@@ -43,6 +43,18 @@ public static class WorkbookFactory
         return workbook;
     }
 
+    public static Workbook CreateFromAppOptions(AppOptions options, string? name = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        return Create(new WorkbookCreationOptions(
+            Name: string.IsNullOrWhiteSpace(name) ? DefaultWorkbookName : name,
+            DefaultSheetCount: options.DefaultSheetCount,
+            DefaultFontName: options.DefaultFontName,
+            DefaultFontSize: options.DefaultFontSize,
+            UserName: options.UserName));
+    }
+
     public static string NormalizeDefaultFontName(string? fontName)
     {
         var normalized = fontName?.Trim();

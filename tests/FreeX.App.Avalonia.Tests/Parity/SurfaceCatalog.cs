@@ -74,7 +74,7 @@ public static class SurfaceCatalog
         // Insert ▸ Charts: RegisterChartCommands binds every canonical id the chart factory recognizes to a
         // real InsertChartRibbonCommand (the descriptive chart-type labels), independent of the adapter.
         foreach (var id in CanonicalCommandIds)
-            if (FreeX.App.Avalonia.Charts.InsertChartCommandFactory.ChartTypeForRibbonCommand(id) is not null)
+            if (FreeX.App.Presentation.Charts.Editing.ChartCommandWorkflowPlanner.ChartTypeForRibbonCommand(id) is not null)
                 ids.Add(id);
 
         return ids;

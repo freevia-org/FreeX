@@ -122,6 +122,53 @@ public sealed class ResidualRendererBoundaryTests
         backstage.Should().Contain("WorkbookSessionFactory.ApplyOnOpenVolatileRecalc(_recalcEngine, _workbook, _fileAdapters)");
     }
 
+    [Fact]
+    public void ResidualRendererNeutralState_LivesInPresentationOrServices()
+    {
+        var root = WorkspaceFileLocator.FindWorkspaceRoot();
+        var host = Path.Combine(root, "src", "FreeX.App.Host");
+        var avalonia = Path.Combine(root, "src", "FreeX.App.Avalonia");
+        var presentation = Path.Combine(root, "src", "FreeX.App.Presentation");
+        var services = Path.Combine(root, "src", "FreeX.App.Services");
+        var hostMain = ReadHost("MainWindow.xaml.cs");
+        var hostPivot = ReadHost("MainWindow.PivotChartCommands.cs");
+        var hostShapeEffects = ReadHost("ShapeEffectsDialog.cs");
+        var avaloniaKeyboard = ReadAvalonia("MainWindow.KeyboardParity.cs");
+        var avaloniaPivot = ReadAvalonia("MainWindow.PivotChartContextMenus.cs");
+
+        foreach (var fileName in new[]
+                 {
+                     "AppLanguageCatalog.cs",
+                     "FailedWorkbookCommand.cs",
+                     "FormulaAuditFormatter.cs",
+                     "NewWorkbookFactory.cs",
+                     "PivotFieldFilterSummary.cs",
+                     "SelectionCornerNavigator.cs",
+                     "SparklineValueCache.cs",
+                     "StatusBarStatsCache.cs",
+                     "ToolbarVisualState.cs",
+                     "ToolbarVisualStateCache.cs"
+                 })
+        {
+            File.Exists(Path.Combine(host, fileName)).Should().BeFalse();
+        }
+
+        File.Exists(Path.Combine(avalonia, "ConditionalFormatCellRenderPlanner.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(avalonia, "ConditionalFormatStatsCache.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(avalonia, "Charts", "InsertChartCommandFactory.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(presentation, "ConditionalFormatting", "ConditionalFormatCellRenderPlanner.cs")).Should().BeTrue();
+        File.Exists(Path.Combine(presentation, "ConditionalFormatting", "ConditionalFormatStatsCache.cs")).Should().BeTrue();
+        File.Exists(Path.Combine(presentation, "Charts", "Editing", "ChartCommandWorkflowPlanner.cs")).Should().BeTrue();
+        File.Exists(Path.Combine(presentation, "GridInteraction", "SelectionCornerNavigator.cs")).Should().BeTrue();
+        File.Exists(Path.Combine(services, "FailedWorkbookCommand.cs")).Should().BeTrue();
+        hostMain.Should().Contain("WorkbookSelectionStatsCache _statusBarStatsCache");
+        hostPivot.Should().Contain("PivotFieldFilterSummary.CreateState(");
+        hostShapeEffects.Should().NotContain("ShapeEffectsDialogPlanner");
+        avaloniaKeyboard.Should().Contain("SelectionCornerNavigator.GetNextCorner(");
+        avaloniaKeyboard.Should().NotContain("var corners = new[]");
+        avaloniaPivot.Should().Contain("PivotFieldFilterSummary.CreateState(");
+    }
+
     private static string ReadHost(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", fileName);
 

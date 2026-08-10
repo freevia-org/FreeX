@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 

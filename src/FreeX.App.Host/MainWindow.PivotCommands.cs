@@ -859,7 +859,8 @@ public partial class MainWindow
             pivotTable,
             sourceIndex,
             PivotUiPlanner.FieldCaption(context.Headers, sourceIndex),
-            allItems);
+            allItems,
+            WpfResourceKeyTextResolver.Instance);
         var dialog = new PivotFieldFilterDialog(
             allItems,
             state.SelectedItems,

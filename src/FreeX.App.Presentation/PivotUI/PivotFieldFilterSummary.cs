@@ -1,8 +1,8 @@
 using System.Globalization;
-using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Localization;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.PivotUI;
 
 public sealed record PivotFieldFilterState(
     string FieldCaption,
@@ -11,43 +11,95 @@ public sealed record PivotFieldFilterState(
     IReadOnlyList<string> SelectedItems,
     PivotLabelFilterModel? LabelFilter,
     PivotValueFilterModel? ValueFilter,
-    IReadOnlyList<PivotDataFieldModel> DataFields)
+    IReadOnlyList<PivotDataFieldModel> DataFields,
+    bool HasStoredItemSelection,
+    string ItemSummary,
+    string LabelSummary,
+    string ValueSummary)
 {
+    public PivotFieldFilterState(
+        string fieldCaption,
+        int sourceFieldIndex,
+        IReadOnlyList<string> allItems,
+        IReadOnlyList<string> selectedItems,
+        PivotLabelFilterModel? labelFilter,
+        PivotValueFilterModel? valueFilter,
+        IReadOnlyList<PivotDataFieldModel> dataFields)
+        : this(
+            fieldCaption,
+            sourceFieldIndex,
+            allItems,
+            selectedItems,
+            labelFilter,
+            valueFilter,
+            dataFields,
+            selectedItems.Count > 0,
+            PivotFieldFilterSummary.FormatItemFilterSummary(selectedItems, allItems.Count, PivotFieldFilterSummary.InvariantText),
+            PivotFieldFilterSummary.FormatLabelFilterSummary(labelFilter, PivotFieldFilterSummary.InvariantText),
+            PivotFieldFilterSummary.FormatValueFilterSummary(valueFilter, dataFields, PivotFieldFilterSummary.InvariantText))
+    {
+    }
+
     public bool HasItemFilter => PivotFieldFilterSummary.HasExplicitItemSelection(SelectedItems, AllItems.Count);
     public bool HasLabelFilter => LabelFilter is not null;
     public bool HasValueFilter => ValueFilter is not null;
     public bool HasAnyFilter => HasItemFilter || HasLabelFilter || HasValueFilter;
-    public string ItemSummary => PivotFieldFilterSummary.FormatItemFilterSummary(SelectedItems, AllItems.Count);
-    public string LabelSummary => PivotFieldFilterSummary.FormatLabelFilterSummary(LabelFilter);
-    public string ValueSummary => PivotFieldFilterSummary.FormatValueFilterSummary(ValueFilter, DataFields);
+    public bool HasStoredFilter => HasStoredItemSelection || HasLabelFilter || HasValueFilter;
     public string OverallSummary => PivotFieldFilterSummary.FormatOverallSummary(this);
 }
 
+/// <summary>
+/// Builds framework-neutral Pivot field-filter state and display summaries.
+/// </summary>
 public static class PivotFieldFilterSummary
 {
+    internal static readonly ResourceKeyTextResolver InvariantText = new(
+        key => key switch
+        {
+            "PivotFieldFilter_NoItemFilter" => "No item filter",
+            "PivotFieldFilter_NoLabelFilter" => "No label filter",
+            "PivotFieldFilter_NoValueFilter" => "No value filter",
+            _ => key
+        },
+        (key, _) => key);
+
     public static PivotFieldFilterState CreateState(
         PivotTableModel pivotTable,
         int sourceFieldIndex,
         string fieldCaption,
-        IReadOnlyList<string> allItems)
+        IReadOnlyList<string> allItems,
+        ResourceKeyTextResolver text)
     {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+        ArgumentNullException.ThrowIfNull(allItems);
+        ArgumentNullException.ThrowIfNull(text);
+
         var layoutField = FindLayoutField(pivotTable, sourceFieldIndex);
         var selectedItems = GetSelectedItems(layoutField);
+        var labelFilter = FindLabelFilter(pivotTable, sourceFieldIndex);
+        var valueFilter = FindValueFilter(pivotTable, sourceFieldIndex);
+        var dataFields = pivotTable.DataFields.ToList();
+
         return new PivotFieldFilterState(
             fieldCaption,
             sourceFieldIndex,
             allItems,
             selectedItems,
-            FindLabelFilter(pivotTable, sourceFieldIndex),
-            FindValueFilter(pivotTable, sourceFieldIndex),
-            pivotTable.DataFields.ToList());
+            labelFilter,
+            valueFilter,
+            dataFields,
+            HasStoredItemSelection(layoutField),
+            FormatItemFilterSummary(selectedItems, allItems.Count, text),
+            FormatLabelFilterSummary(labelFilter, text),
+            FormatValueFilterSummary(valueFilter, dataFields, text));
     }
 
     public static PivotLabelFilterModel? FindLabelFilter(PivotTableModel pivotTable, int sourceFieldIndex) =>
         pivotTable.LabelFilters.LastOrDefault(filter => filter.SourceFieldIndex == sourceFieldIndex);
 
     public static PivotValueFilterModel? FindValueFilter(PivotTableModel pivotTable, int sourceFieldIndex) =>
-        pivotTable.ValueFilters.LastOrDefault(filter => PivotFilterOwnership.BelongsToSourceField(filter, sourceFieldIndex));
+        pivotTable.ValueFilters.LastOrDefault(filter =>
+            PivotFilterOwnership.BelongsToSourceField(filter, sourceFieldIndex));
 
     public static bool HasExplicitItemSelection(IReadOnlyList<string> selectedItems, int allItemCount)
     {
@@ -55,27 +107,33 @@ public static class PivotFieldFilterSummary
         return explicitCount > 0 && explicitCount < allItemCount;
     }
 
-    public static string FormatItemFilterSummary(IReadOnlyList<string> selectedItems, int allItemCount)
+    public static string FormatItemFilterSummary(
+        IReadOnlyList<string> selectedItems,
+        int allItemCount,
+        ResourceKeyTextResolver text)
     {
         var explicitItems = selectedItems.Where(IsExplicitSelection).ToList();
         if (explicitItems.Count == 0 || explicitItems.Count >= allItemCount)
-            return UiText.Get("PivotFieldFilter_NoItemFilter");
+            return text.Get("PivotFieldFilter_NoItemFilter");
 
         return explicitItems.Count == 1
             ? $"Item filter: {Quote(explicitItems[0])}"
             : $"Item filter: {explicitItems.Count} items ({JoinPreview(explicitItems)})";
     }
 
-    public static string FormatLabelFilterSummary(PivotLabelFilterModel? filter) =>
+    public static string FormatLabelFilterSummary(
+        PivotLabelFilterModel? filter,
+        ResourceKeyTextResolver text) =>
         filter is null
-            ? UiText.Get("PivotFieldFilter_NoLabelFilter")
+            ? text.Get("PivotFieldFilter_NoLabelFilter")
             : $"Label filter: {FormatLabelFilter(filter)}";
 
     public static string FormatValueFilterSummary(
         PivotValueFilterModel? filter,
-        IReadOnlyList<PivotDataFieldModel> dataFields) =>
+        IReadOnlyList<PivotDataFieldModel> dataFields,
+        ResourceKeyTextResolver text) =>
         filter is null
-            ? UiText.Get("PivotFieldFilter_NoValueFilter")
+            ? text.Get("PivotFieldFilter_NoValueFilter")
             : $"Value filter: {FormatValueFilter(filter, dataFields)}";
 
     public static string FormatOverallSummary(PivotFieldFilterState state)
@@ -111,19 +169,22 @@ public static class PivotFieldFilterSummary
             ? "Value Filter..."
             : $"Value Filter... ({FormatValueFilter(state.ValueFilter, state.DataFields)})";
 
-    public static string FormatSortSummary(PivotSortModel? sort, IReadOnlyList<PivotDataFieldModel> dataFields)
+    public static string FormatSortSummary(
+        PivotSortModel? sort,
+        IReadOnlyList<PivotDataFieldModel> dataFields)
     {
         if (sort is null)
             return "No sort";
 
         var direction = sort.Direction == PivotSortDirection.Descending ? "descending" : "ascending";
-        if (sort.Target == PivotSortTarget.Value)
-            return $"Sorted {direction} by {DataFieldName(dataFields, sort.DataFieldIndex)}";
-
-        return $"Sorted {direction} by labels";
+        return sort.Target == PivotSortTarget.Value
+            ? $"Sorted {direction} by {DataFieldName(dataFields, sort.DataFieldIndex)}"
+            : $"Sorted {direction} by labels";
     }
 
-    public static string FormatValueFilter(PivotValueFilterModel filter, IReadOnlyList<PivotDataFieldModel> dataFields)
+    public static string FormatValueFilter(
+        PivotValueFilterModel filter,
+        IReadOnlyList<PivotDataFieldModel> dataFields)
     {
         var dataField = DataFieldName(dataFields, filter.DataFieldIndex);
         return filter.Kind switch
@@ -166,7 +227,9 @@ public static class PivotFieldFilterSummary
         FindLayoutField(pivotTable.ColumnFields, sourceFieldIndex) ??
         FindLayoutField(pivotTable.PageFields, sourceFieldIndex);
 
-    private static PivotFieldModel? FindLayoutField(IReadOnlyList<PivotFieldModel> fields, int sourceFieldIndex)
+    private static PivotFieldModel? FindLayoutField(
+        IReadOnlyList<PivotFieldModel> fields,
+        int sourceFieldIndex)
     {
         foreach (var field in fields)
         {
@@ -185,7 +248,12 @@ public static class PivotFieldFilterSummary
         return IsExplicitSelection(field?.SelectedItem) ? [field!.SelectedItem!] : [];
     }
 
-    private static string FormatSelectedItemCount(IReadOnlyList<string> selectedItems, int allItemCount)
+    private static bool HasStoredItemSelection(PivotFieldModel? field) =>
+        field?.SelectedItems is { Count: > 0 } || !string.IsNullOrWhiteSpace(field?.SelectedItem);
+
+    private static string FormatSelectedItemCount(
+        IReadOnlyList<string> selectedItems,
+        int allItemCount)
     {
         var count = selectedItems.Count(IsExplicitSelection);
         return count == 1 ? "1 selected" : $"{Math.Min(count, allItemCount)} selected";
@@ -204,7 +272,9 @@ public static class PivotFieldFilterSummary
         !string.IsNullOrWhiteSpace(value) &&
         !string.Equals(value, "(All)", StringComparison.OrdinalIgnoreCase);
 
-    private static string DataFieldName(IReadOnlyList<PivotDataFieldModel> dataFields, int dataFieldIndex) =>
+    private static string DataFieldName(
+        IReadOnlyList<PivotDataFieldModel> dataFields,
+        int dataFieldIndex) =>
         dataFieldIndex >= 0 && dataFieldIndex < dataFields.Count
             ? dataFields[dataFieldIndex].Name
             : "Values";

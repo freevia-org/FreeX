@@ -1,11 +1,20 @@
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Services.Tests;
 
 public sealed class FailedWorkbookCommandTests
 {
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
+    }
+
     [Fact]
     public void Apply_ReturnsFailedOutcomeWithMessage()
     {

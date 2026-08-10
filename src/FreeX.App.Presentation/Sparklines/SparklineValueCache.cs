@@ -1,7 +1,10 @@
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Sparklines;
 
+/// <summary>
+/// Caches renderer-neutral sparkline values by sheet identity and workbook revision.
+/// </summary>
 public sealed class SparklineValueCache
 {
     private readonly record struct Source(Sheet Sheet, ulong Revision);
@@ -22,8 +25,5 @@ public sealed class SparklineValueCache
         return values;
     }
 
-    public void Clear()
-    {
-        _valuesBySource.Clear();
-    }
+    public void Clear() => _valuesBySource.Clear();
 }

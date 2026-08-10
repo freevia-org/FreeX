@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Xml.Linq;
 using FluentAssertions;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;

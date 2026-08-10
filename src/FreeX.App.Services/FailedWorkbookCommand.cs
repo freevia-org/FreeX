@@ -1,6 +1,6 @@
 using FreeX.Core.Commands;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Services;
 
 public sealed class FailedWorkbookCommand(string message) : IWorkbookCommand
 {

@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using FreeX.App.Presentation.Charts.Editing;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -217,7 +218,8 @@ public partial class MainWindow
                 context.PivotTable,
                 sourceIndex,
                 PivotUiPlanner.FieldCaption(context.Headers, sourceIndex),
-                PivotSourceContext.ReadItems(_workbook, context.Sheet, context.PivotTable, sourceIndex))
+                PivotSourceContext.ReadItems(_workbook, context.Sheet, context.PivotTable, sourceIndex),
+                WpfResourceKeyTextResolver.Instance)
             : null;
         var valueFieldIndex = context is null
             ? null

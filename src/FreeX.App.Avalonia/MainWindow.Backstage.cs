@@ -338,16 +338,11 @@ public sealed partial class MainWindow
 
     private FreeXBackstageAccountPanePlan BuildBackstageAccountPanePlan(
         LocalAccountInfoPlan plan) =>
-        FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
-            plan.UserName,
-            plan.DeviceName,
-            plan.VersionText,
-            plan.OptionsAvailable,
-            _session.CurrentFilePath,
-            _session.Workbook.Name,
-            plan.TrademarkNotice,
-            plan.LicenseNotice,
-            plan.PrivacyNotice));
+        FreeXBackstageAccountPanePlanner.Build(
+            LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(
+                plan,
+                _session.CurrentFilePath,
+                _session.Workbook.Name));
 
     private IReadOnlyList<AvaloniaBackstageActionButtonSpec> BuildBackstageAccountActionButtons(
         IReadOnlyList<FreeXBackstageAccountActionDefinition> actions,

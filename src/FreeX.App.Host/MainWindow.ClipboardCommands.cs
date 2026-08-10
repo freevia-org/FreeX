@@ -1965,7 +1965,7 @@ public partial class MainWindow
     /// grid right away, only formula recalculation is deferred by Manual mode. But
     /// <see cref="RecalculateIfAutomatic"/> is a no-op outside Automatic/AutomaticExceptDataTables
     /// mode, so without this it never bumps <c>_navigationCacheRevision</c>, and
-    /// SparklineValueCache/StatusBarStatsCache (both keyed on that revision) keep returning their
+    /// SparklineValueCache/WorkbookSelectionStatsCache (both keyed on that revision) keep returning their
     /// pre-paste cached result until an unrelated command happens to bump the revision. Mirrors
     /// the Goal Seek fix in MainWindow.DataCommands.cs.
     /// </summary>

@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using FreeX.App.Localization;
 using Xunit;
 
 namespace FreeX.App.Host.Tests;

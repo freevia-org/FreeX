@@ -1,14 +1,7 @@
-using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Avalonia;
+namespace FreeX.App.Presentation.ConditionalFormatting;
 
-/// <summary>
-/// Render instruction for a single data bar within a cell, expressed in fractions of the cell's
-/// drawable content width so the UI layer only has to scale by pixel size. The bar is inset from
-/// the cell edges by <see cref="HorizontalInset"/> / <see cref="VerticalInset"/> device pixels, the
-/// same insets the desktop renderer uses.
-/// </summary>
 public readonly record struct CfDataBarRenderInstruction(
     double StartFraction,
     double EndFraction,
@@ -22,15 +15,9 @@ public readonly record struct CfDataBarRenderInstruction(
     PresentationRgb? AxisColor = null,
     PresentationRgb? BorderColor = null)
 {
-    /// <summary>Signed extent of the bar, always ≥ 0.</summary>
     public double FractionWidth => EndFraction - StartFraction;
 }
 
-/// <summary>
-/// Render instruction for a single icon-set glyph within a cell. <see cref="ColorHex"/> is the
-/// resolved fill (e.g. <c>"#C00000"</c>); <see cref="TextGutter"/> is how far the cell text should
-/// shift right to make room for the glyph (0 when the rule hides the value).
-/// </summary>
 public readonly record struct CfIconRenderInstruction(
     ConditionalIconGlyphKind GlyphKind,
     int IconIndex,
@@ -40,34 +27,20 @@ public readonly record struct CfIconRenderInstruction(
     double TextGutter);
 
 /// <summary>
-/// Portable mapping from the conditional-format results carried on a <see cref="DisplayCell"/>
-/// (computed by the engine / portable <see cref="ConditionalFormatEvaluator"/>) into the
-/// framework-neutral render instructions the Avalonia grid draws. All geometry and color logic
-/// lives here so it can be unit-tested without a running UI, mirroring the desktop's
-/// <c>ConditionalIconLayoutPlanner</c> / data-bar renderer exactly.
+/// Maps conditional-format model results into framework-neutral cell render instructions.
 /// </summary>
 public static class ConditionalFormatCellRenderPlanner
 {
-    /// <summary>Horizontal inset (device pixels at 100% zoom) of a data bar from the cell edges.</summary>
     public const double DataBarHorizontalInset = ConditionalDataBarLayoutPlanner.HorizontalInset;
-
-    /// <summary>Vertical inset (device pixels at 100% zoom) of a data bar from the cell edges.</summary>
     public const double DataBarVerticalInset = ConditionalDataBarLayoutPlanner.VerticalInset;
-
-    /// <summary>Width (device pixels at 100% zoom) of the gutter reserved for an icon-set glyph.</summary>
     public const double IconGutterWidth = ConditionalIconCellLayoutPlanner.GutterWidth;
 
-    /// <summary>
-    /// Build a data-bar render instruction from the model record, or <c>null</c> when the bar would
-    /// be empty. Start/end fractions are clamped to [0, 1] and normalized so start ≤ end.
-    /// </summary>
     public static CfDataBarRenderInstruction? PlanDataBar(ConditionalFormatDataBar? dataBar)
     {
         if (dataBar is not { } bar)
             return null;
 
-        if (ConditionalDataBarLayoutPlanner.Plan(bar.StartFraction, bar.EndFraction)
-                is not { } layout)
+        if (ConditionalDataBarLayoutPlanner.Plan(bar.StartFraction, bar.EndFraction) is not { } layout)
             return null;
 
         return new CfDataBarRenderInstruction(
@@ -84,12 +57,6 @@ public static class ConditionalFormatCellRenderPlanner
             bar.BorderColor is { } borderColor ? PresentationRgb.FromRgbColor(borderColor) : null);
     }
 
-    /// <summary>
-    /// Build a data-bar render instruction directly from a rule and cell value via the portable
-    /// evaluator. Returns <c>null</c> when the rule is not a data-bar rule or the value produces no
-    /// bar. The caller supplies the <see cref="ConditionalFormatStatistics"/> for the rule's range,
-    /// built once per range per render pass.
-    /// </summary>
     public static CfDataBarRenderInstruction? PlanDataBar(
         ConditionalFormat rule,
         double cellValue,
@@ -114,10 +81,6 @@ public static class ConditionalFormatCellRenderPlanner
             resolved.ShowValue));
     }
 
-    /// <summary>
-    /// Build an icon render instruction from the model record, or <c>null</c> when no icon applies.
-    /// The glyph kind and color are resolved the same way the desktop renderer resolves them.
-    /// </summary>
     public static CfIconRenderInstruction? PlanIcon(ConditionalFormatIcon? icon)
     {
         if (icon is not { } resolved)
@@ -133,10 +96,6 @@ public static class ConditionalFormatCellRenderPlanner
             resolved.ShowValue ? IconGutterWidth : 0d);
     }
 
-    /// <summary>
-    /// Build an icon render instruction directly from a rule and cell value via the portable
-    /// evaluator. Returns <c>null</c> when the rule is not an icon-set rule or no bucket applies.
-    /// </summary>
     public static CfIconRenderInstruction? PlanIcon(
         ConditionalFormat rule,
         double cellValue,

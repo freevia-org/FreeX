@@ -51,7 +51,7 @@ public sealed class BackstageProjectionSourceTests
         source.Should().NotContain("FreeXBackstagePaneCatalog.GetExportScopeLabelKey(");
         source.Should().NotContain("FreeXBackstagePaneCatalog.GetExportOutputKindLabelKey(");
 
-        source.Should().Contain("FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(");
+        source.Should().Contain("LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(");
         source.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildAccountDialog(");
         source.Should().NotContain("foreach (var detail in plan.Details)");
         source.Should().NotContain("foreach (var action in plan.Actions)");

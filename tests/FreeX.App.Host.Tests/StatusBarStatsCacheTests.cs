@@ -1,5 +1,6 @@
 using System.IO;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -9,7 +10,7 @@ public sealed class StatusBarStatsCacheTests
     [Fact]
     public void GetOrCreate_ReusesStatsWhenSheetRangeAndRevisionAreUnchanged()
     {
-        var cache = new StatusBarStatsCache();
+        var cache = new WorkbookSelectionStatsCache();
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
@@ -33,7 +34,7 @@ public sealed class StatusBarStatsCacheTests
     [Fact]
     public void GetOrCalculate_ReusesStatsWhenSheetRangeAndRevisionAreUnchanged()
     {
-        var cache = new StatusBarStatsCache();
+        var cache = new WorkbookSelectionStatsCache();
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(7)));
         var range = new GridRange(
@@ -53,7 +54,7 @@ public sealed class StatusBarStatsCacheTests
     [Fact]
     public void GetOrCreate_RecalculatesWhenRevisionChanges()
     {
-        var cache = new StatusBarStatsCache();
+        var cache = new WorkbookSelectionStatsCache();
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
@@ -77,7 +78,7 @@ public sealed class StatusBarStatsCacheTests
     [Fact]
     public void Clear_DropsCachedStats()
     {
-        var cache = new StatusBarStatsCache();
+        var cache = new WorkbookSelectionStatsCache();
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
@@ -102,7 +103,7 @@ public sealed class StatusBarStatsCacheTests
     public void GetOrCreate_PreservesAggregateErrorCodeThroughSharedConversionRoundTrip()
     {
         // The Host cache now owns the shared stats record directly; aggregate errors must survive caching.
-        var cache = new StatusBarStatsCache();
+        var cache = new WorkbookSelectionStatsCache();
         var sheet = new Sheet(SheetId.New(), "Sheet1");
         var range = new GridRange(
             new CellAddress(sheet.Id, 1, 1),
@@ -118,19 +119,22 @@ public sealed class StatusBarStatsCacheTests
     }
 
     [Fact]
-    public void HostCache_DelegatesExpansionCachingToSharedWorkbookSelectionStatsCache()
+    public void HostUsesSharedWorkbookSelectionStatsCacheDirectly()
     {
-        var source = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "StatusBarStatsCache.cs");
+        var hostCachePath = Path.Combine(
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            "src",
+            "FreeX.App.Host",
+            "StatusBarStatsCache.cs");
+        var mainSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "MainWindow.xaml.cs");
         var calculatorPath = Path.Combine(
             WorkspaceFileLocator.FindWorkspaceRoot(),
             "src",
             "FreeX.App.Host",
             "StatusBarCalculator.cs");
 
-        source.Should().Contain("WorkbookSelectionStatsCache");
-        source.Should().NotContain("TryCalculateContainingExpansion");
-        source.Should().NotContain("private static bool Contains");
-        source.Should().NotContain("StatusBarCalculator");
+        File.Exists(hostCachePath).Should().BeFalse();
+        mainSource.Should().Contain("private readonly WorkbookSelectionStatsCache _statusBarStatsCache = new();");
         File.Exists(calculatorPath).Should().BeFalse();
     }
 }

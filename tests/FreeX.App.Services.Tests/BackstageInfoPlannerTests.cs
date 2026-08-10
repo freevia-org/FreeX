@@ -39,6 +39,36 @@ public sealed class BackstageInfoPlannerTests
     }
 
     [Fact]
+    public void CreatePaneRequest_ProjectsEveryInfoPlanField()
+    {
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Budget");
+        var plan = BackstageInfoPlanner.Build(
+            workbook,
+            @"C:\work\budget.xlsx",
+            Strings(),
+            activeSheet: sheet,
+            fileExists: _ => true,
+            hasSelection: true);
+
+        var request = BackstageInfoPlanner.CreatePaneRequest(plan);
+
+        request.WorkbookName.Should().Be(plan.WorkbookName);
+        request.FilePath.Should().Be(plan.FilePath);
+        request.SheetCount.Should().Be(plan.SheetCount);
+        request.Format.Should().Be(plan.Format);
+        request.FileSize.Should().Be(plan.FileSize);
+        request.LastModified.Should().Be(plan.LastModified);
+        request.SharingStatus.Should().Be(plan.SharingStatus);
+        request.ExportStatus.Should().Be(plan.ExportStatus);
+        request.WorkbookProtectionSummary.Should().Be(plan.Summary.WorkbookProtectionSummary);
+        request.ActiveSheetProtectionSummary.Should().Be(plan.Summary.ActiveSheetProtectionSummary);
+        request.StatisticsSummary.Should().Be(plan.StatisticsSummary);
+        request.AccessibilitySummary.Should().Be(plan.AccessibilitySummary);
+        request.FormulaErrorSummary.Should().Be(plan.FormulaErrorSummary);
+    }
+
+    [Fact]
     public void Build_UsesSavedDefaultsWhenWorkbookHasNoCurrentPathOrAccessibilityIssues()
     {
         var workbook = new Workbook("Book1");

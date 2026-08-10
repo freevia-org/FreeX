@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.IO;
+using FreeX.App.Localization;
 using FreeX.App.Presentation.Calculation;
 using FreeX.App.Services;
 using FreeX.Core.Commands;

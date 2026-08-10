@@ -1,7 +1,8 @@
 using FluentAssertions;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host.Tests;
+namespace FreeX.App.Presentation.Tests.GridInteraction;
 
 public sealed class SelectionCornerNavigatorTests
 {

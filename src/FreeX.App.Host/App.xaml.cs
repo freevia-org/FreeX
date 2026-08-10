@@ -421,7 +421,7 @@ public partial class App : Application
         // the secondary window over the originating window's context (see ViewNewWindowBtn_Click).
         services.AddTransient(sp =>
         {
-            var workbook = NewWorkbookFactory.Create(sp.GetRequiredService<AppOptions>());
+            var workbook = WorkbookFactory.CreateFromAppOptions(sp.GetRequiredService<AppOptions>());
             var documentContext = WorkbookDocumentContext.Create(workbook);
             return ActivatorUtilities.CreateInstance<MainWindow>(
                 sp,

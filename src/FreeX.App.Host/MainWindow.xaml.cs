@@ -9,6 +9,8 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.FormulaBar;
+using FreeX.App.Presentation.Ribbon;
+using FreeX.App.Presentation.Sparklines;
 using FreeX.App.Services;
 using FreeX.App.UI;
 using Free.Shared.Theme.Wpf;
@@ -67,7 +69,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private ToolbarVisualState? _lastToolbarVisualState;
     private QuickAccessCommandState? _lastQuickAccessCommandState;
     private WorkbookId? _lastQuickAccessCommandStateWorkbookId;
-    private readonly StatusBarStatsCache _statusBarStatsCache = new();
+    private readonly WorkbookSelectionStatsCache _statusBarStatsCache = new();
     private readonly StatusBarViewModelCache _statusBarDisplayStateCache =
         new(new ResourceKeyStatusBarTextProvider(UiText.Get));
     private Free.Shared.AppServices.StatusBarViewModel? _lastStatusBarDisplayState;

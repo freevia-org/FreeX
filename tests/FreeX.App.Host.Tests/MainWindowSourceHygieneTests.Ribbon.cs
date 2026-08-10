@@ -543,8 +543,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var qatSource = DialogSourceTestSupport.ReadHostSources("MainWindow.QuickAccessToolbar.cs");
         var qatStateSource = DialogSourceTestSupport.ReadAppServicesRibbonSource("QuickAccessCommandState.cs");
         var applicationRouterSource = DialogSourceTestSupport.ReadPresentationSources("Shell", "WorkbookApplicationCommandRouter.cs");
-        var toolbarSource = DialogSourceTestSupport.ReadHostSources("ToolbarVisualState.cs");
-        var cacheSource = DialogSourceTestSupport.ReadHostSources("ToolbarVisualStateCache.cs");
+        var toolbarSource = DialogSourceTestSupport.ReadPresentationSources("Ribbon", "ToolbarVisualState.cs");
+        var cacheSource = DialogSourceTestSupport.ReadPresentationSources("Ribbon", "ToolbarVisualStateCache.cs");
 
         source.Should().Contain("RefreshQuickAccessToolbarCommandStates();");
         source.Should().Contain("RefreshQuickAccessToolbarCommandStatesAfterSelectionChange();");

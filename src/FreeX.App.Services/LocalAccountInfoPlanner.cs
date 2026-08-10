@@ -1,4 +1,5 @@
 using System.Reflection;
+using FreeX.App.Presentation.Backstage;
 
 namespace FreeX.App.Services;
 
@@ -45,6 +46,25 @@ public static class LocalAccountInfoPlanner
             PrivacyNotice: AppHelpInfo.PrivacyNotice,
             HelpUrl: AppHelpInfo.HelpUrl,
             FeedbackUrl: AppHelpInfo.FeedbackUrl);
+    }
+
+    public static FreeXBackstageAccountPaneRequest CreateBackstageAccountPaneRequest(
+        LocalAccountInfoPlan plan,
+        string? currentWorkbookPath,
+        string? currentWorkbookName)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return new FreeXBackstageAccountPaneRequest(
+            plan.UserName,
+            plan.DeviceName,
+            plan.VersionText,
+            plan.OptionsAvailable,
+            currentWorkbookPath,
+            currentWorkbookName,
+            plan.TrademarkNotice,
+            plan.LicenseNotice,
+            plan.PrivacyNotice);
     }
 
     private static string NormalizeOrUnknown(string? value) =>

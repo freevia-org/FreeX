@@ -3711,16 +3711,11 @@ public sealed partial class MainWindow
             userName: Environment.UserName,
             optionsAvailable: true);
 
-        return FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
-            accountInfo.UserName,
-            accountInfo.DeviceName,
-            accountInfo.VersionText,
-            accountInfo.OptionsAvailable,
-            null,
-            "Parity Demo (not saved yet)",
-            accountInfo.TrademarkNotice,
-            accountInfo.LicenseNotice,
-            accountInfo.PrivacyNotice));
+        return FreeXBackstageAccountPanePlanner.Build(
+            LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(
+                accountInfo,
+                currentWorkbookPath: null,
+                currentWorkbookName: "Parity Demo (not saved yet)"));
     }
 
     private static (string Label, string Value)[] BuildParityCapturedBackstageAccountRows(
@@ -4064,24 +4059,8 @@ public sealed partial class MainWindow
 
         return FreeXBackstageInfoPanePlanner.Build(
             FreeXBackstageInfoSurface.ParityCapture,
-            CreateBackstageInfoPaneRequest(info));
+            BackstageInfoPlanner.CreatePaneRequest(info));
     }
-
-    private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(BackstageInfoPlan plan) =>
-        new(
-            plan.WorkbookName,
-            plan.FilePath,
-            plan.SheetCount,
-            plan.Format,
-            plan.FileSize,
-            plan.LastModified,
-            plan.SharingStatus,
-            plan.ExportStatus,
-            plan.Summary.WorkbookProtectionSummary,
-            plan.Summary.ActiveSheetProtectionSummary,
-            plan.StatisticsSummary,
-            plan.AccessibilitySummary,
-            plan.FormulaErrorSummary);
 
     private static Control CreateParityCapturedBackstageInfoAction(RibbonCommandIconKind iconKind, string title, string detail)
     {

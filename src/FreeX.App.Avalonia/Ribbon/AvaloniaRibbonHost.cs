@@ -476,7 +476,7 @@ internal sealed class DisabledNoOpRibbonCommand : IRibbonStatefulCommand
 /// <summary>
 /// Inserts a chart of a fixed <see cref="ChartType"/> over the live session's selection by running the
 /// shared Core <see cref="FreeX.Core.Commands.AddChartCommand"/> (built by
-/// <see cref="InsertChartCommandFactory"/>). On success the host refresh hook redraws the grid so the new
+/// <see cref="ChartCommandWorkflowPlanner"/>). On success the host refresh hook redraws the grid so the new
 /// chart paints in the drawing-object overlay; on failure the Core guard message is surfaced on the
 /// status bar. The session is read each time (it may be replaced on open/new).
 /// </summary>

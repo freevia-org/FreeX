@@ -7,6 +7,7 @@ using FreeX.App.Presentation;
 using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Presentation.FormulaAuditing;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;

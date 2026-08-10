@@ -705,7 +705,7 @@ public partial class MainWindow
 
         var currentPreset = GetTargetDrawingShape(_currentSheetId)?.GetEffectiveEffectPreset()
             ?? DrawingShapeEffectPreset.None;
-        currentPreset = ShapeEffectsDialogPlanner.NormalizePreset(currentPreset);
+        currentPreset = ShapeEffectsPlanner.NormalizePreset(currentPreset);
 
         foreach (var item in menu.Items)
         {
@@ -733,7 +733,7 @@ public partial class MainWindow
             return;
         }
 
-        var normalizedPreset = ShapeEffectsDialogPlanner.NormalizePreset(preset);
+        var normalizedPreset = ShapeEffectsPlanner.NormalizePreset(preset);
         if (normalizedPreset != preset)
             return;
 

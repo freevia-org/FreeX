@@ -1,7 +1,6 @@
-using System;
 using FreeX.Core.Model;
 
-namespace FreeX.App.Host;
+namespace FreeX.App.Presentation.Ribbon;
 
 public sealed class ToolbarVisualStateCache
 {
@@ -16,10 +15,7 @@ public sealed class ToolbarVisualStateCache
     private Source? _previousSource;
     private ToolbarVisualState? _previousState;
 
-    public bool TryGet(
-        WorkbookId workbookId,
-        StyleId styleId,
-        out ToolbarVisualState state)
+    public bool TryGet(WorkbookId workbookId, StyleId styleId, out ToolbarVisualState state)
     {
         var source = new Source(workbookId, styleId);
         if (_lastSource == source && _lastState is { } cached)
@@ -53,13 +49,9 @@ public sealed class ToolbarVisualStateCache
     {
         var source = new Source(workbookId, styleId);
         if (_states.ContainsKey(source))
-        {
             _stateOrder.Remove(source);
-        }
         else
-        {
             TrimCachedStatesForNewSource();
-        }
 
         _states[source] = state;
         _stateOrder.Add(source);

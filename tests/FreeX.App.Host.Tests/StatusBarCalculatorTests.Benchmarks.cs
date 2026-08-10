@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using FluentAssertions;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -21,7 +22,7 @@ public sealed partial class StatusBarCalculatorTests
             new CellAddress(sheet.Id, 1, 1),
             new CellAddress(sheet.Id, CellAddress.MaxRow, 1));
 
-        var cache = new StatusBarStatsCache();
+        var cache = new WorkbookSelectionStatsCache();
         _ = cache.GetOrCreate(sheet, range, revision: 1, () => WorkbookSelectionStatsCalculator.Calculate(sheet, range));
 
         var sw = Stopwatch.StartNew();
@@ -43,7 +44,7 @@ public sealed partial class StatusBarCalculatorTests
         for (uint row = 1; row <= 50_000; row++)
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), Cell.FromValue(new NumberValue(row)));
 
-        var cache = new StatusBarStatsCache();
+        var cache = new WorkbookSelectionStatsCache();
         const int iterations = 2_000;
 
         var sw = Stopwatch.StartNew();

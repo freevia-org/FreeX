@@ -150,7 +150,7 @@ public partial class MainWindow
         // always reflects a value change immediately regardless of calculation mode -- only
         // formula recalculation is deferred by Manual mode. RecalculateIfAutomatic above is a
         // no-op outside Automatic/AutomaticExceptDataTables mode, so it never bumps the
-        // navigation-cache revision that SparklineValueCache/StatusBarStatsCache are keyed on;
+        // navigation-cache revision that SparklineValueCache/WorkbookSelectionStatsCache are keyed on;
         // force that invalidation here so sparklines and status-bar stats over the changed cells
         // refresh immediately instead of showing pre-scenario data until an unrelated edit
         // happens to bump the revision. Mirrors the Goal Seek fix in MainWindow.DataCommands.cs.

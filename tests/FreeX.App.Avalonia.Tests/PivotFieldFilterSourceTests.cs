@@ -32,6 +32,22 @@ public sealed class PivotFieldFilterSourceTests
     }
 
     [Fact]
+    public void PivotChartContextMenu_ConsumesSharedFilterStateWithoutChangingVisibleHeaders()
+    {
+        var source = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.PivotChartContextMenus.cs"));
+
+        source.Should().Contain("PivotFieldFilterSummary.CreateState(");
+        source.Should().Contain("var hasFilter = filterState.HasStoredFilter;");
+        source.Should().Contain("SelectItemsHeader: \"Select Items...\"");
+        source.Should().Contain("ClearFilterHeader: $\"Clear Filters from {target.FieldCaption}\"");
+        source.Should().NotContain("pivot.LabelFilters.Any(");
+        source.Should().NotContain("pivot.ValueFilters.Any(");
+    }
+
+    [Fact]
     public void ItemFilterDialog_EncodesWpfClientGeometryAndCompactControlsLocally()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));

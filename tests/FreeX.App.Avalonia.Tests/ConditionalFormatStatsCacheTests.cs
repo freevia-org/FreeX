@@ -1,5 +1,5 @@
 using FluentAssertions;
-using FreeX.App.Avalonia;
+using FreeX.App.Presentation.ConditionalFormatting;
 
 namespace FreeX.App.Avalonia.Tests;
 

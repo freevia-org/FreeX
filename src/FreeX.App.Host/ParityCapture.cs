@@ -464,16 +464,11 @@ internal static class ParityCapture
             userName: Environment.UserName,
             optionsAvailable: true);
 
-        return FreeXBackstageAccountPanePlanner.Build(new FreeXBackstageAccountPaneRequest(
-            accountInfo.UserName,
-            accountInfo.DeviceName,
-            accountInfo.VersionText,
-            accountInfo.OptionsAvailable,
-            null,
-            "Parity Demo (not saved yet)",
-            accountInfo.TrademarkNotice,
-            accountInfo.LicenseNotice,
-            accountInfo.PrivacyNotice));
+        return FreeXBackstageAccountPanePlanner.Build(
+            LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(
+                accountInfo,
+                currentWorkbookPath: null,
+                currentWorkbookName: "Parity Demo (not saved yet)"));
     }
 
     private static string ResolveBackstageAccountValue(FreeXBackstageTextValue value) =>

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Free.Shared.AppServices;
+using FreeX.App.Presentation.Backstage;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -65,6 +66,26 @@ public static class BackstageInfoPlanner
             sharingStatus,
             exportStatus,
             summary);
+    }
+
+    public static FreeXBackstageInfoPaneRequest CreatePaneRequest(BackstageInfoPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        return new FreeXBackstageInfoPaneRequest(
+            plan.WorkbookName,
+            plan.FilePath,
+            plan.SheetCount,
+            plan.Format,
+            plan.FileSize,
+            plan.LastModified,
+            plan.SharingStatus,
+            plan.ExportStatus,
+            plan.Summary.WorkbookProtectionSummary,
+            plan.Summary.ActiveSheetProtectionSummary,
+            plan.StatisticsSummary,
+            plan.AccessibilitySummary,
+            plan.FormulaErrorSummary);
     }
 
     private static string FormatAccessibilitySummary(int issueCount, WorkbookInfoDisplayStrings strings) =>

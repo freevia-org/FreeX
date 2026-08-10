@@ -11,7 +11,7 @@ namespace FreeX.App.Host.Tests;
 /// Before the fix: Scenario Manager "Show" applied the scenario's cell values via
 /// _commandBus.ExecuteRepeatable directly and then only called RecalculateIfAutomatic, which is a
 /// no-op outside Automatic/AutomaticExceptDataTables calculation mode -- so in Manual mode,
-/// _navigationCacheRevision (which SparklineValueCache/StatusBarStatsCache are keyed on) never
+/// _navigationCacheRevision (which SparklineValueCache/WorkbookSelectionStatsCache are keyed on) never
 /// advanced, leaving sparklines and status-bar stats over the changed cells stale even though the
 /// cell values themselves were written immediately (matching real Excel, which always applies a
 /// scenario's values right away regardless of calculation mode).

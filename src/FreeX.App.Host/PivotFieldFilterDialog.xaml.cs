@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.PivotUI;
 
 namespace FreeX.App.Host;
 

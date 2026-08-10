@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Localization;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
@@ -16,6 +17,9 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static readonly ResourceKeyTextResolver PivotFieldFilterText =
+        new(UiText.Get, UiText.Format);
+
     private void AttachPivotFieldContextMenu(
         Control chip,
         PivotTableModel pivot,
@@ -186,18 +190,22 @@ public sealed partial class MainWindow
         return new PivotHeaderDropdownTargetModel(pivot.Name, caption, index, area, false);
     }
 
-    private static PivotChartFieldContextMenuState BuildPivotChartFieldContextMenuState(
+    private PivotChartFieldContextMenuState BuildPivotChartFieldContextMenuState(
         PivotTableModel pivot,
         PivotHeaderDropdownTargetModel target)
     {
         var sourceIndex = target.SourceFieldIndex;
-        var field = pivot.RowFields.Concat(pivot.ColumnFields).Concat(pivot.PageFields)
-            .FirstOrDefault(candidate => candidate.SourceFieldIndex == sourceIndex);
-        var hasItemFilter = field?.SelectedItems is { Count: > 0 } || !string.IsNullOrWhiteSpace(field?.SelectedItem);
-        var hasFilter = hasItemFilter ||
-            pivot.LabelFilters.Any(filter => filter.SourceFieldIndex == sourceIndex) ||
-            pivot.ValueFilters.Any(filter =>
-                PivotFilterOwnership.BelongsToSourceField(filter, sourceIndex));
+        var filterState = PivotFieldFilterSummary.CreateState(
+            pivot,
+            sourceIndex,
+            target.FieldCaption,
+            PivotSourceContext.ReadItems(
+                _session.Workbook,
+                _session.ActiveSheet,
+                pivot,
+                sourceIndex),
+            PivotFieldFilterText);
+        var hasFilter = filterState.HasStoredFilter;
         var summary = hasFilter ? $"{target.FieldCaption}: Filtered" : $"{target.FieldCaption}: (All)";
 
         return new PivotChartFieldContextMenuState(

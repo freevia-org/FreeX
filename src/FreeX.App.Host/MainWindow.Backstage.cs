@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
+using FreeX.App.Localization;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Calculation;
 using FreeX.App.Presentation.Shell;
@@ -374,7 +375,7 @@ public partial class MainWindow
             cyclicCells: _session.CyclicCells);
         var pane = FreeXBackstageInfoPanePlanner.Build(
             FreeXBackstageInfoSurface.WpfInfoPane,
-            CreateBackstageInfoPaneRequest(info));
+            BackstageInfoPlanner.CreatePaneRequest(info));
 
         foreach (var detail in pane.Details)
         {
@@ -383,22 +384,6 @@ public partial class MainWindow
 
         RefreshBackstageInfoProtectionButton();
     }
-
-    private static FreeXBackstageInfoPaneRequest CreateBackstageInfoPaneRequest(BackstageInfoPlan plan) =>
-        new(
-            plan.WorkbookName,
-            plan.FilePath,
-            plan.SheetCount,
-            plan.Format,
-            plan.FileSize,
-            plan.LastModified,
-            plan.SharingStatus,
-            plan.ExportStatus,
-            plan.Summary.WorkbookProtectionSummary,
-            plan.Summary.ActiveSheetProtectionSummary,
-            plan.StatisticsSummary,
-            plan.AccessibilitySummary,
-            plan.FormulaErrorSummary);
 
     private TextBlock ResolveBackstageInfoDetailTextBlock(FreeXBackstageInfoDetailId id) =>
         id switch
@@ -545,7 +530,7 @@ public partial class MainWindow
     private void InitializeNewWorkbook(string? workbookName)
     {
         CloseFindReplaceDialogIfOpen();
-        AdoptWorkbookAsInitial(NewWorkbookFactory.Create(_options, workbookName));
+        AdoptWorkbookAsInitial(WorkbookFactory.CreateFromAppOptions(_options, workbookName));
     }
 
     /// <summary>

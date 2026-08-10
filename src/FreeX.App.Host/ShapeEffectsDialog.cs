@@ -7,12 +7,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-internal static class ShapeEffectsDialogPlanner
-{
-    public static DrawingShapeEffectPreset NormalizePreset(DrawingShapeEffectPreset preset) =>
-        ShapeEffectsPlanner.NormalizePreset(preset);
-}
-
 public sealed record ShapeEffectsDialogResult(DrawingShapeEffectPreset Preset);
 
 public sealed class ShapeEffectsDialog : Window
@@ -56,7 +50,7 @@ public sealed class ShapeEffectsDialog : Window
         out ShapeEffectsDialogResult result)
     {
         result = new ShapeEffectsDialogResult(ShapeEffectsPlanner.DefaultPreset);
-        if (ShapeEffectsDialogPlanner.NormalizePreset(preset) != preset)
+        if (ShapeEffectsPlanner.NormalizePreset(preset) != preset)
             return false;
 
         result = new ShapeEffectsDialogResult(preset);
