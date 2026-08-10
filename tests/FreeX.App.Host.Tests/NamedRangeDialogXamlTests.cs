@@ -301,7 +301,7 @@ public sealed class NamedRangeDialogXamlTests
         var source = ReadNamedRangeDialogSource();
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"NamedRange_SelectEditMessage\")");
-        source.Should().Contain("DescribeNameError(plan.Validation.Name.Error)");
+        source.Should().Contain("DescribeDraftNameError(plan.Validation.Name.Error, plan.Draft.Name)");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, outcome.ErrorMessage ?? UiText.Get(\"NamedRange_DefineFailedMessage\")");
         source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"NamedRange_SelectDeleteMessage\")");
@@ -503,7 +503,7 @@ public sealed class NamedRangeDialogXamlTests
         var methodStart = source.IndexOf("private void DefineOrUpdateName(", StringComparison.Ordinal);
         var planSave = source.IndexOf("var plan = _definedNames.PlanSave(draft, original);", StringComparison.Ordinal);
         var validation = source.IndexOf("if (!plan.Validation.Name.IsValid)", StringComparison.Ordinal);
-        var localizedMessage = source.IndexOf("DescribeNameError(plan.Validation.Name.Error)", StringComparison.Ordinal);
+        var localizedMessage = source.IndexOf("DescribeDraftNameError(plan.Validation.Name.Error, plan.Draft.Name)", StringComparison.Ordinal);
         var commandExecution = source.IndexOf("_commandBus.Execute(_workbook.Id, plan.Command!)", StringComparison.Ordinal);
 
         methodStart.Should().BeGreaterThan(-1);

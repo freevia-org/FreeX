@@ -1,5 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using FreeX.App.Presentation.FormulaBar;
 
 namespace FreeX.App.Presentation.DefinedNames;
 
@@ -321,19 +322,35 @@ public static class DefinedNameUiPolicy
         if (selection is null)
             return new(name, NameBoxDefinitionRejection.BlankSelection, null);
 
-        if (workbook.ValidateNamedRangeName(name) is not null)
-            return new(name, NameBoxDefinitionRejection.InvalidIdentifier, null);
-
         if (DefinedNameIdentifierCatalog.ContainsTableName(workbook, name))
             return new(name, NameBoxDefinitionRejection.ExistingTable, null);
 
         if (DefinedNameIdentifierCatalog.ContainsFormulaName(workbook, activeSheetId, name))
             return new(name, NameBoxDefinitionRejection.ExistingFormula, null);
 
+        if (workbook.ValidateNamedRangeName(name) is not null)
+            return new(name, NameBoxDefinitionRejection.InvalidIdentifier, null);
+
         return new(
             name,
             NameBoxDefinitionRejection.None,
             new DefineNamedRangeCommand(name, selection.Value, profile.NameBoxMetadata));
+    }
+
+    public static string ResolveNameBoxNavigationDisplayText(
+        Workbook workbook,
+        SheetId activeSheetId,
+        string? text)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        var normalized = text?.Trim() ?? string.Empty;
+        return NameBoxDropdownPlanner.Build(workbook, activeSheetId)
+            .FirstOrDefault(item => string.Equals(
+                item.Name,
+                normalized,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Name ?? normalized;
     }
 
     public static NamedRangeSelectionRequest CreateRangeSelectionRequest(

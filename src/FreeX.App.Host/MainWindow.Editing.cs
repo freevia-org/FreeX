@@ -1316,6 +1316,10 @@ public partial class MainWindow
         if (e.Key != Key.Enter || e.KeyboardDevice.Modifiers != ModifierKeys.None)
             return;
 
+        var navigationText = DefinedNameUiPolicy.ResolveNameBoxNavigationDisplayText(
+            _workbook,
+            _currentSheetId,
+            CellAddressBox.Text);
         if (!TryParseNameBoxReferenceRange(CellAddressBox.Text, out var selectedRange))
         {
             if (TryDefineNameFromNameBox())
@@ -1333,6 +1337,8 @@ public partial class MainWindow
         }
 
         NavigateNameBoxTo(selectedRange);
+        CellAddressBox.Text = navigationText;
+        CellAddressBox.SelectAll();
         FocusSheetGridIfNeeded();
         e.Handled = true;
     }

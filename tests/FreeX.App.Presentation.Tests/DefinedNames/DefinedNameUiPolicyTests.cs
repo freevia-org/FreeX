@@ -132,6 +132,9 @@ public sealed class DefinedNameUiPolicyTests
         DefinedNameUiPolicy.PlanNameBoxDefinition(
                 workbook, sheet.Id, selection, "Orders", DefinedNameUiProfile.Wpf)
             .Rejection.Should().Be(NameBoxDefinitionRejection.ExistingTable);
+        DefinedNameUiPolicy.ResolveNameBoxNavigationDisplayText(
+                workbook, sheet.Id, " orders ")
+            .Should().Be("Orders");
         DefinedNameUiPolicy.PlanNameBoxDefinition(
                 workbook, sheet.Id, selection, "LocalRate", DefinedNameUiProfile.Avalonia)
             .Rejection.Should().Be(NameBoxDefinitionRejection.ExistingFormula);

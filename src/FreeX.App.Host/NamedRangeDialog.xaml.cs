@@ -207,7 +207,7 @@ public sealed partial class NamedRangeDialog : Window
         {
             DialogMessageHelper.ShowWarning(
                 this,
-                DescribeNameError(plan.Validation.Name.Error),
+                DescribeDraftNameError(plan.Validation.Name.Error, plan.Draft.Name),
                 UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
             return;
@@ -326,6 +326,11 @@ public sealed partial class NamedRangeDialog : Window
 
     private static string DescribeNameError(DefinedNameError error) =>
         DefinedNameValidationMessages.Describe(error).Resolve(UiText.Get);
+
+    private static string DescribeDraftNameError(DefinedNameError error, string name) =>
+        error == DefinedNameError.Duplicate
+            ? UiText.Format("NamedRange_NameAlreadyExistsInScopeMessage", name)
+            : DescribeNameError(error);
 
     private static string DescribeRefersToError(RefersToError error) =>
         RefersToValidationMessages.Describe(error).Resolve(UiText.Get);
