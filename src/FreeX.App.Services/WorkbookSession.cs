@@ -3799,10 +3799,10 @@ public sealed class WorkbookSession : IDisposable
                 continue;
 
             var matches = sheet.DataValidations
-                .Where(candidate => HasSameDataValidationSettings(candidate, existingRule))
+                .Where(candidate => candidate.HasSameSettings(existingRule))
                 .Select(candidate => (IWorkbookCommand)new SetDataValidationCommand(
                     sheetId,
-                    CloneDataValidationForRanges(rule, candidate.AppliesTo, candidate.AdditionalRanges)))
+                    rule.CloneWithNewIdentity(candidate.AppliesTo, candidate.AdditionalRanges)))
                 .ToList();
 
             if (matches.Count == 0)
@@ -3817,7 +3817,7 @@ public sealed class WorkbookSession : IDisposable
                     .ToArray();
                 matches.Add(new SetDataValidationCommand(
                     sheetId,
-                    CloneDataValidationForRanges(rule, sheetRanges[0], sheetRanges.Skip(1))));
+                    rule.CloneWithNewIdentity(sheetRanges[0], sheetRanges.Skip(1))));
             }
 
             commands.AddRange(matches);
@@ -6172,7 +6172,7 @@ public sealed class WorkbookSession : IDisposable
             var sheetRanges = selectedRanges
                 .Select(range => RemapRangeToSheet(range, sheetId))
                 .ToArray();
-            var sheetRule = CloneDataValidationForRanges(rule, sheetRanges[0], sheetRanges.Skip(1));
+            var sheetRule = rule.CloneWithNewIdentity(sheetRanges[0], sheetRanges.Skip(1));
             if (WouldSetDataValidationMutate(sheet, sheetRule))
                 commands.Add(new SetDataValidationCommand(sheetId, sheetRule));
         }
@@ -6295,23 +6295,8 @@ public sealed class WorkbookSession : IDisposable
     private static bool WouldSetDataValidationMutate(Sheet sheet, DataValidation rule)
     {
         var existing = FindMatchingDataValidationRule(sheet, rule);
-        return existing is null || !DataValidationRulesEqual(existing, rule);
+        return existing is null || !existing.HasSameDefinition(rule, includeNativeMetadata: true);
     }
-
-    private static bool HasSameDataValidationSettings(DataValidation left, DataValidation right) =>
-        left.Type == right.Type &&
-        left.Operator == right.Operator &&
-        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
-        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
-        left.AllowBlank == right.AllowBlank &&
-        left.ShowDropdown == right.ShowDropdown &&
-        left.AlertStyle == right.AlertStyle &&
-        left.ShowInputMessage == right.ShowInputMessage &&
-        left.ShowErrorMessage == right.ShowErrorMessage &&
-        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
-        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
-        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
-        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal);
 
     private static DataValidation? FindMatchingDataValidationRule(Sheet sheet, DataValidation rule)
     {
@@ -6347,88 +6332,6 @@ public sealed class WorkbookSession : IDisposable
         }
 
         return false;
-    }
-
-    private static DataValidation CloneDataValidationForRanges(
-        DataValidation source,
-        GridRange appliesTo,
-        IEnumerable<GridRange> additionalRanges)
-    {
-        var clone = new DataValidation
-        {
-            AppliesTo = appliesTo,
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = source.Formula1,
-            Formula2 = source.Formula2,
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-        clone.AdditionalRanges.AddRange(additionalRanges);
-        return clone;
-    }
-
-    private static bool DataValidationRulesEqual(DataValidation left, DataValidation right) =>
-        left.AppliesTo == right.AppliesTo &&
-        left.AdditionalRanges.SequenceEqual(right.AdditionalRanges) &&
-        left.Type == right.Type &&
-        left.Operator == right.Operator &&
-        string.Equals(left.Formula1, right.Formula1, StringComparison.Ordinal) &&
-        string.Equals(left.Formula2, right.Formula2, StringComparison.Ordinal) &&
-        left.AllowBlank == right.AllowBlank &&
-        left.ShowDropdown == right.ShowDropdown &&
-        left.AlertStyle == right.AlertStyle &&
-        left.ShowInputMessage == right.ShowInputMessage &&
-        left.ShowErrorMessage == right.ShowErrorMessage &&
-        string.Equals(left.ErrorTitle, right.ErrorTitle, StringComparison.Ordinal) &&
-        string.Equals(left.ErrorMessage, right.ErrorMessage, StringComparison.Ordinal) &&
-        string.Equals(left.PromptTitle, right.PromptTitle, StringComparison.Ordinal) &&
-        string.Equals(left.PromptMessage, right.PromptMessage, StringComparison.Ordinal) &&
-        DictionaryEquals(left.NativeAttributes, right.NativeAttributes) &&
-        SequenceEquals(left.NativeChildXmls, right.NativeChildXmls) &&
-        DictionaryEquals(left.NativeContainerAttributes, right.NativeContainerAttributes) &&
-        SequenceEquals(left.NativeContainerChildXmls, right.NativeContainerChildXmls);
-
-    private static bool DictionaryEquals(
-        IReadOnlyDictionary<string, string>? left,
-        IReadOnlyDictionary<string, string>? right)
-    {
-        if (ReferenceEquals(left, right))
-            return true;
-        if (left is null || right is null || left.Count != right.Count)
-            return false;
-
-        foreach (var (key, value) in left)
-        {
-            if (!right.TryGetValue(key, out var rightValue) ||
-                !string.Equals(value, rightValue, StringComparison.Ordinal))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool SequenceEquals(IReadOnlyList<string>? left, IReadOnlyList<string>? right)
-    {
-        if (ReferenceEquals(left, right))
-            return true;
-        if (left is null || right is null)
-            return false;
-
-        return left.SequenceEqual(right, StringComparer.Ordinal);
     }
 
     private static double GetFittingRowHeight(double fontSize) =>

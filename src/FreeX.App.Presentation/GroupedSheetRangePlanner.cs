@@ -28,28 +28,8 @@ public static class GroupedSheetRangePlanner
 
     public static DataValidation CloneDataValidationForSheet(DataValidation source, SheetId sheetId)
     {
-        var clone = new DataValidation
-        {
-            AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
-            Type = source.Type,
-            Operator = source.Operator,
-            Formula1 = source.Formula1,
-            Formula2 = source.Formula2,
-            AllowBlank = source.AllowBlank,
-            ShowDropdown = source.ShowDropdown,
-            AlertStyle = source.AlertStyle,
-            ShowInputMessage = source.ShowInputMessage,
-            ShowErrorMessage = source.ShowErrorMessage,
-            ErrorTitle = source.ErrorTitle,
-            ErrorMessage = source.ErrorMessage,
-            PromptTitle = source.PromptTitle,
-            PromptMessage = source.PromptMessage,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = source.NativeChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-        clone.AdditionalRanges.AddRange(source.AdditionalRanges.Select(range => RemapRangeToSheet(range, sheetId)));
-        return clone;
+        return source.CloneWithNewIdentity(
+            RemapRangeToSheet(source.AppliesTo, sheetId),
+            source.AdditionalRanges.Select(range => RemapRangeToSheet(range, sheetId)));
     }
 }
