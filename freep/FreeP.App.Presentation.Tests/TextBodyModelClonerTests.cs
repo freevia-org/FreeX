@@ -94,7 +94,7 @@ public sealed class TextBodyModelClonerTests
 
         body.Paragraphs[0].Runs.Select(run => run.Text).Should().Equal("F", "ie", "ld");
         selected.Should().ContainSingle();
-        body.Paragraphs[0].Runs.Should().OnlyContain(run => run.Field is null && run.Math is null);
+        body.Paragraphs[0].Runs.Should().OnlyContain(run => run.Field == null && run.Math == null);
     }
 
     [Fact]
