@@ -550,6 +550,121 @@ public static class MergeRuleEvaluator
     /// <summary>Build the canonical Word REF field instruction.</summary>
     public static string BuildNativeRefInstruction(string bookmarkName) => $" REF {bookmarkName} ";
 
+    public static ComplexField BuildNativeIfField(
+        string fieldName,
+        MergeConditionOperator op,
+        string value,
+        string trueText,
+        string falseText) =>
+        BuildNativeConditionalField("IF", fieldName, op, value, trueText, falseText);
+
+    public static ComplexField BuildNativeSkipIfField(
+        string fieldName,
+        MergeConditionOperator op,
+        string value) =>
+        BuildNativeConditionalField("SKIPIF", fieldName, op, value);
+
+    public static ComplexField BuildNativeNextIfField(
+        string fieldName,
+        MergeConditionOperator op,
+        string value) =>
+        BuildNativeConditionalField("NEXTIF", fieldName, op, value);
+
+    public static bool TryEvaluateNativeConditionalField(
+        ComplexField field,
+        IReadOnlyDictionary<string, string> row,
+        out string result,
+        out bool skipRecord,
+        out bool advanceRecord)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        ArgumentNullException.ThrowIfNull(row);
+        result = string.Empty;
+        skipRecord = false;
+        advanceRecord = false;
+
+        if (field.Keyword is not ("IF" or "SKIPIF" or "NEXTIF"))
+            return false;
+
+        var nested = field.NestedFields?.FirstOrDefault(item =>
+            item.Placement == NestedComplexFieldPlacement.Instruction
+            && MailMerge.TryGetMergeFieldName(item.Field, out _));
+        if (nested is null
+            || !MailMerge.TryGetMergeFieldName(nested.Field, out var fieldName)
+            || nested.Offset < 0
+            || nested.Length < 0
+            || nested.Offset + nested.Length > field.Instruction.Length)
+            return false;
+
+        var rowValue = LookupField(row, fieldName);
+        var resolvedInstruction = field.Instruction[..nested.Offset]
+            + Quote(rowValue)
+            + field.Instruction[(nested.Offset + nested.Length)..];
+        if (field.Keyword != "IF")
+        {
+            var condition = resolvedInstruction.TrimStart();
+            var keywordEnd = condition.IndexOf(' ');
+            if (keywordEnd < 0)
+                return false;
+            condition = condition[(keywordEnd + 1)..];
+            resolvedInstruction = $" IF {condition.Trim()} \"1\" \"0\" ";
+        }
+
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var run = Run.ComplexFieldRun(resolvedInstruction, string.Empty);
+        document.Blocks.Add(new Paragraph { Runs = { run } });
+        var evaluated = ComplexFieldEngine.Recompute(document, 0, run);
+        if (field.Keyword == "IF")
+        {
+            result = evaluated;
+        }
+        else
+        {
+            var conditionMet = evaluated == "1";
+            skipRecord = field.Keyword == "SKIPIF" && conditionMet;
+            advanceRecord = field.Keyword == "NEXTIF" && conditionMet;
+        }
+
+        return true;
+    }
+
+    private static ComplexField BuildNativeConditionalField(
+        string keyword,
+        string fieldName,
+        MergeConditionOperator op,
+        string value,
+        string? trueText = null,
+        string? falseText = null)
+    {
+        var normalizedName = MailMerge.NormalizeMergeFieldName(fieldName);
+        var placeholder = $"{MailMerge.FieldOpen}{normalizedName}{MailMerge.FieldClose}";
+        var prefix = $" {keyword} ";
+        var (nativeOperator, nativeValue) = op switch
+        {
+            MergeConditionOperator.IsBlank => ("=", string.Empty),
+            MergeConditionOperator.IsNotBlank => ("<>", string.Empty),
+            MergeConditionOperator.Contains => ("=", $"*{value}*"),
+            _ => (OperatorToToken(op), value)
+        };
+        var instruction = prefix + placeholder + $" {nativeOperator} {Quote(nativeValue)}";
+        if (keyword == "IF")
+            instruction += $" {Quote(trueText ?? string.Empty)} {Quote(falseText ?? string.Empty)}";
+        instruction += " ";
+
+        return new ComplexField(
+            instruction,
+            NestedFields:
+            [
+                new NestedComplexField(
+                    new ComplexField(MailMerge.BuildMergeFieldInstruction(normalizedName)),
+                    placeholder,
+                    NestedComplexFieldPlacement.Instruction,
+                    prefix.Length,
+                    placeholder.Length)
+            ]);
+    }
+
     // ── Condition evaluation ─────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -2305,6 +2420,23 @@ public static class MailMerge
                     return true;
                 case MergeSequenceNumberInstruction:
                     run.Text = state.SequenceNumber.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                case "IF":
+                case "SKIPIF":
+                case "NEXTIF":
+                    if (!MergeRuleEvaluator.TryEvaluateNativeConditionalField(
+                            run.ComplexField,
+                            row,
+                            out var conditionalResult,
+                            out var skipConditionalRecord,
+                            out var advanceConditionalRecord))
+                        return false;
+                    run.Text = conditionalResult;
+                    run.ComplexField = null;
+                    state.SkipRecordRequested |= skipConditionalRecord;
+                    state.AdvanceRecordRequested |= advanceConditionalRecord;
+                    if (skipConditionalRecord)
+                        state.SkippedIndices.Add(recordIndex - 1);
                     return true;
                 case "FILLIN" when ComplexFieldEngine.HasSwitch(run.ComplexField.Instruction, 'o'):
                     if (MergeRuleEvaluator.TryParseInteractivePrompt(

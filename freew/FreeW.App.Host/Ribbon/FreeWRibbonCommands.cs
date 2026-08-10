@@ -1933,9 +1933,9 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-sequence-number", new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeSequenceNumberField));
         // Rules dropdown — each sub-command inserts the appropriate rule instruction via a dialog.
         registry.Register("freew.merge-rules", EmptyRibbonCommand.Instance); // dropdown host: no action of its own
-        registry.Register("freew.merge-rule-if", new InsertMergeRuleIfCommand(editor, mergeSession));
-        registry.Register("freew.merge-rule-skip-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.SkipRecordIf));
-        registry.Register("freew.merge-rule-next-record-if", new InsertMergeRuleCondCommand(editor, mergeSession, RuleCondKind.NextRecordIf));
+        registry.Register("freew.merge-rule-if", new InsertMergeRuleIfCommand(resolveFieldTarget, mergeSession));
+        registry.Register("freew.merge-rule-skip-record-if", new InsertMergeRuleCondCommand(resolveFieldTarget, mergeSession, RuleCondKind.SkipRecordIf));
+        registry.Register("freew.merge-rule-next-record-if", new InsertMergeRuleCondCommand(resolveFieldTarget, mergeSession, RuleCondKind.NextRecordIf));
         registry.Register("freew.merge-rule-fill-in", new InsertMergeRuleFillInCommand(resolveFieldTarget));
         registry.Register("freew.merge-rule-ask", new InsertMergeRuleAskCommand(resolveFieldTarget));
         registry.Register("freew.merge-rule-set", new InsertMergeRuleSetCommand(resolveFieldTarget));
@@ -6566,39 +6566,54 @@ internal static class FreeWRibbonCommands
     // Merge Rules: command kind tag for Skip/Next Record If.
     private enum RuleCondKind { SkipRecordIf, NextRecordIf }
 
-    // Mailings > Rules > If...Then...Else: ask the user for field/operator/value/true-text/false-text
-    // via a dialog and insert the IF merge instruction at the caret.
-    private sealed class InsertMergeRuleIfCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    // Mailings > Rules > If...Then...Else: insert a native IF field with a nested MERGEFIELD operand.
+    private sealed class InsertMergeRuleIfCommand(
+        Func<DocumentView> resolveEditor,
+        MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var header = session.Data?.Header ?? [];
             var result = MergeRuleIfDialog.Ask(Window.GetWindow(editor), header);
             if (result is null) return;
-            var instruction = MergeRuleEvaluator.BuildIfInstruction(
-                result.FieldName, result.Operator, result.Value, result.TrueText, result.FalseText);
-            editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            InsertNativeMergeRuleField(
+                editor,
+                MergeRuleEvaluator.BuildNativeIfField(
+                    result.FieldName,
+                    result.Operator,
+                    result.Value,
+                    result.TrueText,
+                    result.FalseText),
+                MergeRuleEvaluator.BuildIfInstruction(
+                    result.FieldName,
+                    result.Operator,
+                    result.Value,
+                    result.TrueText,
+                    result.FalseText));
         }
     }
 
-    // Mailings > Rules > Skip Record If / Next Record If: insert «Skip Record If …» or «Next Record If …».
+    // Mailings > Rules > Skip/Next Record If: insert native SKIPIF/NEXTIF with nested MERGEFIELD.
     private sealed class InsertMergeRuleCondCommand(
-        DocumentView editor,
+        Func<DocumentView> resolveEditor,
         MailMergeSession session,
         RuleCondKind kind) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             var header = session.Data?.Header ?? [];
             var label = kind == RuleCondKind.SkipRecordIf ? "Skip Record If" : "Next Record If";
             var result = MergeRuleCondDialog.Ask(Window.GetWindow(editor), header, label);
             if (result is null) return;
-            var instruction = kind == RuleCondKind.SkipRecordIf
+            var displayInstruction = kind == RuleCondKind.SkipRecordIf
                 ? MergeRuleEvaluator.BuildSkipRecordIfInstruction(result.FieldName, result.Operator, result.Value)
                 : MergeRuleEvaluator.BuildNextRecordIfInstruction(result.FieldName, result.Operator, result.Value);
-            editor.Focus();
-            editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+            var field = kind == RuleCondKind.SkipRecordIf
+                ? MergeRuleEvaluator.BuildNativeSkipIfField(result.FieldName, result.Operator, result.Value)
+                : MergeRuleEvaluator.BuildNativeNextIfField(result.FieldName, result.Operator, result.Value);
+            InsertNativeMergeRuleField(editor, field, displayInstruction);
         }
     }
 
@@ -6609,10 +6624,16 @@ internal static class FreeWRibbonCommands
         DocumentView editor,
         string instruction,
         string displayInstruction)
+        => InsertNativeMergeRuleField(editor, new ComplexField(instruction), displayInstruction);
+
+    internal static void InsertNativeMergeRuleField(
+        DocumentView editor,
+        ComplexField field,
+        string displayInstruction)
     {
         editor.Focus();
         editor.InsertComplexField(
-            instruction,
+            field,
             $"{MailMerge.FieldOpen}{displayInstruction}{MailMerge.FieldClose}");
     }
 

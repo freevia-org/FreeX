@@ -13339,13 +13339,18 @@ public sealed class DocumentView : RichTextBox
 
     public void InsertComplexField(string instruction, string? cachedResult)
     {
-        Focus();
         if (string.IsNullOrWhiteSpace(instruction))
             return;
         // Word stores instructions with a single leading/trailing space; normalise so " PAGE " is produced
         // from a bare "PAGE".
         var normalized = " " + instruction.Trim() + " ";
-        var field = new ComplexField(normalized);
+        InsertComplexField(new ComplexField(normalized), cachedResult);
+    }
+
+    internal void InsertComplexField(ComplexField field, string? cachedResult)
+    {
+        Focus();
+        ArgumentNullException.ThrowIfNull(field);
         var run = new ModelRun(cachedResult ?? string.Empty) { ComplexField = field };
         var fieldDocument = FieldEvaluationDocument ?? _model;
         var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
