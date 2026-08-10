@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeX.App.Presentation.FormatCells;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 using CellVAlign = FreeX.Core.Model.VerticalAlignment;
@@ -262,7 +263,7 @@ public static class FormatCellsDialogPlanner
             return Fail(NumberDecimalPlacesValidation(), out validation);
 
         if (!numberAvailability.GeneratesFormat
-            && !IsSupportedCustomNumberFormat(input.Number.FormatText ?? string.Empty))
+            && !FormatCellsInputParser.IsSupportedCustomNumberFormat(input.Number.FormatText ?? string.Empty))
         {
             return Fail(NumberFormatValidation(), out validation);
         }
@@ -275,15 +276,15 @@ public static class FormatCellsDialogPlanner
             input.Number.Symbol,
             input.Number.NegativeIndex);
 
-        var fontSize = TryParseFontSize(input.Font.FontSizeText ?? string.Empty);
+        var fontSize = FormatCellsInputParser.TryParseFontSize(input.Font.FontSizeText ?? string.Empty);
         if (fontSize is null)
             return Fail(FontSizeValidation(), out validation);
 
-        var indentLevel = TryParseIndentLevel(input.Alignment.IndentLevelText ?? string.Empty);
+        var indentLevel = FormatCellsInputParser.TryParseIndentLevel(input.Alignment.IndentLevelText ?? string.Empty);
         if (indentLevel is null)
             return Fail(IndentLevelValidation(), out validation);
 
-        var textRotation = TryParseSupportedTextRotation(input.Alignment.TextRotationText ?? string.Empty);
+        var textRotation = FormatCellsInputParser.TryParseSupportedTextRotation(input.Alignment.TextRotationText ?? string.Empty);
         if (textRotation is null)
             return Fail(TextRotationValidation(), out validation);
 
@@ -358,87 +359,17 @@ public static class FormatCellsDialogPlanner
     public static bool BorderSideNeedsColor(string? styleText) =>
         !string.Equals(styleText, nameof(BorderStyle.None), StringComparison.Ordinal);
 
-    public static double? TryParseFontSize(string text)
-    {
-        if ((double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out var currentCultureSize) ||
-             double.TryParse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out currentCultureSize)) &&
-            currentCultureSize > 0 &&
-            double.IsFinite(currentCultureSize))
-        {
-            return currentCultureSize;
-        }
-
-        return null;
-    }
+    public static double? TryParseFontSize(string text) =>
+        FormatCellsInputParser.TryParseFontSize(text);
 
     public static int? TryParseIndentLevel(string text) =>
-        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var indent)
-            ? Math.Clamp(indent, 0, 15)
-            : null;
+        FormatCellsInputParser.TryParseIndentLevel(text);
 
-    public static int? TryParseSupportedTextRotation(string text)
-    {
-        if (!int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotation))
-            return null;
+    public static int? TryParseSupportedTextRotation(string text) =>
+        FormatCellsInputParser.TryParseSupportedTextRotation(text);
 
-        return rotation == 255 || rotation is >= -90 and <= 90
-            ? rotation
-            : null;
-    }
-
-    public static bool IsSupportedCustomNumberFormat(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return false;
-
-        var sectionCount = 1;
-        var inQuote = false;
-        var bracketDepth = 0;
-        var trimmed = text.Trim();
-
-        for (var i = 0; i < trimmed.Length; i++)
-        {
-            var character = trimmed[i];
-            if (character == '\\')
-            {
-                i++;
-                continue;
-            }
-
-            if (character == '"')
-            {
-                inQuote = !inQuote;
-                continue;
-            }
-
-            if (inQuote)
-                continue;
-
-            if (character == '[')
-            {
-                bracketDepth++;
-                continue;
-            }
-
-            if (character == ']')
-            {
-                if (bracketDepth == 0)
-                    return false;
-
-                bracketDepth--;
-                continue;
-            }
-
-            if (character == ';' && bracketDepth == 0)
-            {
-                sectionCount++;
-                if (sectionCount > 4)
-                    return false;
-            }
-        }
-
-        return !inQuote && bracketDepth == 0;
-    }
+    public static bool IsSupportedCustomNumberFormat(string text) =>
+        FormatCellsInputParser.IsSupportedCustomNumberFormat(text);
 
     private static bool TryValidateBorder(
         FormatCellsDialogBorderInput input,

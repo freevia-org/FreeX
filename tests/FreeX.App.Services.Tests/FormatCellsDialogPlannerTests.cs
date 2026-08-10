@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.FormatCells;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -120,6 +121,57 @@ public sealed class FormatCellsDialogPlannerTests
             FormatCellsDialogPlannerTab.Border,
             FormatCellsDialogValidationTarget.BorderRightColor,
             "FormatCells_InvalidRightBorderColorMessage");
+    }
+
+    [Fact]
+    public void TryCreateResult_AcceptsExcelMaximumFontSize()
+    {
+        var input = ValidInput() with
+        {
+            Font = ValidInput().Font with { FontSizeText = "409" }
+        };
+
+        FormatCellsDialogPlanner.TryCreateResult(new CellStyle(), input, out var result, out var validation)
+            .Should()
+            .BeTrue();
+
+        validation.Should().BeNull();
+        result!.Diff.FontSize.Should().Be(FormatCellsInputParser.MaxFontSize);
+    }
+
+    [Theory]
+    [InlineData("409.01")]
+    [InlineData("410")]
+    [InlineData("5000")]
+    public void TryCreateResult_RejectsFontSizesAboveExcelMaximum(string fontSizeText)
+    {
+        var input = ValidInput() with
+        {
+            Font = ValidInput().Font with { FontSizeText = fontSizeText }
+        };
+
+        AssertValidation(
+            input,
+            FormatCellsDialogPlannerTab.Font,
+            FormatCellsDialogValidationTarget.FontSize,
+            "FormatCells_InvalidFontSizeMessage");
+    }
+
+    [Fact]
+    public void ParsingHelpers_UseNeutralFormatCellsInputParserContract()
+    {
+        FormatCellsDialogPlanner.TryParseFontSize("409.01")
+            .Should()
+            .Be(FormatCellsInputParser.TryParseFontSize("409.01"));
+        FormatCellsDialogPlanner.TryParseIndentLevel("99")
+            .Should()
+            .Be(FormatCellsInputParser.TryParseIndentLevel("99"));
+        FormatCellsDialogPlanner.TryParseSupportedTextRotation("255")
+            .Should()
+            .Be(FormatCellsInputParser.TryParseSupportedTextRotation("255"));
+        FormatCellsDialogPlanner.IsSupportedCustomNumberFormat("0;0;0;@;extra")
+            .Should()
+            .Be(FormatCellsInputParser.IsSupportedCustomNumberFormat("0;0;0;@;extra"));
     }
 
     [Fact]
