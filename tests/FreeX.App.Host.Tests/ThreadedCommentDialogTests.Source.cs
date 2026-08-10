@@ -56,8 +56,12 @@ public sealed partial class ThreadedCommentDialogTests
         source.Should().Contain("ThreadedCommentDialogPlanner.TryCreateReplyEditResult");
         source.Should().Contain("ThreadedCommentDialogPlanner.TryCreateReplyDeleteResult");
         source.Should().Contain("ThreadedCommentDialogPlanner.CreateResult");
-        source.Should().Contain("ThreadedCommentDialogPlanner.FormatReplyChoice");
+        source.Should().Contain("ThreadedCommentDialogPlanner.DescribeReply");
         source.Should().Contain("ThreadedCommentDialogPlanner.FormatMessageHeading");
+        source.Should().Contain("ThreadedCommentDialogPlanner.ReplySelectorAutomationId");
+        source.Should().Contain("ThreadedCommentDialogPlanner.SelectedReplyEditorAutomationId");
+        source.Should().Contain("ThreadedCommentDialogPlanner.UpdateReplyAutomationId");
+        source.Should().Contain("ThreadedCommentDialogPlanner.DeleteReplyAutomationId");
         source.Should().NotContain("public enum ThreadedCommentDialogAction");
         source.Should().NotContain("public sealed record ThreadedCommentDialogResult");
     }

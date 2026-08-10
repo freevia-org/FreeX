@@ -139,7 +139,7 @@ public sealed class ThreadedCommentDialogPlannerTests
     }
 
     [Fact]
-    public void FormatReplyChoice_UsesPortableHeadingAndSummary()
+    public void DescribeReply_OwnsChoiceTextAndLocalizedAutomationName()
     {
         var reply = new CommentReply(
             "First line\r\nsecond line with enough trailing text to trigger a compact summary tail",
@@ -148,9 +148,26 @@ public sealed class ThreadedCommentDialogPlannerTests
             CreatedAtUtc = new DateTimeOffset(2026, 6, 28, 12, 34, 0, TimeSpan.FromHours(2))
         };
 
-        ThreadedCommentDialogPlanner.FormatReplyChoice(1, reply)
-            .Should()
-            .Be("2. Codex - 2026-06-28 10:34 UTC: First line  second line with enough trailing text to trig...");
+        var descriptor = ThreadedCommentDialogPlanner.DescribeReply(1, reply);
+
+        descriptor.ChoiceText.Should().Be(
+            "2. Codex - 2026-06-28 10:34 UTC: First line  second line with enough trailing text to trig...");
+        descriptor.AutomationName.ResourceKey.Should().Be("ThreadedComment_ReplyAutomationNameFormat");
+        descriptor.AutomationName.LiteralText.Should().BeNull();
+        descriptor.AutomationName.Arguments.Should().Equal(
+            2,
+            "Codex - 2026-06-28 10:34 UTC",
+            "First line  second line with enough trailing text to trig...");
+        ThreadedCommentDialogPlanner.FormatReplyChoice(1, reply).Should().Be(descriptor.ChoiceText);
+    }
+
+    [Fact]
+    public void ReplySemanticIds_PreserveExistingAccessibilityContracts()
+    {
+        ThreadedCommentDialogPlanner.ReplySelectorAutomationId.Should().Be("ThreadedCommentReplySelector");
+        ThreadedCommentDialogPlanner.SelectedReplyEditorAutomationId.Should().Be("ThreadedCommentSelectedReplyBox");
+        ThreadedCommentDialogPlanner.UpdateReplyAutomationId.Should().Be("ThreadedCommentUpdateReplyButton");
+        ThreadedCommentDialogPlanner.DeleteReplyAutomationId.Should().Be("ThreadedCommentDeleteReplyButton");
     }
 
     [Fact]

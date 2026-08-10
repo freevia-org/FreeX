@@ -35,8 +35,17 @@ public sealed record ThreadedCommentDialogResult(
     int? ReplyIndex = null,
     string? ReplyEditText = null);
 
+public sealed record ThreadedCommentReplyPresentationDescriptor(
+    string ChoiceText,
+    LocalizedTextDescriptor AutomationName);
+
 public static class ThreadedCommentDialogPlanner
 {
+    public const string ReplySelectorAutomationId = "ThreadedCommentReplySelector";
+    public const string SelectedReplyEditorAutomationId = "ThreadedCommentSelectedReplyBox";
+    public const string UpdateReplyAutomationId = "ThreadedCommentUpdateReplyButton";
+    public const string DeleteReplyAutomationId = "ThreadedCommentDeleteReplyButton";
+
     public static ValidationPresentationDescriptor<ThreadedCommentDialogFocusTarget>? DescribeValidationError(
         ThreadedCommentDialogValidationError error) =>
         error switch
@@ -192,8 +201,23 @@ public static class ThreadedCommentDialogPlanner
     public static bool IsValidReplyIndex(ThreadedComment comment, int replyIndex) =>
         replyIndex >= 0 && replyIndex < comment.Replies.Count;
 
+    public static ThreadedCommentReplyPresentationDescriptor DescribeReply(int index, CommentReply reply)
+    {
+        ArgumentNullException.ThrowIfNull(reply);
+
+        var heading = FormatMessageHeading(reply.Author, reply.CreatedAtUtc);
+        var summary = SummarizeReplyText(reply.Text);
+        return new ThreadedCommentReplyPresentationDescriptor(
+            $"{index + 1}. {heading}: {summary}",
+            LocalizedTextDescriptor.Resource(
+                "ThreadedComment_ReplyAutomationNameFormat",
+                index + 1,
+                heading,
+                summary));
+    }
+
     public static string FormatReplyChoice(int index, CommentReply reply) =>
-        $"{index + 1}. {FormatMessageHeading(reply.Author, reply.CreatedAtUtc)}: {SummarizeReplyText(reply.Text)}";
+        DescribeReply(index, reply).ChoiceText;
 
     public static string SummarizeReplyText(string text)
     {

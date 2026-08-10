@@ -332,19 +332,20 @@ public sealed partial class MainWindow
         var selector = new ComboBox { MinWidth = 200 };
         AvaloniaCompactDialogChrome.ApplyComboBox(selector, style);
         AutomationProperties.SetName(selector, UiText.Get("ThreadedComment_ReplyToEditOrDeleteAutomationName"));
-        AutomationProperties.SetAutomationId(selector, "ThreadedCommentReplySelector");
+        AutomationProperties.SetAutomationId(selector, ThreadedCommentDialogPlanner.ReplySelectorAutomationId);
         AutomationProperties.SetHelpText(selector, UiText.Get("ThreadedComment_ReplySelectorHelpText"));
         for (var i = 0; i < existing.Replies.Count; i++)
         {
-            var item = new ComboBoxItem { Content = ThreadedCommentDialogPlanner.FormatReplyChoice(i, existing.Replies[i]) };
-            AutomationProperties.SetName(item, FormatReplyAutomationName(i, existing.Replies[i]));
+            var descriptor = ThreadedCommentDialogPlanner.DescribeReply(i, existing.Replies[i]);
+            var item = new ComboBoxItem { Content = descriptor.ChoiceText };
+            AutomationProperties.SetName(item, descriptor.AutomationName.Resolve(UiText.Get, UiText.Format));
             selector.Items.Add(item);
         }
 
         var selectedReplyBox = new TextBox { AcceptsReturn = true, MinWidth = 320, MinHeight = 48, TextWrapping = TextWrapping.Wrap };
         AvaloniaCompactDialogChrome.ApplyTextBox(selectedReplyBox, style, fixedHeight: false);
         AutomationProperties.SetName(selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextAutomationName"));
-        AutomationProperties.SetAutomationId(selectedReplyBox, "ThreadedCommentSelectedReplyBox");
+        AutomationProperties.SetAutomationId(selectedReplyBox, ThreadedCommentDialogPlanner.SelectedReplyEditorAutomationId);
         AutomationProperties.SetHelpText(selectedReplyBox, UiText.Get("ThreadedComment_SelectedReplyTextHelpText"));
 
         var updateButton = new Button { Content = UiText.Get("ThreadedComment_UpdateReplyButton") };
@@ -352,10 +353,10 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyButton(updateButton, style, 110);
         AvaloniaCompactDialogChrome.ApplyButton(deleteButton, style, 110);
         AutomationProperties.SetName(updateButton, UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
-        AutomationProperties.SetAutomationId(updateButton, "ThreadedCommentUpdateReplyButton");
+        AutomationProperties.SetAutomationId(updateButton, ThreadedCommentDialogPlanner.UpdateReplyAutomationId);
         AutomationProperties.SetHelpText(updateButton, UiText.Get("ThreadedComment_UpdateSelectedReplyHelpText"));
         AutomationProperties.SetName(deleteButton, UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
-        AutomationProperties.SetAutomationId(deleteButton, "ThreadedCommentDeleteReplyButton");
+        AutomationProperties.SetAutomationId(deleteButton, ThreadedCommentDialogPlanner.DeleteReplyAutomationId);
         AutomationProperties.SetHelpText(deleteButton, UiText.Get("ThreadedComment_DeleteSelectedReplyHelpText"));
 
         void PopulateSelectedReplyText()
@@ -428,13 +429,6 @@ public sealed partial class MainWindow
         selector.SelectedIndex = 0;
         PopulateSelectedReplyText();
     }
-
-    private static string FormatReplyAutomationName(int index, CommentReply reply) =>
-        UiText.Format(
-            "ThreadedComment_ReplyAutomationNameFormat",
-            index + 1,
-            ThreadedCommentDialogPlanner.FormatMessageHeading(reply.Author, reply.CreatedAtUtc),
-            ThreadedCommentDialogPlanner.SummarizeReplyText(reply.Text));
 
     private static Border BuildThreadMessage(string author, string text, DateTimeOffset? createdAtUtc, bool isRoot)
     {
