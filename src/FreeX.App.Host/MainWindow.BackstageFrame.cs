@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.PageLayout;
@@ -87,7 +88,8 @@ public partial class MainWindow
     {
         var navigation = entry.Navigation;
         if (navigation.Kind == FreeXBackstageNavigationEntryKind.Divider)
-            return BackstageEntry.Divider(navigation.DockBottom);
+            return WpfBackstageEntryProjection.FromPlan(
+                SisterBackstageEntryPlan<UIElement>.Divider(navigation.DockBottom));
 
         var label = FreeXBackstageTextValue.ResolveKey(navigation.LabelKey, UiText.Get);
         var automationName = FreeXBackstageTextValue.ResolveOptionalKey(navigation.AutomationNameKey, UiText.Get);
@@ -95,36 +97,35 @@ public partial class MainWindow
         var tooltipTitle = FreeXBackstageTextValue.ResolveOptionalKey(navigation.TooltipTitleKey, UiText.Get);
         var tooltipDescription = FreeXBackstageTextValue.ResolveOptionalKey(navigation.TooltipDescriptionKey, UiText.Get);
 
-        return navigation.Kind switch
+        var mapped = navigation.Kind switch
         {
-            FreeXBackstageNavigationEntryKind.Pane => BackstageEntry.Pane(
+            FreeXBackstageNavigationEntryKind.Pane => SisterBackstageEntryPlan<UIElement>.Pane(
                 label,
-                navigation.Icon,
+                navigation.Icon!.Value,
                 () => BuildBackstagePane(RequirePaneFlow(entry)),
                 navigation.DockBottom,
-                navigation.KeyTip,
-                navigation.AutomationId,
-                automationName,
-                automationHelpText,
-                tooltipTitle,
-                tooltipDescription,
                 navigation.IconCommandName),
 
-            FreeXBackstageNavigationEntryKind.Command => BackstageEntry.Command(
+            FreeXBackstageNavigationEntryKind.Command => SisterBackstageEntryPlan<UIElement>.Command(
                 label,
-                navigation.Icon,
+                navigation.Icon!.Value,
                 ResolveBackstageCommand(RequireCommandWorkflow(entry)),
                 navigation.DockBottom,
-                navigation.KeyTip,
-                navigation.AutomationId,
-                automationName,
-                automationHelpText,
-                tooltipTitle,
-                tooltipDescription,
                 navigation.IconCommandName),
 
             _ => throw new InvalidOperationException($"Unsupported Backstage entry kind '{navigation.Kind}'.")
         };
+
+        return WpfBackstageEntryProjection.FromPlan(mapped with
+        {
+            StableId = entry.StableId,
+            KeyTip = navigation.KeyTip,
+            AutomationId = navigation.AutomationId,
+            AutomationName = automationName,
+            AutomationHelpText = automationHelpText,
+            TooltipTitle = tooltipTitle,
+            TooltipDescription = tooltipDescription,
+        });
     }
 
     private static FreeXBackstagePaneFlowPlan RequirePaneFlow(FreeXBackstageFrameEntryPlan entry) =>

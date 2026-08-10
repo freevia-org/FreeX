@@ -61,6 +61,13 @@ public sealed partial class MainWindowSourceHygieneTests
         buildMethod.Should().NotContain("BackstageSaveAsButton");
         buildMethod.Should().NotContain("BackstageAccountButton");
 
+        var mapMethod = ExtractMethodSource(frameSource, "private BackstageEntry MapBackstageFrameEntry(");
+        mapMethod.Should().Contain("SisterBackstageEntryPlan<UIElement>");
+        mapMethod.Should().Contain("StableId = entry.StableId");
+        mapMethod.Should().Contain("WpfBackstageEntryProjection.FromPlan(mapped with");
+        mapMethod.Should().NotContain("BackstageEntry.Pane(");
+        mapMethod.Should().NotContain("BackstageEntry.Command(");
+
         frameSource.Should().Contain("RequirePaneFlow(entry)");
         frameSource.Should().Contain("RequireCommandWorkflow(entry)");
         frameSource.Should().Contain("BuildBackstagePane(FreeXBackstagePaneFlowPlan plan)");
@@ -85,6 +92,24 @@ public sealed partial class MainWindowSourceHygieneTests
         plannerSource.Should().Contain("FreeXBackstageFlowPlanner.BuildPaneFlow(pane)");
         plannerSource.Should().Contain("FreeXBackstageFlowPlanner.BuildCommandWorkflow(command)");
         plannerSource.Should().Contain("FreeXBackstagePaneSelectionPlan");
+    }
+
+    [Fact]
+    public void FreeXBackstageRail_UsesPlannerStableIdsForSelectionIdentity()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = BackstageRailHarness.Create();
+            harness.OpenBackstage();
+
+            harness.CurrentEntryId.Should().Be(FreeXBackstageFramePlanner.GetPaneStableId(
+                FreeXBackstagePaneId.Home));
+
+            harness.Invoke("ShowInfoView");
+
+            harness.CurrentEntryId.Should().Be(FreeXBackstageFramePlanner.GetPaneStableId(
+                FreeXBackstagePaneId.Info));
+        });
     }
 
     [Fact]
