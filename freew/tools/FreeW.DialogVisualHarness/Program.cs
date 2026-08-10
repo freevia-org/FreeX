@@ -1,8 +1,8 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Free.ToolsShared;
 using FreeW.DialogVisualHarness;
 using SkiaSharp;
 
@@ -49,13 +49,15 @@ static int RunInventory(string[] args)
     var output = Path.GetFullPath(Required(args, "--output"));
     var check = args.Contains("--check", StringComparer.Ordinal);
     var inventory = BuildInventory(root);
-    var json = JsonSerializer.Serialize(inventory, JsonOptions());
+    var json = VisualEvidenceManifestIO.Serialize(inventory, JsonOptions());
     var markdown = BuildInventoryMarkdown(inventory);
     Directory.CreateDirectory(output);
     var jsonPath = Path.Combine(output, "freew_dialog_route_inventory.json");
     var scenariosPath = Path.Combine(output, "freew_dialog_evidence_inventory.json");
     var markdownPath = Path.Combine(output, "freew_dialog_inventory.md");
-    var scenarioJson = JsonSerializer.Serialize(new EvidenceInventory(inventory.Schema, inventory.GeneratedFromSha256, inventory.Scenarios), JsonOptions());
+    var scenarioJson = VisualEvidenceManifestIO.Serialize(
+        new EvidenceInventory(inventory.Schema, inventory.GeneratedFromSha256, inventory.Scenarios),
+        JsonOptions());
     if (check)
     {
         var fresh = File.Exists(jsonPath) && File.Exists(scenariosPath) && File.Exists(markdownPath)
@@ -65,8 +67,11 @@ static int RunInventory(string[] args)
         Console.WriteLine(fresh ? $"inventory current: {output}" : $"inventory stale: {output}");
         return fresh ? 0 : 1;
     }
-    File.WriteAllText(jsonPath, json, new UTF8Encoding(false));
-    File.WriteAllText(scenariosPath, scenarioJson, new UTF8Encoding(false));
+    VisualEvidenceManifestIO.Write(jsonPath, inventory, JsonOptions());
+    VisualEvidenceManifestIO.Write(
+        scenariosPath,
+        new EvidenceInventory(inventory.Schema, inventory.GeneratedFromSha256, inventory.Scenarios),
+        JsonOptions());
     File.WriteAllText(markdownPath, markdown, new UTF8Encoding(false));
     Console.WriteLine($"routes: {inventory.Routes.Count}");
     Console.WriteLine($"scenarios: {inventory.Scenarios.Count}");
@@ -128,18 +133,19 @@ static int RunCompare(string[] args)
             Kind: "canonical-inputs-only",
             Description: "Rows and counts cover only the inventory and WPF/Avalonia capture manifests supplied to this compare invocation.",
             RefreshInstruction: "Route-local evidence remains outside this aggregate until it is merged with --baseline and --refresh-route."));
-    var json = JsonSerializer.Serialize(report, JsonOptions());
+    var json = VisualEvidenceManifestIO.Serialize(report, JsonOptions());
     var markdown = BuildComparisonMarkdown(report);
     var html = BuildComparisonHtml(report);
     var jsonPath = Path.Combine(output, "freew_dialog_visual_comparison.json");
     var markdownPath = Path.Combine(output, "freew_dialog_visual_comparison.md");
     var htmlPath = Path.Combine(output, "freew_dialog_visual_comparison.html");
     var freshnessPath = Path.Combine(output, "freew_dialog_visual_freshness.json");
-    var freshness = JsonSerializer.Serialize(new Freshness(
+    var freshnessRecord = new Freshness(
         report.GeneratedFromSha256,
         Sha256(File.ReadAllText(inventoryPath)),
         Sha256(File.ReadAllText(wpfPath)),
-        Sha256(File.ReadAllText(avaloniaPath))), JsonOptions());
+        Sha256(File.ReadAllText(avaloniaPath)));
+    var freshness = VisualEvidenceManifestIO.Serialize(freshnessRecord, JsonOptions());
     if (check)
     {
         var fresh = File.Exists(jsonPath) && File.Exists(markdownPath) && File.Exists(htmlPath) && File.Exists(freshnessPath)
@@ -150,10 +156,10 @@ static int RunCompare(string[] args)
         Console.WriteLine(fresh ? $"comparison current: {output}" : $"comparison stale: {output}");
         return fresh ? 0 : 1;
     }
-    File.WriteAllText(jsonPath, json, new UTF8Encoding(false));
+    VisualEvidenceManifestIO.Write(jsonPath, report, JsonOptions());
     File.WriteAllText(markdownPath, markdown, new UTF8Encoding(false));
     File.WriteAllText(htmlPath, html, new UTF8Encoding(false));
-    File.WriteAllText(freshnessPath, freshness, new UTF8Encoding(false));
+    VisualEvidenceManifestIO.Write(freshnessPath, freshnessRecord, JsonOptions());
     Console.WriteLine($"scenarios: {report.InventoryScenarioCount}");
     Console.WriteLine($"wpf captured: {report.WpfCaptureCount}");
     Console.WriteLine($"avalonia captured: {report.AvaloniaCaptureCount}");
@@ -364,7 +370,9 @@ static bool IsValidatedAvaloniaCapture(Capture capture) =>
     && capture.TargetPixelContent?.PassesContentGate == true;
 
 static string ResolveCapturePath(CaptureManifest manifest, string path) =>
-    Path.GetFullPath(Path.IsPathRooted(path) ? path : Path.Combine(manifest.CaptureRoot, path.Replace('/', Path.DirectorySeparatorChar)));
+    VisualEvidencePathPolicy.ResolveDeclaredPath(
+        manifest.CaptureRoot,
+        path.Replace('/', Path.DirectorySeparatorChar));
 
 static string PairKey(Scenario scenario)
 {
@@ -413,18 +421,24 @@ static SKBitmap DecodeAndScale(string path, int width, int height)
     return result;
 }
 
-static T Read<T>(string path) => JsonSerializer.Deserialize<T>(File.ReadAllText(path), JsonOptions()) ?? throw new InvalidOperationException($"Invalid JSON: {path}");
+static T Read<T>(string path) where T : class =>
+    VisualEvidenceManifestIO.Read<T>(
+        path,
+        JsonOptions(),
+        invalidExceptionFactory: () => new InvalidOperationException($"Invalid JSON: {path}"));
 static string Required(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : throw new ArgumentException($"Missing {option}."); }
 static string? Optional(string[] args, string option) { var i = Array.IndexOf(args, option); return i >= 0 && i + 1 < args.Length ? args[i + 1] : null; }
-static string Relative(string root, string path) => Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
-static string Safe(string value) => Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
+static string Relative(string root, string path) =>
+    VisualEvidencePathPolicy.NormalizeRelativePath(root, path);
+static string Safe(string value) => VisualEvidenceTextPolicy.ToAsciiSafeArtifactName(value);
 static string Kebab(string value)
 {
     var separated = Regex.Replace(value.Trim(), "([a-z0-9])([A-Z])", "$1-$2");
     return Regex.Replace(separated, "[^A-Za-z0-9]+", "-").Trim('-').ToLowerInvariant();
 }
-static string Sha256(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
-static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true };
+static string Sha256(string text) => VisualEvidenceHash.Sha256Text(text);
+static JsonSerializerOptions JsonOptions() =>
+    VisualEvidenceManifestIO.CreateJsonOptions(stringEnums: false);
 
 static string BuildInventoryMarkdown(RouteInventory inventory)
 {

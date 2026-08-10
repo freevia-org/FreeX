@@ -1,9 +1,8 @@
 using System.Globalization;
 using System.IO;
-using System.Security.Cryptography;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
+using Free.ToolsShared;
 
 namespace FreeP.VisualEvidence;
 
@@ -153,25 +152,19 @@ internal static class FreePVisualEvidenceCaptureOrchestration
         VisualEvidenceCaptureRoute route,
         IEnumerable<string> knownScenarioIds)
     {
-        var outputIndex = Array.FindIndex(
-            args,
-            argument => StringComparer.Ordinal.Equals(argument, route.OutputArgument));
-        if (outputIndex < 0)
+        var output = VisualEvidenceArgumentParser.ReadFirst(args, route.OutputArgument);
+        if (!output.IsPresent)
             return new(false, null, null, null);
 
-        if (outputIndex + 1 >= args.Length || string.IsNullOrWhiteSpace(args[outputIndex + 1]))
+        if (output.Value is null)
             return new(true, null, null, $"{route.OutputArgument} requires an output directory.");
 
-        var outputRoot = Path.GetFullPath(args[outputIndex + 1]);
-        var scenarioIndex = Array.FindIndex(
-            args,
-            argument => StringComparer.Ordinal.Equals(argument, route.ScenarioArgument));
-        var scenarioId = scenarioIndex >= 0 && scenarioIndex + 1 < args.Length
-            ? args[scenarioIndex + 1]
-            : null;
-        if (scenarioIndex >= 0 && string.IsNullOrWhiteSpace(scenarioId))
+        var outputRoot = Path.GetFullPath(output.Value);
+        var scenario = VisualEvidenceArgumentParser.ReadFirst(args, route.ScenarioArgument);
+        if (scenario.IsPresent && scenario.Value is null)
             return new(true, outputRoot, null, $"{route.ScenarioArgument} requires a scenario id.");
 
+        var scenarioId = scenario.Value;
         if (scenarioId is not null && !knownScenarioIds.Contains(scenarioId, StringComparer.Ordinal))
             return new(true, outputRoot, scenarioId, route.UnknownScenarioMessagePrefix + scenarioId);
 
@@ -269,13 +262,8 @@ internal static class FreePVisualEvidenceCaptureOrchestration
             timedOutProcessTreeDescription);
 
     internal static JsonSerializerOptions CreateManifestJsonOptions(bool propertyNameCaseInsensitive = false) =>
-        new()
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            PropertyNameCaseInsensitive = propertyNameCaseInsensitive,
-            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
-        };
+        VisualEvidenceManifestIO.CreateJsonOptions(
+            propertyNameCaseInsensitive: propertyNameCaseInsensitive);
 
     internal static T ReadManifest<T>(
         string path,
@@ -284,10 +272,7 @@ internal static class FreePVisualEvidenceCaptureOrchestration
         string invalidMessage)
         where T : class
     {
-        if (!File.Exists(path))
-            throw new FileNotFoundException(missingMessage, path);
-        var manifest = JsonSerializer.Deserialize<T>(File.ReadAllText(path), options);
-        return manifest ?? throw new InvalidDataException(invalidMessage);
+        return VisualEvidenceManifestIO.Read<T>(path, options, missingMessage, invalidMessage);
     }
 
     internal static VisualEvidenceScenarioManifest<TManifest, TCapture> ReadScenarioManifest<TManifest, TCapture>(
@@ -299,10 +284,10 @@ internal static class FreePVisualEvidenceCaptureOrchestration
         where TManifest : class
         where TCapture : class
     {
-        if (!File.Exists(path))
+        var manifest = VisualEvidenceManifestIO.ReadIfExists<TManifest>(path, options);
+        if (manifest is null && !File.Exists(path))
             return new(VisualEvidenceScenarioManifestStatus.MissingManifest, null, null);
 
-        var manifest = JsonSerializer.Deserialize<TManifest>(File.ReadAllText(path), options);
         var capture = manifest is null
             ? null
             : captures(manifest).SingleOrDefault(candidate =>
@@ -313,62 +298,38 @@ internal static class FreePVisualEvidenceCaptureOrchestration
     }
 
     internal static void WriteManifest<T>(string path, T manifest, JsonSerializerOptions options) =>
-        File.WriteAllText(path, JsonSerializer.Serialize(manifest, options));
+        VisualEvidenceManifestIO.Write(path, manifest, options);
 
     internal static string ResolveDeclaredPath(string outputRoot, string relativePath) =>
-        Path.Combine(outputRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        VisualEvidencePathPolicy.ResolveContainedPath(
+            outputRoot,
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
 
     internal static bool IsNonzeroFile(string path) =>
         File.Exists(path) && new FileInfo(path).Length > 0;
 
     internal static void ResetProgress(VisualEvidenceHostOutputPlan plan)
-    {
-        if (plan.ProgressPath is not null)
-            File.WriteAllText(plan.ProgressPath, string.Empty);
-    }
+        => VisualEvidenceProgressLog.Reset(plan.ProgressPath);
 
     internal static void AppendProgress(VisualEvidenceHostOutputPlan plan, string message)
-    {
-        if (plan.ProgressPath is not null)
-            File.AppendAllText(plan.ProgressPath, message + Environment.NewLine);
-    }
+        => VisualEvidenceProgressLog.Append(
+            plan.ProgressPath,
+            new VisualEvidenceProgressRecord(message));
 
-    internal static string Sha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-    }
+    internal static string Sha256(string path) =>
+        VisualEvidenceHash.Sha256File(path);
 
     internal static string UtcTimestamp() =>
         DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
 
-    internal static string ToSafeFileName(string value)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(value);
-        var invalidCharacters = Path.GetInvalidFileNameChars();
-        return new string(value
-            .Select(character => invalidCharacters.Contains(character) ? '-' : character)
-            .ToArray());
-    }
+    internal static string ToSafeFileName(string value) =>
+        VisualEvidenceTextPolicy.ToSafeArtifactName(value);
 
     internal static string NormalizeLabel(string? label, string? fallback = null) =>
-        (string.IsNullOrWhiteSpace(label) ? fallback ?? string.Empty : label)
-            .Trim()
-            .TrimEnd(':')
-            .Replace("_", string.Empty);
+        VisualEvidenceTextPolicy.NormalizeLabel(label, fallback);
 
-    internal static string SemanticActionId(string label)
-    {
-        var value = label.Trim().ToLowerInvariant();
-        if (value.StartsWith("+", StringComparison.Ordinal))
-            value = "add " + value[1..];
-        else if (value.StartsWith("-", StringComparison.Ordinal))
-            value = "remove " + value[1..];
-        var characters = value
-            .Select(character => char.IsLetterOrDigit(character) ? character : '-')
-            .ToArray();
-        return string.Join('-', new string(characters).Split('-', StringSplitOptions.RemoveEmptyEntries));
-    }
+    internal static string SemanticActionId(string label) =>
+        VisualEvidenceTextPolicy.SemanticActionId(label);
 
     private static string Relative(params string[] parts) =>
         Path.Combine(parts).Replace('\\', '/');

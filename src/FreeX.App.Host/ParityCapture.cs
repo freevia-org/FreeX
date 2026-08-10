@@ -1,7 +1,5 @@
 using System.IO;
 using System.Globalization;
-using System.Text;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -27,6 +25,7 @@ using FreeX.Core.IO;
 using FreeX.Core.Model;
 using FreeX.Ribbon.Definitions;
 using Free.Shared.Shell;
+using Free.ToolsShared;
 using SubtotalColumnChoice = FreeX.App.Presentation.DataTools.SubtotalDialogColumnChoice;
 using SharedRibbon = Free.Shared.Ribbon;
 
@@ -70,31 +69,10 @@ internal static class ParityCapture
     /// Returns the output directory if <paramref name="args"/> requests parity capture, else null.
     /// </summary>
     public static string? TryGetOutputDirectory(IReadOnlyList<string> args)
-    {
-        for (var i = 0; i < args.Count; i++)
-        {
-            if (!string.Equals(args[i], Switch, StringComparison.Ordinal))
-                continue;
-
-            if (i + 1 < args.Count && !string.IsNullOrWhiteSpace(args[i + 1]))
-                return args[i + 1];
-
-            // Support --parity-capture=<dir> form too.
-            return null;
-        }
-
-        foreach (var arg in args)
-        {
-            if (arg.StartsWith(Switch + "=", StringComparison.Ordinal))
-            {
-                var value = arg[(Switch.Length + 1)..];
-                if (!string.IsNullOrWhiteSpace(value))
-                    return value;
-            }
-        }
-
-        return null;
-    }
+        => VisualEvidenceArgumentParser.ReadFirst(
+            args,
+            Switch,
+            allowEqualsSyntax: true).Value;
 
     /// <summary>
     /// Optional focused capture selector used by parity workers to refresh a single expensive dialog surface.
@@ -102,28 +80,10 @@ internal static class ParityCapture
     public static string? TryGetTargetSurfaceId(IReadOnlyList<string> args)
     {
         const string TargetSwitch = "--parity-capture-target";
-
-        for (var i = 0; i < args.Count; i++)
-        {
-            if (!string.Equals(args[i], TargetSwitch, StringComparison.Ordinal))
-                continue;
-
-            return i + 1 < args.Count && !string.IsNullOrWhiteSpace(args[i + 1])
-                ? args[i + 1]
-                : null;
-        }
-
-        foreach (var arg in args)
-        {
-            if (arg.StartsWith(TargetSwitch + "=", StringComparison.Ordinal))
-            {
-                var value = arg[(TargetSwitch.Length + 1)..];
-                if (!string.IsNullOrWhiteSpace(value))
-                    return value;
-            }
-        }
-
-        return null;
+        return VisualEvidenceArgumentParser.ReadFirst(
+            args,
+            TargetSwitch,
+            allowEqualsSyntax: true).Value;
     }
 
     /// <summary>
@@ -1874,7 +1834,9 @@ internal static class ParityCapture
             }),
         };
 
-        var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(Path.Combine(outDir, "manifest.json"), json, new UTF8Encoding(false));
+        VisualEvidenceManifestIO.Write(
+            Path.Combine(outDir, "manifest.json"),
+            manifest,
+            VisualEvidenceManifestIO.CreateJsonOptions(camelCase: false, stringEnums: false));
     }
 }

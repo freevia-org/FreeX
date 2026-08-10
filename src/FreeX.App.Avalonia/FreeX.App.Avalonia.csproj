@@ -16,6 +16,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
+    <ProjectReference Include="..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

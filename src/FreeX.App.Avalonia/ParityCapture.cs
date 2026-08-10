@@ -1,7 +1,7 @@
 using System.Text;
-using System.Globalization;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
+using Free.ToolsShared;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 
@@ -23,11 +23,23 @@ internal sealed record ParityCaptureOptions(string OutputDirectory, string? Surf
     public const string Argument = "--parity-capture";
     public const string SurfaceArgument = "--parity-capture-surface";
 
-    private static bool IsCaptureArgument(string argument) =>
-        string.Equals(argument, Argument, StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsSurfaceArgument(string argument) =>
-        string.Equals(argument, SurfaceArgument, StringComparison.OrdinalIgnoreCase);
+    private const string OutputKey = "output";
+    private const string SurfaceKey = "surface";
+    private static readonly VisualEvidenceArgumentSpec[] ArgumentSpecs =
+    [
+        new(
+            OutputKey,
+            Argument,
+            $"{Argument} requires an output directory path.",
+            $"{Argument} requires a non-empty output directory path.",
+            $"{Argument} was specified more than once."),
+        new(
+            SurfaceKey,
+            SurfaceArgument,
+            $"{SurfaceArgument} requires a surface id.",
+            $"{SurfaceArgument} requires a non-empty surface id.",
+            $"{SurfaceArgument} was specified more than once."),
+    ];
 
     /// <summary>
     /// Parses <c>--parity-capture &lt;outDir&gt;</c> out of <paramref name="args"/>, returning the remaining
@@ -43,68 +55,19 @@ internal sealed record ParityCaptureOptions(string OutputDirectory, string? Surf
         ArgumentNullException.ThrowIfNull(args);
 
         options = null;
-        error = "";
-        var filteredArguments = new List<string>();
-        string? outputDirectory = null;
-        string? surfaceId = null;
-        for (var index = 0; index < args.Count; index++)
+        var parsed = VisualEvidenceArgumentParser.Parse(
+            args,
+            ArgumentSpecs,
+            StringComparison.OrdinalIgnoreCase);
+        if (parsed.Error is not null)
         {
-            var argument = args[index];
-            if (IsSurfaceArgument(argument))
-            {
-                if (surfaceId is not null)
-                {
-                    startupArguments = [];
-                    error = $"{SurfaceArgument} was specified more than once.";
-                    return false;
-                }
-
-                if (index + 1 >= args.Count)
-                {
-                    startupArguments = [];
-                    error = $"{SurfaceArgument} requires a surface id.";
-                    return false;
-                }
-
-                surfaceId = args[++index];
-                if (string.IsNullOrWhiteSpace(surfaceId))
-                {
-                    startupArguments = [];
-                    error = $"{SurfaceArgument} requires a non-empty surface id.";
-                    return false;
-                }
-
-                continue;
-            }
-
-            if (!IsCaptureArgument(argument))
-            {
-                filteredArguments.Add(argument);
-                continue;
-            }
-
-            if (outputDirectory is not null)
-            {
-                startupArguments = [];
-                error = $"{Argument} was specified more than once.";
-                return false;
-            }
-
-            if (index + 1 >= args.Count)
-            {
-                startupArguments = [];
-                error = $"{Argument} requires an output directory path.";
-                return false;
-            }
-
-            outputDirectory = args[++index];
-            if (string.IsNullOrWhiteSpace(outputDirectory))
-            {
-                startupArguments = [];
-                error = $"{Argument} requires a non-empty output directory path.";
-                return false;
-            }
+            startupArguments = [];
+            error = parsed.Error;
+            return false;
         }
+
+        var outputDirectory = parsed.Value(OutputKey);
+        var surfaceId = parsed.Value(SurfaceKey);
 
         if (outputDirectory is null && surfaceId is not null)
         {
@@ -116,7 +79,8 @@ internal sealed record ParityCaptureOptions(string OutputDirectory, string? Surf
         if (outputDirectory is not null)
             options = new ParityCaptureOptions(outputDirectory, surfaceId);
 
-        startupArguments = filteredArguments.ToArray();
+        startupArguments = parsed.RemainingArguments;
+        error = "";
         return true;
     }
 }
@@ -285,28 +249,26 @@ internal static class ParityCaptureCoordinator
     /// </summary>
     private static void WriteManifest(string outputDirectory, IReadOnlyList<ParitySurfaceResult> results)
     {
-        var builder = new StringBuilder();
-        builder.Append("{\n");
-        builder.Append("  \"platform\": ").Append(JsonString(PlatformName())).Append(",\n");
-        builder.Append("  \"shell\": \"avalonia\",\n");
-        builder.Append("  \"surfaces\": [\n");
-        for (var i = 0; i < results.Count; i++)
+        var manifest = new
         {
-            var r = results[i];
-            builder.Append("    { ");
-            builder.Append("\"id\": ").Append(JsonString(r.Id)).Append(", ");
-            builder.Append("\"kind\": ").Append(JsonString(ParitySurfaceResult.KindToken(r.Kind))).Append(", ");
-            builder.Append("\"png\": ").Append(JsonString(r.PngFileName)).Append(", ");
-            builder.Append("\"captured\": ").Append(r.Captured ? "true" : "false").Append(", ");
-            builder.Append("\"note\": ").Append(JsonString(r.Note)).Append(", ");
-            builder.Append("\"width\": ").Append(r.Width?.ToString(CultureInfo.InvariantCulture) ?? "null").Append(", ");
-            builder.Append("\"height\": ").Append(r.Height?.ToString(CultureInfo.InvariantCulture) ?? "null").Append(", ");
-            builder.Append("\"evidenceProvenance\": ").Append(JsonString(r.EvidenceProvenance ?? "")).Append(" }");
-            builder.Append(i < results.Count - 1 ? ",\n" : "\n");
-        }
-        builder.Append("  ]\n");
-        builder.Append("}\n");
-        File.WriteAllText(Path.Combine(outputDirectory, "manifest.json"), builder.ToString());
+            platform = PlatformName(),
+            shell = "avalonia",
+            surfaces = results.Select(result => new
+            {
+                id = result.Id,
+                kind = ParitySurfaceResult.KindToken(result.Kind),
+                png = result.PngFileName,
+                captured = result.Captured,
+                note = result.Note,
+                width = result.Width,
+                height = result.Height,
+                evidenceProvenance = result.EvidenceProvenance ?? string.Empty,
+            }),
+        };
+        VisualEvidenceManifestIO.Write(
+            Path.Combine(outputDirectory, "manifest.json"),
+            manifest,
+            VisualEvidenceManifestIO.CreateJsonOptions(camelCase: false, stringEnums: false));
     }
 
     private static void TryWriteFailureManifest(string outputDirectory, Exception ex)
@@ -314,14 +276,17 @@ internal static class ParityCaptureCoordinator
         try
         {
             Directory.CreateDirectory(outputDirectory);
-            var builder = new StringBuilder();
-            builder.Append("{\n");
-            builder.Append("  \"platform\": ").Append(JsonString(PlatformName())).Append(",\n");
-            builder.Append("  \"shell\": \"avalonia\",\n");
-            builder.Append("  \"surfaces\": [],\n");
-            builder.Append("  \"error\": ").Append(JsonString($"{ex.GetType().Name}: {ex.Message}")).Append('\n');
-            builder.Append("}\n");
-            File.WriteAllText(Path.Combine(outputDirectory, "manifest.json"), builder.ToString());
+            var manifest = new
+            {
+                platform = PlatformName(),
+                shell = "avalonia",
+                surfaces = Array.Empty<object>(),
+                error = $"{ex.GetType().Name}: {ex.Message}",
+            };
+            VisualEvidenceManifestIO.Write(
+                Path.Combine(outputDirectory, "manifest.json"),
+                manifest,
+                VisualEvidenceManifestIO.CreateJsonOptions(camelCase: false, stringEnums: false));
         }
         catch
         {
@@ -338,31 +303,6 @@ internal static class ParityCaptureCoordinator
         if (OperatingSystem.IsLinux())
             return "linux";
         return "unknown";
-    }
-
-    private static string JsonString(string value)
-    {
-        var builder = new StringBuilder(value.Length + 2);
-        builder.Append('"');
-        foreach (var ch in value)
-        {
-            switch (ch)
-            {
-                case '"': builder.Append("\\\""); break;
-                case '\\': builder.Append("\\\\"); break;
-                case '\n': builder.Append("\\n"); break;
-                case '\r': builder.Append("\\r"); break;
-                case '\t': builder.Append("\\t"); break;
-                default:
-                    if (ch < 0x20)
-                        builder.Append("\\u").Append(((int)ch).ToString("x4"));
-                    else
-                        builder.Append(ch);
-                    break;
-            }
-        }
-        builder.Append('"');
-        return builder.ToString();
     }
 
     private static void Shutdown(int exitCode)

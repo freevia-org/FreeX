@@ -1,7 +1,7 @@
 using System.Globalization;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Free.ToolsShared;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -490,9 +490,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(manifestPath);
 
-        var json = File.ReadAllText(manifestPath);
-        return JsonSerializer.Deserialize<FreeWVisualEvidenceManifest>(json, JsonOptions)
-            ?? throw new InvalidOperationException($"Visual evidence manifest could not be read: {Path.GetFileName(manifestPath)}");
+        return VisualEvidenceManifestIO.Read<FreeWVisualEvidenceManifest>(
+            manifestPath,
+            JsonOptions,
+            invalidExceptionFactory: () => new InvalidOperationException(
+                $"Visual evidence manifest could not be read: {Path.GetFileName(manifestPath)}"));
     }
 
     public static FreeWVisualEvidenceNormalizedSummary BuildNormalizedSummaryFromFiles(
@@ -537,8 +539,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
         foreach (var manifestPath in manifestPaths.OrderBy(p => p, StringComparer.OrdinalIgnoreCase))
         {
             var fullManifestPath = Path.GetFullPath(manifestPath);
-            var sourceManifestPath = NormalizeRelativePath(normalizedRoot, fullManifestPath);
-            if (!IsSubPathOf(normalizedRoot, fullManifestPath))
+            var sourceManifestPath = VisualEvidencePathPolicy.NormalizeRelativePath(normalizedRoot, fullManifestPath);
+            if (!VisualEvidencePathPolicy.IsContained(
+                    normalizedRoot,
+                    fullManifestPath,
+                    StringComparison.OrdinalIgnoreCase))
                 failures.Add($"source manifest '{sourceManifestPath}' is outside the run root");
 
             var manifest = ReadManifest(fullManifestPath);
@@ -641,7 +646,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static string ToJson(FreeWVisualEvidenceNormalizedSummary summary)
     {
         ArgumentNullException.ThrowIfNull(summary);
-        return JsonSerializer.Serialize(summary, JsonOptions);
+        return VisualEvidenceManifestIO.Serialize(summary, JsonOptions);
     }
 
     public static string ToMarkdown(FreeWVisualEvidenceNormalizedSummary summary)
@@ -6389,9 +6394,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateFeatureExpectations(normalizedRow, rowFailures);
         ValidateBackstageCaptureSource(normalizedRow, rowFailures, allowNoWordFallbackEvidence);
 
-        var outputPath = ResolveOutputPath(row.OutputPath, manifestDirectory);
-        var relativeOutputPath = NormalizeRelativePath(runRoot, outputPath);
-        if (!IsSubPathOf(runRoot, outputPath))
+        var outputPath = VisualEvidencePathPolicy.ResolveDeclaredPath(manifestDirectory, row.OutputPath);
+        var relativeOutputPath = VisualEvidencePathPolicy.NormalizeRelativePath(runRoot, outputPath);
+        if (!VisualEvidencePathPolicy.IsContained(
+                runRoot,
+                outputPath,
+                StringComparison.OrdinalIgnoreCase))
             rowFailures.Add($"output path '{relativeOutputPath}' is outside the run root");
         if (!string.Equals(Path.GetFileName(outputPath), row.OutputName, StringComparison.OrdinalIgnoreCase))
             rowFailures.Add($"output file name '{Path.GetFileName(outputPath)}' does not match manifest output name '{row.OutputName}'");
@@ -6402,7 +6410,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             var file = new FileInfo(outputPath);
             fileLength = file.Length;
-            sha256 = ComputeSha256(outputPath);
+            sha256 = VisualEvidenceHash.Sha256File(outputPath);
             if (fileLength != row.ByteLength)
                 rowFailures.Add($"byte length {row.ByteLength.ToString(CultureInfo.InvariantCulture)} does not match file length {fileLength.ToString(CultureInfo.InvariantCulture)} for '{relativeOutputPath}'");
         }
@@ -6435,9 +6443,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
             fileLength > 0 ? fileLength : row.ByteLength,
             sha256,
             row.PixelStats,
-            row.HostMetadata
-                .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.OrdinalIgnoreCase),
+            VisualEvidenceNormalization.OrderMetadata(
+                row.HostMetadata,
+                StringComparer.OrdinalIgnoreCase),
             pageExpectation.PageNumber,
             pageExpectation.PageCount,
             pageExpectation.LayoutKind,
@@ -9159,8 +9167,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (string.IsNullOrEmpty(value))
             return "-";
 
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
-        return Convert.ToHexString(hash).ToLowerInvariant()[..12];
+        return VisualEvidenceHash.Sha256Text(value)[..12];
     }
 
     private static string BuildWordArtWatermarkFeatureSignature(FreeWVisualPageFeatureExpectation features)
@@ -9299,37 +9306,6 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
     private static string ScenarioKey(string hostId, string scenarioId) =>
         string.Concat(hostId, "\u001f", scenarioId);
-
-    private static string ResolveOutputPath(string outputPath, string manifestDirectory)
-    {
-        if (Path.IsPathRooted(outputPath))
-            return Path.GetFullPath(outputPath);
-
-        return Path.GetFullPath(Path.Combine(manifestDirectory, outputPath));
-    }
-
-    private static string NormalizeRelativePath(string root, string path)
-    {
-        var relative = Path.GetRelativePath(Path.GetFullPath(root), Path.GetFullPath(path));
-        return relative.Replace('\\', '/');
-    }
-
-    private static bool IsSubPathOf(string root, string path)
-    {
-        var fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var fullPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (string.Equals(fullRoot, fullPath, StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var rootWithSeparator = fullRoot + Path.DirectorySeparatorChar;
-        return fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string ComputeSha256(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-    }
 
     private static string FeatureSummary(FreeWVisualEvidenceNormalizedRow row)
     {
@@ -9791,10 +9767,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     private static string EscapeMarkdown(string value) =>
         value.Replace("|", "\\|", StringComparison.Ordinal);
 
-    private static JsonSerializerOptions JsonOptions { get; } = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true
-    };
+    private static JsonSerializerOptions JsonOptions { get; } =
+        VisualEvidenceManifestIO.CreateJsonOptions(
+            propertyNameCaseInsensitive: true,
+            stringEnums: false);
 }

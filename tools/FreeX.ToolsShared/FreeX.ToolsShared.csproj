@@ -3,6 +3,7 @@
   <!-- Pure helper library — no WPF/COM/app deps. Referenced by the cold fidelity tool harnesses. -->
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.ToolsShared\Free.ToolsShared.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
   </ItemGroup>
 

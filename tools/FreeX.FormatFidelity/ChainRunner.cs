@@ -5,6 +5,7 @@ using System.Linq;
 using FreeX.App.Services;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.ToolsShared;
 using FreeX.ToolsShared;
 
 namespace FreeX.FormatFidelity;

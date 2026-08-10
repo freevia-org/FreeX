@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Free.ToolsShared;
 
 namespace FreeW.DialogVisualHarness;
 
@@ -255,7 +256,7 @@ public static class FreeWDialogEvidenceCatalog
     }
 
     public static string SafeEvidenceName(string value) =>
-        Regex.Replace(value, "[^A-Za-z0-9._-]", "-");
+        VisualEvidenceTextPolicy.ToAsciiSafeArtifactName(value);
 
     public static string ManifestFileName(string host) =>
         $"{HostId(ParseHost(host))}_dialog_capture_manifest.json";

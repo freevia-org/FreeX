@@ -16,6 +16,7 @@ using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.ToolsShared;
 using FreeX.ToolsShared;
 using FreeX.ToolsShared.Wpf;
 using static FreeX.ToolsShared.Wpf.WpfImageDiff;

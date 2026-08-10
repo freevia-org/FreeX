@@ -146,13 +146,38 @@ public sealed class DialogPaneVisualEvidenceContractTests
         foreach (var path in paths)
         {
             var source = File.ReadAllText(path);
-            source.Should().Contain("DialogPaneVisualEvidencePreparationPlanner.Create(scenario)");
-            source.Should().Contain("DialogPaneVisualEvidenceDialogPreparation preparation");
+            source.Should().Contain("DialogPaneVisualEvidencePreparationSession.Create(scenario)");
+            source.Should().Contain("preparation.CreateDialog(dialogAdapter, assertions)");
+            source.Should().Contain("preparation.PrepareLoadedDialogState(dialog, dialogAdapter, assertions)");
+            source.Should().NotContain("DialogPaneVisualEvidencePreparationPlanner.Create(scenario)");
             source.Should().NotContain("switch (scenario.RouteId)");
+            source.Should().NotContain("switch (preparation)");
             source.Should().NotContain("scenario.StateId ==");
             source.Should().NotContain("scenario.StateId !=");
             foreach (var route in dialogRouteLiterals)
                 source.Should().NotContain($"\"{route}\"");
+        }
+    }
+
+    [Fact]
+    public void Main_window_capture_partials_are_native_route_callback_adapters_only()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var paths = new[]
+        {
+            Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.VisualEvidence.cs"),
+            Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.VisualEvidence.cs"),
+        };
+
+        foreach (var path in paths)
+        {
+            var source = File.ReadAllText(path);
+            source.Should().Contain("IDialogPaneVisualEvidenceRouteHost");
+            source.Should().Contain("CreateDialogPaneVisualEvidenceRouteHost()");
+            source.Should().NotContain("seeded-presentation");
+            source.Should().NotContain("no-preselection-mutation");
+            source.Should().NotContain("PrepareDialogPaneVisualEvidence(");
+            source.Should().NotContain("CompleteDialogPaneVisualEvidence(");
         }
     }
 

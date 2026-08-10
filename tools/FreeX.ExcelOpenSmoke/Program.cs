@@ -12,6 +12,7 @@ using DocumentFormat.OpenXml.Validation;
 using Free.Shared.Opc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using Free.ToolsShared;
 using FreeX.ToolsShared;
 using static FreeX.ToolsShared.Wpf.ExcelComAutomation;
 using static ExcelSmokeFixtures;

@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.IO\Free.Shared.IO.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
+    <ProjectReference Include="..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

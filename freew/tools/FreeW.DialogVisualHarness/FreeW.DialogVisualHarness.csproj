@@ -8,4 +8,7 @@
   <ItemGroup>
     <PackageReference Include="SkiaSharp" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
+  </ItemGroup>
 </Project>

@@ -1,9 +1,6 @@
-using System;
-using System.IO;
-using System.Linq;
 using System.Text;
 
-namespace FreeX.ToolsShared;
+namespace Free.ToolsShared;
 
 public static class ToolFileNameSanitizer
 {
@@ -35,7 +32,10 @@ public static class ToolFileNameSanitizer
         return builder.ToString();
     }
 
-    public static string ReplaceInvalidFileNameChars(string value, string fallback, bool lowerInvariant = false)
+    public static string ReplaceInvalidFileNameChars(
+        string value,
+        string fallback,
+        bool lowerInvariant = false)
     {
         var sanitized = ReplaceInvalidFileNameChars(value, lowerInvariant);
         return string.IsNullOrWhiteSpace(sanitized) ? fallback : sanitized;
@@ -45,10 +45,7 @@ public static class ToolFileNameSanitizer
     {
         var builder = new StringBuilder(value.Length);
         foreach (var character in value)
-        {
             builder.Append(char.IsLetterOrDigit(character) ? character : '_');
-        }
-
         return builder.ToString();
     }
 }

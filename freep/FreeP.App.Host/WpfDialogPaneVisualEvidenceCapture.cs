@@ -86,10 +86,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         foreach (var scenario in scenarios)
         {
             FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"start {scenario.Id}");
-            var preparation = DialogPaneVisualEvidencePreparationPlanner.Create(scenario);
-            var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
-            if (preparation.FixtureIntent == DialogPaneVisualEvidenceFixtureIntent.ClearCustomShows)
-                fixture.Presentation.CustomShows.Clear();
+            var preparation = DialogPaneVisualEvidencePreparationSession.Create(scenario);
 
             var owner = new MainWindow
             {
@@ -105,17 +102,14 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 owner.Show();
                 NormalizeOwnerContentSize(owner);
                 owner.Activate();
-                var assertions = owner.PrepareDialogPaneVisualEvidence(scenario, fixture).ToList();
+                var routeHost = owner.CreateDialogPaneVisualEvidenceRouteHost();
+                var dialogAdapter = new WpfDialogPaneVisualEvidenceAdapter(owner);
+                var assertions = preparation.PrepareRoute(routeHost).ToList();
                 Window target = owner;
 
                 if (scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog)
                 {
-                    dialog = CreateDialog(
-                        owner,
-                        fixture,
-                        preparation.Dialog ?? throw new InvalidOperationException(
-                            $"Missing dialog preparation plan for {scenario.Id}."),
-                        assertions);
+                    dialog = preparation.CreateDialog(dialogAdapter, assertions);
                     dialog.Owner = owner;
                     dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
                     dialog.Show();
@@ -123,9 +117,9 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 }
 
                 PumpLayout(target);
-                PrepareLoadedDialogState(dialog, preparation.Dialog, assertions);
+                preparation.PrepareLoadedDialogState(dialog, dialogAdapter, assertions);
                 target.Activate();
-                FocusFirstInputIfNeeded(target, preparation.FocusIntent);
+                FocusFirstInputIfNeeded(target, preparation.Plan.FocusIntent);
                 PumpLayout(target);
 
                 var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
@@ -155,7 +149,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 var focus = DescribeFocus(Keyboard.FocusedElement);
                 var buttons = Buttons(metadataRoot);
                 var controls = Controls(metadataRoot);
-                assertions.AddRange(owner.CompleteDialogPaneVisualEvidence(scenario));
+                assertions.AddRange(preparation.CompleteRoute(routeHost));
                 captures.Add(new DialogPaneVisualEvidenceCapture(
                     scenario.Id,
                     scenario.RouteId,
@@ -216,104 +210,80 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         return captures.Count == scenarios.Count ? 0 : 1;
     }
 
-    private static Window CreateDialog(
-        MainWindow owner,
-        DialogPaneVisualEvidenceFixture fixture,
-        DialogPaneVisualEvidenceDialogPreparation preparation,
-        List<DialogPaneVisualEvidenceAssertion> assertions)
+    private sealed class WpfDialogPaneVisualEvidenceAdapter(MainWindow owner)
+        : IDialogPaneVisualEvidenceDialogAdapter<Window>
     {
-        switch (preparation)
+        public Window CreateSlideSize(DialogPaneVisualEvidenceSlideSizePreparation preparation)
         {
-            case DialogPaneVisualEvidenceSlideSizePreparation slideSize:
-            {
-                var dialog = new SlideSizeDialog(owner.Editor);
-                if (slideSize.InitialInput is { } input)
-                    dialog.SetInputForTests(input.WidthText, input.HeightText, input.Unit);
-                return dialog;
-            }
-            case DialogPaneVisualEvidenceHeaderFooterPreparation headerFooter:
-            {
-                var dialog = new HeaderFooterDialog(owner.Editor, headerFooter.InitialFocus);
-                dialog.PrepareForVisualEvidence(
-                    headerFooter.ShowDateTime,
-                    headerFooter.ShowFooter,
-                    headerFooter.ShowSlideNumber,
-                    headerFooter.FooterText);
-                return dialog;
-            }
-            case DialogPaneVisualEvidenceFindReplacePreparation findReplace:
-            {
-                var dialog = new FindReplaceDialog(owner.Editor, findReplace.ReplaceMode);
-                dialog.SetInputForTests(
-                    findReplace.Query,
-                    findReplace.Replacement,
-                    findReplace.MatchCase,
-                    findReplace.WholeWord);
-                return dialog;
-            }
-            case DialogPaneVisualEvidenceHyperlinkPreparation hyperlink:
-            {
-                var dialog = new HyperlinkDialog(
-                    fixture.Presentation.Slides,
-                    hyperlink.InitialLink?.ToModel());
-                if (hyperlink.ValidationIntent == DialogPaneVisualEvidenceValidationIntent.BeforeShow)
-                {
-                    var input = hyperlink.ValidationInput ?? throw new InvalidOperationException(
-                        "Hyperlink visual-evidence validation requires input values.");
-                    var valid = dialog.ApplyForVisualEvidence(
-                        input.TargetKind,
-                        input.Url,
-                        input.SelectedSlideIndex,
-                        input.Tooltip);
-                    if (hyperlink.EvaluateExpectedAssertion(valid) is { } assertion)
-                        assertions.Add(assertion);
-                }
-                return dialog;
-            }
-            case DialogPaneVisualEvidenceChartDataPreparation:
-                return new ChartDataDialog(owner.Editor);
-            case DialogPaneVisualEvidenceCustomShowsPreparation customShows:
-            {
-                var dialog = new CustomShowDialog(
-                    new SlideShowCustomShowSession(() => owner.Editor));
-                if (customShows.ValidationIntent == DialogPaneVisualEvidenceValidationIntent.BeforeShow)
-                    dialog.PrepareValidationForVisualEvidence();
-                return dialog;
-            }
-            default:
-                throw new InvalidOperationException(
-                    $"No WPF dialog capture adapter for {preparation.GetType().Name}.");
+            var dialog = new SlideSizeDialog(owner.Editor);
+            if (preparation.InitialInput is { } input)
+                dialog.SetInputForTests(input.WidthText, input.HeightText, input.Unit);
+            return dialog;
         }
-    }
 
-    private static void PrepareLoadedDialogState(
-        Window? dialog,
-        DialogPaneVisualEvidenceDialogPreparation? preparation,
-        List<DialogPaneVisualEvidenceAssertion> assertions)
-    {
-        if (dialog is null || preparation?.ValidationIntent != DialogPaneVisualEvidenceValidationIntent.AfterLoad)
-            return;
-
-        switch (dialog, preparation)
+        public Window CreateHeaderFooter(DialogPaneVisualEvidenceHeaderFooterPreparation preparation)
         {
-            case (SlideSizeDialog slideSize, DialogPaneVisualEvidenceSlideSizePreparation slideSizePreparation):
-            {
-                var valid = slideSize.ApplyForTests();
-                if (slideSizePreparation.EvaluateExpectedAssertion(valid, slideSize.ValidationText) is { } assertion)
-                    assertions.Add(assertion);
-                return;
-            }
-            case (ChartDataDialog chart, DialogPaneVisualEvidenceChartDataPreparation chartPreparation):
-            {
-                var prepared = chart.PrepareValidationForVisualEvidence();
-                if (chartPreparation.EvaluateExpectedAssertion(prepared, chart.ValidationText) is { } assertion)
-                    assertions.Add(assertion);
-                return;
-            }
-            default:
-                throw new InvalidOperationException(
-                    $"No WPF loaded-state adapter for {preparation.GetType().Name}.");
+            var dialog = new HeaderFooterDialog(owner.Editor, preparation.InitialFocus);
+            dialog.PrepareForVisualEvidence(
+                preparation.ShowDateTime,
+                preparation.ShowFooter,
+                preparation.ShowSlideNumber,
+                preparation.FooterText);
+            return dialog;
         }
+
+        public Window CreateFindReplace(DialogPaneVisualEvidenceFindReplacePreparation preparation)
+        {
+            var dialog = new FindReplaceDialog(owner.Editor, preparation.ReplaceMode);
+            dialog.SetInputForTests(
+                preparation.Query,
+                preparation.Replacement,
+                preparation.MatchCase,
+                preparation.WholeWord);
+            return dialog;
+        }
+
+        public Window CreateHyperlink(
+            DialogPaneVisualEvidenceHyperlinkPreparation preparation,
+            DialogPaneVisualEvidenceFixture fixture) =>
+            new HyperlinkDialog(
+                fixture.Presentation.Slides,
+                preparation.InitialLink?.ToModel());
+
+        public Window CreateChartData(DialogPaneVisualEvidenceChartDataPreparation preparation) =>
+            new ChartDataDialog(owner.Editor);
+
+        public Window CreateCustomShows(DialogPaneVisualEvidenceCustomShowsPreparation preparation) =>
+            new CustomShowDialog(new SlideShowCustomShowSession(() => owner.Editor));
+
+        public bool ApplyHyperlinkValidation(
+            Window dialog,
+            DialogPaneVisualEvidenceHyperlinkInput input) =>
+            Require<HyperlinkDialog>(dialog).ApplyForVisualEvidence(
+                input.TargetKind,
+                input.Url,
+                input.SelectedSlideIndex,
+                input.Tooltip);
+
+        public void PrepareCustomShowsValidation(Window dialog) =>
+            Require<CustomShowDialog>(dialog).PrepareValidationForVisualEvidence();
+
+        public DialogPaneVisualEvidenceValidationResult PrepareSlideSizeLoadedState(Window dialog)
+        {
+            var slideSize = Require<SlideSizeDialog>(dialog);
+            return new(slideSize.ApplyForTests(), slideSize.ValidationText);
+        }
+
+        public DialogPaneVisualEvidenceValidationResult PrepareChartDataLoadedState(Window dialog)
+        {
+            var chart = Require<ChartDataDialog>(dialog);
+            return new(chart.PrepareValidationForVisualEvidence(), chart.ValidationText);
+        }
+
+        private static TDialog Require<TDialog>(Window dialog)
+            where TDialog : Window =>
+            dialog as TDialog ?? throw new InvalidOperationException(
+                $"Expected {typeof(TDialog).Name}, but received {dialog.GetType().Name}.");
     }
 
     private static void FocusFirstInputIfNeeded(

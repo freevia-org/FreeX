@@ -56,12 +56,15 @@ public sealed class ToolHarnessDedupSourceTests
     [Fact]
     public void FormatHarnesses_UseSharedFileNameSanitizer()
     {
-        var sanitizer = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ToolsShared", "ToolFileNameSanitizer.cs");
+        var sanitizer = TestWorkspaceFiles.ReadRepoText("tools", "Free.ToolsShared", "ToolFileNameSanitizer.cs");
         var chainRunner = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.FormatFidelity", "ChainRunner.cs");
         var crossCheckRunner = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.FormatCrossCheck", "CrossCheckRunner.cs");
         var chartExamples = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ExcelExamplesCharts", "Program.cs");
 
         sanitizer.Should().Contain("ReplaceNonAlphaNumericWithUnderscore");
+        chainRunner.Should().Contain("using Free.ToolsShared;");
+        crossCheckRunner.Should().Contain("using Free.ToolsShared;");
+        chartExamples.Should().Contain("using Free.ToolsShared;");
         chainRunner.Should().Contain("ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(chain.Name)");
         crossCheckRunner.Should().Contain(
             "ToolFileNameSanitizer.ReplaceNonAlphaNumericWithUnderscore(Path.GetFileNameWithoutExtension(sourcePath))");

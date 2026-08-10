@@ -34,6 +34,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.ToolsShared\Free.ToolsShared.csproj" />
     <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
