@@ -53,6 +53,55 @@ public sealed class FreeWRibbonParityTests
             .Should().NotContain(run => run.ComplexField != null);
     }
 
+    [StaFact]
+    public void NativeFieldProducerCommandsUseTheResolvedStoryEditor()
+    {
+        var bodyEditor = new DocumentView();
+        var storyEditor = new DocumentView();
+        storyEditor.Model.Properties.Title = "Story title";
+        var registry = FreeWRibbonCommands.Build(
+            bodyEditor,
+            new RibbonStateStore(),
+            onPrintPreview: null,
+            onToggleNavPane: null,
+            isNavPaneVisible: null,
+            onToggleReadMode: null,
+            isReadModeActive: null,
+            onTogglePrintLayout: null,
+            isPrintLayoutActive: null,
+            onToggleOutlineView: null,
+            isOutlineViewActive: null,
+            onZoomDialog: null,
+            resolveFieldEditor: () => storyEditor);
+
+        foreach (var commandId in new[]
+                 {
+                     "freew.docprop-title",
+                     "freew.page-number-current",
+                     "freew.merge-next-record",
+                     "freew.merge-record-number",
+                     "freew.merge-sequence-number"
+                 })
+        {
+            registry.TryGet(commandId, out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+        }
+
+        var storyRuns = storyEditor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .ToArray();
+        storyRuns.Count(run => run.FieldKind == RunFieldKind.Title && run.Text == "Story title")
+            .Should().Be(1);
+        storyRuns.Count(run => run.FieldKind == RunFieldKind.PageNumber)
+            .Should().Be(1);
+        storyRuns.Select(run => run.ComplexField?.Keyword)
+            .Should().Contain(new[] { "NEXT", "MERGEREC", "MERGESEQ" });
+        bodyEditor.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Count(run => run.FieldKind != RunFieldKind.None || run.ComplexField != null)
+            .Should().Be(0);
+    }
+
     [Fact]
     public void Build_OrdersImplementedTopLevelTabsLikeWord()
     {
@@ -1388,9 +1437,9 @@ public sealed class FreeWRibbonParityTests
             Data = MergeData.FromCsv("FirstName,LastName\nAda,Lovelace")
         };
 
-        new FreeWRibbonCommands.InsertAddressBlockCommand(editor, session)
+        new FreeWRibbonCommands.InsertAddressBlockCommand(() => editor, session)
             .Execute(RibbonCommandContext.Empty);
-        new FreeWRibbonCommands.InsertGreetingLineCommand(editor, session)
+        new FreeWRibbonCommands.InsertGreetingLineCommand(() => editor, session)
             .Execute(RibbonCommandContext.Empty);
 
         var fields = editor.Model.Blocks.OfType<Paragraph>()

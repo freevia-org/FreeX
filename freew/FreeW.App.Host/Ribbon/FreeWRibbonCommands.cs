@@ -1447,10 +1447,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.footer", new HeaderFooterCommand(editor, isFooter: true, askHeaderFooterText: askHeaderFooterText));
         // Insert > Header & Footer > Page Number gallery: top/bottom/current position + format dialog.
         // The top-level id inserts into the footer (Word's default button-face action).
-        registry.Register("freew.page-number", new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
-        registry.Register("freew.page-number-top", new InsertPageNumberCommand(editor, PageNumberPosition.Top));
-        registry.Register("freew.page-number-bottom", new InsertPageNumberCommand(editor, PageNumberPosition.Bottom));
-        registry.Register("freew.page-number-current", new InsertPageNumberCommand(editor, PageNumberPosition.Current));
+        registry.Register("freew.page-number", new InsertPageNumberCommand(() => editor, PageNumberPosition.Bottom));
+        registry.Register("freew.page-number-top", new InsertPageNumberCommand(() => editor, PageNumberPosition.Top));
+        registry.Register("freew.page-number-bottom", new InsertPageNumberCommand(() => editor, PageNumberPosition.Bottom));
+        registry.Register("freew.page-number-current", new InsertPageNumberCommand(resolveFieldTarget, PageNumberPosition.Current));
         registry.Register("freew.page-number-format", new PageNumberFormatCommand(editor));
         registry.Register("freew.field", new InsertFieldCommand(resolveFieldTarget, askField));
         registry.Register("freew.toggle-field-codes", new ToggleFieldCodesCommand(editor));
@@ -1515,7 +1515,7 @@ internal static class FreeWRibbonCommands
         // Insert tab — Symbols: pick a glyph from a grid, or a formatted current date/time string, and
         // insert it at the caret as ordinary text (flows through the normal edit/undo path).
         registry.Register("freew.symbol", new InsertSymbolCommand(editor));
-        registry.Register("freew.datetime", new InsertDateTimeCommand(editor));
+        registry.Register("freew.datetime", new InsertDateTimeCommand(resolveFieldTarget));
 
         // Home > Font > Text Colour / Highlight: pick a colour from a small palette and apply it to
         // the selection (foreground reuses TextElement.Foreground; highlight uses TextElement.Background).
@@ -1571,7 +1571,7 @@ internal static class FreeWRibbonCommands
         // Insert > Quick Parts > Document Property: insert a live field run that renders the matching
         // document-property value. Uses RunFieldKind so it round-trips as w:fldSimple in docx.
         foreach (var plan in DocumentPropertyFieldPlanner.CommandPlans)
-            registry.Register(plan.CommandId, new InsertDocPropFieldCommand(editor, plan.Kind));
+            registry.Register(plan.CommandId, new InsertDocPropFieldCommand(resolveFieldTarget, plan.Kind));
 
         // Home > Font > Change Case: open a small menu to pick a target case (UPPERCASE / lowercase /
         // Sentence case / Capitalize Each Word / tOGGLE cASE) and recase the selection's text via the
@@ -1921,16 +1921,16 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.start-mail-merge-normal", new ClearMergeSessionCommand(editor, mergeSession));
         registry.Register("freew.merge-data", new SetMergeDataCommand(editor, mergeSession));
         registry.Register("freew.merge-edit-recipients", new SetMergeDataCommand(editor, mergeSession));
-        registry.Register("freew.merge-field", new InsertMergeFieldCommand(editor));
+        registry.Register("freew.merge-field", new InsertMergeFieldCommand(resolveFieldTarget));
         // Write & Insert Fields — Address Block, Greeting Line, Match Fields (Word parity).
-        registry.Register("freew.merge-address-block", new InsertAddressBlockCommand(editor, mergeSession));
-        registry.Register("freew.merge-greeting-line", new InsertGreetingLineCommand(editor, mergeSession));
+        registry.Register("freew.merge-address-block", new InsertAddressBlockCommand(resolveFieldTarget, mergeSession));
+        registry.Register("freew.merge-greeting-line", new InsertGreetingLineCommand(resolveFieldTarget, mergeSession));
         registry.Register("freew.merge-match-fields", new MatchFieldsCommand(editor, mergeSession));
         // Special merge fields use Word's native NEXT/MERGEREC/MERGESEQ instructions. Their cached
         // result remains the familiar guillemet label until a merge evaluates the field.
-        registry.Register("freew.merge-next-record", new InsertSpecialMergeFieldCommand(editor, MailMerge.NextRecordField));
-        registry.Register("freew.merge-record-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeRecordNumberField));
-        registry.Register("freew.merge-sequence-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeSequenceNumberField));
+        registry.Register("freew.merge-next-record", new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.NextRecordField));
+        registry.Register("freew.merge-record-number", new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeRecordNumberField));
+        registry.Register("freew.merge-sequence-number", new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeSequenceNumberField));
         // Rules dropdown — each sub-command inserts the appropriate rule instruction via a dialog.
         registry.Register("freew.merge-rules", EmptyRibbonCommand.Instance); // dropdown host: no action of its own
         registry.Register("freew.merge-rule-if", new InsertMergeRuleIfCommand(editor, mergeSession));
@@ -4316,10 +4316,11 @@ internal static class FreeWRibbonCommands
 
     // Insert > Symbols > Date & Time: list formatted current date/time strings; insert the chosen one as
     // plain text or, when "Update automatically" is checked, as a live DATE/TIME complex field.
-    private sealed class InsertDateTimeCommand(DocumentView editor) : IRibbonCommand
+    private sealed class InsertDateTimeCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             var result = DateTimeDialog.Prompt(Window.GetWindow(editor));
             if (result is null)
@@ -4334,10 +4335,13 @@ internal static class FreeWRibbonCommands
     // Insert > Quick Parts > Document Property: insert a live field run bound to a document-property
     // value (Title, Subject, Author, Keywords, Comments). Uses RunFieldKind so the run renders the
     // current property value immediately and serialises as w:fldSimple for lossless round-trip.
-    private sealed class InsertDocPropFieldCommand(DocumentView editor, RunFieldKind kind) : IRibbonCommand
+    private sealed class InsertDocPropFieldCommand(
+        Func<DocumentView> resolveEditor,
+        RunFieldKind kind) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             editor.InsertField(kind);
         }
@@ -6431,10 +6435,11 @@ internal static class FreeWRibbonCommands
 
     // Mailings > Insert Merge Field: prompt for a field name and insert a native Word MERGEFIELD at the
     // caret through the editor's normal undo path. The cached result keeps Word's familiar «Name» label.
-    private sealed class InsertMergeFieldCommand(DocumentView editor) : IRibbonCommand
+    private sealed class InsertMergeFieldCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             var name = TextPrompt.Ask(Window.GetWindow(editor), "Insert Merge Field", "Field name:", string.Empty);
             if (string.IsNullOrWhiteSpace(name))
@@ -6455,10 +6460,13 @@ internal static class FreeWRibbonCommands
     // The placeholder is resolved at preview/merge time via the session's FieldMapping (auto-matched or
     // user-customised via Match Fields). Opens Match Fields first if no data is loaded so the user can
     // configure the mapping before the placeholder lands in the document.
-    internal sealed class InsertAddressBlockCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class InsertAddressBlockCommand(
+        Func<DocumentView> resolveEditor,
+        MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             if (session.Data is null)
             {
                 DialogMessageHelper.ShowInfo(
@@ -6477,10 +6485,13 @@ internal static class FreeWRibbonCommands
 
     // Mailings > Insert Greeting Line: insert a native default GREETINGLINE field at the caret.
     // Resolved per-record at preview/merge time using the session's FieldMapping.
-    internal sealed class InsertGreetingLineCommand(DocumentView editor, MailMergeSession session) : IRibbonCommand
+    internal sealed class InsertGreetingLineCommand(
+        Func<DocumentView> resolveEditor,
+        MailMergeSession session) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             if (session.Data is null)
             {
                 DialogMessageHelper.ShowInfo(
@@ -6532,10 +6543,13 @@ internal static class FreeWRibbonCommands
     }
 
     // Mailings > Rules (special fields): insert a native Word field while retaining the familiar label.
-    private sealed class InsertSpecialMergeFieldCommand(DocumentView editor, string fieldName) : IRibbonCommand
+    private sealed class InsertSpecialMergeFieldCommand(
+        Func<DocumentView> resolveEditor,
+        string fieldName) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             if (MailMerge.TryGetNativeSpecialFieldInstruction(fieldName, out var instruction))
             {
@@ -8802,10 +8816,13 @@ internal static class FreeWRibbonCommands
     // (Bottom), or body at the caret (Current). The gallery maps each position to an instance of this
     // command. Top and Bottom edit the model's Header/Footer directly. Current inserts a page-number
     // run into the body at the caret block's position.
-    private sealed class InsertPageNumberCommand(DocumentView editor, PageNumberPosition position) : IRibbonCommand
+    private sealed class InsertPageNumberCommand(
+        Func<DocumentView> resolveEditor,
+        PageNumberPosition position) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
+            var editor = resolveEditor();
             editor.Focus();
             var model = editor.Model;
 
