@@ -155,7 +155,7 @@ internal static class PresentationModelCloneHelper
         table.StyleData = CloneTableStyleData(snapshot.StyleData);
     }
 
-    private static TableCellBorders? CloneTableCellBorders(TableCellBorders? source) =>
+    internal static TableCellBorders? CloneTableCellBorders(TableCellBorders? source) =>
         source is null
             ? null
             : new TableCellBorders

@@ -130,6 +130,8 @@ public sealed class FreePTableCloneHelperSourceTests
         commandSource.Should().Contain("PresentationModelCloneHelper.FindTable");
         commandSource.Should().Contain("PresentationModelCloneHelper.CloneTable");
         commandSource.Should().Contain("PresentationModelCloneHelper.RestoreTableState");
+        commandSource.Should().Contain("PresentationModelCloneHelper.CloneTableCellBorders");
+        commandSource.Should().NotContain("private static TableCellBorders CloneBorders");
         commandSource.Should().Contain("TextBodyModelCloner.CloneTextBody");
 
         clonerSource.Should().Contain("TextBodyModelCloner.CloneTextBody");

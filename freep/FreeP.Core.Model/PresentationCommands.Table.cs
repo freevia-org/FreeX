@@ -521,8 +521,9 @@ public sealed class SetTableCellBorderCommand : IPresentationCommand
         var cell = GetCell(presentation);
         if (cell is null) return;
 
-        _oldBorders = cell.Borders;
-        var borders = CloneBorders(cell.Borders);
+        _oldBorders = PresentationModelCloneHelper.CloneTableCellBorders(cell.Borders);
+        var borders = PresentationModelCloneHelper.CloneTableCellBorders(cell.Borders)
+            ?? new TableCellBorders();
         SetSide(borders, _side, _newOutline);
         cell.Borders = HasAnySide(borders) ? borders : null;
     }
@@ -531,7 +532,7 @@ public sealed class SetTableCellBorderCommand : IPresentationCommand
     {
         var cell = GetCell(presentation);
         if (cell is not null)
-            cell.Borders = _oldBorders;
+            cell.Borders = PresentationModelCloneHelper.CloneTableCellBorders(_oldBorders);
     }
 
     private TableCell? GetCell(Presentation presentation)
@@ -543,16 +544,6 @@ public sealed class SetTableCellBorderCommand : IPresentationCommand
         var row = table.Rows[_row];
         return _col >= 0 && _col < row.Cells.Count ? row.Cells[_col] : null;
     }
-
-    private static TableCellBorders CloneBorders(TableCellBorders? source) => new()
-    {
-        Left = source?.Left,
-        Right = source?.Right,
-        Top = source?.Top,
-        Bottom = source?.Bottom,
-        DiagonalDown = source?.DiagonalDown,
-        DiagonalUp = source?.DiagonalUp,
-    };
 
     private static bool HasAnySide(TableCellBorders borders) =>
         borders.Left is not null || borders.Right is not null ||
