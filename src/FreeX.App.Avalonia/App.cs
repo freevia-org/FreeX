@@ -94,7 +94,7 @@ public sealed class App : Application
             Free.Shared.Ribbon.RibbonCommandFaultReporter.Handler =
                 (exception, commandId) => Diagnostics?.RecordCrash(exception, "ribbon_command:" + commandId);
 
-            var mainWindow = new MainWindow(StartupArguments);
+            var mainWindow = new MainWindow(StartupArguments, deferStartupFileOpen: true);
             desktop.MainWindow = mainWindow;
             Diagnostics?.RecordEvent("app_ready", new Dictionary<string, string?>
             {
@@ -126,7 +126,7 @@ public sealed class App : Application
 
             // Startup recovery must run after the window is visible (it hosts the confirmation
             // dialog), so defer it to the next UI-thread dispatch rather than running inline here.
-            Dispatcher.UIThread.Post(() => _ = OfferStartupRecoveryAsync(mainWindow, snapshotStore));
+            Dispatcher.UIThread.Post(() => _ = CompleteStartupAsync(mainWindow, snapshotStore, StartupArguments));
 
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
                 activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(mainWindow, args);
@@ -145,6 +145,48 @@ public sealed class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async Task CompleteStartupAsync(
+        MainWindow mainWindow,
+        AutosaveSnapshotStore snapshotStore,
+        IReadOnlyList<string> startupArguments)
+    {
+        try
+        {
+            var recoveryAccepted = await OfferStartupRecoveryAsync(mainWindow, snapshotStore);
+            var startupFilePlan = StartupFileOpenPlanner.Plan(startupArguments, recoveryAccepted);
+
+            foreach (var entry in startupFilePlan.Entries)
+            {
+                var targetWindow = entry.OpenInNewWindow
+                    ? OpenIndependentWindow()
+                    : mainWindow;
+                await targetWindow.OpenStartupFileAsync(entry.Path);
+            }
+
+            if (startupFilePlan.ShouldReportMissingPath)
+                mainWindow.ReportStartupFileNotFound(startupFilePlan.FirstMissingPath!);
+        }
+        catch (OperationCanceledException)
+        {
+            Diagnostics?.RecordEvent("startup_open_canceled", new Dictionary<string, string?>
+            {
+                ["source"] = "avalonia",
+                ["scope"] = "startup",
+                ["status"] = "canceled"
+            });
+        }
+        catch (Exception ex)
+        {
+            Diagnostics?.RecordEvent("startup_open_failed", new Dictionary<string, string?>
+            {
+                ["source"] = "avalonia",
+                ["scope"] = "startup",
+                ["status"] = "error",
+                ["reason"] = ex.GetType().Name
+            });
+        }
     }
 
     // Wraps the fire-and-forget activation handler so an exception cannot escape an async-void
@@ -202,7 +244,7 @@ public sealed class App : Application
     /// Declined or unreadable candidates are deleted so they are never re-offered. Must never throw —
     /// startup recovery is best-effort and must not affect normal startup.
     /// </summary>
-    private static async Task OfferStartupRecoveryAsync(MainWindow mainWindow, AutosaveSnapshotStore snapshotStore)
+    private static async Task<bool> OfferStartupRecoveryAsync(MainWindow mainWindow, AutosaveSnapshotStore snapshotStore)
     {
         var host = new StartupRecoveryWorkflowHost<MainWindow>(
             PrimaryTarget: mainWindow,
@@ -216,7 +258,7 @@ public sealed class App : Application
             ExecuteRestoreAsync: (operation, _) => new ValueTask(operation()),
             DeleteCandidate: AutosaveSnapshotStore.DeleteCandidate);
 
-        await StartupRecoveryWorkflow.RunAsync(snapshotStore.EnumerateCandidates(), host);
+        return await StartupRecoveryWorkflow.RunAsync(snapshotStore.EnumerateCandidates(), host);
     }
 
     /// <summary>
@@ -225,9 +267,11 @@ public sealed class App : Application
     /// coordinator exactly like <c>MainWindow.WindowManagement.cs</c>'s <c>NewWindow()</c> /
     /// <see cref="OnFrameworkInitializationCompleted"/> already do for every other live window.
     /// </summary>
-    private static MainWindow OpenRecoveryWindow()
+    private static MainWindow OpenRecoveryWindow() => OpenIndependentWindow();
+
+    private static MainWindow OpenIndependentWindow()
     {
-        var window = new MainWindow(StartupArguments);
+        var window = new MainWindow([], deferStartupFileOpen: true);
         var snapshotStore = AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance);
         var autosaveCoordinator = new AvaloniaAutosaveCoordinator(window, snapshotStore);
         window.AttachAutosaveCoordinator(autosaveCoordinator);

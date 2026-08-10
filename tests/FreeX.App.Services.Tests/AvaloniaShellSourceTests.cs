@@ -56,7 +56,7 @@ public sealed class AvaloniaShellSourceTests
         var ingressPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookOpenIngressPlanner.cs"));
 
         programSource.Should().NotContain("DisableAvaloniaAppDelegate");
-        appSource.Should().Contain("new MainWindow(StartupArguments)");
+        appSource.Should().Contain("new MainWindow(StartupArguments, deferStartupFileOpen: true)");
         appSource.Should().Contain("desktop.MainWindow = mainWindow;");
         appSource.Should().Contain("this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime");
         // Wired through a non-async-void wrapper so a thrown activation cannot crash the dispatcher.

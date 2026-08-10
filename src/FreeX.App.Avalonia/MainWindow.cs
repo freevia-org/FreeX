@@ -1286,6 +1286,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
     }
 
+    internal MainWindow(IReadOnlyList<string> startupArguments, bool deferStartupFileOpen)
+        : this(
+            startupArguments,
+            WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
+            WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
+            new CupsPlatformPrinter(),
+            sharedSession: null,
+            platformClipboard: null,
+            deferStartupFileOpen: deferStartupFileOpen)
+    {
+    }
+
     internal MainWindow(IReadOnlyList<string> startupArguments, WorkbookSession sharedSession)
         : this(
             startupArguments,
@@ -1318,7 +1330,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IWorkbookFileAccessService workbookFileAccessService,
         IPlatformPrinter platformPrinter,
         WorkbookSession? sharedSession,
-        IPlatformClipboard? platformClipboard = null)
+        IPlatformClipboard? platformClipboard = null,
+        bool deferStartupFileOpen = false)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
         ArgumentNullException.ThrowIfNull(workbookFileAccessService);
@@ -1348,16 +1361,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         else
         {
-            // StartupWorkbookLoader's own catch filter only covers IOException/InvalidDataException/
-            // NotSupportedException/UnauthorizedAccessException/WorkbookTooLargeException, so a
-            // password-protected workbook (WorkbookPasswordProtectedException) or any other startup-time
-            // failure would otherwise propagate out of this constructor and crash the whole app before
-            // _statusText (built by BuildContent below) even exists. Fall back to the sample workbook with
-            // a status message instead, matching the WPF host's broad startup catch and Avalonia's own
-            // File > Open catch (ShowOpenIssue).
+            // Interactive app startup defers command-line files until crash recovery has completed;
+            // direct MainWindow construction retains the loader path used by focused tests and native
+            // child-window scenarios. Keep a final guard here so construction can always fall back to a
+            // usable workbook before _statusText exists.
             try
             {
-                source = new StartupWorkbookLoader().Load(startupArguments);
+                source = new StartupWorkbookLoader().Load(
+                    deferStartupFileOpen ? [] : startupArguments);
             }
             catch (Exception ex)
             {
@@ -25490,6 +25501,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var fileAccessIdentity = await _workbookFileAccessService.CreateIdentityAsync(path!, storageItem);
         await OpenWorkbookPathAsync(path!, fileAccessIdentity);
     }
+
+    internal Task OpenStartupFileAsync(string path) => OpenWorkbookPathAsync(path);
+
+    internal void ReportStartupFileNotFound(string path) =>
+        ShowOpenIssue(UiText.Format("Startup_FileArgumentNotFoundMessage", path));
 
     internal async Task<MacOsLaunchSmokeDialogSnapshot> CaptureLaunchSmokeDialogEvidenceAsync()
     {
