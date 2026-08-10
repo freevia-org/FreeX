@@ -833,18 +833,9 @@ public sealed partial class SlideCanvas : FrameworkElement
         var destination = plan.DestinationDip;
         var dest = new Rect(destination.X, destination.Y, destination.Width, destination.Height);
 
-        bool hasTransform = pic.RotationDeg != 0 || pic.FlipH || pic.FlipV;
-        if (hasTransform)
-        {
-            double cx = dest.Left + dest.Width / 2;
-            double cy = dest.Top + dest.Height / 2;
-            var transform = new TransformGroup();
-            if (pic.FlipH || pic.FlipV)
-                transform.Children.Add(new ScaleTransform(pic.FlipH ? -1 : 1, pic.FlipV ? -1 : 1, cx, cy));
-            if (pic.RotationDeg != 0)
-                transform.Children.Add(new RotateTransform(pic.RotationDeg, cx, cy));
-            dc.PushTransform(transform);
-        }
+        var pictureTransform = ShapeTransformPlanner.PlanPictureTransform(pic);
+        if (!pictureTransform.IsIdentity)
+            dc.PushTransform(ToWpfTransform(pictureTransform));
 
         // Wave 26: draw outer shadow behind the picture when effects are set.
         // Route the shadow-direction/blur math through the shared renderer-neutral planner
@@ -868,9 +859,6 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         if (plan.HasReflection)
         {
-            double reflectionScale = Math.Abs(plan.ReflectionScaleY) < 0.001
-                ? -1.0
-                : plan.ReflectionScaleY;
             foreach (var blurPass in plan.ReflectionBlurPasses)
             {
                 var reflectionDest = new Rect(
@@ -878,7 +866,6 @@ public sealed partial class SlideCanvas : FrameworkElement
                     dest.Y + blurPass.OffsetYDip,
                     dest.Width,
                     dest.Height);
-                double pivotY = dest.Bottom + plan.ReflectionDistDip / 2.0;
                 var reflectionMask = new LinearGradientBrush
                 {
                     StartPoint = new System.Windows.Point(0.5, 0),
@@ -888,11 +875,15 @@ public sealed partial class SlideCanvas : FrameworkElement
                     Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0));
                 reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
                     Color.FromArgb(0, 255, 255, 255),
-                    Math.Clamp(plan.ReflectionEndPos, 0.001, 1.0)));
-                if (plan.ReflectionEndPos < 0.999)
+                    plan.ReflectionEndPos));
+                if (plan.ReflectionNeedsTerminalTransparentStop)
                     reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
                         Color.FromArgb(0, 255, 255, 255), 1));
-                dc.PushTransform(new ScaleTransform(1, reflectionScale, dest.Left + dest.Width / 2, pivotY));
+                dc.PushTransform(new ScaleTransform(
+                    1,
+                    plan.ReflectionScaleY,
+                    dest.Left + dest.Width / 2,
+                    plan.ReflectionPivotY));
                 dc.PushOpacityMask(reflectionMask);
                 dc.PushOpacity(blurPass.Opacity);
                 dc.DrawImage(bitmap, reflectionDest);
@@ -948,7 +939,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         if (pic.IsMedia)
             DrawPlayButtonOverlay(dc, dest);
 
-        if (hasTransform) dc.Pop();
+        if (!pictureTransform.IsIdentity) dc.Pop();
     }
 
     /// <summary>

@@ -38,6 +38,8 @@ public sealed record PictureRenderPlan(
     public double ReflectionBlurDip { get; init; }
     public double ReflectionScaleY { get; init; } = -1;
     public double ReflectionEndPos { get; init; } = 1;
+    public double ReflectionPivotY { get; init; }
+    public bool ReflectionNeedsTerminalTransparentStop { get; init; }
     public IReadOnlyList<PictureReflectionBlurPass> ReflectionBlurPasses { get; init; } =
         [new PictureReflectionBlurPass(0, 0, 1)];
 
@@ -59,6 +61,9 @@ public static class PictureRenderPlanner
         int sourceWidth = Math.Max(1, pixelWidth);
         int sourceHeight = Math.Max(1, pixelHeight);
         var sourceRect = PlanSourceRect(picture, sourceWidth, sourceHeight);
+        double reflectionDistance = picture.Effects?.ReflectionDistDip ?? 0;
+        double reflectionScale = picture.Effects?.ReflectionScaleY ?? -1;
+        double reflectionEndPosition = picture.Effects?.ReflectionEndPos ?? 1;
 
         return new PictureRenderPlan(
             picture.DestDip,
@@ -74,10 +79,12 @@ public static class PictureRenderPlanner
                 sourceRect.Height != sourceHeight,
             HasReflection = picture.Effects?.HasReflection == true,
             ReflectionAlpha = picture.Effects?.ReflectionAlpha ?? 0,
-            ReflectionDistDip = picture.Effects?.ReflectionDistDip ?? 0,
+            ReflectionDistDip = reflectionDistance,
             ReflectionBlurDip = picture.Effects?.ReflectionBlurDip ?? 0,
-            ReflectionScaleY = picture.Effects?.ReflectionScaleY ?? -1,
-            ReflectionEndPos = picture.Effects?.ReflectionEndPos ?? 1,
+            ReflectionScaleY = Math.Abs(reflectionScale) < 0.001 ? -1 : reflectionScale,
+            ReflectionEndPos = Math.Clamp(reflectionEndPosition, 0.001, 1.0),
+            ReflectionPivotY = picture.DestDip.Y + picture.DestDip.Height + reflectionDistance / 2.0,
+            ReflectionNeedsTerminalTransparentStop = reflectionEndPosition < 0.999,
             ReflectionBlurPasses = PictureReflectionRenderPlanner.PlanBlurPasses(
                 picture.Effects?.ReflectionBlurDip ?? 0)
         };

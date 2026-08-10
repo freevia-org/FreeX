@@ -865,19 +865,9 @@ public sealed partial class SlideCanvas : Control
         IDisposable? pictureTransformScope = null;
         IDisposable? alphaScope = null;
 
-        if (pic.RotationDeg != 0 || pic.FlipH || pic.FlipV)
-        {
-            double cx  = dest.Left + dest.Width  / 2;
-            double cy  = dest.Top  + dest.Height / 2;
-            double rad = pic.RotationDeg * Math.PI / 180.0;
-            var transform = Matrix.CreateTranslation(-cx, -cy);
-            if (pic.FlipH || pic.FlipV)
-                transform *= Matrix.CreateScale(pic.FlipH ? -1 : 1, pic.FlipV ? -1 : 1);
-            if (pic.RotationDeg != 0)
-                transform *= Matrix.CreateRotation(rad);
-            transform *= Matrix.CreateTranslation(cx, cy);
-            pictureTransformScope = dc.PushTransform(transform);
-        }
+        var pictureTransform = ShapeTransformPlanner.PlanPictureTransform(pic);
+        if (!pictureTransform.IsIdentity)
+            pictureTransformScope = dc.PushTransform(ToAvaloniaMatrix(pictureTransform));
 
         // Wave 26: draw outer shadow behind the picture when effects are set.
         // Route the shadow-direction/blur math through the shared renderer-neutral planner
@@ -904,9 +894,6 @@ public sealed partial class SlideCanvas : Control
 
         if (plan.HasReflection)
         {
-            double reflectionScale = Math.Abs(plan.ReflectionScaleY) < 0.001
-                ? -1.0
-                : plan.ReflectionScaleY;
             foreach (var blurPass in plan.ReflectionBlurPasses)
             {
                 var reflectionDest = new Rect(
@@ -914,16 +901,15 @@ public sealed partial class SlideCanvas : Control
                     dest.Y + blurPass.OffsetYDip,
                     dest.Width,
                     dest.Height);
-                double pivotY = dest.Bottom + plan.ReflectionDistDip / 2.0;
                 var reflectionStops = new GradientStops
                 {
                     new AvGradientStop(
                         Color.FromArgb(plan.ReflectionAlpha, 255, 255, 255), 0),
                     new AvGradientStop(
                         Color.FromArgb(0, 255, 255, 255),
-                        Math.Clamp(plan.ReflectionEndPos, 0.001, 1.0)),
+                        plan.ReflectionEndPos),
                 };
-                if (plan.ReflectionEndPos < 0.999)
+                if (plan.ReflectionNeedsTerminalTransparentStop)
                     reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
                 var reflectionMask = new LinearGradientBrush
                 {
@@ -932,13 +918,13 @@ public sealed partial class SlideCanvas : Control
                     GradientStops = reflectionStops,
                 };
                 using var transformScope = dc.PushTransform(
-                    Matrix.CreateTranslation(-(dest.Left + dest.Width / 2), -pivotY)
-                    * Matrix.CreateScale(1, reflectionScale)
-                    * Matrix.CreateTranslation(dest.Left + dest.Width / 2, pivotY));
+                    Matrix.CreateTranslation(-(dest.Left + dest.Width / 2), -plan.ReflectionPivotY)
+                    * Matrix.CreateScale(1, plan.ReflectionScaleY)
+                    * Matrix.CreateTranslation(dest.Left + dest.Width / 2, plan.ReflectionPivotY));
                 using var maskScope = dc.PushOpacityMask(
                     reflectionMask,
                     new Rect(reflectionDest.Left, reflectionDest.Bottom + plan.ReflectionDistDip,
-                        reflectionDest.Width, reflectionDest.Height * Math.Abs(reflectionScale)));
+                        reflectionDest.Width, reflectionDest.Height * Math.Abs(plan.ReflectionScaleY)));
                 using var opacityScope = dc.PushOpacity(blurPass.Opacity);
                 dc.DrawImage(renderBitmap, reflectionDest);
             }

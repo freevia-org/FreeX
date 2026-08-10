@@ -1264,14 +1264,18 @@ public static class TableCellEditPlanner
                 int afterLen = runEnd - overlapEnd;
 
                 if (beforeLen > 0)
-                    newRuns.Add(CloneRunWithText(run, run.Text.Substring(0, beforeLen)));
+                    newRuns.Add(TextBodyModelCloner.CloneRunWithText(run, run.Text.Substring(0, beforeLen)));
 
-                var middle = CloneRunWithText(run, run.Text.Substring(beforeLen, selectedLen));
+                var middle = TextBodyModelCloner.CloneRunWithText(
+                    run,
+                    run.Text.Substring(beforeLen, selectedLen));
                 newRuns.Add(middle);
                 selected.Add(middle);
 
                 if (afterLen > 0)
-                    newRuns.Add(CloneRunWithText(run, run.Text.Substring(beforeLen + selectedLen, afterLen)));
+                    newRuns.Add(TextBodyModelCloner.CloneRunWithText(
+                        run,
+                        run.Text.Substring(beforeLen + selectedLen, afterLen)));
             }
 
             paragraph.Runs.Clear();
@@ -1280,41 +1284,6 @@ public static class TableCellEditPlanner
 
         return selected;
     }
-
-    private static Run CloneRunWithText(Run source, string text) => new()
-    {
-        Text = text,
-        Language = source.Language,
-        AlternateLanguage = source.AlternateLanguage,
-        Kumimoji = source.Kumimoji,
-        SmartTagClean = source.SmartTagClean,
-        NormalizeHeight = source.NormalizeHeight,
-        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
-        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
-        UnderlineStyleToken = source.UnderlineStyleToken,
-        StrikeStyleToken = source.StrikeStyleToken,
-        Dirty = source.Dirty,
-        NoProof = source.NoProof,
-        Error = source.Error,
-        FontFamily = source.FontFamily,
-        FontSizePt = source.FontSizePt,
-        BaselineOffset = source.BaselineOffset,
-        Bold = source.Bold,
-        Italic = source.Italic,
-        BoldSet = source.BoldSet,
-        ItalicSet = source.ItalicSet,
-        Underline = source.Underline,
-        Strikethrough = source.Strikethrough,
-        Caps = source.Caps,
-        Color = source.Color,
-        Hyperlink = source.Hyperlink,
-        Field = source.Field,
-        TextFill = source.TextFill,
-        TextOutline = source.TextOutline,
-        TextShadow = source.TextShadow,
-        TextReflection = source.TextReflection,
-        Math = source.Math,
-    };
 
     private static bool RunFormatEquals(Run a, Run b) =>
         a.Language == b.Language

@@ -734,14 +734,18 @@ internal static class TextBodyRunMutationPlanner
                 int afterLen = runEnd - overlapEnd;
 
                 if (beforeLen > 0)
-                    newRuns.Add(CloneRunWithText(run, run.Text.Substring(0, beforeLen)));
+                    newRuns.Add(TextBodyModelCloner.CloneRunWithText(run, run.Text.Substring(0, beforeLen)));
 
-                var middle = CloneRunWithText(run, run.Text.Substring(beforeLen, selectedLen));
+                var middle = TextBodyModelCloner.CloneRunWithText(
+                    run,
+                    run.Text.Substring(beforeLen, selectedLen));
                 newRuns.Add(middle);
                 selected.Add(middle);
 
                 if (afterLen > 0)
-                    newRuns.Add(CloneRunWithText(run, run.Text.Substring(beforeLen + selectedLen, afterLen)));
+                    newRuns.Add(TextBodyModelCloner.CloneRunWithText(
+                        run,
+                        run.Text.Substring(beforeLen + selectedLen, afterLen)));
             }
 
             paragraph.Runs.Clear();
@@ -750,59 +754,6 @@ internal static class TextBodyRunMutationPlanner
 
         return selected;
     }
-
-    private static Run CloneRunWithText(Run source, string text) => new()
-    {
-        Text = text,
-        Language = source.Language,
-        AlternateLanguage = source.AlternateLanguage,
-        Kumimoji = source.Kumimoji,
-        SmartTagClean = source.SmartTagClean,
-        NormalizeHeight = source.NormalizeHeight,
-        CharacterSpacingHundredthsPt = source.CharacterSpacingHundredthsPt,
-        KerningThresholdHundredthsPt = source.KerningThresholdHundredthsPt,
-        UnderlineStyleToken = source.UnderlineStyleToken,
-        StrikeStyleToken = source.StrikeStyleToken,
-        Dirty = source.Dirty,
-        NoProof = source.NoProof,
-        Error = source.Error,
-        InlineImage = source.InlineImage is { } image && text == source.Text
-            ? new ImagePart { Bytes = image.Bytes.ToArray(), ContentType = image.ContentType }
-            : null,
-        InlineImageWidthEmu = source.InlineImage is not null && text == source.Text
-            ? source.InlineImageWidthEmu
-            : null,
-        InlineImageHeightEmu = source.InlineImage is not null && text == source.Text
-            ? source.InlineImageHeightEmu
-            : null,
-        InlineOleObject = source.InlineOleObject is { } ole && text == source.Text
-            ? CloneInlineOleObject(ole)
-            : null,
-        InlineTable = source.InlineTable is { } table && text == source.Text
-            ? table.Clone()
-            : null,
-        FontFamily = source.FontFamily,
-        FontSizePt = source.FontSizePt,
-        BaselineOffset = source.BaselineOffset,
-        Bold = source.Bold,
-        Italic = source.Italic,
-        BoldSet = source.BoldSet,
-        ItalicSet = source.ItalicSet,
-        Underline = source.Underline,
-        Strikethrough = source.Strikethrough,
-        RightToLeft = source.RightToLeft,
-        Caps = source.Caps,
-        Color = source.Color,
-        Hyperlink = source.Hyperlink,
-        Field = source.Field,
-        TextFill = source.TextFill,
-        TextOutline = source.TextOutline,
-        TextShadow = source.TextShadow,
-        TextReflection = source.TextReflection,
-        TextGlow = source.TextGlow,
-        TextSoftEdge = source.TextSoftEdge,
-        Math = source.Math,
-    };
 
     private static bool RunFormatEquals(Run a, Run b) =>
         a.Language == b.Language
@@ -1286,6 +1237,32 @@ internal static class TextBodyModelCloner
         TextSoftEdge = CloneRunSoftEdge(source.TextSoftEdge),
         Math = CloneMath(source.Math),
     };
+
+    internal static Run CloneRunWithText(Run source, string text)
+    {
+        var clone = CloneRun(source);
+        clone.Text = text;
+        clone.Color = source.Color;
+        clone.Hyperlink = source.Hyperlink;
+        clone.Field = source.Field;
+        clone.TextFill = source.TextFill;
+        clone.TextOutline = source.TextOutline;
+        clone.TextShadow = source.TextShadow;
+        clone.TextReflection = source.TextReflection;
+        clone.TextGlow = source.TextGlow;
+        clone.TextSoftEdge = source.TextSoftEdge;
+        clone.Math = source.Math;
+
+        if (string.Equals(text, source.Text, StringComparison.Ordinal))
+            return clone;
+
+        clone.InlineImage = null;
+        clone.InlineImageWidthEmu = null;
+        clone.InlineImageHeightEmu = null;
+        clone.InlineOleObject = null;
+        clone.InlineTable = null;
+        return clone;
+    }
 
     private static FieldRun? CloneField(FieldRun? source) =>
         source is null

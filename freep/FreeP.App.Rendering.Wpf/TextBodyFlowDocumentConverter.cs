@@ -1071,12 +1071,7 @@ internal static class TextBodyFlowDocumentConverter
             }
         }
 
-        // WPF exposes only the enabled/disabled decoration, so retain an authored
-        // DrawingML variant when an unchanged source run still has the decoration.
-        if (mr.Underline && originalRun?.UnderlineStyleToken is not null)
-            mr.UnderlineStyleToken = originalRun.UnderlineStyleToken;
-        if (mr.Strikethrough && originalRun?.StrikeStyleToken is not null)
-            mr.StrikeStyleToken = originalRun.StrikeStyleToken;
+        TextRunEditRoundTripPlanner.PreserveSourceOnlyMetadata(mr, originalRun);
 
         // Y2: read Foreground LOCAL value only.
         // When unset (inherited), carry the ORIGINAL run's Color (incl. SchemeColor ref) through
@@ -1110,19 +1105,6 @@ internal static class TextBodyFlowDocumentConverter
             // Foreground is inherited — preserve the original run's Color (may be null or a
             // SchemeColor ref such as accent1) rather than synthesizing a new sRGB.
             mr.Color = originalRun?.Color;
-        }
-
-        // FlowDocument has no native representation for DrawingML run effects. When the
-        // reconstructed inline is paired with an unchanged source run, carry the
-        // renderer-neutral effect state through the WPF editing round-trip.
-        if (originalRun is not null)
-        {
-            mr.TextFill = originalRun.TextFill;
-            mr.TextOutline = originalRun.TextOutline;
-            mr.TextShadow = originalRun.TextShadow;
-            mr.TextReflection = originalRun.TextReflection;
-            mr.TextGlow = originalRun.TextGlow;
-            mr.TextSoftEdge = originalRun.TextSoftEdge;
         }
 
         for (DependencyObject? parent = inline.Parent;
