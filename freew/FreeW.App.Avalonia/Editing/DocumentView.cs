@@ -14629,64 +14629,6 @@ public sealed class DocumentView : Control
         return (blockIndex, runIndex, paragraphIndex, 0, 0);
     }
 
-    private static Paragraph CloneShapeParagraphWithRange(
-        Paragraph source,
-        int start,
-        int end,
-        Func<RunFormatting, RunFormatting>? selectedFormatting = null)
-    {
-        var clone = (Paragraph)DocumentMerge.CloneBlock(source);
-        clone.Runs.Clear();
-        var lo = Math.Clamp(Math.Min(start, end), 0, source.PlainText.Length);
-        var hi = Math.Clamp(Math.Max(start, end), lo, source.PlainText.Length);
-        var position = 0;
-
-        foreach (var sourceRun in source.Runs)
-        {
-            var length = sourceRun.Text.Length;
-            var runStart = position;
-            var runEnd = runStart + length;
-            position = runEnd;
-
-            if (selectedFormatting is not null)
-            {
-                if (length == 0 || runEnd <= lo || runStart >= hi)
-                {
-                    clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(sourceRun, sourceRun.Text));
-                    continue;
-                }
-
-                var selectedStart = Math.Max(lo, runStart);
-                var selectedEnd = Math.Min(hi, runEnd);
-                if (selectedStart > runStart)
-                    clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
-                        sourceRun, sourceRun.Text[..(selectedStart - runStart)]));
-
-                var selected = RevisionEditPlanner.CloneRunWithText(
-                    sourceRun, sourceRun.Text[(selectedStart - runStart)..(selectedEnd - runStart)]);
-                selected.Formatting = selectedFormatting(sourceRun.Formatting);
-                clone.Runs.Add(selected);
-
-                if (selectedEnd < runEnd)
-                    clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
-                        sourceRun, sourceRun.Text[(selectedEnd - runStart)..]));
-                continue;
-            }
-
-            var overlapStart = Math.Max(lo, runStart);
-            var overlapEnd = Math.Min(hi, runEnd);
-            if (overlapEnd <= overlapStart)
-                continue;
-            clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
-                sourceRun, sourceRun.Text[(overlapStart - runStart)..(overlapEnd - runStart)]));
-        }
-
-        if (clone.Runs.Count == 0)
-            clone.Runs.Add(new Run(string.Empty,
-                source.Runs.FirstOrDefault()?.Formatting ?? RunFormatting.Default));
-        return clone;
-    }
-
     private static void AppendShapeTextRun(Paragraph paragraph, string text, RunFormatting formatting)
     {
         if (!string.IsNullOrEmpty(text))
@@ -14696,7 +14638,7 @@ public sealed class DocumentView : Control
     private static void AppendShapeParagraphRuns(Paragraph target, Paragraph fragment)
     {
         foreach (var run in fragment.Runs)
-            target.Runs.Add(RevisionEditPlanner.CloneRunWithText(run, run.Text));
+            target.Runs.Add(run);
     }
 
     private static void EnsureShapeParagraphRun(Paragraph paragraph)
@@ -14729,10 +14671,14 @@ public sealed class DocumentView : Control
         var prefixEnd = Math.Clamp(startOffset, 0, start.PlainText.Length);
         var prefix = start.PlainText[..prefixEnd];
         var insertionFormatting = RevisionEditPlanner.FormattingAtOffset(start, startOffset);
-        AppendShapeParagraphRuns(merged, CloneShapeParagraphWithRange(start, 0, prefixEnd));
+        AppendShapeParagraphRuns(merged, DocumentModelCloner.CloneParagraphTextRange(
+            start, 0, prefixEnd, RevisionClonePolicy.Preserve));
         AppendShapeTextRun(merged, replacement, insertionFormatting);
-        AppendShapeParagraphRuns(merged, CloneShapeParagraphWithRange(
-            end, Math.Clamp(endOffset, 0, end.PlainText.Length), end.PlainText.Length));
+        AppendShapeParagraphRuns(merged, DocumentModelCloner.CloneParagraphTextRange(
+            end,
+            Math.Clamp(endOffset, 0, end.PlainText.Length),
+            end.PlainText.Length,
+            RevisionClonePolicy.Preserve));
         EnsureShapeParagraphRun(merged);
         result.Add(merged);
 
@@ -14837,7 +14783,13 @@ public sealed class DocumentView : Control
 
             var from = index == startParagraphIndex ? startOffset : 0;
             var to = index == endParagraphIndex ? endOffset : source.PlainText.Length;
-            paragraphs.Add(CloneShapeParagraphWithRange(source, from, to, transform));
+            paragraphs.Add(DocumentModelCloner.CloneParagraphTextRange(
+                source,
+                from,
+                to,
+                RevisionClonePolicy.Preserve,
+                transform,
+                preserveUnselectedText: true));
         }
 
         _bus.Execute(new ReplaceShapeTextParagraphsCommand(

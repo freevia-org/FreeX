@@ -35,6 +35,109 @@ public static class DocumentModelCloner
         return CloneParagraphCore(source, ShouldPreserveRevisions(revisionPolicy));
     }
 
+    /// <summary>
+    /// Deep-clones a paragraph text range while retaining paragraph metadata and run payloads. By default,
+    /// only the normalized range is returned. Set <paramref name="preserveUnselectedText"/> to keep the
+    /// complete paragraph and apply <paramref name="selectedFormatting"/> only to the selected fragments.
+    /// </summary>
+    public static Paragraph CloneParagraphTextRange(
+        Paragraph source,
+        int start,
+        int end,
+        RevisionClonePolicy revisionPolicy,
+        Func<RunFormatting, RunFormatting>? selectedFormatting = null,
+        bool preserveUnselectedText = false)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var preserveRevisions = ShouldPreserveRevisions(revisionPolicy);
+        var clone = CloneParagraphCore(source, preserveRevisions);
+        var bookmarkPositions = BookmarkBoundaryMapper.Capture(source);
+        clone.Runs.Clear();
+
+        var lo = Math.Clamp(Math.Min(start, end), 0, source.PlainText.Length);
+        var hi = Math.Clamp(Math.Max(start, end), lo, source.PlainText.Length);
+        var position = 0;
+        foreach (var sourceRun in source.Runs)
+        {
+            var length = sourceRun.Text.Length;
+            var runStart = position;
+            var runEnd = runStart + length;
+            position = runEnd;
+
+            if (preserveUnselectedText)
+            {
+                if (length == 0 || runEnd <= lo || runStart >= hi)
+                {
+                    clone.Runs.Add(CloneRunWithTextCore(sourceRun, sourceRun.Text, preserveRevisions));
+                    continue;
+                }
+
+                var selectedStart = Math.Max(lo, runStart);
+                var selectedEnd = Math.Min(hi, runEnd);
+                if (selectedStart > runStart)
+                {
+                    clone.Runs.Add(CloneRunWithTextCore(
+                        sourceRun,
+                        sourceRun.Text[..(selectedStart - runStart)],
+                        preserveRevisions));
+                }
+
+                var selected = CloneRunWithTextCore(
+                    sourceRun,
+                    sourceRun.Text[(selectedStart - runStart)..(selectedEnd - runStart)],
+                    preserveRevisions);
+                if (selectedFormatting is not null)
+                    selected.Formatting = selectedFormatting(sourceRun.Formatting);
+                clone.Runs.Add(selected);
+
+                if (selectedEnd < runEnd)
+                {
+                    clone.Runs.Add(CloneRunWithTextCore(
+                        sourceRun,
+                        sourceRun.Text[(selectedEnd - runStart)..],
+                        preserveRevisions));
+                }
+                continue;
+            }
+
+            if (length == 0)
+            {
+                if (runStart >= lo && (runStart < hi || runStart == hi && hi == source.PlainText.Length))
+                    clone.Runs.Add(CloneRunWithTextCore(sourceRun, sourceRun.Text, preserveRevisions));
+                continue;
+            }
+
+            var overlapStart = Math.Max(lo, runStart);
+            var overlapEnd = Math.Min(hi, runEnd);
+            if (overlapEnd <= overlapStart)
+                continue;
+
+            var fragment = CloneRunWithTextCore(
+                sourceRun,
+                sourceRun.Text[(overlapStart - runStart)..(overlapEnd - runStart)],
+                preserveRevisions);
+            if (selectedFormatting is not null)
+                fragment.Formatting = selectedFormatting(sourceRun.Formatting);
+            clone.Runs.Add(fragment);
+        }
+
+        if (clone.Runs.Count == 0)
+        {
+            clone.Runs.Add(new Run(
+                string.Empty,
+                source.Runs.FirstOrDefault()?.Formatting ?? RunFormatting.Default));
+        }
+
+        clone.BookmarkBoundaries.Clear();
+        BookmarkBoundaryMapper.Restore(
+            clone,
+            bookmarkPositions,
+            preserveUnselectedText
+                ? null
+                : offset => Math.Clamp(offset - lo, 0, hi - lo));
+        return clone;
+    }
+
     public static Run CloneRun(Run source, RevisionClonePolicy revisionPolicy)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -124,6 +227,15 @@ public static class DocumentModelCloner
         MoveRevisionId = preserveRevisions ? source.MoveRevisionId : null,
         FormatRevision = preserveRevisions ? source.FormatRevision : null
     };
+
+    private static Run CloneRunWithTextCore(Run source, string text, bool preserveRevisions)
+    {
+        var clone = CloneRunCore(source, preserveRevisions);
+        clone.Text = text;
+        if (!string.Equals(text, source.Text, StringComparison.Ordinal))
+            clone.Ruby = null;
+        return clone;
+    }
 
     private static Shape CloneShape(Shape source, bool preserveRevisions)
     {

@@ -2744,42 +2744,14 @@ public sealed class InsertShapeTextParagraphBreakCommand(
         var source = paragraphs[paragraphIndex];
         var fullOffset = source.Runs.Take(runIndex).Sum(run => run.Text.Length)
             + Math.Clamp(runOffset, 0, source.Runs[runIndex].Text.Length);
-        var prefix = CloneParagraphWithTextRange(source, 0, fullOffset);
-        var suffix = CloneParagraphWithTextRange(source, fullOffset, source.PlainText.Length);
+        var prefix = DocumentModelCloner.CloneParagraphTextRange(
+            source, 0, fullOffset, RevisionClonePolicy.Preserve);
+        var suffix = DocumentModelCloner.CloneParagraphTextRange(
+            source, fullOffset, source.PlainText.Length, RevisionClonePolicy.Preserve);
         var result = paragraphs.ToList();
         result.RemoveAt(paragraphIndex);
         result.InsertRange(paragraphIndex, [prefix, suffix]);
         return result;
-    }
-
-    private static Paragraph CloneParagraphWithTextRange(Paragraph source, int start, int end)
-    {
-        var clone = (Paragraph)DocumentMerge.CloneBlock(source);
-        clone.Runs.Clear();
-
-        var position = 0;
-        foreach (var run in source.Runs)
-        {
-            var runStart = position;
-            var runEnd = position + run.Text.Length;
-            position = runEnd;
-            var overlapStart = Math.Max(start, runStart);
-            var overlapEnd = Math.Min(end, runEnd);
-            if (overlapEnd > overlapStart)
-            {
-                clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
-                    run,
-                    run.Text[(overlapStart - runStart)..(overlapEnd - runStart)]));
-            }
-        }
-
-        if (clone.Runs.Count == 0)
-        {
-            var formatting = source.Runs.FirstOrDefault()?.Formatting ?? RunFormatting.Default;
-            clone.Runs.Add(new Run(string.Empty, formatting));
-        }
-
-        return clone;
     }
 }
 
