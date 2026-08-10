@@ -17,15 +17,22 @@ public sealed class FreeWFileDialogSourceTests
         };
         var combined = string.Join(Environment.NewLine, sources);
         var outputWorkflow = ReadPresentationSource("Shell", "FreeWOutputWorkflow.cs");
+        var pictureWorkflow = ReadPresentationSource(
+            "DocumentFragments", "FreeWPictureImportWorkflow.cs");
+        var fragmentWorkflow = ReadPresentationSource(
+            "DocumentFragments", "FreeWDocumentFragmentImportWorkflow.cs");
+        var fragmentPorts = ReadHostSource(
+            "DocumentFragments", "WpfDocumentFragmentImportPorts.cs");
 
         combined.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         combined.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
-        combined.Should().Contain("defaultExtensionWithDot: \".docx\"");
-        combined.Should().Contain("\"Insert Text from File\"");
-        combined.Should().Contain("\"Insert Picture\"");
-        combined.Should().Contain("\"Insert Object\"");
-        combined.Should().Contain("OlePackagePayloadBuilder.Create(");
-        combined.Should().Contain("EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId)");
+        fragmentPorts.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
+        fragmentWorkflow.Should().Contain("DefaultExtensionWithDot: \".docx\"");
+        fragmentWorkflow.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
+        pictureWorkflow.Should().Contain("InsertPicturePickerTitle");
+        fragmentWorkflow.Should().Contain("\"Insert Object\"");
+        fragmentWorkflow.Should().Contain("OlePackagePayloadBuilder.Create(");
+        fragmentWorkflow.Should().Contain("EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId)");
         combined.Should().NotContain("SampleEmbeddedObject");
         combined.Should().Contain("FreeWExportWorkflow.CreatePlan(");
         outputWorkflow.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");

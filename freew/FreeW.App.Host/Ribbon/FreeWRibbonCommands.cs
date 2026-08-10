@@ -3240,62 +3240,52 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Text > Text from File: pick a .docx, read it, and merge its body into the document at the caret.
+    // Insert > Text > Text from File: realize the portable import policy through WPF-native ports.
     private sealed class InsertFileCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
-            var result = WpfFileDialogService.ShowOpenDialog(
-                owner,
-                "Word Documents (*.docx)|*.docx|All files (*.*)|*.*",
-                defaultExtensionWithDot: ".docx",
-                title: "Insert Text from File");
-            if (!result.Chosen)
-                return;
-
-            try
-            {
-                var source = DocxReader.Read(result.FileName!);
-                editor.Focus();
-                editor.InsertDocument(source);
-            }
-            catch (Exception ex)
-            {
-                DialogMessageHelper.ShowError(owner, $"Could not insert the file:\n{ex.Message}", "FreeW");
-            }
+            var workflow = new FreeWDocumentFragmentImportWorkflow(
+                [new DocxFileAdapter()],
+                new WpfDocumentFragmentPickerPort(owner),
+                new WpfDocumentFragmentSourceReaderPort(),
+                new WpfDocumentFragmentInsertionPort(editor));
+            var request = FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
+                FreeWDocumentFragmentHostProfile.Wpf);
+            var result = workflow.ImportAsync(request).GetAwaiter().GetResult();
+            ShowDocumentFragmentImportOutcome(owner, result);
         }
     }
 
-    // Insert > Text > Object: package the selected file in a real OLE compound payload so Word can
-    // extract or activate it after DOCX save. FreeW itself intentionally renders a static placeholder.
+    // Insert > Text > Object: realize portable OLE package policy through WPF-native ports.
     private sealed class InsertEmbeddedObjectCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             var owner = Window.GetWindow(editor);
-            var result = WpfFileDialogService.ShowOpenDialog(
-                owner,
-                "All files (*.*)|*.*",
-                title: "Insert Object");
-            if (!result.Chosen)
-                return;
-
-            try
-            {
-                var path = result.FileName!;
-                var payload = OlePackagePayloadBuilder.Create(
-                    Path.GetFileName(path),
-                    path,
-                    File.ReadAllBytes(path));
-                editor.Focus();
-                editor.InsertEmbeddedObject(EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId));
-            }
-            catch (Exception ex)
-            {
-                DialogMessageHelper.ShowError(owner, $"Could not insert the object:\n{ex.Message}", "FreeW");
-            }
+            var workflow = new FreeWDocumentFragmentImportWorkflow(
+                [],
+                new WpfDocumentFragmentPickerPort(owner),
+                new WpfDocumentFragmentSourceReaderPort(),
+                new WpfDocumentFragmentInsertionPort(editor));
+            var request = FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
+                FreeWDocumentFragmentHostProfile.Wpf);
+            var result = workflow.ImportAsync(request).GetAwaiter().GetResult();
+            ShowDocumentFragmentImportOutcome(owner, result);
         }
+    }
+
+    private static void ShowDocumentFragmentImportOutcome(
+        Window? owner,
+        FreeWDocumentFragmentImportResult result)
+    {
+        var presentation = FreeWDocumentFragmentImportOutcomePlanner.Plan(
+            result,
+            FreeWFileTextResources.Document,
+            FreeWDocumentFragmentImportFailureSurface.WpfModalError);
+        if (presentation.ModalMessage is { } message)
+            DialogMessageHelper.ShowError(owner, message, presentation.ModalTitle ?? "FreeW");
     }
 
     // Insert > Illustrations > Picture: realize the portable import workflow through WPF-native ports.

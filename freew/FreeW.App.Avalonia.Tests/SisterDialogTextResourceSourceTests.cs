@@ -41,6 +41,8 @@ public sealed class SisterDialogTextResourceSourceTests
     {
         var source = ReadAvaloniaSource("MainWindow.cs");
         var outputWorkflow = ReadPresentationSource("Shell", "FreeWOutputWorkflow.cs");
+        var fragmentWorkflow = ReadPresentationSource(
+            "DocumentFragments", "FreeWDocumentFragmentImportWorkflow.cs");
 
         source.Should().Contain("FreeWFileTextResources.Document");
         source.Should().Contain("FileText.OpenPickerTitle");
@@ -51,9 +53,9 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("showOverwritePrompt: true");
         source.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
         outputWorkflow.Should().Contain("ExportAtomicWriter.ReplaceTarget(");
-        source.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
-        source.Should().Contain("SisterAppFileTextPlanner.FormatUnsupportedFileType(");
-        source.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
+        fragmentWorkflow.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
+        fragmentWorkflow.Should().Contain("SisterAppFileTextPlanner.FormatUnsupportedFileType(");
+        fragmentWorkflow.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
         source.Should().NotContain("SisterAppFileTextPlanner.Document");
         source.Should().NotContain("SisterAppFileTextPlanner.OpenCommand");
         source.Should().NotContain("SisterAppFileTextPlanner.SaveCommand");

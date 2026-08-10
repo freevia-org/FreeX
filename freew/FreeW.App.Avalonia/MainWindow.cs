@@ -3531,9 +3531,6 @@ public sealed partial class MainWindow : Window
         }, DispatcherPriority.Input);
     }
 
-    private static readonly FilePickerFileType EmbeddedObjectFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType("All files", ["*.*"]);
-
     /// <summary>
     /// Insert &gt; Picture (AV-INSERT): realize the portable import workflow through Avalonia-native ports.
     /// </summary>
@@ -3555,31 +3552,9 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Pick a file and insert it as a Word-compatible generic OLE Package.</summary>
-    private async Task InsertEmbeddedObjectAsync()
-    {
-        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                "Insert Object",
-                [EmbeddedObjectFileType]));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        try
-        {
-            var payload = OlePackagePayloadBuilder.Create(
-                Path.GetFileName(path),
-                path,
-                await File.ReadAllBytesAsync(path));
-            _editor.InsertEmbeddedObject(EmbeddedObject.Create(payload, OlePackagePayloadBuilder.ProgId));
-            _editor.Focus();
-        }
-        catch (Exception ex)
-        {
-            _status.Text = $"Could not insert the object: {ex.Message}";
-        }
-    }
+    private Task InsertEmbeddedObjectAsync() => ExecuteDocumentFragmentImportAsync(
+        FreeWDocumentFragmentImportPlanner.CreateEmbeddedObjectRequest(
+            FreeWDocumentFragmentHostProfile.Avalonia));
 
     private async Task OpenSymbolPickerAsync()
     {
@@ -3889,61 +3864,28 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// AV-INSERT2: Insert Text from File opens a file picker for a .docx/.txt. DOCX files are loaded through
-    /// the open adapters and inserted as cloned document blocks; .txt files retain the plain-text quick-part
-    /// insertion path. Wired to <c>freew.text-from-file</c> (Insert -> Text).
+    /// AV-INSERT2: Insert Text from File realizes the portable DOCX/TXT policy through Avalonia-native ports.
+    /// Wired to <c>freew.text-from-file</c> (Insert -> Text).
     /// </summary>
-    private async Task InsertTextFromFileAsync()
+    private Task InsertTextFromFileAsync() => ExecuteDocumentFragmentImportAsync(
+        FreeWDocumentFragmentImportPlanner.CreateTextFromFileRequest(
+            FreeWDocumentFragmentHostProfile.Avalonia));
+
+    private async Task ExecuteDocumentFragmentImportAsync(FreeWDocumentFragmentImportRequest request)
     {
-        using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerOpenRequest.FromFileTypes(
-                InsertDialogTextResources.TextFromFilePickerTitle,
-                [TextFromFileType]));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        try
-        {
-            var ext = Path.GetExtension(path);
-            if (string.Equals(ext, ".txt", StringComparison.OrdinalIgnoreCase))
-            {
-                var text = await File.ReadAllTextAsync(path);
-                _editor.InsertQuickPartText(text);
-            }
-            else
-            {
-                var adapter = DocumentFileFormatResolver.FindOpenAdapter(_documentPersistence.Adapters, ext, out _);
-                if (adapter is null)
-                {
-                    _status.Text = SisterAppFileTextPlanner.FormatUnsupportedFileType(
-                        FileText,
-                        FreeWFileTextResources.InsertTextCommand,
-                        ext);
-                    return;
-                }
-                using var stream = File.OpenRead(path);
-                var document = adapter.Load(stream);
-                _editor.InsertDocument(document);
-            }
-
-            _editor.Focus();
-        }
-        catch (Exception ex)
-        {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                FileText,
-                FreeWFileTextResources.InsertTextCommand,
-                ex.Message);
-        }
+        var workflow = new FreeWDocumentFragmentImportWorkflow(
+            _documentPersistence.Adapters,
+            new AvaloniaDocumentFragmentPickerPort(StorageProvider),
+            new AvaloniaDocumentFragmentSourceReaderPort(),
+            new AvaloniaDocumentFragmentInsertionPort(_editor));
+        var result = await workflow.ImportAsync(request);
+        var presentation = FreeWDocumentFragmentImportOutcomePlanner.Plan(
+            result,
+            FileText,
+            FreeWDocumentFragmentImportFailureSurface.AvaloniaStatus);
+        if (presentation.StatusText is { } statusText)
+            _status.Text = statusText;
     }
-
-    private static readonly FilePickerFileType TextFromFileType =
-        AvaloniaFilePickerTypeAdapter.CreateFileType(
-            FreeWFileTextResources.TextFromFileTypeName,
-            ["*.docx", "*.txt"],
-            ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"]);
 
     private void ApplyOpenResult(DocumentOpenResult result)
     {
