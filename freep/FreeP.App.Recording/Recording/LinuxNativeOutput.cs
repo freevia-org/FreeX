@@ -1,7 +1,4 @@
 using System.Diagnostics;
-using System.Globalization;
-using System.IO.Compression;
-using System.Text;
 using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
 using FreeP.App.Compositor;
@@ -446,176 +443,73 @@ public interface ILinuxVideoExportAdapter
 public sealed class LinuxVideoExportAdapter : ILinuxVideoExportAdapter
 {
     private readonly LinuxVideoEncoderCapability _capability;
-    private readonly IProcessRunner _processRunner;
+    private readonly PresentationVideoExportOrchestrator _orchestrator;
 
     public LinuxVideoExportAdapter(
         LinuxVideoEncoderCapability capability,
         IProcessRunner? processRunner = null)
     {
         _capability = capability ?? throw new ArgumentNullException(nameof(capability));
-        _processRunner = processRunner ?? new SystemProcessRunner();
+        _orchestrator = new PresentationVideoExportOrchestrator(
+            capability,
+            new FfmpegVideoExportBackend(
+                capability,
+                processRunner ?? new SystemProcessRunner()),
+            new PresentationVideoExportOrchestrationOptions(
+                TemporaryDirectoryPrefix: "freep-video-",
+                InitialStage: "running ffmpeg",
+                InvalidOutputReason: "ffmpeg completed but did not produce a valid non-empty MP4 file.",
+                CanExport: static value =>
+                    value.CanEncodeMp4 &&
+                    !string.IsNullOrWhiteSpace(value.ExecutablePath) &&
+                    !string.IsNullOrWhiteSpace(value.EncoderName),
+                FormatFailureReason: static (_, ex) => ex.Message,
+                BuildFfmpegConcatFile: true,
+                RequireNonEmptyFrames: true));
     }
 
     public LinuxVideoEncoderCapability Capability => _capability;
 
-    public async Task<LinuxVideoExportResult> ExportAsync(
+    public Task<LinuxVideoExportResult> ExportAsync(
         PresentationVideoFramePackage package,
         string outputPath,
         CancellationToken cancellationToken = default,
-        IReadOnlyList<PresentationRecordingMediaArtifact>? mediaArtifacts = null)
-    {
-        ArgumentNullException.ThrowIfNull(package);
-        ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
-        if (cancellationToken.IsCancellationRequested)
-            return LinuxVideoExportResult.CanceledResult(outputPath);
-        if (!_capability.CanEncodeMp4 ||
-            string.IsNullOrWhiteSpace(_capability.ExecutablePath) ||
-            string.IsNullOrWhiteSpace(_capability.EncoderName))
-            return LinuxVideoExportResult.Failed(_capability.Reason, outputPath);
-
-        var validation = PresentationVideoFramePackageExecutor.ValidatePackage(package);
-        if (!validation.IsValid)
-            return LinuxVideoExportResult.Failed(
-                validation.FailureReason ?? "Video frame package validation failed.",
-                outputPath);
-
-        try
-        {
-            using var temporaryDirectoryLease = TemporaryDirectoryLease.Create("freep-video-");
-            var temporaryDirectory = temporaryDirectoryLease.Path;
-            var concatPath = ExtractFramesAndBuildConcatFile(package, temporaryDirectory);
-            var mediaPlan = PresentationVideoMediaMuxPlanner.Prepare(
-                package,
-                mediaArtifacts,
-                temporaryDirectory);
-            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
-            var arguments = PresentationVideoMediaMuxPlanner.BuildFfmpegArguments(
-                concatPath,
-                outputPath,
-                _capability.EncoderName!,
-                mediaPlan);
-            var processResult = await RunFfmpegAsync(
-                _capability.ExecutablePath,
-                arguments,
-                outputPath,
-                cancellationToken).ConfigureAwait(false);
-            if (processResult is not null)
-            {
-                if (!processResult.Succeeded)
-                    TryDelete(outputPath);
-                return processResult;
-            }
-
-            var bytes = await File.ReadAllBytesAsync(outputPath, cancellationToken).ConfigureAwait(false);
-            if (!HasNonEmptyMp4Payload(bytes))
-            {
-                TryDelete(outputPath);
-                return LinuxVideoExportResult.Failed(
-                    "ffmpeg completed but did not produce a valid non-empty MP4 file.",
-                    outputPath);
-            }
-
-            return LinuxVideoExportResult.Success(
-                outputPath,
-                _capability.EncoderName!,
-                bytes.LongLength,
-                mediaPlan.MuxedNarrationTrackCount,
-                mediaPlan.MuxedCameraTrackCount,
-                mediaPlan.MuxedCaptionTrackCount);
-        }
-        catch (OperationCanceledException)
-        {
-            TryDelete(outputPath);
-            return LinuxVideoExportResult.CanceledResult(outputPath);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            TryDelete(outputPath);
-            return LinuxVideoExportResult.Failed(ex.Message, outputPath);
-        }
-    }
-
-    private static string ExtractFramesAndBuildConcatFile(
-        PresentationVideoFramePackage package,
-        string directory)
-    {
-        using var archive = new ZipArchive(new MemoryStream(package.Bytes), ZipArchiveMode.Read);
-        var concatPath = Path.Combine(directory, "frames.txt");
-        var lines = new List<string>(package.Frames.Count * 2 + 1);
-        foreach (var frame in package.Frames)
-        {
-            var entry = archive.GetEntry(frame.FileName) ??
-                throw new InvalidDataException($"Video package is missing frame '{frame.FileName}'.");
-            var framePath = Path.Combine(directory, $"frame-{frame.SegmentIndex:D6}.png");
-            using (var input = entry.Open())
-            using (var output = File.Create(framePath))
-                input.CopyTo(output);
-            var payload = File.ReadAllBytes(framePath);
-            if (payload.Length == 0)
-                throw new InvalidDataException($"Video package frame '{frame.FileName}' is empty.");
-
-            lines.Add($"file '{EscapeConcatPath(framePath)}'");
-            lines.Add($"duration {frame.Duration.TotalSeconds.ToString("0.######", CultureInfo.InvariantCulture)}");
-        }
-
-        if (package.Frames.Count > 0)
-        {
-            var lastPath = Path.Combine(directory, $"frame-{package.Frames[^1].SegmentIndex:D6}.png");
-            lines.Add($"file '{EscapeConcatPath(lastPath)}'");
-        }
-
-        File.WriteAllLines(concatPath, lines, new UTF8Encoding(false));
-        return concatPath;
-    }
-
-    private async Task<LinuxVideoExportResult?> RunFfmpegAsync(
-        string executable,
-        IReadOnlyList<string> arguments,
-        string outputPath,
-        CancellationToken cancellationToken)
-    {
-        ProcessResult result;
-        try
-        {
-            result = await _processRunner.RunAsync(
-                new ProcessInvocation(executable, arguments),
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            return LinuxVideoExportResult.CanceledResult(outputPath);
-        }
-
-        if (result.ExitCode == 0)
-            return null;
-        return LinuxVideoExportResult.Failed(
-            string.IsNullOrWhiteSpace(result.StandardError)
-                ? $"ffmpeg exited with code {result.ExitCode}."
-                : result.StandardError.Trim(),
-            outputPath);
-    }
+        IReadOnlyList<PresentationRecordingMediaArtifact>? mediaArtifacts = null) =>
+        _orchestrator.ExportAsync(package, outputPath, cancellationToken, mediaArtifacts);
 
     internal static bool HasNonEmptyMp4Payload(byte[] bytes)
+        => PresentationVideoExportOrchestrator.HasNonEmptyMp4Payload(bytes);
+
+    private sealed class FfmpegVideoExportBackend(
+        LinuxVideoEncoderCapability capability,
+        IProcessRunner processRunner) : IPresentationVideoExportBackend
     {
-        if (bytes.Length < 16 || !bytes.AsSpan(4, 4).SequenceEqual("ftyp"u8))
-            return false;
-
-        return bytes.AsSpan().IndexOf("moov"u8) >= 0 && bytes.AsSpan().IndexOf("mdat"u8) >= 0;
-    }
-
-    private static string EscapeConcatPath(string path) =>
-        path.Replace("'", "'\\''", StringComparison.Ordinal);
-
-    private static void TryDelete(string path)
-    {
-        try
+        public async Task<PresentationVideoExportBackendResult> EncodeAsync(
+            PresentationVideoExportWorkspace workspace,
+            PresentationVideoExportStage stage,
+            CancellationToken cancellationToken)
         {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
+            var arguments = PresentationVideoMediaMuxPlanner.BuildFfmpegArguments(
+                workspace.ConcatPath!,
+                workspace.OutputPath,
+                capability.EncoderName!,
+                workspace.MediaPlan);
+            var result = await processRunner.RunAsync(
+                new ProcessInvocation(capability.ExecutablePath!, arguments),
+                cancellationToken).ConfigureAwait(false);
+            if (result.ExitCode != 0)
+            {
+                return PresentationVideoExportBackendResult.Failed(
+                    string.IsNullOrWhiteSpace(result.StandardError)
+                        ? $"ffmpeg exited with code {result.ExitCode}."
+                        : result.StandardError.Trim());
+            }
+
+            return PresentationVideoExportBackendResult.Encoded(
+                capability.EncoderName!,
+                workspace.MediaPlan.MuxedNarrationTrackCount,
+                workspace.MediaPlan.MuxedCameraTrackCount,
+                workspace.MediaPlan.MuxedCaptionTrackCount);
         }
     }
-
 }
