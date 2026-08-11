@@ -281,4 +281,29 @@ public sealed class WholeWindowVisualEvidenceContractTests
                 .And.NotContain("case \"zoom-fit\"");
         }
     }
+
+    [Fact]
+    public void Media_caption_capture_uses_the_canonical_host_lifecycle_in_both_renderers()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var hosts = new[]
+        {
+            (
+                MainWindow: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs")),
+                Capture: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.WholeWindowVisualEvidence.cs"))),
+            (
+                MainWindow: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs")),
+                Capture: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.WholeWindowVisualEvidence.cs"))),
+        };
+
+        foreach (var host in hosts)
+        {
+            host.Capture.Should().Contain("case WholeWindowVisualEvidenceActivationKind.MediaCaptionPane:")
+                .And.Contain("ShowMediaCaptionPane();")
+                .And.Contain("if (IsMediaCaptionPaneVisible) result.Add(\"accessibility.media-caption-pane\")");
+            host.MainWindow.Should().Contain("ShowMediaCaptionPane() =>")
+                .And.Contain("_mediaPaneHostCoordinator.Show();")
+                .And.Contain("HideMediaCaptionPane() => _mediaPaneHostCoordinator.Hide();");
+        }
+    }
 }

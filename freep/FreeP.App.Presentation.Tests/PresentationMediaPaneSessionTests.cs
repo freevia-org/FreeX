@@ -159,7 +159,7 @@ public sealed class PresentationMediaPaneSessionTests
         media.Bookmarks.Should().ContainSingle().Which.Should().Match<MediaBookmarkInfo>(bookmark =>
             bookmark.Name == "Chapter" && bookmark.TimeMilliseconds == 900);
         session.SelectedBookmarkIndex.Should().Be(0);
-        callbackCount.Should().Be(16);
+        callbackCount.Should().Be(12);
         editor.CanUndo.Should().BeTrue();
     }
 
@@ -206,43 +206,47 @@ public sealed class PresentationMediaPaneSessionTests
         deleted.Succeeded.Should().BeTrue();
         media.CaptionTracks.Should().BeEmpty();
         session.SelectedCaptionTrackIndex.Should().BeNull();
-        callbackCount.Should().Be(8);
+        callbackCount.Should().Be(6);
     }
 
     [Fact]
     public void HostCoordinator_OwnsCaptionVolumePlaybackTimingAndBookmarkTransitions()
     {
         var (editor, media) = CreateSelectedMediaEditor();
-        var coordinator = new PresentationMediaPaneHostCoordinator(CreateSession(editor));
+        var view = new RecordingMediaPaneHostView();
+        var panes = new PresentationWorkareaPaneSession();
+        var coordinator = new PresentationMediaPaneHostCoordinator(CreateSession(editor), panes, view);
 
-        var render = coordinator.BuildRenderPlan(new PresentationMediaCaptionHostSnapshot(
+        var opened = coordinator.Show();
+        coordinator.SetCaptionInput(new(
             "English",
             "en-US",
             "captions.vtt",
             "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello"));
-        coordinator.ApplyCaption(
-            PresentationMediaCaptionAuthoringIntentKind.Create,
-            new PresentationMediaCaptionHostSnapshot(
-                "English",
-                "en-US",
-                "captions.vtt",
-                "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello")).Succeeded.Should().BeTrue();
-        coordinator.ApplyVolume(new PresentationMediaVolumeHostSnapshot(135)).Should().BeTrue();
-        coordinator.ApplyPlayback(new PresentationMediaPlaybackHostSnapshot(
-            StartModeIndex: 1,
-            Loop: true,
-            ShowWhenStopped: false,
-            RewindAfterPlaying: true,
-            PlayFullScreen: true,
-            StopAfterSlidesText: "3")).Should().BeTrue();
-        coordinator.ApplyTiming(new PresentationMediaTimingHostSnapshot(
-            "125", "250", "500", "750")).Should().BeTrue();
-        coordinator.ApplyBookmark(
-            PresentationMediaBookmarkMutationIntentKind.Create,
-            new PresentationMediaBookmarkHostSnapshot("Chapter", "900")).Should().BeTrue();
+        coordinator.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Create)
+            .Succeeded.Should().BeTrue();
+        coordinator.SetVolumeInput(135);
+        coordinator.ApplyVolume().Should().BeTrue();
+        coordinator.SetPlaybackInput(
+            MediaPlaybackStartMode.Automatically,
+            loop: true,
+            showWhenStopped: false,
+            rewindAfterPlaying: true,
+            playFullScreen: true,
+            stopAfterSlides: 3);
+        coordinator.ApplyPlayback().Should().BeTrue();
+        coordinator.SetTimingInput(125, 250, 500, 750);
+        coordinator.ApplyTiming().Should().BeTrue();
+        coordinator.SetBookmarkInput("Chapter", 900);
+        coordinator.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Create).Should().BeTrue();
 
-        render.Caption.Should().BeSameAs(coordinator.LastCaptionAuthoringPanePlan);
-        render.Playback.StartModeIndex.Should().Be(0);
+        opened.ShapeId.Should().Be(42);
+        opened.Tracks.Should().BeEmpty();
+        coordinator.LastCaptionAuthoringPanePlan!.Tracks.Should().ContainSingle();
+        panes.IsVisible(PresentationWorkareaPane.MediaCaption).Should().BeTrue();
+        view.IsPaneVisible.Should().BeTrue();
+        view.LastRender.Should().NotBeNull();
+        view.LastRender!.Playback.StartModeIndex.Should().Be(1);
         media.CaptionTracks.Should().ContainSingle();
         media.VolumePercent.Should().Be(100);
         media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
@@ -259,6 +263,43 @@ public sealed class PresentationMediaPaneSessionTests
     }
 
     [Fact]
+    public void HostCoordinator_OwnsVisibilityAndSuppressesNestedRefreshDuringViewUpdates()
+    {
+        var (editor, _) = CreateSelectedMediaEditor();
+        var view = new RecordingMediaPaneHostView();
+        var panes = new PresentationWorkareaPaneSession();
+        var coordinator = new PresentationMediaPaneHostCoordinator(CreateSession(editor), panes, view);
+        var nestedRefreshes = 0;
+        view.DuringRender = () =>
+        {
+            nestedRefreshes++;
+            coordinator.Refresh().Should().BeNull();
+            coordinator.SelectCaptionTrack(99);
+        };
+
+        coordinator.Show();
+
+        view.RenderCount.Should().Be(1);
+        nestedRefreshes.Should().Be(1);
+        coordinator.SelectedCaptionTrackIndex.Should().BeNull();
+        coordinator.IsUpdating.Should().BeFalse();
+        view.Events.Take(3).Should().Equal("render", "visible:true", "accessibility");
+
+        coordinator.Hide();
+
+        panes.IsRequested(PresentationWorkareaPane.MediaCaption).Should().BeFalse();
+        view.IsPaneVisible.Should().BeFalse();
+
+        coordinator.SetVolumeInput(45);
+
+        panes.IsVisible(PresentationWorkareaPane.MediaCaption).Should().BeTrue();
+        view.IsPaneVisible.Should().BeTrue();
+        view.Volume.VolumePercent.Should().Be(45);
+        view.RenderCount.Should().Be(2);
+        nestedRefreshes.Should().Be(2);
+    }
+
+    [Fact]
     public void MainWindowSourceGuards_KeepMediaTransitionsInHostCoordinator()
     {
         var root = FindWorkspaceRoot();
@@ -268,18 +309,29 @@ public sealed class PresentationMediaPaneSessionTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("private readonly PresentationMediaPaneHostCoordinator _mediaPaneHostCoordinator;");
+            source.Should().Contain("IPresentationMediaPaneHostView");
             source.Should().Contain("CaptureMediaCaptionHostSnapshot()");
             source.Should().Contain("CaptureMediaVolumeHostSnapshot()");
             source.Should().Contain("CaptureMediaPlaybackHostSnapshot()");
             source.Should().Contain("CaptureMediaTimingHostSnapshot()");
             source.Should().Contain("CaptureMediaBookmarkHostSnapshot()");
+            source.Should().Contain("_mediaPaneHostCoordinator.Show()");
+            source.Should().Contain("_mediaPaneHostCoordinator.Hide()");
+            source.Should().Contain("_mediaPaneHostCoordinator.SetCaptionInput(");
+            source.Should().Contain("_mediaPaneHostCoordinator.SetVolumeInput(");
+            source.Should().Contain("_mediaPaneHostCoordinator.SetPlaybackInput(");
+            source.Should().Contain("_mediaPaneHostCoordinator.SetTimingInput(");
+            source.Should().Contain("_mediaPaneHostCoordinator.SetBookmarkInput(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyVolume(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyPlayback(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyTiming(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyBookmark(");
-            source.Should().Contain("_mediaPaneHostCoordinator.BuildRenderPlan(");
             source.Should().NotContain("_mediaPaneSession");
+            source.Should().NotContain("_mediaCaptionPaneRefreshing");
+            source.Should().NotContain("_mediaPaneHostCoordinator.BuildRenderPlan(");
+            source.Should().NotContain("_workareaSession.Panes.Show(PresentationWorkareaPane.MediaCaption)");
+            source.Should().NotContain("_workareaSession.Panes.Hide(PresentationWorkareaPane.MediaCaption)");
             source.Should().NotContain("PresentationMediaPaneSession.BuildPlaybackInputPlan(");
             source.Should().NotContain("PresentationMediaPaneSession.ParseStopAfterSlides(");
             source.Should().Contain("RenderMediaCaptionPane(");
@@ -303,7 +355,7 @@ public sealed class PresentationMediaPaneSessionTests
         callback ??= () => { };
         return new PresentationMediaPaneSession(
             () => editor,
-            new PresentationMediaPaneSessionCallbacks(callback, callback, callback, callback));
+            new PresentationMediaPaneSessionCallbacks(callback, callback, callback));
     }
 
     private static (EditingSession Editor, MediaInfo Media) CreateSelectedMediaEditor()
@@ -321,6 +373,98 @@ public sealed class PresentationMediaPaneSessionTests
         var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
         editor.Select(shape.Id);
         return (editor, media);
+    }
+
+    private sealed class RecordingMediaPaneHostView : IPresentationMediaPaneHostView
+    {
+        public bool IsPaneVisible { get; private set; }
+
+        public PresentationMediaCaptionHostSnapshot Caption { get; private set; } =
+            new(null, null, null, null);
+
+        public PresentationMediaVolumeHostSnapshot Volume { get; private set; } = new(80);
+
+        public PresentationMediaPlaybackHostSnapshot Playback { get; private set; } =
+            new(0, false, true, false, false, "1");
+
+        public PresentationMediaTimingHostSnapshot Timing { get; private set; } =
+            new("0", "0", "0", "0");
+
+        public PresentationMediaBookmarkHostSnapshot Bookmark { get; private set; } =
+            new(string.Empty, "0");
+
+        public PresentationMediaPaneHostRenderPlan? LastRender { get; private set; }
+
+        public int RenderCount { get; private set; }
+
+        public Action? DuringRender { get; set; }
+
+        public List<string> Events { get; } = [];
+
+        public PresentationMediaCaptionHostSnapshot CaptureCaption() => Caption;
+
+        public PresentationMediaVolumeHostSnapshot CaptureVolume() => Volume;
+
+        public PresentationMediaPlaybackHostSnapshot CapturePlayback() => Playback;
+
+        public PresentationMediaTimingHostSnapshot CaptureTiming() => Timing;
+
+        public PresentationMediaBookmarkHostSnapshot CaptureBookmark() => Bookmark;
+
+        public void SetPaneVisible(bool visible)
+        {
+            IsPaneVisible = visible;
+            Events.Add($"visible:{visible.ToString().ToLowerInvariant()}");
+        }
+
+        public void SetCaptionInput(PresentationMediaCaptionHostSnapshot input) => Caption = input;
+
+        public void SetVolumeInput(PresentationMediaVolumeInputPlan input) =>
+            Volume = new(input.VolumePercent);
+
+        public void SetPlaybackInput(PresentationMediaPlaybackInputPlan input) =>
+            Playback = new(
+                input.StartModeIndex,
+                input.Loop,
+                input.ShowWhenStopped,
+                input.RewindAfterPlaying,
+                input.PlayFullScreen,
+                input.StopAfterSlidesText);
+
+        public void SetTimingInput(PresentationMediaTimingInputPlan input) =>
+            Timing = new(input.TrimStartText, input.TrimEndText, input.FadeInText, input.FadeOutText);
+
+        public void SetBookmarkInput(PresentationMediaBookmarkInputPlan input) =>
+            Bookmark = new(input.Name, input.TimeText);
+
+        public void Render(PresentationMediaPaneHostRenderPlan plan)
+        {
+            LastRender = plan;
+            RenderCount++;
+            Events.Add("render");
+            Caption = new(
+                plan.Caption.Label.Value,
+                plan.Caption.Language.Value,
+                plan.Caption.Source.Value,
+                plan.Caption.TranscriptText.Value);
+            Volume = new(plan.Media.VolumePercent);
+            Playback = new(
+                plan.Playback.StartModeIndex,
+                plan.Playback.Loop,
+                plan.Playback.ShowWhenStopped,
+                plan.Playback.RewindAfterPlaying,
+                plan.Playback.PlayFullScreen,
+                plan.Playback.StopAfterSlidesText);
+            Timing = new(
+                plan.Media.Timing.TrimStartText,
+                plan.Media.Timing.TrimEndText,
+                plan.Media.Timing.FadeInText,
+                plan.Media.Timing.FadeOutText);
+            Bookmark = new(plan.Media.BookmarkName, plan.Media.BookmarkTimeText);
+            DuringRender?.Invoke();
+        }
+
+        public void RefreshAccessibilityMetadata() => Events.Add("accessibility");
     }
 
     private static string FindWorkspaceRoot() =>

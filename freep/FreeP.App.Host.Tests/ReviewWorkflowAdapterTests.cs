@@ -979,6 +979,11 @@ public sealed class ReviewWorkflowAdapterTests
             delete.Succeeded.Should().BeTrue();
             mediaShape.Media.CaptionTracks.Should().BeEmpty();
             window.MediaCaptionPaneTrackCount.Should().Be(0);
+
+            window.HideMediaCaptionPane();
+            window.IsMediaCaptionPaneVisible.Should().BeFalse();
+            window.ShowMediaCaptionPane();
+            window.IsMediaCaptionPaneVisible.Should().BeTrue();
         }
         finally
         {
@@ -2531,8 +2536,12 @@ public sealed class ReviewWorkflowAdapterTests
         workareaEndpointSource.Should().Contain(
             "RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan()");
         source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
-        source.Should().Contain("_mediaPaneHostCoordinator.BuildRenderPlan(");
+        source.Should().Contain("_mediaPaneHostCoordinator.Show();");
+        source.Should().Contain("_mediaPaneHostCoordinator.SetCaptionInput(");
+        source.Should().Contain("_mediaPaneHostCoordinator.Refresh();");
         source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
+        source.Should().NotContain("_mediaCaptionPaneRefreshing");
+        source.Should().NotContain("_mediaPaneHostCoordinator.BuildRenderPlan(");
         source.Should().NotContain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
         source.Should().NotContain("Editor.ApplyMediaCaptionAuthoring(");
         source.Should().Contain("RenderCommentPane(PresentationCommentPanePlan plan)");

@@ -6,8 +6,7 @@ namespace FreeP.App.Compositor;
 public sealed record PresentationMediaPaneSessionCallbacks(
     Action MarkDirty,
     Action RefreshReviewWorkflowPlans,
-    Action UpdateHost,
-    Action RefreshPane);
+    Action UpdateHost);
 
 public enum PresentationMediaBookmarkMutationIntentKind
 {
@@ -161,10 +160,6 @@ public sealed class PresentationMediaPaneSession
                 intent,
                 LastCaptionTrackMutationResult.TrackIndex);
             CompleteMutation();
-        }
-        else
-        {
-            _callbacks.RefreshPane();
         }
 
         return LastCaptionTrackMutationResult;
@@ -439,6 +434,5 @@ public sealed class PresentationMediaPaneSession
         _callbacks.MarkDirty();
         _callbacks.RefreshReviewWorkflowPlans();
         _callbacks.UpdateHost();
-        _callbacks.RefreshPane();
     }
 }

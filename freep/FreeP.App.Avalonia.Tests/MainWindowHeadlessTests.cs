@@ -5724,6 +5724,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var replaceEnabledAfterCreate = false;
         var deleteEnabledAfterCreate = false;
         var dirty = false;
+        var visibleAfterHide = true;
+        var visibleAfterReopen = false;
 
         var ran = await OnUiThread(() =>
         {
@@ -5769,6 +5771,10 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
             delete = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
             trackCountAfterDelete = window.MediaCaptionPaneTrackCount;
+            window.HideMediaCaptionPane();
+            visibleAfterHide = window.IsMediaCaptionPaneVisible;
+            window.ShowMediaCaptionPane();
+            visibleAfterReopen = window.IsMediaCaptionPaneVisible;
         });
 
         if (!ran) return;
@@ -5798,6 +5804,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         delete.Should().NotBeNull();
         delete!.Succeeded.Should().BeTrue();
         trackCountAfterDelete.Should().Be(0);
+        visibleAfterHide.Should().BeFalse();
+        visibleAfterReopen.Should().BeTrue();
     }
 
     [Fact]
