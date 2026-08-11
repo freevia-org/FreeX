@@ -234,7 +234,6 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
     private readonly CheckBox _cellFitText;
     private readonly TextBlock _validation = new();
     private readonly TabControl _tabs;
-    private readonly Control[] _initialFocusTargets;
     private readonly List<string> _focusTrace = [];
 
     public TablePropertiesValues? Result { get; private set; }
@@ -243,7 +242,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         ModelTableContext context,
         TablePropertiesDialogTabKind initialTab = TablePropertiesDialogTabKind.Table)
     {
-        _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture);
+        _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture, initialTab);
         var state = _session.InitialState;
 
         Title = TablePropertiesDialogPlanner.Title;
@@ -333,14 +332,12 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
             if (_tabs.SelectedIndex == (int)TablePropertiesDialogTabKind.Cell)
                 NormalizeCellComboSurfaces();
         };
-        _tabs.SelectedIndex = Math.Clamp((int)initialTab, 0, 3);
+        _tabs.SelectedIndex = (int)_session.InitialFocusPlan.Tab;
         AutomationProperties.SetAutomationId(_tabs, TablePropertiesDialogPlanner.TabsAutomationId);
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabs,
             DialogChromeStyle,
             contentPaneMargin: new Thickness(-12, 0, -12, 0));
-        _initialFocusTargets = [_preferredWidth, _rowHeight, _columnWidth, _cellWidth];
-
         AvaloniaCompactDialogChrome.ApplyValidationStatus(
             _validation,
             DialogChromeStyle,
@@ -376,7 +373,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
     internal TabControl TabsForTest => _tabs;
     internal TextBlock ValidationForTest => _validation;
-    internal Control InitialFocusTargetForTest => _initialFocusTargets[_tabs.SelectedIndex];
+    internal Control InitialFocusTargetForTest => ResolveFocusTarget(_session.InitialFocusPlan);
     internal IReadOnlyList<string> FocusTraceForValidation => _focusTrace;
 
     internal TablePropertiesValues? AcceptForTest() => TryAccept(close: false);
@@ -567,11 +564,21 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
 
     private void FocusInitialField()
     {
-        var target = _initialFocusTargets[Math.Clamp(_tabs.SelectedIndex, 0, 3)];
+        var focusPlan = _session.PlanFocus((TablePropertiesDialogTabKind)_tabs.SelectedIndex);
+        var target = ResolveFocusTarget(focusPlan);
         target.Focus();
-        if (target is TextBox textBox)
-            textBox.SelectAll();
+        if (focusPlan.SelectAllOnFocus)
+            target.SelectAll();
     }
+
+    private TextBox ResolveFocusTarget(TablePropertiesDialogFocusPlan plan) =>
+        plan.TargetAutomationId switch
+        {
+            TablePropertiesDialogPlanner.RowHeightAutomationId => _rowHeight,
+            TablePropertiesDialogPlanner.ColumnWidthAutomationId => _columnWidth,
+            TablePropertiesDialogPlanner.CellWidthAutomationId => _cellWidth,
+            _ => _preferredWidth,
+        };
 
     private static StackPanel Stack(params Control[] controls)
     {

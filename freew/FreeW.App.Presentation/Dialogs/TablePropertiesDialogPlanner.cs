@@ -127,6 +127,11 @@ public sealed record TablePropertiesDialogEnabledState(
     bool HorizontalOffsetEnabled,
     bool VerticalOffsetEnabled);
 
+public sealed record TablePropertiesDialogFocusPlan(
+    TablePropertiesDialogTabKind Tab,
+    string TargetAutomationId,
+    bool SelectAllOnFocus);
+
 public sealed record TablePropertiesDialogAcceptance(
     TablePropertiesValues? Result,
     string? ValidationMessage)
@@ -138,15 +143,20 @@ public sealed class TablePropertiesDialogSession
 {
     private readonly CultureInfo _culture;
 
-    public TablePropertiesDialogSession(ModelTableContext context, CultureInfo culture)
+    public TablePropertiesDialogSession(
+        ModelTableContext context,
+        CultureInfo culture,
+        TablePropertiesDialogTabKind initialTab = TablePropertiesDialogTabKind.Table)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(culture);
         _culture = culture;
         InitialState = TablePropertiesDialogPlanner.BuildInitialState(context, culture);
+        InitialFocusPlan = PlanFocus(initialTab);
     }
 
     public TablePropertiesDialogInitialState InitialState { get; }
+    public TablePropertiesDialogFocusPlan InitialFocusPlan { get; }
 
     public IReadOnlyList<string> AlignmentNames => TablePropertiesDialogPlanner.AlignmentNames;
     public IReadOnlyList<string> WrappingNames => TablePropertiesDialogPlanner.WrappingNames;
@@ -156,6 +166,27 @@ public sealed class TablePropertiesDialogSession
     public IReadOnlyList<string> FloatingVerticalModeNames => TablePropertiesDialogPlanner.FloatingVerticalModeNames;
     public IReadOnlyList<string> RowRuleNames => TablePropertiesDialogPlanner.RowRuleNames;
     public IReadOnlyList<string> CellVerticalAlignmentNames => TablePropertiesDialogPlanner.CellVerticalAlignmentNames;
+
+    public TablePropertiesDialogFocusPlan PlanFocus(TablePropertiesDialogTabKind tab) =>
+        tab switch
+        {
+            TablePropertiesDialogTabKind.Row => new(
+                TablePropertiesDialogTabKind.Row,
+                TablePropertiesDialogPlanner.RowHeightAutomationId,
+                SelectAllOnFocus: true),
+            TablePropertiesDialogTabKind.Column => new(
+                TablePropertiesDialogTabKind.Column,
+                TablePropertiesDialogPlanner.ColumnWidthAutomationId,
+                SelectAllOnFocus: true),
+            TablePropertiesDialogTabKind.Cell => new(
+                TablePropertiesDialogTabKind.Cell,
+                TablePropertiesDialogPlanner.CellWidthAutomationId,
+                SelectAllOnFocus: true),
+            _ => new(
+                TablePropertiesDialogTabKind.Table,
+                TablePropertiesDialogPlanner.PreferredWidthAutomationId,
+                SelectAllOnFocus: true),
+        };
 
     public TablePropertiesDialogEnabledState PlanEnabledState(
         int wrappingIndex,

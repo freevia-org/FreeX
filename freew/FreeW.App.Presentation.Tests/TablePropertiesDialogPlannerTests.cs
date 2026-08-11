@@ -243,6 +243,30 @@ public sealed class TablePropertiesDialogPlannerTests
         session.PlanAcceptance(ValidInput()).Result.Should().NotBeNull();
     }
 
+    [Theory]
+    [InlineData(TablePropertiesDialogTabKind.Table, TablePropertiesDialogTabKind.Table, TablePropertiesDialogPlanner.PreferredWidthAutomationId)]
+    [InlineData(TablePropertiesDialogTabKind.Row, TablePropertiesDialogTabKind.Row, TablePropertiesDialogPlanner.RowHeightAutomationId)]
+    [InlineData(TablePropertiesDialogTabKind.Column, TablePropertiesDialogTabKind.Column, TablePropertiesDialogPlanner.ColumnWidthAutomationId)]
+    [InlineData(TablePropertiesDialogTabKind.Cell, TablePropertiesDialogTabKind.Cell, TablePropertiesDialogPlanner.CellWidthAutomationId)]
+    [InlineData((TablePropertiesDialogTabKind)99, TablePropertiesDialogTabKind.Table, TablePropertiesDialogPlanner.PreferredWidthAutomationId)]
+    public void Session_OwnsTabDefaultingAndFocusAutomationTarget(
+        TablePropertiesDialogTabKind requestedTab,
+        TablePropertiesDialogTabKind expectedTab,
+        string expectedAutomationId)
+    {
+        var table = Table.Create(1, 1);
+        var session = new TablePropertiesDialogSession(
+            new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]),
+            CultureInfo.InvariantCulture,
+            requestedTab);
+
+        session.InitialFocusPlan.Should().Be(new TablePropertiesDialogFocusPlan(
+            expectedTab,
+            expectedAutomationId,
+            SelectAllOnFocus: true));
+        session.PlanFocus(requestedTab).Should().Be(session.InitialFocusPlan);
+    }
+
     [Fact]
     public void ApplyValues_AppliesTableRowColumnAndCellFields()
     {
@@ -412,6 +436,8 @@ public sealed class TablePropertiesDialogSessionOwnershipTests
         source.Should().Contain("_session.InitialState");
         source.Should().Contain("_session.PlanEnabledState(");
         source.Should().Contain("_session.PlanAcceptance(");
+        source.Should().Contain("_session.InitialFocusPlan");
+        source.Should().Contain("ResolveFocusTarget(");
         source.Should().NotContain("TablePropertiesDialogPlanner.BuildInitialState(");
         source.Should().NotContain("TablePropertiesDialogPlanner.TryBuildResult(");
         source.Should().NotContain("Title = \"Table Properties\"");

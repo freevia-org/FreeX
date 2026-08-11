@@ -63,7 +63,7 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         ModelTableContext context,
         TablePropertiesDialogTabKind initialTab)
     {
-        _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture);
+        _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture, initialTab);
         Owner = owner;
         Title = TablePropertiesDialogPlanner.Title;
         Width = 440;
@@ -152,7 +152,7 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.RowTabLabel, TablePropertiesDialogPlanner.RowTabAutomationId, BuildRowTab()));
         tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.ColumnTabLabel, TablePropertiesDialogPlanner.ColumnTabAutomationId, BuildColumnTab()));
         tabs.Items.Add(CreateTabItem(TablePropertiesDialogPlanner.CellTabLabel, TablePropertiesDialogPlanner.CellTabAutomationId, BuildCellTab()));
-        tabs.SelectedIndex = (int)initialTab;
+        tabs.SelectedIndex = (int)_session.InitialFocusPlan.Tab;
         AutomationProperties.SetAutomationId(tabs, TablePropertiesDialogPlanner.TabsAutomationId);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(14, 12, 14, 12));
@@ -163,14 +163,12 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         root.Children.Add(tabs);
         Content = root;
 
-        var initialFocus = initialTab switch
-        {
-            TablePropertiesDialogTabKind.Row => _rowHeight,
-            TablePropertiesDialogTabKind.Column => _columnWidth,
-            TablePropertiesDialogTabKind.Cell => _cellWidth,
-            _ => _preferredWidth,
-        };
-        DialogFocus.FocusAndSelect(initialFocus);
+        var focusPlan = _session.InitialFocusPlan;
+        var initialFocus = ResolveFocusTarget(focusPlan);
+        if (focusPlan.SelectAllOnFocus)
+            DialogFocus.FocusAndSelect(initialFocus);
+        else
+            initialFocus.Focus();
     }
 
     private UIElement BuildTableTab()
@@ -387,6 +385,15 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             fe.Margin = new Thickness(0, 4, 0, 4);
         grid.Children.Add(field);
     }
+
+    private TextBox ResolveFocusTarget(TablePropertiesDialogFocusPlan plan) =>
+        plan.TargetAutomationId switch
+        {
+            TablePropertiesDialogPlanner.RowHeightAutomationId => _rowHeight,
+            TablePropertiesDialogPlanner.ColumnWidthAutomationId => _columnWidth,
+            TablePropertiesDialogPlanner.CellWidthAutomationId => _cellWidth,
+            _ => _preferredWidth,
+        };
 
     private void Accept()
     {
