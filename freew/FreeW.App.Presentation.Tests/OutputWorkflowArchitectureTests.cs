@@ -16,7 +16,7 @@ public sealed class OutputWorkflowArchitectureTests
         source.Should().Contain("ExportAtomicWriter.ReplaceTarget(");
         source.Should().Contain("public static class FreeWPrintRequestPlanner");
         source.Should().Contain("public sealed class FreeWPortablePrintWorkflow");
-        source.Should().Contain("Func<Stream, CancellationToken, ValueTask> renderPdfAsync");
+        source.Should().Contain("Func<Stream, PrintSelection, CancellationToken, ValueTask> renderPdfAsync");
         source.Should().Contain("_printService.SubmitAsync(");
         source.Should().Contain("public static class FreeWPrintMessagePlanner");
         source.Should().Contain("public sealed class FreeWPrintPreviewSession");
@@ -61,10 +61,13 @@ public sealed class OutputWorkflowArchitectureTests
             .Should().NotContain("Save(DocumentPaginator paginator, string path");
         ReadSource("freew", "FreeW.App.Host", "XpsExport.cs")
             .Should().NotContain("Save(DocumentPaginator paginator, string path");
+        avalonia.Should().NotContain("FreeWAvaloniaPdfExport.Save(_editor, path")
+            .And.NotContain("FreeWAvaloniaXpsExport.Save(_editor, path");
+
         ReadSource("freew", "FreeW.App.Avalonia", "Pdf", "FreeWAvaloniaPdfExport.cs")
-            .Should().NotContain("Save(DocumentView view, string path");
+            .Should().Contain("Save(DocumentView view, Stream stream");
         ReadSource("freew", "FreeW.App.Avalonia", "Pdf", "FreeWAvaloniaXpsExport.cs")
-            .Should().NotContain("Save(DocumentView view, string path");
+            .Should().Contain("Save(DocumentView view, Stream stream");
     }
 
     [Fact]

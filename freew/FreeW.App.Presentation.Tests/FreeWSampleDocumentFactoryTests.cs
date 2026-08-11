@@ -47,9 +47,11 @@ public sealed class FreeWSampleDocumentFactoryTests
         var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "MainWindow.cs"));
         var avalonia = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "SampleDocument.cs"));
 
-        wpf.Should().Contain("FreeWSampleDocumentProfile.ClassicEditor");
-        wpf.Should().NotContain("CreateSampleDocument");
-        avalonia.Should().Contain("FreeWSampleDocumentProfile.FeatureShowcase");
+        wpf.Should().Contain(
+            "FreeWSampleDocumentFactory.Create(FreeWSampleDocumentProfile.ClassicEditor)");
+        wpf.Should().NotContain("private static TextDocument CreateSampleDocument(");
+        avalonia.Should().Contain(
+            "FreeWSampleDocumentFactory.Create(FreeWSampleDocumentProfile.FeatureShowcase)");
         avalonia.Should().NotContain("TextDocument.CreateEmpty");
         avalonia.Should().NotContain("new Paragraph");
     }

@@ -148,9 +148,14 @@ public sealed class RunFormattingEditingSessionTests
             Path.Combine(root, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"),
         }.Select(File.ReadAllText).ToArray();
 
+        var wpf = rendererSources[0];
+        var avalonia = rendererSources[1];
+
+        wpf.Should().Contain("_editingSession.TrySetRunFormatting(");
+        avalonia.Should().Contain("_editingSession.TryApplyRunFormatting(");
+
         foreach (var source in rendererSources)
         {
-            source.Should().Contain("_editingSession.TrySetRunFormatting(");
             source.Should().Contain("_editingSession.TryToggleRunFormatting(");
             source.Should().Contain("_editingSession.FormatParagraphRuns(");
             source.Should().Contain("_editingSession.SetMultiLevelNumberFormats(");

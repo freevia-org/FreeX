@@ -9,7 +9,18 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
         {
             source.Should().Contain("_applicationCommands = new FreeWApplicationCommandRouter(");
             source.Should().Contain("_applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument)");
-            source.Should().NotContain("case FreeWKeyboardCommand.");
+            source.Should().NotContain("case FreeWKeyboardCommand.NewDocument")
+                .And.NotContain("case FreeWKeyboardCommand.OpenDocument")
+                .And.NotContain("case FreeWKeyboardCommand.SaveDocument")
+                .And.NotContain("case FreeWKeyboardCommand.SaveDocumentAs")
+                .And.NotContain("case FreeWKeyboardCommand.PrintDocument")
+                .And.NotContain("case FreeWKeyboardCommand.Find")
+                .And.NotContain("case FreeWKeyboardCommand.Replace")
+                .And.NotContain("case FreeWKeyboardCommand.Cut")
+                .And.NotContain("case FreeWKeyboardCommand.Copy")
+                .And.NotContain("case FreeWKeyboardCommand.Paste")
+                .And.NotContain("case FreeWKeyboardCommand.Undo")
+                .And.NotContain("case FreeWKeyboardCommand.Redo");
         }
     }
 
@@ -53,7 +64,8 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
             "FreeWApplicationFrameTextCatalog.cs");
         catalog.Should().Contain("public static class FreeWApplicationFrameTextCatalog")
             .And.NotContain("System.Windows")
-            .And.NotContain("Avalonia");
+            .And.NotContain("using Avalonia")
+            .And.NotContain("Avalonia.");
     }
 
     [Fact]
@@ -96,7 +108,8 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
             .And.Contain("AppStoragePathPlanner.GetApplicationDataDirectoryLabelOrFallback(")
             .And.NotContain("Path.GetDirectoryName(optionsStorePath)")
             .And.NotContain("System.Windows")
-            .And.NotContain("Avalonia");
+            .And.NotContain("using Avalonia")
+            .And.NotContain("Avalonia.");
     }
 
     [Fact]

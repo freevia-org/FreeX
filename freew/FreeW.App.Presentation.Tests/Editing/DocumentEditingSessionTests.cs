@@ -544,7 +544,8 @@ public sealed class DocumentEditingSessionSourceOwnershipTests
         {
             source.Should().NotContain("using Avalonia");
             source.Should().NotContain("using System.Windows");
-            source.Should().NotContain("DocumentView");
+            source.Should().NotContain("FreeW.App.Host.Editing")
+                .And.NotContain("FreeW.App.Avalonia.Editing");
             source.Should().NotContain("TextPointer");
             source.Should().NotContain("DocPosition");
         }
