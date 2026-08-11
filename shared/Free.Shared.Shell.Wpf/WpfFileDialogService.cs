@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Microsoft.Win32;
 
@@ -9,14 +10,18 @@ public sealed record WpfOpenFileDialogResult(string? FileName, IReadOnlyList<str
 {
     public static WpfOpenFileDialogResult Cancelled { get; } = new(null, Array.Empty<string>());
 
-    public bool Chosen => !string.IsNullOrWhiteSpace(FileName);
+    public FileDialogSelection Selection => new(FileName);
+
+    public bool Chosen => Selection.Chosen;
 }
 
 public sealed record WpfSaveFileDialogResult(string? FileName, int FilterIndex)
 {
     public static WpfSaveFileDialogResult Cancelled { get; } = new(null, 0);
 
-    public bool Chosen => !string.IsNullOrWhiteSpace(FileName);
+    public FileDialogSelection Selection => new(FileName);
+
+    public bool Chosen => Selection.Chosen;
 }
 
 /// <summary>

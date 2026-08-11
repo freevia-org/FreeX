@@ -1,6 +1,18 @@
+using Free.Shared.Localization;
+
 namespace Free.Shared.AppServices;
 
-public sealed record ResourceTextDescriptor(string ResourceKey, string FallbackText);
+public sealed record ResourceTextDescriptor(string ResourceKey, string FallbackText)
+{
+    public string Resolve(
+        Func<string, string?>? getText = null,
+        bool stripMnemonics = false) =>
+        LocalizedFallbackTextResolver.Resolve(
+            ResourceKey,
+            FallbackText,
+            getText,
+            stripMnemonics);
+}
 
 public sealed record SisterBackstageExportPaneTextDescriptor(
     ResourceTextDescriptor Heading,

@@ -1,4 +1,4 @@
-using Free.Shared.Localization;
+using Free.Shared.AppServices;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -276,5 +276,5 @@ public static class AccessibilityCheckerDialogPlanner
         $"{issue.SheetName}!{issue.Location}: {issue.Message}";
 
     private static string Text(string key, string fallback, Func<string, string> getText) =>
-        LocalizedFallbackTextResolver.Resolve(key, fallback, getText);
+        new ResourceTextDescriptor(key, fallback).Resolve(getText);
 }

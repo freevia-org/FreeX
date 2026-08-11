@@ -1,5 +1,4 @@
 using Free.Shared.AppServices;
-using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.DefinedNames;
 
@@ -15,10 +14,7 @@ public readonly record struct LocalizedValidationMessage<TError>(
     {
         ArgumentNullException.ThrowIfNull(textProvider);
 
-        return LocalizedFallbackTextResolver.Resolve(
-            Text.ResourceKey,
-            Text.FallbackText,
-            textProvider);
+        return Text.Resolve(textProvider);
     }
 }
 

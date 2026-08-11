@@ -34,32 +34,42 @@ public static class SisterAppClientFrameBuilder
 
         var root = new Grid();
 
-        foreach (var slot in contract.Slots)
+        foreach (var slot in contract.SlotsBeforeWorkArea)
         {
-            switch (slot.Role)
-            {
-                case SisterAppClientFrameSlotRole.Chrome:
-                    AddRow(root, spec.Chrome, GridLength.Auto);
-                    break;
-                case SisterAppClientFrameSlotRole.TopPanelBelowChrome:
-                    AddRow(root, topPanelsBelowChrome[slot.Index], GridLength.Auto);
-                    break;
-                case SisterAppClientFrameSlotRole.WorkArea:
-                    AddRow(root, spec.WorkArea, new GridLength(1, GridUnitType.Star));
-                    break;
-                case SisterAppClientFrameSlotRole.BottomPanelAboveStatus:
-                    AddRow(root, bottomPanelsAboveStatus[slot.Index], GridLength.Auto);
-                    break;
-                case SisterAppClientFrameSlotRole.StatusBar:
-                    AddRow(root, spec.StatusBar, GridLength.Auto);
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(slot), slot.Role, "Unknown sister-app frame slot.");
-            }
+            AddRow(
+                root,
+                ResolveAutoRow(spec, topPanelsBelowChrome, bottomPanelsAboveStatus, slot),
+                GridLength.Auto);
+        }
+
+        AddRow(root, spec.WorkArea, new GridLength(1, GridUnitType.Star));
+
+        foreach (var slot in contract.SlotsAfterWorkArea)
+        {
+            AddRow(
+                root,
+                ResolveAutoRow(spec, topPanelsBelowChrome, bottomPanelsAboveStatus, slot),
+                GridLength.Auto);
         }
 
         return new SisterAppClientFrameBuildResult(root);
     }
+
+    private static UIElement ResolveAutoRow(
+        SisterAppClientFrameSpec spec,
+        IReadOnlyList<UIElement> topPanelsBelowChrome,
+        IReadOnlyList<UIElement> bottomPanelsAboveStatus,
+        SisterAppClientFrameSlotPlan slot) => slot.Role switch
+        {
+            SisterAppClientFrameSlotRole.Chrome => spec.Chrome,
+            SisterAppClientFrameSlotRole.TopPanelBelowChrome => topPanelsBelowChrome[slot.Index],
+            SisterAppClientFrameSlotRole.BottomPanelAboveStatus => bottomPanelsAboveStatus[slot.Index],
+            SisterAppClientFrameSlotRole.StatusBar => spec.StatusBar,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(slot),
+                slot.Role,
+                "Only fixed-height frame slots can be resolved as automatic rows."),
+        };
 
     private static void AddRow(Grid root, UIElement child, GridLength height)
     {

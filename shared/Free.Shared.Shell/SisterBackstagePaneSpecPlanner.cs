@@ -1,5 +1,4 @@
 using Free.Shared.AppServices;
-using Free.Shared.Localization;
 
 namespace Free.Shared.Shell;
 
@@ -26,23 +25,13 @@ public sealed record SisterBackstageExportPaneTextSpec(
         ArgumentNullException.ThrowIfNull(descriptor);
 
         return new SisterBackstageExportPaneTextSpec(
-            Resolve(descriptor.Heading, getText),
-            Resolve(descriptor.Description, getText),
-            Resolve(descriptor.FixedLayoutGroupHeading, getText),
-            Resolve(descriptor.PdfActionLabel, getText),
-            Resolve(descriptor.PdfActionDescription, getText),
-            descriptor.XpsActionLabel is null ? null : Resolve(descriptor.XpsActionLabel, getText),
-            descriptor.XpsActionDescription is null ? null : Resolve(descriptor.XpsActionDescription, getText));
-    }
-
-    private static string Resolve(ResourceTextDescriptor descriptor, Func<string, string?>? getText)
-    {
-        ArgumentNullException.ThrowIfNull(descriptor);
-
-        return LocalizedFallbackTextResolver.Resolve(
-            descriptor.ResourceKey,
-            descriptor.FallbackText,
-            getText);
+            descriptor.Heading.Resolve(getText),
+            descriptor.Description.Resolve(getText),
+            descriptor.FixedLayoutGroupHeading.Resolve(getText),
+            descriptor.PdfActionLabel.Resolve(getText),
+            descriptor.PdfActionDescription.Resolve(getText),
+            descriptor.XpsActionLabel?.Resolve(getText),
+            descriptor.XpsActionDescription?.Resolve(getText));
     }
 }
 
@@ -67,25 +56,15 @@ public sealed record SisterBackstagePaneTextSpec(
         ArgumentNullException.ThrowIfNull(descriptor);
 
         return new SisterBackstagePaneTextSpec(
-            Resolve(descriptor.RecentEmptyText, getText),
-            Resolve(descriptor.TemplateHeading, getText),
-            Resolve(descriptor.TemplateTileCaption, getText),
-            Resolve(descriptor.TemplateFooterText, getText),
-            Resolve(descriptor.OptionsDescription, getText),
-            descriptor.OptionsEditText is null ? null : Resolve(descriptor.OptionsEditText, getText))
+            descriptor.RecentEmptyText.Resolve(getText),
+            descriptor.TemplateHeading.Resolve(getText),
+            descriptor.TemplateTileCaption.Resolve(getText),
+            descriptor.TemplateFooterText.Resolve(getText),
+            descriptor.OptionsDescription.Resolve(getText),
+            descriptor.OptionsEditText?.Resolve(getText))
         {
             Export = SisterBackstageExportPaneTextSpec.FromDescriptor(descriptor.Export, getText)
         };
-    }
-
-    private static string Resolve(ResourceTextDescriptor descriptor, Func<string, string?>? getText)
-    {
-        ArgumentNullException.ThrowIfNull(descriptor);
-
-        return LocalizedFallbackTextResolver.Resolve(
-            descriptor.ResourceKey,
-            descriptor.FallbackText,
-            getText);
     }
 }
 

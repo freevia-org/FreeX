@@ -1,5 +1,4 @@
 using Free.Shared.AppServices;
-using Free.Shared.Localization;
 using Free.Shared.Shell;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
@@ -555,23 +554,13 @@ public sealed record BackstageExportPaneSurfaceText(
         ArgumentNullException.ThrowIfNull(descriptor);
 
         return new BackstageExportPaneSurfaceText(
-            Resolve(descriptor.Heading, getText),
-            Resolve(descriptor.Description, getText),
-            Resolve(descriptor.FixedLayoutGroupHeading, getText),
-            Resolve(descriptor.PdfActionLabel, getText),
-            Resolve(descriptor.PdfActionDescription, getText),
-            descriptor.XpsActionLabel is null ? null : Resolve(descriptor.XpsActionLabel, getText),
-            descriptor.XpsActionDescription is null ? null : Resolve(descriptor.XpsActionDescription, getText),
+            descriptor.Heading.Resolve(getText),
+            descriptor.Description.Resolve(getText),
+            descriptor.FixedLayoutGroupHeading.Resolve(getText),
+            descriptor.PdfActionLabel.Resolve(getText),
+            descriptor.PdfActionDescription.Resolve(getText),
+            descriptor.XpsActionLabel?.Resolve(getText),
+            descriptor.XpsActionDescription?.Resolve(getText),
             pdfOnlyActionLabel);
-    }
-
-    private static string Resolve(ResourceTextDescriptor descriptor, Func<string, string?>? getText)
-    {
-        ArgumentNullException.ThrowIfNull(descriptor);
-
-        return LocalizedFallbackTextResolver.Resolve(
-            descriptor.ResourceKey,
-            descriptor.FallbackText,
-            getText);
     }
 }
