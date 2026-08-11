@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -86,6 +87,88 @@ public sealed class GeneratedReferenceMutationCoordinatorTests
         bus.CanUndo.Should().BeFalse();
     }
 
+    [Fact]
+    public void Plan_failure_rolls_back_commands_already_applied_and_leaves_no_undo_entry()
+    {
+        var first = new Paragraph("First");
+        var second = new Paragraph("Second");
+        var document = DocumentWith(first, second);
+        var bus = new DocumentCommandBus(new Context(document));
+        var plan = new Plan([1, 99], 0, [Generated("Replacement")]);
+
+        var act = () => GeneratedReferenceMutationCoordinator.ApplyPlan(
+            document, bus, plan, "Update Bibliography");
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+        document.Blocks.Should().Equal(first, second);
+        bus.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Stabilizing_plan_returns_final_shape_and_is_one_undoable_mutation()
+    {
+        var body = new Paragraph("Body");
+        var document = DocumentWith(body);
+        var bus = new DocumentCommandBus(new Context(document));
+        var initial = new Plan([], 1, [Generated("Initial")]);
+        var stabilized = new Plan([1], 0, [Generated("Final A"), Generated("Final B")]);
+        var layoutPasses = 0;
+        var refreshBuilds = 0;
+
+        var result = GeneratedReferenceMutationCoordinator.ApplyStabilizingPlan(
+            document,
+            bus,
+            initial,
+            "Insert Table of Authorities",
+            () =>
+            {
+                refreshBuilds++;
+                return stabilized;
+            },
+            paragraphs => paragraphs.Count == 2 &&
+                          document.Blocks.OfType<Paragraph>().Take(2)
+                              .Select(paragraph => paragraph.PlainText)
+                              .SequenceEqual(["Final A", "Final B"]),
+            () => layoutPasses++);
+
+        result.Should().Be(new GeneratedReferenceMutationResult(0, 2));
+        refreshBuilds.Should().Be(2);
+        layoutPasses.Should().Be(2);
+        document.Blocks.Select(block => ((Paragraph)block).PlainText)
+            .Should().Equal("Final A", "Final B", "Body");
+        bus.Undo().Should().BeTrue();
+        document.Blocks.Should().ContainSingle().Which.Should().BeSameAs(body);
+        bus.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Stabilization_failure_rolls_back_every_pass_and_leaves_no_undo_entry()
+    {
+        var body = new Paragraph("Body");
+        var document = DocumentWith(body);
+        var bus = new DocumentCommandBus(new Context(document));
+        var initial = new Plan([], 1, [Generated("Initial")]);
+        var build = 0;
+
+        var act = () => GeneratedReferenceMutationCoordinator.ApplyStabilizingPlan(
+            document,
+            bus,
+            initial,
+            "Insert Table of Authorities",
+            () =>
+            {
+                build++;
+                return new Plan([1], 1, [Generated($"Pass {build}")]);
+            },
+            _ => false);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("Generated reference pagination did not stabilize.");
+        build.Should().Be(GeneratedReferenceMutationCoordinator.MaxStabilizationPasses + 1);
+        document.Blocks.Should().ContainSingle().Which.Should().BeSameAs(body);
+        bus.CanUndo.Should().BeFalse();
+    }
+
     private static Paragraph Generated(string text) => new(text) { StyleId = "Generated" };
 
     private static TextDocument DocumentWith(params Block[] blocks)
@@ -99,4 +182,9 @@ public sealed class GeneratedReferenceMutationCoordinatorTests
     {
         public TextDocument Document => document;
     }
+
+    private sealed record Plan(
+        IReadOnlyList<int> DeleteIndicesDescending,
+        int InsertIndex,
+        IReadOnlyList<Paragraph> Paragraphs) : IGeneratedReferenceRegionPlan;
 }

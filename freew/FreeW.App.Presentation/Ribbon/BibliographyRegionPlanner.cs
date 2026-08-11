@@ -5,7 +5,7 @@ namespace FreeW.App.Presentation.Ribbon;
 public sealed record BibliographyRegionPlan(
     IReadOnlyList<int> DeleteIndicesDescending,
     int InsertIndex,
-    IReadOnlyList<Paragraph> Paragraphs)
+    IReadOnlyList<Paragraph> Paragraphs) : IGeneratedReferenceRegionPlan
 {
     public BlockContentControl? BlockContentControl { get; init; }
 }

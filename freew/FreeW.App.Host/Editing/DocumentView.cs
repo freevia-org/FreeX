@@ -13524,7 +13524,8 @@ public sealed class DocumentView : RichTextBox
             ApplyTableOfAuthoritiesPlan(
                 TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
                     _model,
-                    pageResolver: BuildTableOfAuthoritiesPageResolver()));
+                    pageResolver: BuildTableOfAuthoritiesPageResolver()),
+                "Update Table of Authorities");
             refreshedGeneratedRegion = true;
         }
 
@@ -16853,25 +16854,7 @@ public sealed class DocumentView : RichTextBox
             "Update Bibliography");
 
     private void ApplyBibliographyPlan(BibliographyRegionPlan plan, string label)
-    {
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var deleteIndex in plan.DeleteIndicesDescending)
-                _commands.Execute(new DeleteParagraphCommand(deleteIndex));
-
-            var index = Math.Clamp(plan.InsertIndex, 0, _model.Blocks.Count);
-            foreach (var paragraph in plan.Paragraphs)
-                _commands.Execute(new InsertParagraphCommand(index++, paragraph));
-
-            _commands.CommitUndoGroup(label);
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-    }
+        => GeneratedReferenceMutationCoordinator.ApplyPlan(_model, _commands, plan, label);
 
     /// <summary>
     /// Marks <paramref name="term"/> for the document index by inserting Word's hidden <c>XE</c> field at
@@ -17057,7 +17040,8 @@ public sealed class DocumentView : RichTextBox
                 _model,
                 index,
                 options,
-                BuildTableOfAuthoritiesPageResolver()));
+                BuildTableOfAuthoritiesPageResolver()),
+            "Insert Table of Authorities");
     }
 
     /// <summary>
@@ -17085,7 +17069,8 @@ public sealed class DocumentView : RichTextBox
             TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
                 _model,
                 options,
-                BuildTableOfAuthoritiesPageResolver()));
+                BuildTableOfAuthoritiesPageResolver()),
+            "Update Table of Authorities");
     }
 
     private ToaCitationPageAddressResolver? BuildTableOfAuthoritiesPageResolver()
@@ -17255,57 +17240,17 @@ public sealed class DocumentView : RichTextBox
         return offset;
     }
 
-    private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan)
-    {
-        _commands.BeginUndoGroup();
-        try
-        {
-            ApplyTableOfAuthoritiesPlanCommands(plan);
-            const int maxStabilizationPasses = 8;
-            var isStable = false;
-            for (var pass = 0; pass < maxStabilizationPasses; pass++)
-            {
-                Render();
-                var stabilized = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-                    _model,
-                    pageResolver: BuildTableOfAuthoritiesPageResolver());
-                if (TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_model, stabilized.Paragraphs))
-                {
-                    isStable = true;
-                    break;
-                }
-                ApplyTableOfAuthoritiesPlanCommands(stabilized);
-            }
-            if (!isStable)
-            {
-                Render();
-                var finalCheck = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-                    _model,
-                    pageResolver: BuildTableOfAuthoritiesPageResolver());
-                if (!TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_model, finalCheck.Paragraphs))
-                    throw new InvalidOperationException("Table of Authorities pagination did not stabilize.");
-            }
-        }
-        catch
-        {
-            _commands.RollbackUndoGroup();
-            throw;
-        }
-
-        _commands.CommitUndoGroup(plan.DeleteIndicesDescending.Count > 0
-            ? "Update Table of Authorities"
-            : "Insert Table of Authorities");
-    }
-
-    private void ApplyTableOfAuthoritiesPlanCommands(TableOfAuthoritiesRegionPlan plan)
-    {
-        foreach (var deleteIndex in plan.DeleteIndicesDescending)
-            _commands.Execute(new DeleteParagraphCommand(deleteIndex));
-
-        var index = Math.Clamp(plan.InsertIndex, 0, _model.Blocks.Count);
-        foreach (var paragraph in plan.Paragraphs)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
-    }
+    private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan, string label) =>
+        GeneratedReferenceMutationCoordinator.ApplyStabilizingPlan(
+            _model,
+            _commands,
+            plan,
+            label,
+            () => TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                _model,
+                pageResolver: BuildTableOfAuthoritiesPageResolver()),
+            paragraphs => TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_model, paragraphs),
+            Render);
 
     /// <summary>
     /// Insert a Table of Figures (or Table of Tables) generated from the document's <see cref="CaptionLabel"/>

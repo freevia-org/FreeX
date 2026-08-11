@@ -1,4 +1,5 @@
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.DocumentView;
 
@@ -11,6 +12,8 @@ public sealed record GeneratedReferenceMutationResult(int InsertIndex, int Inser
 /// </summary>
 public static class GeneratedReferenceMutationCoordinator
 {
+    public const int MaxStabilizationPasses = 8;
+
     public static int NormalizeBackMatterInsertionIndex(TextDocument document, int requestedIndex)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -56,6 +59,77 @@ public static class GeneratedReferenceMutationCoordinator
         return ApplyAtomic(document, commandBus, insertIndex, label, indices, buildGenerated);
     }
 
+    public static GeneratedReferenceMutationResult ApplyPlan(
+        TextDocument document,
+        DocumentCommandBus commandBus,
+        IGeneratedReferenceRegionPlan plan,
+        string label)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return ApplyAtomic(
+            document,
+            commandBus,
+            plan.InsertIndex,
+            label,
+            plan.DeleteIndicesDescending,
+            () => plan.Paragraphs);
+    }
+
+    public static GeneratedReferenceMutationResult ApplyStabilizingPlan(
+        TextDocument document,
+        DocumentCommandBus commandBus,
+        IGeneratedReferenceRegionPlan initialPlan,
+        string label,
+        Func<IGeneratedReferenceRegionPlan> buildRefreshPlan,
+        Func<IReadOnlyList<Paragraph>, bool> matchesGeneratedRegion,
+        Action? prepareLayoutForMeasurement = null)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(commandBus);
+        ArgumentNullException.ThrowIfNull(initialPlan);
+        ArgumentException.ThrowIfNullOrWhiteSpace(label);
+        ArgumentNullException.ThrowIfNull(buildRefreshPlan);
+        ArgumentNullException.ThrowIfNull(matchesGeneratedRegion);
+
+        commandBus.BeginUndoGroup();
+        var currentPlan = initialPlan;
+        int appliedIndex;
+        try
+        {
+            appliedIndex = ApplyPlanCommands(document, commandBus, currentPlan);
+            var isStable = false;
+            for (var pass = 0; pass < MaxStabilizationPasses; pass++)
+            {
+                prepareLayoutForMeasurement?.Invoke();
+                var stabilized = buildRefreshPlan();
+                if (matchesGeneratedRegion(stabilized.Paragraphs))
+                {
+                    isStable = true;
+                    break;
+                }
+
+                currentPlan = stabilized;
+                appliedIndex = ApplyPlanCommands(document, commandBus, currentPlan);
+            }
+
+            if (!isStable)
+            {
+                prepareLayoutForMeasurement?.Invoke();
+                var finalCheck = buildRefreshPlan();
+                if (!matchesGeneratedRegion(finalCheck.Paragraphs))
+                    throw new InvalidOperationException("Generated reference pagination did not stabilize.");
+            }
+        }
+        catch
+        {
+            commandBus.RollbackUndoGroup();
+            throw;
+        }
+
+        commandBus.CommitUndoGroup(label);
+        return new GeneratedReferenceMutationResult(appliedIndex, currentPlan.Paragraphs.Count);
+    }
+
     private static GeneratedReferenceMutationResult ApplyAtomic(
         TextDocument document,
         DocumentCommandBus commandBus,
@@ -72,6 +146,7 @@ public static class GeneratedReferenceMutationCoordinator
 
         commandBus.BeginUndoGroup();
         IReadOnlyList<Paragraph> generated;
+        int appliedIndex;
         try
         {
             foreach (var deleteIndex in deleteIndicesDescending)
@@ -79,13 +154,9 @@ public static class GeneratedReferenceMutationCoordinator
 
             generated = buildGenerated();
             ArgumentNullException.ThrowIfNull(generated);
+            appliedIndex = Math.Clamp(insertIndex, 0, document.Blocks.Count);
             if (generated.Count > 0)
-            {
-                commandBus.Execute(new ReplaceBlocksCommand(
-                    Math.Clamp(insertIndex, 0, document.Blocks.Count),
-                    0,
-                    generated));
-            }
+                commandBus.Execute(new ReplaceBlocksCommand(appliedIndex, 0, generated));
         }
         catch
         {
@@ -94,6 +165,20 @@ public static class GeneratedReferenceMutationCoordinator
         }
 
         commandBus.CommitUndoGroup(label);
-        return new GeneratedReferenceMutationResult(insertIndex, generated.Count);
+        return new GeneratedReferenceMutationResult(appliedIndex, generated.Count);
+    }
+
+    private static int ApplyPlanCommands(
+        TextDocument document,
+        DocumentCommandBus commandBus,
+        IGeneratedReferenceRegionPlan plan)
+    {
+        foreach (var deleteIndex in plan.DeleteIndicesDescending)
+            commandBus.Execute(new DeleteParagraphCommand(deleteIndex));
+
+        var appliedIndex = Math.Clamp(plan.InsertIndex, 0, document.Blocks.Count);
+        if (plan.Paragraphs.Count > 0)
+            commandBus.Execute(new ReplaceBlocksCommand(appliedIndex, 0, plan.Paragraphs));
+        return appliedIndex;
     }
 }

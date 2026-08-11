@@ -23244,57 +23244,21 @@ public sealed class DocumentView : Control
         bool adjustCaretForInsert)
     {
         var originalCaret = _caret;
-        _bus.BeginUndoGroup();
-        var appliedIndex = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
-        try
-        {
-            ApplyTableOfAuthoritiesPlanCommands(plan);
-            const int maxStabilizationPasses = 8;
-            var isStable = false;
-            for (var pass = 0; pass < maxStabilizationPasses; pass++)
-            {
-                var stabilized = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-                    _doc,
-                    pageResolver: BuildTableOfAuthoritiesPageResolver());
-                if (TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_doc, stabilized.Paragraphs))
-                {
-                    isStable = true;
-                    break;
-                }
-                ApplyTableOfAuthoritiesPlanCommands(stabilized);
-            }
-            if (!isStable)
-            {
-                var finalCheck = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-                    _doc,
-                    pageResolver: BuildTableOfAuthoritiesPageResolver());
-                if (!TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_doc, finalCheck.Paragraphs))
-                    throw new InvalidOperationException("Table of Authorities pagination did not stabilize.");
-            }
-        }
-        catch
-        {
-            _bus.RollbackUndoGroup();
-            throw;
-        }
+        var result = GeneratedReferenceMutationCoordinator.ApplyStabilizingPlan(
+            _doc,
+            _bus,
+            plan,
+            label,
+            () => TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+                _doc,
+                pageResolver: BuildTableOfAuthoritiesPageResolver()),
+            paragraphs => TableOfAuthoritiesRegionPlanner.MatchesGeneratedRegion(_doc, paragraphs));
 
-        _bus.CommitUndoGroup(label);
-
-        if (adjustCaretForInsert && plan.Paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        if (adjustCaretForInsert && result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
         {
-            _caret = originalCaret with { Block = originalCaret.Block + plan.Paragraphs.Count };
+            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
             _selectionAnchor = _caret;
         }
-    }
-
-    private void ApplyTableOfAuthoritiesPlanCommands(TableOfAuthoritiesRegionPlan plan)
-    {
-        foreach (var deleteIndex in plan.DeleteIndicesDescending)
-            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
-
-        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
-        foreach (var paragraph in plan.Paragraphs)
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
     }
 
     private void ApplyGeneratedReferencePlan(
@@ -23303,19 +23267,11 @@ public sealed class DocumentView : Control
         bool adjustCaretForInsert)
     {
         var originalCaret = _caret;
-        _bus.BeginUndoGroup();
-        foreach (var deleteIndex in plan.DeleteIndicesDescending)
-            _bus.Execute(new DeleteParagraphCommand(deleteIndex));
+        var result = GeneratedReferenceMutationCoordinator.ApplyPlan(_doc, _bus, plan, label);
 
-        var index = Math.Clamp(plan.InsertIndex, 0, _doc.Blocks.Count);
-        var appliedIndex = index;
-        foreach (var paragraph in plan.Paragraphs)
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup(label);
-
-        if (adjustCaretForInsert && plan.Paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        if (adjustCaretForInsert && result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
         {
-            _caret = originalCaret with { Block = originalCaret.Block + plan.Paragraphs.Count };
+            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
             _selectionAnchor = _caret;
         }
     }
