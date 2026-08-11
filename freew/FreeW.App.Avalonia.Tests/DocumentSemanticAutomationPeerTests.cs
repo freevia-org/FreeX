@@ -104,6 +104,122 @@ public sealed class DocumentSemanticAutomationPeerTests
     }
 
     [Fact]
+    public async Task Drawing_objects_expose_names_values_bounds_and_floating_selection_status()
+    {
+        await Dispatch(() =>
+        {
+            var floatingImage = new InlineImage([], 90, 50)
+            {
+                AltText = "Floating architecture diagram",
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 12,
+                VerticalOffsetPt = 8
+            };
+            var floatingShape = Shape.TextBoxWith("Release approved", 110, 45);
+            floatingShape.AltText = "Approval callout";
+            floatingShape.Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.Square,
+                HorizontalOffsetPt = 130,
+                VerticalOffsetPt = 8
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(floatingImage));
+            paragraph.Runs.Add(Run.FromShape(floatingShape));
+            paragraph.Runs.Add(Run.FromChart(new Chart { Title = "Revenue trend", Kind = ChartKind.Line }));
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(paragraph);
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(900, 1200));
+
+            var root = ControlAutomationPeer.CreatePeerForElement(view);
+            var objectPeers = root.GetChildren().Single().GetChildren();
+            var selection = root.GetProvider<ISelectionProvider>();
+
+            objectPeers.Should().HaveCount(3);
+            selection.Should().NotBeNull();
+            selection!.CanSelectMultiple.Should().BeTrue();
+            selection.GetSelection().Should().BeEmpty();
+            objectPeers.Should().OnlyContain(peer => peer.GetAutomationControlType() == AutomationControlType.Image);
+            var imagePeer = objectPeers.Single(peer => peer.GetName() == "Floating architecture diagram");
+            imagePeer.GetBoundingRectangle().Width.Should().BeGreaterThan(0);
+            var imageSelection = imagePeer.GetProvider<ISelectionItemProvider>();
+            imageSelection.Should().NotBeNull();
+            var shapePeer = objectPeers.Single(peer => peer.GetName() == "Approval callout");
+            shapePeer.GetProvider<IValueProvider>()!.Value.Should().Be("Release approved");
+            shapePeer.GetBoundingRectangle().Width.Should().BeGreaterThan(0);
+            var shapeSelection = shapePeer.GetProvider<ISelectionItemProvider>();
+            shapeSelection.Should().NotBeNull();
+            var chartPeer = objectPeers.Single(peer => peer.GetName() == "Revenue trend");
+            chartPeer.GetBoundingRectangle().Width.Should().BeGreaterThan(0);
+
+            var imageSelectionEvents = 0;
+            imagePeer.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == SelectionItemPatternIdentifiers.IsSelectedProperty)
+                    imageSelectionEvents++;
+            };
+            imageSelection!.Select();
+
+            view.SelectedFloatingInfo.Should().NotBeNull();
+            view.SelectedFloatingInfo!.Value.Kind.Should().Be("Image");
+            imageSelection.IsSelected.Should().BeTrue();
+            imageSelectionEvents.Should().Be(1);
+            selection.GetSelection().Should().ContainSingle().Which.Should().BeSameAs(imagePeer);
+            root.GetItemStatus().Should().Be("Selected Image: Floating architecture diagram");
+
+            shapeSelection!.AddToSelection();
+            selection.GetSelection().Should().HaveCount(2);
+            shapeSelection.IsSelected.Should().BeTrue();
+            imageSelection.RemoveFromSelection();
+            selection.GetSelection().Should().ContainSingle().Which.Should().BeSameAs(shapePeer);
+            imageSelection.IsSelected.Should().BeFalse();
+        });
+    }
+
+    [Fact]
+    public async Task Drawing_group_exposes_nested_children_and_focuses_the_selected_child()
+    {
+        await Dispatch(() =>
+        {
+            var group = new DrawingGroup { WidthPt = 150, HeightPt = 60 };
+            group.Children.Add(new InlineImage([], 40, 30) { AltText = "Grouped logo" });
+            group.Children.Add(Shape.TextBoxWith("Grouped note", 80, 30));
+            group.ChildOffsets.Add((0, 0));
+            group.ChildOffsets.Add((50, 0));
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(group));
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(paragraph);
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(900, 1200));
+
+            var root = ControlAutomationPeer.CreatePeerForElement(view);
+            var groupPeer = root.GetChildren().Single().GetChildren().Should().ContainSingle().Subject;
+            groupPeer.GetAutomationControlType().Should().Be(AutomationControlType.Group);
+            groupPeer.GetBoundingRectangle().Width.Should().BeGreaterThan(0);
+            var children = groupPeer.GetChildren();
+            children.Select(peer => peer.GetName()).Should().Equal("Grouped logo", "Grouped note");
+            children.Should().OnlyContain(peer => peer.GetBoundingRectangle().Width > 0);
+
+            var childSelection = children[1].GetProvider<ISelectionItemProvider>();
+            childSelection.Should().NotBeNull();
+            childSelection!.Select();
+
+            view.SelectedFloatingInfo!.Value.Kind.Should().Be("Group");
+            view.SelectedFloatingGroupChildPath.Should().Equal(1);
+            childSelection.IsSelected.Should().BeTrue();
+            root.GetProvider<ISelectionProvider>()!.GetSelection()
+                .Should().ContainSingle().Which.Should().BeSameAs(children[1]);
+            root.GetItemStatus().Should().Be("Selected Shape: Grouped note");
+        });
+    }
+
+    [Fact]
     public async Task Text_change_preserves_peer_identity_and_structure_change_refreshes_children()
     {
         await Dispatch(() =>

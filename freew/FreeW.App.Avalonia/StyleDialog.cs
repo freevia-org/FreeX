@@ -13,7 +13,10 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class StyleDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+    // This style owns Avalonia brush objects, so create it with each dialog on the UI thread.
+    // A static instance can be initialized by a source/metrics test thread and later fail
+    // Avalonia's thread-affinity checks when the real dialog renders.
+    private readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             // These are the measured WPF metrics for this dialog. Keep the correction local;
@@ -49,8 +52,8 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private readonly RunFormatting _seedRun;
     private readonly ParagraphFormatting _seedParagraph;
 
-    internal static double ControlHeightForTests => DialogChromeStyle.ControlHeight;
-    internal static double ButtonHeightForTests => DialogChromeStyle.ButtonHeight;
+    internal static double ControlHeightForTests => StyleDialogMetrics.ComboBoxHeight;
+    internal static double ButtonHeightForTests => StyleDialogMetrics.ButtonHeight;
     internal static double CheckBoxHeightForTests => StyleDialogMetrics.CheckBoxHeight;
 
     private StyleDialog(
@@ -213,7 +216,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
         return 0;
     }
 
-    private static void AddRow(Panel panel, string label, Control field)
+    private void AddRow(Panel panel, string label, Control field)
     {
         panel.Children.Add(new TextBlock
         {

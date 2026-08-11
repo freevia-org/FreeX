@@ -48,28 +48,34 @@ public sealed class PasteStyleDialogParityTests
                 RunFormatting.Default,
                 ParagraphFormatting.Default,
                 null);
-            dialog.Show();
-            var labels = dialog.GetLogicalDescendants().OfType<TextBlock>().Select(block => block.Text).ToArray();
-            var name = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
-            var comboBoxes = dialog.GetLogicalDescendants().OfType<ComboBox>().ToArray();
-            var checkBoxes = dialog.GetLogicalDescendants().OfType<CheckBox>().ToArray();
-            var buttons = Buttons(dialog);
+            try
+            {
+                dialog.Show();
+                var labels = dialog.GetLogicalDescendants().OfType<TextBlock>().Select(block => block.Text).ToArray();
+                var name = dialog.GetLogicalDescendants().OfType<TextBox>().Single();
+                var comboBoxes = dialog.GetLogicalDescendants().OfType<ComboBox>().ToArray();
+                var checkBoxes = dialog.GetLogicalDescendants().OfType<CheckBox>().ToArray();
+                var buttons = Buttons(dialog);
 
-            dialog.SizeToContent.Should().Be(SizeToContent.WidthAndHeight);
-            labels.Should().Contain("Text colour:");
-            labels.Should().NotContain(StyleDialogPlanner.ValidationMessageFor(StyleDialogValidationError.EmptyName));
-            comboBoxes.Should().HaveCount(5);
-            comboBoxes.Select(comboBox => comboBox.MinWidth).Should().Equal(280, 280, 100, 160, 160);
-            name.IsFocused.Should().BeTrue();
-            comboBoxes.Should().NotContain(comboBox => comboBox.IsFocused);
-            checkBoxes.Should().OnlyContain(checkBox => checkBox.Height == StyleDialogMetrics.CheckBoxHeight && checkBox.Template != null);
-            buttons.Select(UserFacingButtonText).Should().Equal(
-                ShellStrings.Current.Ok,
-                ShellStrings.Current.Cancel);
-            buttons[0].IsDefault.Should().BeTrue();
-            buttons[1].IsCancel.Should().BeTrue();
-            RestingButtonBrush(buttons[1], Button.BorderBrushProperty).Color.Should().Be(Color.FromRgb(112, 112, 112));
-            dialog.Close();
+                dialog.SizeToContent.Should().Be(SizeToContent.WidthAndHeight);
+                labels.Should().Contain("Text colour:");
+                labels.Should().NotContain(StyleDialogPlanner.ValidationMessageFor(StyleDialogValidationError.EmptyName));
+                comboBoxes.Should().HaveCount(5);
+                comboBoxes.Select(comboBox => comboBox.MinWidth).Should().Equal(280, 280, 100, 160, 160);
+                name.IsFocused.Should().BeTrue();
+                comboBoxes.Should().NotContain(comboBox => comboBox.IsFocused);
+                checkBoxes.Should().OnlyContain(checkBox => checkBox.Height == StyleDialogMetrics.CheckBoxHeight && checkBox.Template != null);
+                buttons.Select(UserFacingButtonText).Should().Equal(
+                    ShellStrings.Current.Ok,
+                    ShellStrings.Current.Cancel);
+                buttons[0].IsDefault.Should().BeTrue();
+                buttons[1].IsCancel.Should().BeTrue();
+                RestingButtonBrush(buttons[1], Button.BorderBrushProperty).Color.Should().Be(Color.FromRgb(112, 112, 112));
+            }
+            finally
+            {
+                dialog.Close();
+            }
         }, CancellationToken.None);
     }
 

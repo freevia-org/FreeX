@@ -10,7 +10,13 @@ public enum DocumentAccessibilityNodeKind
     TableRow,
     TableCell,
     Hyperlink,
-    Image
+    Image,
+    Shape,
+    Chart,
+    WordArt,
+    SmartArt,
+    DrawingGroup,
+    EmbeddedObject
 }
 
 /// <summary>
@@ -36,6 +42,8 @@ public sealed record DocumentAccessibilityNode(
     int ColumnSpan = 1,
     int RowSpan = 1,
     bool IsHeader = false,
+    bool IsFloatingObject = false,
+    IReadOnlyList<int>? ObjectPath = null,
     IReadOnlyList<DocumentAccessibilityNode>? Children = null)
 {
     public IReadOnlyList<DocumentAccessibilityNode> SemanticChildren { get; init; } = Children ?? [];
@@ -205,8 +213,8 @@ public static class DocumentAccessibilityNodePlanner
                         || !string.Equals(candidate.HyperlinkTooltip, tooltip, StringComparison.Ordinal))
                         break;
                     groupText.Append(candidate.Text);
-                    if (candidate.Image is { IsFloating: false } linkedImage)
-                        linkChildren.Add(BuildImage(id, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, linkedImage));
+                    linkChildren.AddRange(BuildRunObjects(
+                        id, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, candidate));
                     textOffset += candidate.Text.Length;
                     runIndex++;
                 }
@@ -233,8 +241,8 @@ public static class DocumentAccessibilityNodePlanner
                 continue;
             }
 
-            if (run.Image is { IsFloating: false } image)
-                children.Add(BuildImage(id, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, image));
+            children.AddRange(BuildRunObjects(
+                id, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, run));
 
             textOffset += run.Text.Length;
             runIndex++;
@@ -254,6 +262,31 @@ public static class DocumentAccessibilityNodePlanner
             paragraphIndex,
             HeadingLevel: isHeading ? headingLevel : -1,
             Children: children);
+    }
+
+    private static IEnumerable<DocumentAccessibilityNode> BuildRunObjects(
+        string paragraphId,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        Run run)
+    {
+        if (run.Image is { } image)
+            yield return BuildImage(paragraphId, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, image);
+        if (run.Shape is { } shape)
+            yield return BuildShape(paragraphId, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, shape);
+        if (run.Chart is { } chart)
+            yield return BuildChart(paragraphId, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, chart);
+        if (run.WordArt is { } wordArt)
+            yield return BuildWordArt(paragraphId, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, wordArt);
+        if (run.SmartArt is { } smartArt)
+            yield return BuildSmartArt(paragraphId, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, smartArt);
+        if (run.DrawingGroup is { } group)
+            yield return BuildDrawingGroup(paragraphId, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, group);
+        if (run.EmbeddedObject is { } embeddedObject)
+            yield return BuildEmbeddedObject(paragraphId, blockIndex, rowIndex, columnIndex, paragraphIndex, runIndex, embeddedObject);
     }
 
     private static DocumentAccessibilityNode BuildImage(
@@ -276,7 +309,273 @@ public static class DocumentAccessibilityNodePlanner
             rowIndex,
             columnIndex,
             paragraphIndex,
+            runIndex,
+            IsFloatingObject: image.IsFloating);
+
+    private static DocumentAccessibilityNode BuildShape(
+        string paragraphId,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        Shape shape) =>
+        new(
+            $"{paragraphId}:run:{runIndex}:shape",
+            DocumentAccessibilityNodeKind.Shape,
+            FirstNonBlank(shape.AltText, shape.PlainText, $"{shape.Kind} shape")!,
+            shape.HasText ? shape.PlainText : null,
+            FirstNonBlank(shape.AltText, $"{(shape.IsFloating ? "Floating" : "Inline")} {shape.Kind} shape"),
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            runIndex,
+            IsFloatingObject: shape.IsFloating);
+
+    private static DocumentAccessibilityNode BuildChart(
+        string paragraphId,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        Chart chart) =>
+        new(
+            $"{paragraphId}:run:{runIndex}:chart",
+            DocumentAccessibilityNodeKind.Chart,
+            FirstNonBlank(chart.Title, $"{chart.Kind} chart")!,
+            ChartSummary(chart),
+            $"{chart.Kind} chart with {chart.Series.Count} series and {chart.Categories.Count} categories",
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            runIndex,
+            IsFloatingObject: chart.IsFloating);
+
+    private static DocumentAccessibilityNode BuildWordArt(
+        string paragraphId,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        WordArt wordArt) =>
+        new(
+            $"{paragraphId}:run:{runIndex}:wordart",
+            DocumentAccessibilityNodeKind.WordArt,
+            FirstNonBlank(wordArt.AltText, wordArt.Text, "WordArt")!,
+            wordArt.Text,
+            FirstNonBlank(wordArt.AltText, $"WordArt, {wordArt.Style}"),
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            runIndex,
+            IsFloatingObject: wordArt.IsFloating);
+
+    private static DocumentAccessibilityNode BuildSmartArt(
+        string paragraphId,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        SmartArt smartArt)
+    {
+        var text = string.Join("; ", FlattenSmartArtText(smartArt.Nodes));
+        return new DocumentAccessibilityNode(
+            $"{paragraphId}:run:{runIndex}:smartart",
+            DocumentAccessibilityNodeKind.SmartArt,
+            FirstNonBlank(text, $"{smartArt.Kind} SmartArt")!,
+            string.IsNullOrWhiteSpace(text) ? null : text,
+            $"{smartArt.Kind} SmartArt diagram with {smartArt.Nodes.Count} top-level nodes",
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            runIndex,
+            IsFloatingObject: smartArt.IsFloating);
+    }
+
+    private static DocumentAccessibilityNode BuildDrawingGroup(
+        string paragraphId,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        DrawingGroup group)
+    {
+        var id = $"{paragraphId}:run:{runIndex}:group";
+        var children = group.Children
+            .Select((child, index) => BuildGroupedObject(
+                child,
+                $"{id}:child:{index}",
+                blockIndex,
+                rowIndex,
+                columnIndex,
+                paragraphIndex,
+                runIndex,
+                [index]))
+            .Where(node => node is not null)
+            .Cast<DocumentAccessibilityNode>()
+            .ToArray();
+        return new DocumentAccessibilityNode(
+            id,
+            DocumentAccessibilityNodeKind.DrawingGroup,
+            $"Drawing group, {children.Length} objects",
+            null,
+            "Floating drawing-object group",
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            runIndex,
+            IsFloatingObject: true,
+            Children: children);
+    }
+
+    private static DocumentAccessibilityNode BuildEmbeddedObject(
+        string paragraphId,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        EmbeddedObject embeddedObject) =>
+        new(
+            $"{paragraphId}:run:{runIndex}:embedded-object",
+            DocumentAccessibilityNodeKind.EmbeddedObject,
+            FirstNonBlank(embeddedObject.Icon?.AltText, embeddedObject.ProgId, "Embedded object")!,
+            null,
+            embeddedObject.IsLinked
+                ? $"Linked {embeddedObject.ProgId} object"
+                : $"Embedded {embeddedObject.ProgId} object",
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
             runIndex);
+
+    private static DocumentAccessibilityNode? BuildGroupedObject(
+        object child,
+        string id,
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        int paragraphIndex,
+        int runIndex,
+        IReadOnlyList<int> objectPath)
+    {
+        if (child is DrawingGroup nestedGroup)
+        {
+            var nestedChildren = nestedGroup.Children
+                .Select((nestedChild, index) => BuildGroupedObject(
+                    nestedChild,
+                    $"{id}:child:{index}",
+                    blockIndex,
+                    rowIndex,
+                    columnIndex,
+                    paragraphIndex,
+                    runIndex,
+                    [.. objectPath, index]))
+                .Where(node => node is not null)
+                .Cast<DocumentAccessibilityNode>()
+                .ToArray();
+            return new DocumentAccessibilityNode(
+                id,
+                DocumentAccessibilityNodeKind.DrawingGroup,
+                $"Drawing group, {nestedChildren.Length} objects",
+                null,
+                "Nested drawing-object group",
+                blockIndex,
+                rowIndex,
+                columnIndex,
+                paragraphIndex,
+                runIndex,
+                IsFloatingObject: true,
+                ObjectPath: objectPath,
+                Children: nestedChildren);
+        }
+
+        var (kind, name, value, helpText) = child switch
+        {
+            InlineImage image => (
+                DocumentAccessibilityNodeKind.Image,
+                FirstNonBlank(image.AltText, "Image")!,
+                (string?)null,
+                FirstNonBlank(image.AltText, $"Image, {image.WidthPt:0.#} by {image.HeightPt:0.#} points")),
+            Shape shape => (
+                DocumentAccessibilityNodeKind.Shape,
+                FirstNonBlank(shape.AltText, shape.PlainText, $"{shape.Kind} shape")!,
+                shape.HasText ? shape.PlainText : null,
+                FirstNonBlank(shape.AltText, $"{shape.Kind} shape")),
+            Chart chart => (
+                DocumentAccessibilityNodeKind.Chart,
+                FirstNonBlank(chart.Title, $"{chart.Kind} chart")!,
+                ChartSummary(chart),
+                (string?)$"{chart.Kind} chart with {chart.Series.Count} series and {chart.Categories.Count} categories"),
+            WordArt wordArt => (
+                DocumentAccessibilityNodeKind.WordArt,
+                FirstNonBlank(wordArt.AltText, wordArt.Text, "WordArt")!,
+                wordArt.Text,
+                FirstNonBlank(wordArt.AltText, $"WordArt, {wordArt.Style}")),
+            SmartArt smartArt => (
+                DocumentAccessibilityNodeKind.SmartArt,
+                FirstNonBlank(string.Join("; ", FlattenSmartArtText(smartArt.Nodes)), $"{smartArt.Kind} SmartArt")!,
+                FirstNonBlank(string.Join("; ", FlattenSmartArtText(smartArt.Nodes))),
+                (string?)$"{smartArt.Kind} SmartArt diagram with {smartArt.Nodes.Count} top-level nodes"),
+            _ => default
+        };
+        if (kind == default)
+            return null;
+        return new DocumentAccessibilityNode(
+            id,
+            kind,
+            name,
+            value,
+            helpText,
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            runIndex,
+            IsFloatingObject: true,
+            ObjectPath: objectPath);
+    }
+
+    private static string? ChartSummary(Chart chart)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(chart.Title))
+            parts.Add(chart.Title.Trim());
+        if (chart.Categories.Count > 0)
+            parts.Add("Categories: " + string.Join(", ", chart.Categories));
+        for (var index = 0; index < chart.Series.Count; index++)
+        {
+            var series = chart.Series[index];
+            var name = FirstNonBlank(series.Name, $"Series {index + 1}")!;
+            parts.Add(name + ": " + string.Join(", ", series.Values.Select(value =>
+                value.ToString("G", System.Globalization.CultureInfo.InvariantCulture))));
+        }
+        if (parts.Count == 0)
+            return null;
+        var summary = string.Join(". ", parts);
+        return summary.Length <= 1000 ? summary : summary[..997] + "...";
+    }
+
+    private static IEnumerable<string> FlattenSmartArtText(IEnumerable<SmartArtNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (!string.IsNullOrWhiteSpace(node.Text))
+                yield return node.Text.Trim();
+            foreach (var child in FlattenSmartArtText(node.Children))
+                yield return child;
+        }
+    }
 
     private static int CountVerticalSpan(Table table, int restartRow, int gridColumn)
     {

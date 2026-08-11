@@ -358,6 +358,7 @@ public sealed class DocumentView : Control
         // a handful of external-mutation sites) — see DocumentViewAutomationPeer for why these are
         // the closest Avalonia equivalent to WPF RichTextBox's built-in TextPattern change events.
         CaretMoved += RaiseAutomationSelectionChanged;
+        FloatingSelectionChanged += RaiseAutomationSelectionChanged;
         DocumentChanged += RaiseAutomationValueChanged;
     }
 
@@ -1094,7 +1095,26 @@ public sealed class DocumentView : Control
         return AccessibleDocumentSnapshotPlanner.Build(_doc, caret, anchor);
     }
 
-    internal string AutomationSelectionStatus() => AutomationSnapshot().Status;
+    internal string AutomationSelectionStatus()
+    {
+        if (_selectedFloatingObjects.Count > 1)
+            return $"{_selectedFloatingObjects.Count} drawing objects selected";
+        if (_selectedFloating is { } selected)
+        {
+            var selectedPath = _selectedFloatingGroupChild?.ChildPath;
+            var node = AutomationSemanticTree().ById.Values.FirstOrDefault(candidate =>
+                candidate.BlockIndex == selected.BlockIndex
+                && candidate.RunIndex == selected.RunIndex
+                && IsAutomationDrawingNode(candidate.Kind)
+                && (selectedPath is null
+                    ? candidate.ObjectPath is null
+                    : candidate.ObjectPath is not null && candidate.ObjectPath.SequenceEqual(selectedPath)));
+            return node is null
+                ? $"Selected {selected.Kind}"
+                : $"Selected {node.Kind}: {node.Name}";
+        }
+        return AutomationSnapshot().Status;
+    }
 
     internal DocumentAccessibilityTree AutomationSemanticTree() =>
         DocumentAccessibilityNodePlanner.Build(_doc);
@@ -1127,6 +1147,42 @@ public sealed class DocumentView : Control
 
     internal void AutomationFocusNode(DocumentAccessibilityNode node)
     {
+        if (IsAutomationDrawingNode(node.Kind))
+        {
+            Focus();
+            if (node.IsFloatingObject && node.ObjectPath is { Count: > 0 } objectPath
+                && TryGetFloatingGroupChildGeometry(node.BlockIndex, node.RunIndex, objectPath, out var child))
+            {
+                SelectFloatingGroupChildCore(new FloatingGroupChildSelection(
+                    node.BlockIndex,
+                    node.RunIndex,
+                    objectPath,
+                    child.Child.Kind.ToString(),
+                    child.Child.Rect));
+            }
+            else if (node.IsFloatingObject)
+            {
+                SelectFloating(node.BlockIndex, node.RunIndex);
+            }
+            else
+            {
+                var offset = AutomationRunStartOffset(node);
+                if (node.RowIndex >= 0 && node.ColumnIndex >= 0)
+                    PlaceCaretInCell(node.BlockIndex, node.RowIndex, node.ColumnIndex, Math.Max(0, node.ParagraphIndex), offset);
+                else
+                {
+                    _cellCaret = null;
+                    _cellAnchor = null;
+                    _caret = new DocPosition(node.BlockIndex, offset);
+                    _selectionAnchor = _caret;
+                    InvalidateVisual();
+                    CaretMoved?.Invoke();
+                }
+            }
+            ScrollToCaretRequested?.Invoke();
+            return;
+        }
+
         if (node.RowIndex >= 0 && node.ColumnIndex >= 0)
         {
             Focus();
@@ -1154,6 +1210,30 @@ public sealed class DocumentView : Control
     {
         if (!IsKeyboardFocusWithin)
             return false;
+        if (IsAutomationDrawingNode(node.Kind) && node.IsFloatingObject)
+        {
+            if (_selectedFloating is not { } selected
+                || selected.BlockIndex != node.BlockIndex
+                || selected.RunIndex != node.RunIndex)
+                return false;
+            return node.ObjectPath is not { Count: > 0 } objectPath
+                ? _selectedFloatingGroupChild is null
+                : _selectedFloatingGroupChild is { } child && child.ChildPath.SequenceEqual(objectPath);
+        }
+        if (IsAutomationDrawingNode(node.Kind))
+        {
+            var objectOffset = AutomationRunStartOffset(node);
+            if (node.RowIndex >= 0 && node.ColumnIndex >= 0)
+            {
+                return _cellCaret is { } objectCaret
+                    && objectCaret.TableBlock == node.BlockIndex
+                    && objectCaret.Row == node.RowIndex
+                    && objectCaret.Col == node.ColumnIndex
+                    && objectCaret.ParaIdx == Math.Max(0, node.ParagraphIndex)
+                    && objectCaret.Offset == objectOffset;
+            }
+            return _cellCaret is null && _caret.Block == node.BlockIndex && _caret.Offset == objectOffset;
+        }
         if (node.RowIndex >= 0 && node.ColumnIndex >= 0)
         {
             return _cellCaret is { } caret
@@ -1165,9 +1245,78 @@ public sealed class DocumentView : Control
         return _cellCaret is null && _caret.Block == node.BlockIndex;
     }
 
+    internal bool AutomationNodeIsSelected(DocumentAccessibilityNode node)
+    {
+        if (!node.IsFloatingObject)
+            return false;
+        if (node.ObjectPath is { Count: > 0 } objectPath)
+        {
+            return _selectedFloatingGroupChild is { } child
+                && child.BlockIndex == node.BlockIndex
+                && child.RunIndex == node.RunIndex
+                && child.ChildPath.SequenceEqual(objectPath);
+        }
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && selectedChild.BlockIndex == node.BlockIndex
+            && selectedChild.RunIndex == node.RunIndex)
+            return false;
+        return _selectedFloatingObjects.Any(selected =>
+            selected.BlockIndex == node.BlockIndex && selected.RunIndex == node.RunIndex);
+    }
+
+    internal void AutomationSelectNode(DocumentAccessibilityNode node, bool addToSelection)
+    {
+        if (!node.IsFloatingObject)
+            return;
+        Focus();
+        if (node.ObjectPath is { Count: > 0 } objectPath
+            && TryGetFloatingGroupChildGeometry(node.BlockIndex, node.RunIndex, objectPath, out var child))
+        {
+            SelectFloatingGroupChildCore(new FloatingGroupChildSelection(
+                node.BlockIndex,
+                node.RunIndex,
+                objectPath,
+                child.Child.Kind.ToString(),
+                child.Child.Rect));
+            return;
+        }
+        SelectFloating(node.BlockIndex, node.RunIndex, addToSelection);
+    }
+
+    internal void AutomationRemoveNodeFromSelection(DocumentAccessibilityNode node)
+    {
+        if (!AutomationNodeIsSelected(node))
+            return;
+        SelectFloating(node.BlockIndex, node.RunIndex, addToMultiSelect: true);
+    }
+
+    private int AutomationRunStartOffset(DocumentAccessibilityNode node)
+    {
+        if (AutomationNodeParagraph(node) is not { } paragraph)
+            return 0;
+        var offset = 0;
+        for (var index = 0; index < Math.Min(node.RunIndex, paragraph.Runs.Count); index++)
+            offset += AutomationRunLayoutLength(paragraph.Runs[index]);
+        return offset;
+    }
+
+    private static bool IsAutomationDrawingNode(DocumentAccessibilityNodeKind kind) =>
+        kind is DocumentAccessibilityNodeKind.Image
+            or DocumentAccessibilityNodeKind.Shape
+            or DocumentAccessibilityNodeKind.Chart
+            or DocumentAccessibilityNodeKind.WordArt
+            or DocumentAccessibilityNodeKind.SmartArt
+            or DocumentAccessibilityNodeKind.DrawingGroup
+            or DocumentAccessibilityNodeKind.EmbeddedObject;
+
     private Rect AutomationNodeBoundsLocal(DocumentAccessibilityNode node)
     {
         var rectangles = new List<Rect>();
+        if (node.ObjectPath is { Count: > 0 } objectPath
+            && TryGetFloatingGroupChildGeometry(node.BlockIndex, node.RunIndex, objectPath, out var groupChild))
+        {
+            rectangles.Add(groupChild.Child.Rect);
+        }
         switch (node.Kind)
         {
             case DocumentAccessibilityNodeKind.Table:
@@ -1186,17 +1335,72 @@ public sealed class DocumentView : Control
                     .Select(hit => hit.Rect));
                 break;
             case DocumentAccessibilityNodeKind.Image:
-                var imageModel = AutomationNodeImage(node);
-                rectangles.AddRange(_images
-                    .Where(image => image.BlockIndex == node.BlockIndex
-                        && image.RunIndex == node.RunIndex
-                        && (imageModel is null || ReferenceEquals(image.Model, imageModel)))
-                    .Select(image => image.Rect));
-                rectangles.AddRange(_floatingImages
-                    .Where(image => image.BlockIndex == node.BlockIndex
-                        && image.RunIndex == node.RunIndex
-                        && (imageModel is null || ReferenceEquals(image.Model, imageModel)))
-                    .Select(image => image.Rect));
+                if (node.ObjectPath is not { Count: > 0 })
+                {
+                    var imageModel = AutomationNodeImage(node);
+                    rectangles.AddRange(_images
+                        .Where(image => image.BlockIndex == node.BlockIndex
+                            && image.RunIndex == node.RunIndex
+                            && (imageModel is null || ReferenceEquals(image.Model, imageModel)))
+                        .Select(image => image.Rect));
+                    rectangles.AddRange(_floatingImages
+                        .Where(image => image.BlockIndex == node.BlockIndex
+                            && image.RunIndex == node.RunIndex
+                            && (imageModel is null || ReferenceEquals(image.Model, imageModel)))
+                        .Select(image => image.Rect));
+                }
+                break;
+            case DocumentAccessibilityNodeKind.Shape:
+                if (node.ObjectPath is not { Count: > 0 })
+                {
+                    rectangles.AddRange(_inlineShapes
+                        .Where(shape => shape.BlockIndex == node.BlockIndex && shape.RunIndex == node.RunIndex)
+                        .Select(shape => shape.Rect));
+                    rectangles.AddRange(_floatingShapes
+                        .Where(shape => shape.BlockIndex == node.BlockIndex && shape.RunIndex == node.RunIndex)
+                        .Select(shape => shape.Rect));
+                }
+                break;
+            case DocumentAccessibilityNodeKind.Chart:
+                if (node.ObjectPath is not { Count: > 0 })
+                {
+                    rectangles.AddRange(_inlineCharts
+                        .Where(chart => chart.BlockIndex == node.BlockIndex && chart.RunIndex == node.RunIndex)
+                        .Select(chart => chart.Rect));
+                    rectangles.AddRange(_floatingCharts
+                        .Where(chart => chart.BlockIndex == node.BlockIndex && chart.RunIndex == node.RunIndex)
+                        .Select(chart => chart.Rect));
+                }
+                break;
+            case DocumentAccessibilityNodeKind.WordArt:
+                if (node.ObjectPath is not { Count: > 0 })
+                {
+                    rectangles.AddRange(_inlineWordArts
+                        .Where(wordArt => wordArt.BlockIndex == node.BlockIndex && wordArt.RunIndex == node.RunIndex)
+                        .Select(wordArt => wordArt.Rect));
+                    rectangles.AddRange(_floatingWordArts
+                        .Where(wordArt => wordArt.BlockIndex == node.BlockIndex && wordArt.RunIndex == node.RunIndex)
+                        .Select(wordArt => wordArt.Rect));
+                }
+                break;
+            case DocumentAccessibilityNodeKind.SmartArt:
+                if (node.ObjectPath is not { Count: > 0 })
+                {
+                    rectangles.AddRange(_inlineSmartArts
+                        .Where(smartArt => smartArt.BlockIndex == node.BlockIndex && smartArt.RunIndex == node.RunIndex)
+                        .Select(smartArt => smartArt.Rect));
+                    rectangles.AddRange(_floatingSmartArts
+                        .Where(smartArt => smartArt.BlockIndex == node.BlockIndex && smartArt.RunIndex == node.RunIndex)
+                        .Select(smartArt => smartArt.Rect));
+                }
+                break;
+            case DocumentAccessibilityNodeKind.DrawingGroup:
+                if (node.ObjectPath is not { Count: > 0 })
+                {
+                    rectangles.AddRange(_floatingGroups
+                        .Where(group => group.BlockIndex == node.BlockIndex && group.RunIndex == node.RunIndex)
+                        .Select(group => group.Rect));
+                }
                 break;
             case DocumentAccessibilityNodeKind.Paragraph:
             case DocumentAccessibilityNodeKind.Heading:
@@ -1326,6 +1530,7 @@ public sealed class DocumentView : Control
     {
         if (_automationPeer is null)
             return;
+        _automationPeer.NotifyObjectSelectionChanged();
         var status = AutomationSelectionStatus();
         if (string.Equals(_lastAutomationSelectionStatus, status, StringComparison.Ordinal))
             return;

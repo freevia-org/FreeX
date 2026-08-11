@@ -135,7 +135,7 @@ public sealed class DocumentAccessibilityNodePlannerTests
     }
 
     [Fact]
-    public void Build_excludes_floating_images_and_repeats_structural_ids_deterministically()
+    public void Build_includes_floating_images_and_repeats_structural_ids_deterministically()
     {
         var paragraph = new Paragraph();
         paragraph.Runs.Add(Run.FromImage(new InlineImage([], 40, 30)
@@ -151,7 +151,56 @@ public sealed class DocumentAccessibilityNodePlannerTests
         var first = DocumentAccessibilityNodePlanner.Build(document);
         var second = DocumentAccessibilityNodePlanner.Build(document);
 
-        first.Children[0].SemanticChildren.Should().ContainSingle().Which.Name.Should().Be("Inline");
+        first.Children[0].SemanticChildren.Select(node => node.Name).Should().Equal("Floating", "Inline");
+        first.Children[0].SemanticChildren[0].IsFloatingObject.Should().BeTrue();
         second.ById.Keys.Should().Equal(first.ById.Keys);
+    }
+
+    [Fact]
+    public void Build_projects_all_drawing_object_kinds_and_nested_group_children()
+    {
+        var paragraph = new Paragraph();
+        var shape = Shape.TextBoxWith("Quarterly result", 120, 60);
+        shape.AltText = "Results callout";
+        shape.Placement = new FloatingPlacement { Wrapping = ImageWrapping.Square };
+        paragraph.Runs.Add(Run.FromShape(shape));
+        var chart = new Chart { Title = "Revenue", Kind = ChartKind.Line };
+        chart.Categories.AddRange(["Q1", "Q2"]);
+        chart.Series.Add(new ChartSeries("Actual", [12, 18]));
+        paragraph.Runs.Add(Run.FromChart(chart));
+        paragraph.Runs.Add(Run.FromWordArt(new WordArt { Text = "Launch", AltText = "Launch banner" }));
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(new SmartArtNode("Director", [new SmartArtNode("Manager")]));
+        paragraph.Runs.Add(Run.FromSmartArt(smartArt));
+        var group = new DrawingGroup();
+        group.Children.Add(new InlineImage([], 40, 30) { AltText = "Logo" });
+        group.Children.Add(Shape.TextBoxWith("Grouped note", 80, 30));
+        group.ChildOffsets.Add((0, 0));
+        group.ChildOffsets.Add((45, 0));
+        paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        paragraph.Runs.Add(Run.FromEmbeddedObject(EmbeddedObject.Create([], "Excel.Sheet.12")));
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+
+        var objects = DocumentAccessibilityNodePlanner.Build(document).Children[0].SemanticChildren;
+
+        objects.Select(node => node.Kind).Should().Equal(
+            DocumentAccessibilityNodeKind.Shape,
+            DocumentAccessibilityNodeKind.Chart,
+            DocumentAccessibilityNodeKind.WordArt,
+            DocumentAccessibilityNodeKind.SmartArt,
+            DocumentAccessibilityNodeKind.DrawingGroup,
+            DocumentAccessibilityNodeKind.EmbeddedObject);
+        objects[0].Name.Should().Be("Results callout");
+        objects[0].Value.Should().Be("Quarterly result");
+        objects[0].IsFloatingObject.Should().BeTrue();
+        objects[1].Name.Should().Be("Revenue");
+        objects[1].Value.Should().Be("Revenue. Categories: Q1, Q2. Actual: 12, 18");
+        objects[2].Value.Should().Be("Launch");
+        objects[3].Value.Should().Be("Director; Manager");
+        objects[4].SemanticChildren.Select(node => node.Name).Should().Equal("Logo", "Grouped note");
+        objects[4].SemanticChildren[1].ObjectPath.Should().Equal(1);
+        objects[5].Name.Should().Be("Excel.Sheet.12");
     }
 }
