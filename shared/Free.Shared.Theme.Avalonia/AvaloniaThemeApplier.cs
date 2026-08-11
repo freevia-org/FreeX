@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -7,7 +8,7 @@ namespace Free.Shared.Theme.Avalonia;
 
 /// <summary>
 /// Converts a <see cref="Theme"/> into Avalonia resources.
-/// Not live-wired to a running application in round 1 — built and unit-tested only.
+/// Can merge the generated resources into a running application or resource dictionary.
 /// </summary>
 public static class AvaloniaThemeApplier
 {
@@ -102,6 +103,40 @@ public static class AvaloniaThemeApplier
         AddTypo("Heading",       t.Heading);
         AddTypo("StatusBarText", t.StatusBarText);
 
+        // Prefix-free aliases keep shared renderers app-neutral. These mirror the WPF
+        // resource contract exactly; accent values remain specific to each brand theme.
+        AddAliasBrush(dict, "ThemeNeutralTextBrush",         c.Text);
+        AddAliasBrush(dict, "ThemeNeutralMutedTextBrush",    c.MutedText);
+        AddAliasBrush(dict, "ThemeNeutralWhiteBrush",        c.White);
+        AddAliasBrush(dict, "ThemeNeutralDangerBrush",       c.Danger);
+        AddAliasBrush(dict, "ThemeNeutralSheetSurfaceBrush", c.SheetSurface);
+
+        AddAliasBrush(dict, "ThemeAccentBrush",            c.Accent);
+        AddAliasBrush(dict, "ThemeAccentDarkBrush",        c.AccentDark);
+        AddAliasBrush(dict, "ThemeAccentSoftBrush",        c.AccentSoft);
+        AddAliasBrush(dict, "ThemeAccentPressedBrush",     c.AccentPressed);
+        AddAliasBrush(dict, "ThemeRibbonButtonHoverBrush", c.RibbonButtonHover);
+
         return dict;
+    }
+
+    private static void AddAliasBrush(ResourceDictionary dict, string key, ThemeColor color) =>
+        dict[key] = new ImmutableSolidColorBrush(ToColor(color));
+
+    /// <summary>
+    /// Merges the generated theme resources as the last application dictionary so they
+    /// override earlier fallback resources, matching the WPF applier's precedence.
+    /// </summary>
+    public static void Apply(Application app, Theme theme, string keyPrefix)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        Apply(app.Resources, theme, keyPrefix);
+    }
+
+    /// <summary>Merges the generated resources as the last dictionary in <paramref name="target"/>.</summary>
+    public static void Apply(IResourceDictionary target, Theme theme, string keyPrefix)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        target.MergedDictionaries.Add(BuildResources(theme, keyPrefix));
     }
 }

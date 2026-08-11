@@ -38,7 +38,7 @@ public sealed class App : Application
             ? BrandThemes.FreeXMidnight
             : BrandThemes.FreeP;
         ActiveTheme = theme;
-        Resources.MergedDictionaries.Add(AvaloniaThemeApplier.BuildResources(theme, "FreeP"));
+        AvaloniaThemeApplier.Apply(this, theme, "FreeP");
         var options = ApplicationOptionsStore<FreePOptions>.Create().Load();
 
         SisterAvaloniaAppBootstrap.Initialize(

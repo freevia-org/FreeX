@@ -32,7 +32,7 @@ internal static class AvaloniaLaunchSmokeBootstrapTestSupport
             "App.cs"));
         app.Should().Contain("using Free.Shared.Shell.Avalonia;");
         app.Should().Contain("using Free.Shared.Theme.Avalonia;");
-        app.Should().Contain($"AvaloniaThemeApplier.BuildResources(theme, \"{spec.ProductName}\")");
+        app.Should().Contain($"AvaloniaThemeApplier.Apply(this, theme, \"{spec.ProductName}\")");
         app.Should().Contain("SisterAvaloniaAppBootstrap.Initialize(");
         app.Should().Contain("new SisterAvaloniaAppBootstrapSpec<MainWindow>(");
         app.Should().NotContain("Styles.Add(new FluentTheme())");

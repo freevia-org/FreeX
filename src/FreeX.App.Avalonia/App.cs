@@ -78,8 +78,7 @@ public sealed class App : Application
             ? BrandThemes.FreeXMidnight
             : BrandThemes.FreeX;
         ActiveTheme = theme;
-        var themeResources = AvaloniaThemeApplier.BuildResources(theme, "FreeX");
-        Resources.MergedDictionaries.Add(themeResources);
+        AvaloniaThemeApplier.Apply(this, theme, "FreeX");
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
