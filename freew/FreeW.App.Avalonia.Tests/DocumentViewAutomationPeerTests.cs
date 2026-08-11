@@ -49,6 +49,8 @@ public sealed class DocumentViewAutomationPeerTests
     {
         AutomationPeer? peer = null;
         AutomationControlType controlType = default;
+        string? accessibleName = null;
+        string? helpText = null;
         IValueProvider? valueProvider = null;
         string? value = null;
         bool isReadOnly = false;
@@ -64,6 +66,8 @@ public sealed class DocumentViewAutomationPeerTests
 
             peer = view.CreateAutomationPeerForTests();
             controlType = peer.GetAutomationControlType();
+            accessibleName = peer.GetName();
+            helpText = peer.GetHelpText();
             valueProvider = peer.GetProvider<IValueProvider>();
             value = valueProvider?.Value;
             isReadOnly = valueProvider?.IsReadOnly ?? false;
@@ -76,10 +80,39 @@ public sealed class DocumentViewAutomationPeerTests
         // Before the fix, Control.OnCreateAutomationPeer()'s default (NoneAutomationPeer) reports
         // AutomationControlType.None and exposes no providers at all — a screen reader sees nothing.
         controlType.Should().Be(AutomationControlType.Document);
+        accessibleName.Should().Be("Document editor");
+        helpText.Should().Contain("paragraph 1 of 1").And.Contain("word: Hello");
         valueProvider.Should().NotBeNull(
             "Avalonia has no ITextProvider — IValueProvider is the only pattern that can expose document text");
         value.Should().Be("Hello accessible world");
         isReadOnly.Should().BeTrue("edits must go through DocumentView's command bus, not raw automation SetValue");
+    }
+
+    [Fact]
+    public async Task Automation_snapshot_exposes_range_addressable_body_selection()
+    {
+        FreeW.App.Presentation.DocumentView.AccessibleDocumentSnapshot? snapshot = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Alpha beta"));
+            doc.Blocks.Add(new Paragraph("Gamma"));
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.SetSelectionRangePublic(0, 2, 1, 3);
+
+            snapshot = view.AutomationSnapshot();
+        });
+
+        if (!ran)
+            return;
+
+        snapshot.Should().NotBeNull();
+        snapshot!.Text.Should().Be("Alpha beta\nGamma");
+        snapshot.CaretOffset.Should().Be(14);
+        snapshot.Selection.Should().Be(new FreeW.App.Presentation.DocumentView.AccessibleTextRange(2, 12));
+        snapshot.GetText(snapshot.Selection!).Should().Be("pha beta\nGam");
     }
 
     [Fact]
@@ -150,6 +183,7 @@ public sealed class DocumentViewAutomationPeerTests
     public async Task Moving_the_caret_into_a_table_cell_raises_an_automation_selection_changed_notification()
     {
         var raisedCount = 0;
+        var helpTextRaisedCount = 0;
         AutomationProperty? raisedProperty = null;
 
         var ran = await OnUiThread(() =>
@@ -168,6 +202,8 @@ public sealed class DocumentViewAutomationPeerTests
             var peer = view.CreateAutomationPeerForTests();
             peer.PropertyChanged += (_, e) =>
             {
+                if (e.Property == AutomationElementIdentifiers.HelpTextProperty)
+                    helpTextRaisedCount++;
                 if (e.Property != AutomationElementIdentifiers.ItemStatusProperty)
                     return;
                 raisedCount++;
@@ -187,5 +223,7 @@ public sealed class DocumentViewAutomationPeerTests
         raisedCount.Should().BeGreaterThan(0,
             "DocumentView.CaretMoved fires on this call site and must push an ItemStatus-changed automation event");
         raisedProperty.Should().Be(AutomationElementIdentifiers.ItemStatusProperty);
+        helpTextRaisedCount.Should().BeGreaterThan(0,
+            "caret context is projected through HelpText as well as ItemStatus");
     }
 }

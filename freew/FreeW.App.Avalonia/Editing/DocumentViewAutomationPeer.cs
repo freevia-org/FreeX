@@ -44,14 +44,10 @@ namespace FreeW.App.Avalonia.Editing;
 /// joins every paragraph/table cell's runs). This covers "document text exposure".
 /// </description></item>
 /// <item><description>
-/// Reports caret position and selection via the automation ItemStatus property (a free-text
-/// status field) — see <see cref="DocumentView.AutomationSelectionStatus"/> for the exact format
-/// (body block/offset, or table row/col/paragraph/offset while the caret is in a cell, plus the
-/// selected text when there is a selection). Built from the same <c>CellCaretInfo</c>/
-/// <see cref="DocumentView.SelectedText"/> the ribbon and Find/Replace already use, not a
-/// reimplementation. Reporting caret position (not just selected text) matters because most
-/// caret moves — arrow keys, clicks — never produce a selection, so a selection-only status
-/// would silently never change for the majority of navigation.
+/// Reports caret and selection context through both ItemStatus and HelpText. The renderer only
+/// translates its body/table caret addresses; the flattened text, global ranges, current word,
+/// paragraph, and logical line come from the shared <c>AccessibleDocumentSnapshotPlanner</c>.
+/// Reporting a collapsed caret matters because most arrow-key and pointer moves never select text.
 /// </description></item>
 /// <item><description>
 /// Raises change notifications: <see cref="NotifySelectionChanged"/> fires an
@@ -73,10 +69,11 @@ namespace FreeW.App.Avalonia.Editing;
 ///
 /// <para>
 /// <b>Explicitly NOT provided</b> (because Avalonia has no pattern for it): per-character/word/
-/// line/paragraph <c>TextPatternRange</c> navigation, run-level formatting attribute queries via
+/// visual-line/paragraph <c>TextPatternRange</c> navigation, run-level formatting attribute queries via
 /// automation, and a dedicated caret-position/text-selection-changed automation event. A screen
-/// reader driving FreeW-Avalonia therefore gets "here is the whole document's text, and here is
-/// what's currently selected, updated live" rather than WPF's fully range-addressable navigation.
+/// reader driving FreeW-Avalonia gets the whole text plus live semantic caret/selection context,
+/// rather than WPF's client-driven TextPattern navigation. Shared code can query the same snapshot
+/// by character, word, logical line, paragraph, or document without toolkit dependencies.
 /// </para>
 /// </summary>
 internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValueProvider
@@ -92,6 +89,8 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
     protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Document;
 
     protected override string GetClassNameCore() => nameof(DocumentView);
+
+    protected override string? GetNameCore() => "Document editor";
 
     protected override string? GetItemStatusCore() => _owner.AutomationSelectionStatus();
 
@@ -116,5 +115,11 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
     /// <see cref="DocumentView.CaretMoved"/>.
     /// </summary>
     internal void NotifySelectionChanged(string? oldStatus, string? newStatus) =>
+        NotifySelectionPropertiesChanged(oldStatus, newStatus);
+
+    private void NotifySelectionPropertiesChanged(string? oldStatus, string? newStatus)
+    {
         RaisePropertyChangedEvent(AutomationElementIdentifiers.ItemStatusProperty, oldStatus, newStatus);
+        RaisePropertyChangedEvent(AutomationElementIdentifiers.HelpTextProperty, oldStatus, newStatus);
+    }
 }

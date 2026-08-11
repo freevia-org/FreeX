@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -1054,6 +1055,8 @@ public sealed class DocumentView : Control
         _automationPeer = new DocumentViewAutomationPeer(this);
         _lastAutomationValue = PlainText;
         _lastAutomationSelectionStatus = AutomationSelectionStatus();
+        AutomationProperties.SetName(this, "Document editor");
+        AutomationProperties.SetHelpText(this, _lastAutomationSelectionStatus);
         return _automationPeer;
     }
 
@@ -1064,19 +1067,33 @@ public sealed class DocumentView : Control
     /// Single source of truth for the automation "ItemStatus" text: both <see cref="RaiseAutomationSelectionChanged"/>
     /// (dedup + change-event trigger) and <see cref="DocumentViewAutomationPeer.GetItemStatusCore"/> (what an
     /// automation client reads on demand) call this, so the two can never drift out of sync.
-    /// Reports caret position even when nothing is selected (a plain arrow-key/click move still changes this
-    /// string) plus the selected text when there is a selection, and reports table row/col/paragraph instead
-    /// of a raw glyph offset while the caret is in a table cell — the closest Avalonia can get to WPF
-    /// TextPattern's structural position without a real ICaretProvider/ITextRangeProvider.
+    /// Reports global caret/selection ranges plus current word, paragraph, and logical line from the
+    /// shared accessibility snapshot. This is the closest Avalonia can get to WPF TextPattern's
+    /// structural position without a public ICaretProvider/ITextRangeProvider.
     /// </summary>
-    internal string AutomationSelectionStatus()
+    internal AccessibleDocumentSnapshot AutomationSnapshot()
     {
-        var caretDesc = CellCaretInfo is { } cell
-            ? $"Table {cell.TableBlock} row {cell.Row} col {cell.Col} para {cell.ParaIdx} offset {cell.Offset}"
-            : $"Block {_caret.Block} offset {_caret.Offset}";
-        var selected = SelectedText;
-        return selected.Length > 0 ? $"{caretDesc}; Selected: {selected}" : caretDesc;
+        var caret = _cellCaret is { } cell
+            ? AccessibleDocumentLocation.TableCell(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx, cell.Offset)
+            : AccessibleDocumentLocation.Body(_caret.Block, _caret.Offset);
+        AccessibleDocumentLocation? anchor = null;
+        if (_cellCaret is not null && _cellAnchor is { } cellAnchor && !cellAnchor.Equals(_cellCaret.Value))
+        {
+            anchor = AccessibleDocumentLocation.TableCell(
+                cellAnchor.TableBlock,
+                cellAnchor.Row,
+                cellAnchor.Col,
+                cellAnchor.ParaIdx,
+                cellAnchor.Offset);
+        }
+        else if (_cellCaret is null && _selectionAnchor is { } bodyAnchor && !bodyAnchor.Equals(_caret))
+        {
+            anchor = AccessibleDocumentLocation.Body(bodyAnchor.Block, bodyAnchor.Offset);
+        }
+        return AccessibleDocumentSnapshotPlanner.Build(_doc, caret, anchor);
     }
+
+    internal string AutomationSelectionStatus() => AutomationSnapshot().Status;
 
     private void RaiseAutomationValueChanged()
     {
@@ -1088,6 +1105,7 @@ public sealed class DocumentView : Control
         var oldValue = _lastAutomationValue;
         _lastAutomationValue = newValue;
         _automationPeer.NotifyValueChanged(oldValue, newValue);
+        RaiseAutomationSelectionChanged();
     }
 
     private void RaiseAutomationSelectionChanged()
@@ -1099,6 +1117,7 @@ public sealed class DocumentView : Control
             return;
         var oldStatus = _lastAutomationSelectionStatus;
         _lastAutomationSelectionStatus = status;
+        AutomationProperties.SetHelpText(this, status);
         _automationPeer.NotifySelectionChanged(oldStatus, status);
     }
 
