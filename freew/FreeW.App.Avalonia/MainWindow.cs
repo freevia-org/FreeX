@@ -1296,14 +1296,14 @@ public sealed partial class MainWindow : Window
     {
         if (_editor.CommentsAtCaret.Count == 0)
         {
-            _status.Text = "Place the caret in a comment to reply.";
+            _status.Text = CommentDialogPresentationPlanner.Text.MissingReplyTargetMessage;
             _editor.Focus();
             return;
         }
 
         var text = await CommentReplyDialog.AskAsync(this);
         if (!string.IsNullOrWhiteSpace(text) && !_editor.ReplyToCommentAtCaret(text))
-            _status.Text = "Place the caret in a comment to reply.";
+            _status.Text = CommentDialogPresentationPlanner.Text.MissingReplyTargetMessage;
         _editor.Focus();
     }
 

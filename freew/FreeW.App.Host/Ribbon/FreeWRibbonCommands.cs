@@ -4159,7 +4159,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var text = TextPrompt.Ask(Window.GetWindow(editor), "New Comment", "Comment:", string.Empty);
+            var text = TextPrompt.Ask(
+                Window.GetWindow(editor),
+                CommentDialogPresentationPlanner.Text.NewCommentTitle,
+                CommentDialogPresentationPlanner.Text.CommentFieldLabel,
+                string.Empty);
             if (string.IsNullOrWhiteSpace(text))
                 return; // cancelled or empty — nothing to attach
 
@@ -4194,18 +4198,24 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var text = TextPrompt.Ask(Window.GetWindow(editor), "Reply", "Reply:", string.Empty);
-            if (string.IsNullOrWhiteSpace(text))
+            var text = TextPrompt.Ask(
+                Window.GetWindow(editor),
+                CommentDialogPresentationPlanner.Text.ReplyTitle,
+                CommentDialogPresentationPlanner.Text.ReplyFieldLabel,
+                string.Empty);
+            var acceptance = CommentDialogPresentationPlanner.PlanReplyAcceptance(text);
+            if (!acceptance.IsAccepted)
                 return; // cancelled or empty
 
             var author = CommentAuthor.Resolve(editor);
             editor.Focus();
             if (!editor.ReplyToCommentAtCaret(
-                    text.Trim(),
+                    acceptance.Text,
                     author,
                     CommentInitialsPolicy.Derive(author, CommentInitialsPolicy.FirstThreeWords)))
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
-                    "Place the cursor inside a comment, then choose Reply.", "Reply");
+                    CommentDialogPresentationPlanner.Text.MissingReplyTargetMessage,
+                    CommentDialogPresentationPlanner.Text.ReplyTitle);
         }
     }
 
@@ -4218,7 +4228,8 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (editor.ToggleResolveCommentAtCaret() is null)
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
-                    "Place the cursor inside a comment, then choose Resolve.", "Resolve");
+                    CommentDialogPresentationPlanner.Text.MissingResolveTargetMessage,
+                    CommentDialogPresentationPlanner.Text.ResolveTitle);
         }
     }
 
@@ -4230,7 +4241,8 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (!editor.DeleteCommentAtCaret())
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
-                    "Place the cursor inside a comment, then choose Delete.", "Delete Comment");
+                    CommentDialogPresentationPlanner.Text.MissingDeleteTargetMessage,
+                    CommentDialogPresentationPlanner.Text.DeleteTitle);
         }
     }
 
@@ -4243,7 +4255,10 @@ internal static class FreeWRibbonCommands
             var moved = previous ? editor.MoveToPreviousComment() : editor.MoveToNextComment();
             if (!moved)
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
-                    "This document does not contain any comments.", previous ? "Previous Comment" : "Next Comment");
+                    CommentDialogPresentationPlanner.Text.NoCommentsMessage,
+                    previous
+                        ? CommentDialogPresentationPlanner.Text.PreviousTitle
+                        : CommentDialogPresentationPlanner.Text.NextTitle);
         }
     }
 
@@ -4260,8 +4275,8 @@ internal static class FreeWRibbonCommands
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "This document does not contain any comments.",
-                    "Comments");
+                    CommentDialogPresentationPlanner.Text.NoCommentsMessage,
+                    CommentDialogPresentationPlanner.Text.ListTitle);
                 return;
             }
 
@@ -4273,6 +4288,7 @@ internal static class FreeWRibbonCommands
     {
         public static void Show(Window? owner, IReadOnlyList<CommentListItem> items)
         {
+            var presentation = CommentDialogPresentationPlanner.BuildList(items);
             var list = new System.Windows.Controls.ListBox
             {
                 MinWidth = 440,
@@ -4280,16 +4296,12 @@ internal static class FreeWRibbonCommands
                 Margin = new Thickness(0, 0, 0, 12)
             };
 
-            foreach (var item in items)
-            {
-                var status = item.Resolved ? "Resolved" : "Open";
-                var replies = item.ReplyCount == 1 ? "1 reply" : $"{item.ReplyCount} replies";
-                list.Items.Add($"#{item.Id + 1} {status} - {item.Author} - {item.Text} ({replies})");
-            }
+            foreach (var row in presentation.Rows)
+                list.Items.Add(row.CompactText);
 
             var dialog = new Window
             {
-                Title = "Comments",
+                Title = presentation.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -4299,7 +4311,7 @@ internal static class FreeWRibbonCommands
 
             var close = new System.Windows.Controls.Button
             {
-                Content = "Close",
+                Content = CommentDialogPresentationPlanner.Text.CloseActionLabel,
                 IsCancel = true,
                 MinWidth = 72,
                 HorizontalAlignment = HorizontalAlignment.Right
@@ -4308,7 +4320,7 @@ internal static class FreeWRibbonCommands
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = $"{items.Count} comment thread{(items.Count == 1 ? string.Empty : "s")}",
+                Text = presentation.SummaryText,
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 8)
             });
