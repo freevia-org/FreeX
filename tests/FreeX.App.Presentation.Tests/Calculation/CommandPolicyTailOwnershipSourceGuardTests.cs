@@ -5,16 +5,19 @@ namespace FreeX.App.Presentation.Tests.Calculation;
 public sealed class CommandPolicyTailOwnershipSourceGuardTests
 {
     [Fact]
-    public void OptionsRenderersDelegateFormulaErrorAndIterativeCommandPlanning()
+    public void OptionsRenderersDelegateFormulaErrorAndIterativeWorkflows()
     {
         var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.Backstage.cs");
         var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.Options.cs");
         var paired = wpf + Environment.NewLine + avalonia;
 
-        wpf.Should().Contain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
-        avalonia.Should().Contain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
-        wpf.Should().Contain("CalculationCommandPolicy.PlanIterativeCalculationChange(");
-        avalonia.Should().Contain("CalculationCommandPolicy.PlanIterativeCalculationChange(");
+        wpf.Should().Contain("CalculationWorkflow.ChangeFormulaErrorRules(");
+        avalonia.Should().Contain("CalculationWorkflow.ChangeFormulaErrorRules(");
+        wpf.Should().Contain("CalculationWorkflow.ChangeIterativeCalculation(");
+        avalonia.Should().Contain("CalculationWorkflow.ChangeIterativeCalculation(");
+        paired.Should().NotContain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
+        paired.Should().NotContain("CalculationCommandPolicy.PlanIterativeCalculationChange(");
+        paired.Should().NotContain("ApplyCalculationRecalculation(");
         paired.Should().NotContain("new SetFormulaErrorCheckingRuleCommand(");
         paired.Should().NotContain("new SetIterativeCalculationOptionsCommand(");
     }

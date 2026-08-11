@@ -552,18 +552,15 @@ public partial class MainWindow
 
     private void CalcNowBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
-            CalculationCommandAction.CalculateNow));
+        ExecuteCalculationAction(CalculationCommandAction.CalculateNow);
     }
     private void CalcFullBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
-            CalculationCommandAction.CalculateFull));
+        ExecuteCalculationAction(CalculationCommandAction.CalculateFull);
     }
     private void CalcSheetBtn_Click(object sender, RoutedEventArgs e)
     {
-        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
-            CalculationCommandAction.CalculateActiveSheet));
+        ExecuteCalculationAction(CalculationCommandAction.CalculateActiveSheet);
     }
     private void CalcOptionsBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -600,45 +597,38 @@ public partial class MainWindow
 
     private void ApplyCalculationModeChange(WorkbookCalculationMode requestedMode)
     {
-        var plan = CalculationCommandPolicy.PlanModeChange(_workbook.CalculationMode, requestedMode);
-        if (plan.IsNoOp)
-        {
-            ApplyCalculationRefresh(plan.RefreshPolicy);
-            return;
-        }
-
-        if (!TryExecuteCommand(plan.Command!, CalculationCommandPolicy.CommandLabel))
-            return;
-
-        ApplyCalculationRecalculation(plan.RecalculationScope);
-        ApplyCalculationRefresh(plan.RefreshPolicy);
+        ApplyCalculationWorkflowOutcome(CalculationWorkflow.ChangeMode(requestedMode));
     }
 
-    private void ExecuteCalculationAction(CalculationCommandActionPlan plan)
+    private CalculationWorkflowSession CalculationWorkflow =>
+        new(
+            _workbook,
+            (command, label) =>
+            {
+                var success = TryExecuteCommand(command, label, out var outcome);
+                return new CalculationCommandExecutionResult(
+                    success,
+                    outcome.ErrorMessage,
+                    outcome.IsNoOp);
+            },
+            new CalculationRecalculationOperations(
+                RecalculateDirtyCells,
+                RecalculateWorkbook,
+                () =>
+                {
+                    _session.RecalculateActiveSheet();
+                    InvalidateNavigationCaches();
+                }));
+
+    private void ExecuteCalculationAction(CalculationCommandAction action)
     {
-        ApplyCalculationRecalculation(plan.RecalculationScope);
-        ApplyCalculationRefresh(plan.RefreshPolicy);
+        ApplyCalculationWorkflowOutcome(CalculationWorkflow.Execute(action));
     }
 
-    private void ApplyCalculationRecalculation(CalculationRecalculationScope scope)
+    private void ApplyCalculationWorkflowOutcome(CalculationWorkflowOutcome outcome)
     {
-        switch (scope)
-        {
-            case CalculationRecalculationScope.None:
-                return;
-            case CalculationRecalculationScope.DirtyWorkbook:
-                RecalculateDirtyCells();
-                return;
-            case CalculationRecalculationScope.FullWorkbook:
-                RecalculateWorkbook();
-                return;
-            case CalculationRecalculationScope.ActiveSheet:
-                _session.RecalculateActiveSheet();
-                InvalidateNavigationCaches();
-                return;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(scope), scope, null);
-        }
+        if (outcome.Success)
+            ApplyCalculationRefresh(outcome.RefreshPolicy);
     }
 
     private void ApplyCalculationRefresh(CalculationStateRefreshPolicy policy)

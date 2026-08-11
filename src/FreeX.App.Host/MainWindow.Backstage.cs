@@ -1118,29 +1118,13 @@ public partial class MainWindow
         if (workbookIsManual != wantManual)
         {
             var wantMode = wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic;
-            if (TryExecuteCommand(new SetCalculationModeCommand(wantMode), "Calculation Options") &&
-                wantMode == WorkbookCalculationMode.Automatic)
-            {
-                RecalculateWorkbook();
-            }
+            ApplyCalculationWorkflowOutcome(CalculationWorkflow.ChangeMode(wantMode));
         }
 
-        var iterativePlan = CalculationCommandPolicy.PlanIterativeCalculationChange(
-            _workbook.IterativeCalculation,
-            _workbook.MaxCalculationIterations,
-            _workbook.MaxCalculationChange,
+        CalculationWorkflow.ChangeIterativeCalculation(
             calcSettings.IterativeCalculation,
             calcSettings.MaxCalculationIterations,
             calcSettings.MaxCalculationChange);
-        if (!iterativePlan.IsNoOp)
-        {
-            if (TryExecuteCommand(
-                    iterativePlan.Command!,
-                    CalculationCommandPolicy.CommandLabel))
-            {
-                ApplyCalculationRecalculation(iterativePlan.RecalculationScope);
-            }
-        }
     }
 
     private void ApplyOptionsWorksheetViewSettings()
@@ -1164,18 +1148,7 @@ public partial class MainWindow
 
     private void ApplyFormulaErrorCheckingOptions(IReadOnlySet<string> disabledErrorCodes)
     {
-        var commands = CalculationCommandPolicy.PlanFormulaErrorRuleChanges(
-            _workbook.DisabledFormulaErrorCodes,
-            disabledErrorCodes);
-        foreach (var command in commands)
-        {
-            if (!TryExecuteCommand(
-                    command,
-                    "Error Checking Options"))
-            {
-                return;
-            }
-        }
+        CalculationWorkflow.ChangeFormulaErrorRules(disabledErrorCodes);
     }
 
     private bool OpenFileBackstageFromKeyTip()

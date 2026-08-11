@@ -63,6 +63,7 @@ public sealed record IterativeCalculationChangePlan(
 public static class CalculationCommandPolicy
 {
     public const string CommandLabel = "Calculation Options";
+    public const string FormulaErrorRulesCommandLabel = "Error Checking Options";
     public const string FailureResourceKey = "ShellLoc_CouldNotChangeCalcMode";
     public const int DefaultMaxCalculationIterations = 100;
     public const double DefaultMaxCalculationChange = 0.001;

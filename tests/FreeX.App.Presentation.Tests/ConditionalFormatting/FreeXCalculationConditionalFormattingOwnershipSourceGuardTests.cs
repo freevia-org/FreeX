@@ -12,15 +12,26 @@ public sealed class FreeXCalculationConditionalFormattingOwnershipSourceGuardTes
         var avaloniaKeyboard = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.KeyboardParity.cs");
         var paired = wpf + Environment.NewLine + avalonia;
 
-        wpf.Should().Contain("CalculationCommandPolicy.PlanModeChange(");
-        avalonia.Should().Contain("CalculationCommandPolicy.PlanModeChange(");
-        wpf.Should().Contain("CalculationCommandPolicy.PlanAction(");
-        avalonia.Should().Contain("CalculationCommandPolicy.PlanAction(");
-        paired.Should().Contain("CalculationStateRefreshPolicy.FormulaResults");
+        wpf.Should().Contain("CalculationWorkflow.ChangeMode(");
+        avalonia.Should().Contain("CalculationWorkflow.ChangeMode(");
+        wpf.Should().Contain("CalculationWorkflow.Execute(");
+        avalonia.Should().Contain("CalculationWorkflow.Execute(");
+        paired.Should().Contain("new CalculationRecalculationOperations(");
+        paired.Should().NotContain("CalculationCommandPolicy.PlanModeChange(");
+        paired.Should().NotContain("CalculationCommandPolicy.PlanAction(");
+        paired.Should().NotContain("case CalculationRecalculationScope.");
         paired.Should().NotContain("new SetCalculationModeCommand(");
-        avalonia.Should().Contain("_session.RecalculateDirtyCells();");
+        avalonia.Should().Contain("_session.RecalculateDirtyCells,");
         avaloniaKeyboard.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(
             "case AvaloniaHostShortcut.RebuildDependenciesAndCalculate:\n                CalculateFull();");
+
+        var workflow = ReadSource(
+            "src",
+            "FreeX.App.Presentation",
+            "Calculation",
+            "CalculationWorkflowSession.cs");
+        AssertPortable(workflow);
+        workflow.Should().Contain("case CalculationRecalculationScope.DirtyWorkbook:");
 
         var policy = ReadSource(
             "src",

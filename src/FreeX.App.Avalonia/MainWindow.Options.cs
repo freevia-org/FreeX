@@ -1125,16 +1125,11 @@ public sealed partial class MainWindow
                 .Where(entry => entry.Value.IsChecked != true)
                 .Select(entry => entry.Key)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var commands = CalculationCommandPolicy.PlanFormulaErrorRuleChanges(
-                workbook.DisabledFormulaErrorCodes,
+            var outcome = CalculationWorkflow.ChangeFormulaErrorRules(
                 requestedDisabledErrorCodes);
-            foreach (var command in commands)
+            if (!outcome.Success)
             {
-                var result = _session.ExecuteReviewCommand(command);
-                if (result.Success)
-                    continue;
-
-                warningText.Text = result.ErrorMessage ?? UiText.Get("Options_SaveFailed");
+                warningText.Text = outcome.ErrorMessage ?? UiText.Get("Options_SaveFailed");
                 warningText.IsVisible = true;
                 return false;
             }
@@ -1332,25 +1327,13 @@ public sealed partial class MainWindow
     /// </summary>
     private void ApplyLiveIterativeCalculationOptions(bool enabled, int maxIterations, double maxChange)
     {
-        var workbook = _session.Workbook;
-        var plan = CalculationCommandPolicy.PlanIterativeCalculationChange(
-            workbook.IterativeCalculation,
-            workbook.MaxCalculationIterations,
-            workbook.MaxCalculationChange,
+        var outcome = CalculationWorkflow.ChangeIterativeCalculation(
             enabled,
             maxIterations,
             maxChange);
-        if (plan.IsNoOp)
-            return;
-
-        var result = _session.ExecuteReviewCommand(plan.Command!);
-        if (!result.Success)
-        {
-            RefreshShell(result.ErrorMessage ?? UiText.Get(plan.FailureResourceKey));
-            return;
-        }
-
-        ApplyCalculationRecalculation(plan.RecalculationScope);
+        if (!outcome.Success)
+            RefreshShell(outcome.ErrorMessage ?? UiText.Get(
+                outcome.FailureResourceKey ?? CalculationCommandPolicy.FailureResourceKey));
     }
 
     private static void ApplyOptionsButtonChrome(Button button, double minWidth, bool isDefault = false)

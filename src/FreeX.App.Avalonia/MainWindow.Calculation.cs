@@ -69,26 +69,7 @@ public sealed partial class MainWindow
 
     private void SetCalculationMode(WorkbookCalculationMode mode)
     {
-        var plan = CalculationCommandPolicy.PlanModeChange(
-            _session.Workbook.CalculationMode,
-            mode);
-        if (plan.IsNoOp)
-        {
-            ApplyCalculationRefresh(plan.RefreshPolicy, ResolveCalculationStatus(plan.Status));
-            return;
-        }
-
-        var result = _session.ExecuteReviewCommand(plan.Command!);
-        if (!result.Success)
-        {
-            ApplyCalculationRefresh(
-                CalculationStateRefreshPolicy.CommandSurface,
-                result.ErrorMessage ?? UiText.Get(plan.FailureResourceKey));
-            return;
-        }
-
-        ApplyCalculationRecalculation(plan.RecalculationScope);
-        ApplyCalculationRefresh(plan.RefreshPolicy, ResolveCalculationStatus(plan.Status));
+        ApplyCalculationWorkflowOutcome(CalculationWorkflow.ChangeMode(mode));
     }
 
     /// <summary>
@@ -100,14 +81,12 @@ public sealed partial class MainWindow
     /// </remarks>
     private void CalculateNow()
     {
-        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
-            CalculationCommandAction.CalculateNow));
+        ExecuteCalculationAction(CalculationCommandAction.CalculateNow);
     }
 
     private void CalculateFull()
     {
-        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
-            CalculationCommandAction.CalculateFull));
+        ExecuteCalculationAction(CalculationCommandAction.CalculateFull);
     }
 
     /// <summary>
@@ -116,34 +95,44 @@ public sealed partial class MainWindow
     /// </summary>
     private void CalculateActiveSheet()
     {
-        ExecuteCalculationAction(CalculationCommandPolicy.PlanAction(
-            CalculationCommandAction.CalculateActiveSheet));
+        ExecuteCalculationAction(CalculationCommandAction.CalculateActiveSheet);
     }
 
-    private void ExecuteCalculationAction(CalculationCommandActionPlan plan)
+    private CalculationWorkflowSession CalculationWorkflow =>
+        new(
+            _session.Workbook,
+            (command, _) =>
+            {
+                var result = _session.ExecuteReviewCommand(command);
+                return new CalculationCommandExecutionResult(
+                    result.Success,
+                    result.ErrorMessage,
+                    result.IsNoOp);
+            },
+            new CalculationRecalculationOperations(
+                _session.RecalculateDirtyCells,
+                _session.RecalculateWorkbook,
+                _session.RecalculateActiveSheet));
+
+    private void ExecuteCalculationAction(CalculationCommandAction action)
     {
-        ApplyCalculationRecalculation(plan.RecalculationScope);
-        ApplyCalculationRefresh(plan.RefreshPolicy, ResolveCalculationStatus(plan.Status));
+        ApplyCalculationWorkflowOutcome(CalculationWorkflow.Execute(action));
     }
 
-    private void ApplyCalculationRecalculation(CalculationRecalculationScope scope)
+    private void ApplyCalculationWorkflowOutcome(CalculationWorkflowOutcome outcome)
     {
-        switch (scope)
+        if (!outcome.Success)
         {
-            case CalculationRecalculationScope.None:
-                return;
-            case CalculationRecalculationScope.DirtyWorkbook:
-                _session.RecalculateDirtyCells();
-                return;
-            case CalculationRecalculationScope.FullWorkbook:
-                _session.RecalculateWorkbook();
-                return;
-            case CalculationRecalculationScope.ActiveSheet:
-                _session.RecalculateActiveSheet();
-                return;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(scope), scope, null);
+            ApplyCalculationRefresh(
+                CalculationStateRefreshPolicy.CommandSurface,
+                outcome.ErrorMessage ?? UiText.Get(
+                    outcome.FailureResourceKey ?? CalculationCommandPolicy.FailureResourceKey));
+            return;
         }
+
+        ApplyCalculationRefresh(
+            outcome.RefreshPolicy,
+            ResolveCalculationStatus(outcome.Status));
     }
 
     private void ApplyCalculationRefresh(CalculationStateRefreshPolicy policy, string status)
