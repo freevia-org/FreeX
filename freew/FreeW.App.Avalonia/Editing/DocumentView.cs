@@ -23228,16 +23228,12 @@ public sealed class DocumentView : Control
         ArgumentNullException.ThrowIfNull(paragraphs);
 
         var originalCaret = _caret;
-        _bus.BeginUndoGroup();
-        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
-        var appliedIndex = index;
-        foreach (var paragraph in paragraphs)
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup(label);
+        var result = GeneratedReferenceMutationCoordinator.Insert(
+            _doc, _bus, insertAt, label, paragraphs);
 
-        if (paragraphs.Count > 0 && appliedIndex <= originalCaret.Block)
+        if (result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
         {
-            _caret = originalCaret with { Block = originalCaret.Block + paragraphs.Count };
+            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
             _selectionAnchor = _caret;
         }
     }
@@ -23325,22 +23321,8 @@ public sealed class DocumentView : Control
     }
 
     private void RefreshGeneratedReferenceBlocks(Func<Block, bool> isGeneratedBlock, Func<IReadOnlyList<Paragraph>> build, string label)
-    {
-        var indices = new List<int>();
-        for (var i = 0; i < _doc.Blocks.Count; i++)
-            if (isGeneratedBlock(_doc.Blocks[i]))
-                indices.Add(i);
-
-        var insertAt = indices.Count > 0 ? indices[0] : 0;
-
-        _bus.BeginUndoGroup();
-        for (var i = indices.Count - 1; i >= 0; i--)
-            _bus.Execute(new DeleteParagraphCommand(indices[i]));
-        var index = Math.Clamp(insertAt, 0, _doc.Blocks.Count);
-        foreach (var paragraph in build())
-            _bus.Execute(new InsertParagraphCommand(index++, paragraph));
-        _bus.CommitUndoGroup(label);
-    }
+        => GeneratedReferenceMutationCoordinator.Refresh(
+            _doc, _bus, isGeneratedBlock, build, label);
 
     // ── AV-INSERT2: Insert depth 2 (cover page / drop cap / document-property field / equation / quick part) ──
 

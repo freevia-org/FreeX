@@ -1661,7 +1661,7 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Insert a Table of Contents generated from the document's heading outline. The TOC paragraphs
     /// (built by <see cref="TableOfContents.Build"/>) are inserted at the caret's block (else at the
-    /// document start), routed one-by-one through the undo/redo bus so the insert is reversible. The
+    /// document start), applied atomically through the shared mutation coordinator so one undo removes it. The
     /// paragraphs carry dedicated TOC styles (registered via <see cref="TableOfContents.EnsureStyles"/>)
     /// which both give them distinct formatting and mark the region for <see cref="RefreshTableOfContents"/>.
     /// </summary>
@@ -1680,7 +1680,7 @@ public sealed class DocumentView : RichTextBox
     /// Rebuild the Table of Contents: remove the previously inserted TOC region (paragraphs carrying a
     /// TOC style, see <see cref="TableOfContents.IsTocParagraph"/>) and re-insert a freshly generated
     /// TOC at the same position. With no existing TOC this behaves like <see cref="InsertTableOfContents"/>,
-    /// inserting at the document start. Every removal/insert is reversible through the undo/redo bus.
+    /// inserting at the document start. Replacement and pagination stabilization are one shared undoable edit.
     /// </summary>
     public void RefreshTableOfContents()
     {
@@ -1707,7 +1707,7 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Prepend a simple cover page (a Title paragraph, an optional author Subtitle, and a spacer) at the
-    /// start of the document, routing each block insert through the undo/redo bus so it is reversible.
+    /// start of the document as one shared undoable block replacement.
     /// The title/author come from <see cref="TextDocument.Properties"/> (see
     /// <see cref="DocumentOps.BuildCoverPage"/>). Re-renders the surface.
     /// </summary>
@@ -1716,7 +1716,7 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Prepend a cover page using the given <paramref name="preset"/> at the start of the document,
-    /// routing each block insert through the undo/redo bus so it is reversible. The title/author come
+    /// applying the generated blocks as one shared undoable replacement. The title/author come
     /// from <see cref="TextDocument.Properties"/>. Re-renders the surface.
     /// </summary>
     public void InsertCoverPage(CoverPagePreset preset)
@@ -16951,8 +16951,8 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Insert an index generated from the document's marked <see cref="TextDocument.IndexEntries"/> at the
-    /// caret's block (else at the document end), routed one-by-one through the undo/redo bus so the insert
-    /// is reversible — mirroring <see cref="InsertBibliography"/>. The paragraphs carry dedicated index
+    /// caret's block (else at the document end), applied atomically through the shared generated-reference
+    /// coordinator — mirroring <see cref="InsertBibliography"/>. The paragraphs carry dedicated index
     /// styles (registered via <see cref="DocumentIndex.EnsureStyles"/>) which both give them distinct
     /// formatting and mark the region.
     /// </summary>
@@ -16964,17 +16964,12 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         DocumentIndex.EnsureStyles(_model, identifier);
 
-        // Insert at the caret's block (an index reads as back-matter); fall back to the document end.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
         var entries = DocumentIndex.Build(
             _model,
             identifier: identifier,
             pageReferenceOf: BuildGeneratedIndexPageReferenceResolver());
-        foreach (var paragraph in entries)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+        GeneratedReferenceMutationCoordinator.Insert(
+            _model, _commands, CaretBlockIndex(), "Insert Index", entries);
     }
 
     /// <summary>
@@ -16989,27 +16984,15 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         DocumentIndex.EnsureStyles(_model, identifier);
 
-        var firstIndex = -1;
-        var indexParagraphs = new List<int>();
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (!DocumentIndex.IsIndexParagraph(_model.Blocks[i], identifier))
-                continue;
-            firstIndex = firstIndex < 0 ? i : firstIndex;
-            indexParagraphs.Add(i);
-        }
-
-        var insertAt = firstIndex >= 0 ? firstIndex : _model.Blocks.Count;
-        for (var i = indexParagraphs.Count - 1; i >= 0; i--)
-            _commands.Execute(new DeleteParagraphCommand(indexParagraphs[i]));
-
-        var entries = DocumentIndex.Build(
+        GeneratedReferenceMutationCoordinator.Refresh(
             _model,
-            identifier: identifier,
-            pageReferenceOf: BuildGeneratedIndexPageReferenceResolver());
-        var index = Math.Clamp(insertAt, 0, _model.Blocks.Count);
-        foreach (var paragraph in entries)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
+            _commands,
+            block => DocumentIndex.IsIndexParagraph(block, identifier),
+            () => DocumentIndex.Build(
+                _model,
+                identifier: identifier,
+                pageReferenceOf: BuildGeneratedIndexPageReferenceResolver()),
+            "Update Index");
     }
 
     /// <summary>
@@ -17326,8 +17309,8 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Insert a Table of Figures (or Table of Tables) generated from the document's <see cref="CaptionLabel"/>
-    /// captions at the caret's block (else at the document end), routed one-by-one through the undo/redo bus
-    /// so the insert is reversible — mirroring <see cref="InsertTableOfContents"/>. The paragraphs carry
+    /// captions at the caret's block (else at the document end), applied atomically through the shared
+    /// generated-reference coordinator — mirroring <see cref="InsertTableOfContents"/>. The paragraphs carry
     /// dedicated styles (registered via <see cref="TableOfFigures.EnsureStyles"/>) which both give them
     /// distinct formatting and mark the region for <see cref="RefreshTableOfFigures"/>.
     /// </summary>
@@ -17343,20 +17326,16 @@ public sealed class DocumentView : RichTextBox
         labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_model);
 
-        // Insert at the caret's block (a table of figures reads as front-/back-matter); fall back to the end.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        InsertTableOfFiguresAt(index, labelText);
+        var entries = BuildTableOfFigures(labelText);
+        GeneratedReferenceMutationCoordinator.Insert(
+            _model, _commands, CaretBlockIndex(), "Insert Table of Figures", entries);
     }
 
     /// <summary>
     /// Rebuild the Table of Figures: remove the previously inserted region (paragraphs carrying a
     /// table-of-figures style, see <see cref="TableOfFigures.IsTableOfFiguresParagraph"/>) and re-insert a
     /// freshly generated one at the same position. With no existing region this behaves like
-    /// <see cref="InsertTableOfFigures"/>, inserting at the document end. Every removal/insert is reversible
-    /// through the undo/redo bus.
+    /// <see cref="InsertTableOfFigures"/>, inserting at the document end. The replacement is one undoable edit.
     /// </summary>
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
     {
@@ -17369,45 +17348,19 @@ public sealed class DocumentView : RichTextBox
         labelText = Captions.NormalizeLabelText(labelText);
         TableOfFigures.EnsureStyles(_model);
 
-        // Find the first existing table-of-figures paragraph (the marker region anchor).
-        var first = -1;
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfFigures.IsTableOfFiguresParagraph(_model.Blocks[i]))
-            {
-                first = i;
-                break;
-            }
-        }
-
-        var insertAt = first >= 0 ? first : _model.Blocks.Count;
-
-        // Remove every existing table-of-figures paragraph (reversible). Collect first to avoid mutating
-        // while scanning, then delete from the end so earlier indices stay valid.
-        var indices = new List<int>();
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfFigures.IsTableOfFiguresParagraph(_model.Blocks[i]))
-                indices.Add(i);
-        }
-        for (var i = indices.Count - 1; i >= 0; i--)
-            _commands.Execute(new DeleteParagraphCommand(indices[i]));
-
-        InsertTableOfFiguresAt(insertAt, labelText);
+        GeneratedReferenceMutationCoordinator.Refresh(
+            _model,
+            _commands,
+            TableOfFigures.IsTableOfFiguresParagraph,
+            () => BuildTableOfFigures(labelText),
+            "Update Table of Figures");
     }
 
-    // Insert the freshly built table-of-figures paragraphs starting at block index `at`, one reversible
-    // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
-    private void InsertTableOfFiguresAt(int at, string labelText)
-    {
-        var entries = TableOfFigures.BuildWithTableAddresses(
+    private IReadOnlyList<ModelParagraph> BuildTableOfFigures(string labelText) =>
+        TableOfFigures.BuildWithTableAddresses(
             _model,
             labelText,
             BuildTableOfFiguresPageTextResolver());
-        var index = Math.Clamp(at, 0, _model.Blocks.Count);
-        foreach (var paragraph in entries)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
-    }
 
     private Func<int, string?>? BuildGeneratedPageTextResolver()
     {
