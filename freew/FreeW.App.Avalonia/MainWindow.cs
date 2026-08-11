@@ -3357,7 +3357,7 @@ public sealed partial class MainWindow : Window
             var rtf = data is null
                 ? null
                 : await data.TryGetValueAsync(DataFormat.CreateStringPlatformFormat("Rich Text Format"));
-            return DocumentView.TryReadRtfClipboardDocument(rtf, out var document) ? document : null;
+            return RichClipboardDocumentPlanner.TryReadRtf(rtf, out var document) ? document : null;
         }
         catch (InvalidOperationException)
         {

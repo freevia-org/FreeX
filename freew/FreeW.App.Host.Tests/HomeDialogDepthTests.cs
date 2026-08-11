@@ -2,6 +2,7 @@ using System.Linq;
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -355,7 +356,7 @@ public sealed class HomeDialogDepthTests
     {
         const string rtf = @"{\rtf1\ansi\b Bold\b0  plain\par\i Second\i0}";
 
-        DocumentView.TryReadRtfClipboardDocument(rtf, out var source).Should().BeTrue();
+        RichClipboardDocumentPlanner.TryReadRtf(rtf, out var source).Should().BeTrue();
 
         var paragraphs = source!.Blocks.OfType<Paragraph>().ToList();
         paragraphs.Should().HaveCount(2);

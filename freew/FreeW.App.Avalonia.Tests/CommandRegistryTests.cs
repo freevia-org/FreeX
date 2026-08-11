@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -815,7 +816,7 @@ public sealed class CommandRegistryTests
     {
         const string rtf = @"{\rtf1\ansi\b Bold\b0  plain\par\i Second\i0}";
 
-        DocumentView.TryReadRtfClipboardDocument(rtf, out var source).Should().BeTrue();
+        RichClipboardDocumentPlanner.TryReadRtf(rtf, out var source).Should().BeTrue();
 
         var paragraphs = source!.Blocks.OfType<Paragraph>().ToList();
         paragraphs.Should().HaveCount(2);

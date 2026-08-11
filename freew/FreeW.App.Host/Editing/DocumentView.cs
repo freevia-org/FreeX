@@ -1,5 +1,4 @@
 ﻿using System.IO;
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -1590,7 +1589,7 @@ public sealed class DocumentView : RichTextBox
             return;
         }
 
-        if (TryReadRtfClipboardDocument(rtf, out var source)
+        if (RichClipboardDocumentPlanner.TryReadRtf(rtf, out var source)
             && source is not null
             && PasteKeepSourceFormatting(source))
         {
@@ -1598,34 +1597,6 @@ public sealed class DocumentView : RichTextBox
         }
 
         PasteFromClipboard();
-    }
-
-    // Test seam for the clipboard payload conversion. RTF clipboard text is ASCII control syntax plus
-    // source-encoded text; Latin-1 preserves each supplied code unit for RtfReader's code-page handling.
-    internal static bool TryReadRtfClipboardDocument(string? rtf, out TextDocument? document)
-    {
-        document = null;
-        if (string.IsNullOrWhiteSpace(rtf))
-            return false;
-
-        try
-        {
-            using var stream = new MemoryStream(Encoding.Latin1.GetBytes(rtf));
-            var parsed = RtfReader.Read(stream);
-            if (parsed.Blocks.Count == 0)
-                return false;
-
-            document = parsed;
-            return true;
-        }
-        catch (InvalidDataException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
     }
 
     /// <summary>
