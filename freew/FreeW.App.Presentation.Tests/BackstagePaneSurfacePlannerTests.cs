@@ -60,6 +60,7 @@ public sealed class BackstagePaneSurfacePlannerTests
         metrics.SearchMargin.Should().Be(new BackstageThickness(0, 0, 0, 12));
         metrics.SearchPadding.Should().Be(new BackstageThickness(8, 3, 8, 3));
         metrics.TabsWidth.Should().Be(640);
+        metrics.TabsMinHeight.Should().Be(63);
         metrics.TabsMargin.Should().Be(new BackstageThickness(0, 0, 0, 14));
         metrics.ActionRowMargin.Should().Be(new BackstageThickness(0, 0, 0, 10));
         metrics.DescriptionMargin.Should().Be(new BackstageThickness(0, 2, 0, 0));

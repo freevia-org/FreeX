@@ -252,7 +252,8 @@ internal sealed class BackstageView : UserControl
         var tabs = new TabControl
         {
             Margin = ToThickness(metrics.TabsMargin),
-            Width = metrics.TabsWidth
+            Width = metrics.TabsWidth,
+            MinHeight = metrics.TabsMinHeight
         };
         tabs.Items.Add(new TabItem { Header = surface.Tabs.DocumentsTabLabel, Content = documentsPanel });
         tabs.Items.Add(new TabItem { Header = surface.Tabs.FoldersTabLabel, Content = foldersPanel });

@@ -284,6 +284,7 @@ public class BackstageViewTests
                 metrics.SearchPadding.Bottom));
             search.Margin.Left.Should().Be(0);
             search.Width.Should().Be(metrics.SearchWidth);
+            tabs.MinHeight.Should().Be(metrics.TabsMinHeight);
             tabs.Items.Cast<TabItem>().Should().OnlyContain(item => item.MinHeight == 22);
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
@@ -307,6 +308,7 @@ public class BackstageViewTests
         metrics.SearchMargin.Should().Be(new BackstageThickness(0, 0, 0, 12));
         metrics.SearchPadding.Should().Be(new BackstageThickness(8, 3, 8, 3));
         metrics.TabsWidth.Should().Be(640);
+        metrics.TabsMinHeight.Should().Be(63);
         metrics.TabsMargin.Should().Be(new BackstageThickness(0, 0, 0, 14));
         metrics.ActionFontSize.Should().Be(13);
         metrics.DescriptionFontSize.Should().Be(11);
@@ -332,7 +334,7 @@ public class BackstageViewTests
                 .Single(presenter => presenter.Name == "PART_SelectedContentHost");
             selectedContentHost.Margin.Should().Be(new Thickness(0));
             selectedContentHost.HorizontalAlignment.Should().Be(HorizontalAlignment.Stretch);
-            selectedContentHost.Padding.Should().Be(new Thickness(4, 0, 0, 0));
+            selectedContentHost.Padding.Should().Be(new Thickness(4, 3, 0, 0));
             view.Close();
         }, CancellationToken.None);
     }
