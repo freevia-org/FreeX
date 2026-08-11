@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -67,7 +68,7 @@ public sealed class PasteStyleDialogParityTests
                 ShellStrings.Current.Cancel);
             buttons[0].IsDefault.Should().BeTrue();
             buttons[1].IsCancel.Should().BeTrue();
-            ((SolidColorBrush)buttons[1].BorderBrush!).Color.Should().Be(Color.FromRgb(112, 112, 112));
+            RestingButtonBrush(buttons[1], Button.BorderBrushProperty).Color.Should().Be(Color.FromRgb(112, 112, 112));
             dialog.Close();
         }, CancellationToken.None);
     }
@@ -98,7 +99,7 @@ public sealed class PasteStyleDialogParityTests
             Assert.All(combos, combo => ((SolidColorBrush)combo.BorderBrush!).Color.Should().Be(Color.FromRgb(172, 172, 172)));
             textBox.CornerRadius.Should().Be(new CornerRadius(0));
             combos.Should().OnlyContain(combo => combo.CornerRadius == new CornerRadius(0));
-            Buttons(dialog).Should().OnlyContain(button => button.CornerRadius == new CornerRadius(0));
+            Buttons(dialog).Should().OnlyContain(button => button.CornerRadius == new CornerRadius(3));
         }, CancellationToken.None);
     }
 
@@ -162,6 +163,16 @@ public sealed class PasteStyleDialogParityTests
 
     private static Button[] Buttons(Window dialog) =>
         dialog.GetLogicalDescendants().OfType<Button>().Where(button => button is not global::Avalonia.Controls.Primitives.ToggleButton).ToArray();
+
+    private static ISolidColorBrush RestingButtonBrush(Button button, AvaloniaProperty property) =>
+        button.Styles
+            .OfType<Style>()
+            .SelectMany(style => style.Setters)
+            .OfType<Setter>()
+            .Where(setter => setter.Property == property)
+            .Select(setter => setter.Value)
+            .OfType<ISolidColorBrush>()
+            .First();
 
     // AvaloniaDialogButtonContent wraps mnemonic-bearing text ("_OK") in an AccessText so Avalonia's
     // Fluent button template actually registers and renders the access key (WPF does this automatically

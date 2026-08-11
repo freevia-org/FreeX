@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 using Free.Shared.Pdf;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -134,7 +135,7 @@ public sealed class DocumentView : Control
     // Border: bool = table-level outer border; CellBorderPlan: per-edge override planned from the model.
     private readonly List<(Rect Rect, IBrush? Fill, bool Border, TableCellBorderVisualPlan? CellBorderPlan)> _rects = new();
     private readonly List<(Rect Rect, string? ShadingHex, ParagraphBorder? Border)> _paragraphDecorations = new();
-    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, InlineImage Model, int ReflectionPreset, int BlockIndex)> _images = new();
+    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, InlineImage Model, int ReflectionPreset, int BlockIndex, int RunIndex)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
     // AV-FLSEL: BlockIndex/RunIndex added so hit-test can locate the model object.
@@ -1095,16 +1096,229 @@ public sealed class DocumentView : Control
 
     internal string AutomationSelectionStatus() => AutomationSnapshot().Status;
 
+    internal DocumentAccessibilityTree AutomationSemanticTree() =>
+        DocumentAccessibilityNodePlanner.Build(_doc);
+
+    internal Rect AutomationNodeBounds(DocumentAccessibilityNode node)
+    {
+        if (_laidOutWidth < 0)
+            Relayout(FallbackWidth);
+        var local = AutomationNodeBoundsLocal(node);
+        var topLevel = TopLevel.GetTopLevel(this);
+        if (topLevel is null || local.Width <= 0 || local.Height <= 0)
+            return local;
+        var topLeft = this.TranslatePoint(local.TopLeft, topLevel);
+        var bottomRight = this.TranslatePoint(local.BottomRight, topLevel);
+        return topLeft is not null && bottomRight is not null
+            ? new Rect(topLeft.Value, bottomRight.Value)
+            : local;
+    }
+
+    internal bool AutomationInvokeNode(DocumentAccessibilityNode node)
+    {
+        if (node.Kind != DocumentAccessibilityNodeKind.Hyperlink
+            || string.IsNullOrWhiteSpace(node.HyperlinkTarget))
+            return false;
+        if (node.IsInternalHyperlink)
+            return GoToBookmark(node.HyperlinkTarget);
+        HyperlinkActivated?.Invoke(node.HyperlinkTarget);
+        return true;
+    }
+
+    internal void AutomationFocusNode(DocumentAccessibilityNode node)
+    {
+        if (node.RowIndex >= 0 && node.ColumnIndex >= 0)
+        {
+            Focus();
+            PlaceCaretInCell(
+                node.BlockIndex,
+                node.RowIndex,
+                node.ColumnIndex,
+                Math.Max(0, node.ParagraphIndex),
+                Math.Max(0, node.TextStart));
+        }
+        else if (node.BlockIndex >= 0 && node.BlockIndex < _doc.Blocks.Count)
+        {
+            _cellCaret = null;
+            _cellAnchor = null;
+            _caret = new DocPosition(node.BlockIndex, Math.Max(0, node.TextStart));
+            _selectionAnchor = _caret;
+            Focus();
+            InvalidateVisual();
+            CaretMoved?.Invoke();
+        }
+        ScrollToCaretRequested?.Invoke();
+    }
+
+    internal bool AutomationNodeHasKeyboardFocus(DocumentAccessibilityNode node)
+    {
+        if (!IsKeyboardFocusWithin)
+            return false;
+        if (node.RowIndex >= 0 && node.ColumnIndex >= 0)
+        {
+            return _cellCaret is { } caret
+                && caret.TableBlock == node.BlockIndex
+                && caret.Row == node.RowIndex
+                && caret.Col == node.ColumnIndex
+                && (node.ParagraphIndex < 0 || caret.ParaIdx == node.ParagraphIndex);
+        }
+        return _cellCaret is null && _caret.Block == node.BlockIndex;
+    }
+
+    private Rect AutomationNodeBoundsLocal(DocumentAccessibilityNode node)
+    {
+        var rectangles = new List<Rect>();
+        switch (node.Kind)
+        {
+            case DocumentAccessibilityNodeKind.Table:
+                rectangles.AddRange(_cellHits
+                    .Where(hit => hit.Block == node.BlockIndex)
+                    .Select(hit => hit.Rect));
+                break;
+            case DocumentAccessibilityNodeKind.TableRow:
+                rectangles.AddRange(_cellHits
+                    .Where(hit => hit.Block == node.BlockIndex && hit.Row == node.RowIndex)
+                    .Select(hit => hit.Rect));
+                break;
+            case DocumentAccessibilityNodeKind.TableCell:
+                rectangles.AddRange(_cellHits
+                    .Where(hit => hit.Block == node.BlockIndex && hit.Row == node.RowIndex && hit.Col == node.ColumnIndex)
+                    .Select(hit => hit.Rect));
+                break;
+            case DocumentAccessibilityNodeKind.Image:
+                var imageModel = AutomationNodeImage(node);
+                rectangles.AddRange(_images
+                    .Where(image => image.BlockIndex == node.BlockIndex
+                        && image.RunIndex == node.RunIndex
+                        && (imageModel is null || ReferenceEquals(image.Model, imageModel)))
+                    .Select(image => image.Rect));
+                rectangles.AddRange(_floatingImages
+                    .Where(image => image.BlockIndex == node.BlockIndex
+                        && image.RunIndex == node.RunIndex
+                        && (imageModel is null || ReferenceEquals(image.Model, imageModel)))
+                    .Select(image => image.Rect));
+                break;
+            case DocumentAccessibilityNodeKind.Paragraph:
+            case DocumentAccessibilityNodeKind.Heading:
+            case DocumentAccessibilityNodeKind.Hyperlink:
+                rectangles.AddRange(_placed
+                    .Where(placed => AutomationPlacedCharBelongsToNode(placed, node))
+                    .Select(placed => new Rect(placed.X, placed.Y, Math.Max(1, placed.W), Math.Max(1, placed.LineHeight))));
+                break;
+        }
+
+        foreach (var child in node.SemanticChildren)
+        {
+            var childBounds = AutomationNodeBoundsLocal(child);
+            if (childBounds.Width > 0 && childBounds.Height > 0)
+                rectangles.Add(childBounds);
+        }
+        return UnionRectangles(rectangles);
+    }
+
+    private bool AutomationPlacedCharBelongsToNode(PlacedChar placed, DocumentAccessibilityNode node)
+    {
+        if (placed.Block != node.BlockIndex || placed.Sentinel)
+            return false;
+        if (node.RowIndex >= 0)
+        {
+            if (!placed.IsCell
+                || placed.CellRow != node.RowIndex
+                || placed.CellCol != node.ColumnIndex
+                || (node.ParagraphIndex >= 0 && placed.CellParaIdx != node.ParagraphIndex))
+                return false;
+            if (node.Kind != DocumentAccessibilityNodeKind.Hyperlink)
+                return true;
+            var range = AutomationHyperlinkLayoutRange(node);
+            return placed.CellParaOffset >= range.Start && placed.CellParaOffset < range.Start + range.Length;
+        }
+        if (placed.IsCell)
+            return false;
+        if (node.Kind != DocumentAccessibilityNodeKind.Hyperlink)
+            return true;
+        var bodyRange = AutomationHyperlinkLayoutRange(node);
+        return placed.Offset >= bodyRange.Start && placed.Offset < bodyRange.Start + bodyRange.Length;
+    }
+
+    private InlineImage? AutomationNodeImage(DocumentAccessibilityNode node) =>
+        AutomationNodeParagraph(node) is { } paragraph
+        && node.RunIndex >= 0
+        && node.RunIndex < paragraph.Runs.Count
+            ? paragraph.Runs[node.RunIndex].Image
+            : null;
+
+    private (int Start, int Length) AutomationHyperlinkLayoutRange(DocumentAccessibilityNode node)
+    {
+        if (AutomationNodeParagraph(node) is not { } paragraph)
+            return (Math.Max(0, node.TextStart), Math.Max(0, node.TextLength));
+        var start = 0;
+        for (var index = 0; index < Math.Min(node.RunIndex, paragraph.Runs.Count); index++)
+            start += AutomationRunLayoutLength(paragraph.Runs[index]);
+        var length = 0;
+        for (var index = Math.Max(0, node.RunIndex); index < paragraph.Runs.Count; index++)
+        {
+            var run = paragraph.Runs[index];
+            var hasTarget = node.IsInternalHyperlink
+                ? run.HyperlinkUrl is null && string.Equals(run.HyperlinkAnchor, node.HyperlinkTarget, StringComparison.Ordinal)
+                : run.HyperlinkAnchor is null && string.Equals(run.HyperlinkUrl, node.HyperlinkTarget, StringComparison.Ordinal);
+            var expectedTooltip = string.Equals(node.HelpText, node.HyperlinkTarget, StringComparison.Ordinal)
+                ? null
+                : node.HelpText;
+            if (!hasTarget || !string.Equals(run.HyperlinkTooltip, expectedTooltip, StringComparison.Ordinal))
+                break;
+            length += AutomationRunLayoutLength(run);
+        }
+        return (start, length);
+    }
+
+    private Paragraph? AutomationNodeParagraph(DocumentAccessibilityNode node)
+    {
+        if (node.BlockIndex < 0 || node.BlockIndex >= _doc.Blocks.Count)
+            return null;
+        if (node.RowIndex < 0)
+            return _doc.Blocks[node.BlockIndex] as Paragraph;
+        var cell = GetCellModel(node.BlockIndex, node.RowIndex, node.ColumnIndex);
+        return cell is not null && node.ParagraphIndex >= 0 && node.ParagraphIndex < cell.Paragraphs.Count
+            ? cell.Paragraphs[node.ParagraphIndex]
+            : null;
+    }
+
+    private static int AutomationRunLayoutLength(Run run)
+    {
+        if (IsFloatingDrawingRun(run))
+            return 0;
+        if (run.Image is not null
+            || run.Shape is not null
+            || run.Chart is not null
+            || run.WordArt is not null
+            || run.SmartArt is not null)
+            return 1;
+        return run.Text.Length;
+    }
+
+    private static Rect UnionRectangles(IReadOnlyList<Rect> rectangles)
+    {
+        if (rectangles.Count == 0)
+            return default;
+        var left = rectangles.Min(rect => rect.Left);
+        var top = rectangles.Min(rect => rect.Top);
+        var right = rectangles.Max(rect => rect.Right);
+        var bottom = rectangles.Max(rect => rect.Bottom);
+        return new Rect(left, top, Math.Max(0, right - left), Math.Max(0, bottom - top));
+    }
+
     private void RaiseAutomationValueChanged()
     {
         if (_automationPeer is null)
             return;
         var newValue = PlainText;
-        if (string.Equals(_lastAutomationValue, newValue, StringComparison.Ordinal))
-            return;
-        var oldValue = _lastAutomationValue;
-        _lastAutomationValue = newValue;
-        _automationPeer.NotifyValueChanged(oldValue, newValue);
+        if (!string.Equals(_lastAutomationValue, newValue, StringComparison.Ordinal))
+        {
+            var oldValue = _lastAutomationValue;
+            _lastAutomationValue = newValue;
+            _automationPeer.NotifyValueChanged(oldValue, newValue);
+        }
+        _automationPeer.NotifySemanticDocumentChanged();
         RaiseAutomationSelectionChanged();
     }
 
@@ -7291,7 +7505,7 @@ public sealed class DocumentView : Control
         for (var i = 0; i < _images.Count; i++)
         {
             var item = _images[i];
-            _images[i] = (MoveRect(item.Rect), item.Image, item.Model, item.ReflectionPreset, item.BlockIndex);
+            _images[i] = (MoveRect(item.Rect), item.Image, item.Model, item.ReflectionPreset, item.BlockIndex, item.RunIndex);
         }
 
         for (var i = 0; i < _floatingImages.Count; i++)
@@ -7494,7 +7708,7 @@ public sealed class DocumentView : Control
         {
             var item = _images[i];
             _images[i] = (ShiftRect(item.Rect, (x, y) => offsetForOwnedObject(item.BlockIndex, x, y)), item.Image,
-                item.Model, item.ReflectionPreset, item.BlockIndex);
+                item.Model, item.ReflectionPreset, item.BlockIndex, item.RunIndex);
         }
 
         for (var i = 0; i < _floatingImages.Count; i++)
@@ -10749,8 +10963,9 @@ public sealed class DocumentView : Control
         var anchorContentY = PeekFirstLineContentY(firstImgLineH);
         CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
 
-        foreach (var run in paragraph.Runs)
+        for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
         {
+            var run = paragraph.Runs[runIndex];
             if (run.Image is not { IsFloating: false } image)
                 continue; // Skip floating images — they are handled by CollectFloatingObjects.
 
@@ -10768,7 +10983,7 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG2: shift X to the column band that this image's content-Y falls in.
             var x = ColumnLeftFor(imgContentY) + AlignmentOffset(alignment, textWidth, width);
             _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeRenderedImage(image), image,
-                image.ReflectionPreset, blockIndex));
+                image.ReflectionPreset, blockIndex, runIndex));
             _layoutContentY = imgContentY + height + ReflectionExtraHeight(image, height) + gap;
         }
     }
@@ -10867,7 +11082,7 @@ public sealed class DocumentView : Control
                 var pageSpaceY = ContentYToPageSpaceY(contentY);
                 var x = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 _images.Add((new Rect(x, pageSpaceY, width, height), DecodeRenderedImage(image), image,
-                    image.ReflectionPreset, blockIndex));
+                    image.ReflectionPreset, blockIndex, runIndex));
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
                 _layoutContentY = contentY + height + ReflectionExtraHeight(image, height) + gap;
@@ -12592,7 +12807,7 @@ public sealed class DocumentView : Control
             DrawFloatingObjectSnapshot(context, snapshot);
 
         // Inline images (non-floating).
-        foreach (var (rect, bitmap, model, reflectionPreset, _) in _images)
+        foreach (var (rect, bitmap, model, reflectionPreset, _, _) in _images)
             DrawFloatingImage(context, rect, bitmap, model, reflectionPreset);
 
         // FO4: inline drawing objects rendered in the text flow using the same FO3 helpers.

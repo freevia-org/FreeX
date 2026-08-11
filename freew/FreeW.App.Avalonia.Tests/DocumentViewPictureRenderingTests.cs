@@ -87,7 +87,7 @@ public sealed class DocumentViewPictureRenderingTests
         var source = File.ReadAllText(FindRepositoryFile(
             "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
-        source.Should().Contain("foreach (var (rect, bitmap, model, reflectionPreset, _) in _images)");
+        source.Should().Contain("foreach (var (rect, bitmap, model, reflectionPreset, _, _) in _images)");
         source.Should().Contain("DrawFloatingImage(context, rect, bitmap, model, reflectionPreset);");
         source.Should().Contain("DrawFloatingImage(context, image.Rect, image.Image, image.Model, image.ReflectionPreset);");
         source.Should().Contain("DrawFloatingImage(context, rect, DecodeRenderedImage(image), image, image.ReflectionPreset);");

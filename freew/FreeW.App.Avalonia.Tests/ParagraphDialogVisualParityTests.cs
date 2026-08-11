@@ -126,7 +126,7 @@ public sealed class ParagraphDialogVisualParityTests
             AvaloniaCompactDialogChrome.ApplyTextBox(
                 sharedTextBox,
                 AvaloniaCompactDialogChrome.WindowsStyle);
-            ((ISolidColorBrush)sharedTextBox.BorderBrush!).Color.Should().Be(Color.FromRgb(0xAB, 0xAD, 0xB3));
+            ((ISolidColorBrush)sharedTextBox.BorderBrush!).Color.Should().Be(Color.FromRgb(0xB7, 0xBC, 0xC2));
         }, CancellationToken.None);
     }
 
