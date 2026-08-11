@@ -964,6 +964,134 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(shape);
         anchoredComment.ModernAnchorKind.Should().Be("deMkLst");
         anchoredComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+
+        bus.Redo();
+
+        anchoredComment.ModernAnchorKind.Should().BeEmpty();
+        anchoredComment.ModernAnchorXml.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_UndoRestoresAnchorToEditedAndReorderedLogicalComment()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(7);
+        p.Slides[0].Shapes.Add(shape);
+
+        var anchoredComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "  {AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}  ",
+            Text = "Original text",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"7\"/></p188:deMkLst>",
+        };
+        var unrelatedComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}",
+            Text = "Unrelated",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"8\"/></p188:deMkLst>",
+        };
+        p.Slides[0].Comments.Add(anchoredComment);
+        p.Slides[0].Comments.Add(unrelatedComment);
+
+        bus.Execute(new DeleteShapeCommand(0, shape.Id));
+
+        var editedComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa}",
+            Text = "Edited after shape deletion",
+        };
+        p.Slides[0].Comments.Clear();
+        p.Slides[0].Comments.Add(unrelatedComment);
+        p.Slides[0].Comments.Add(editedComment);
+
+        bus.Undo();
+
+        editedComment.Text.Should().Be("Edited after shape deletion");
+        editedComment.ModernAnchorKind.Should().Be("deMkLst");
+        editedComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+        unrelatedComment.ModernAnchorXml.Should().Contain("id=\"8\"");
+
+        bus.Redo();
+
+        editedComment.ModernAnchorKind.Should().BeEmpty();
+        editedComment.ModernAnchorXml.Should().BeEmpty();
+        unrelatedComment.ModernAnchorXml.Should().Contain("id=\"8\"");
+
+        bus.Undo();
+
+        editedComment.ModernAnchorKind.Should().Be("deMkLst");
+        editedComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_UndoUsesOriginalIndexForIdentitylessReplacement()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(7);
+        p.Slides[0].Shapes.Add(shape);
+        p.Slides[0].Comments.Add(new SlideComment
+        {
+            ModernCommentId = "{CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC}",
+            Text = "Indexed before target",
+        });
+        p.Slides[0].Comments.Add(new SlideComment
+        {
+            ModernCommentId = "   ",
+            Text = "Identityless target",
+            ModernAnchorKind = "txMkLst",
+            ModernAnchorXml =
+                "<p188:txMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"7\"/></p188:txMkLst>",
+        });
+
+        bus.Execute(new DeleteShapeCommand(0, shape.Id));
+
+        var editedIdentitylessComment = new SlideComment { Text = "Edited identityless target" };
+        p.Slides[0].Comments[1] = editedIdentitylessComment;
+
+        bus.Undo();
+
+        editedIdentitylessComment.ModernAnchorKind.Should().Be("txMkLst");
+        editedIdentitylessComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_UndoDoesNotUseIdentitylessIndexForIdentifiedReplacement()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(7);
+        p.Slides[0].Shapes.Add(shape);
+        p.Slides[0].Comments.Add(new SlideComment
+        {
+            Text = "Identityless target",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"7\"/></p188:deMkLst>",
+        });
+
+        bus.Execute(new DeleteShapeCommand(0, shape.Id));
+
+        var identifiedReplacement = new SlideComment
+        {
+            ModernCommentId = "{DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD}",
+            Text = "Different logical comment",
+        };
+        p.Slides[0].Comments[0] = identifiedReplacement;
+
+        bus.Undo();
+
+        identifiedReplacement.ModernAnchorKind.Should().BeEmpty();
+        identifiedReplacement.ModernAnchorXml.Should().BeEmpty();
     }
 
     [Fact]
@@ -1944,6 +2072,44 @@ public sealed class PresentationCommandTests
         var slide = new Slide { Title = "Orig" };
         var clone = SlideCloner.CloneSlide(slide);
         clone.Id.Should().NotBe(slide.Id);
+    }
+
+    [Fact]
+    public void SlideCloner_CloneModes_PreserveOrMintSemanticIdentities()
+    {
+        var slide = new Slide
+        {
+            Id = "slide-identity",
+            NumericId = 42,
+        };
+        var comment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA}",
+        };
+        comment.Replies.Add(new SlideCommentReply
+        {
+            ModernReplyId = "{BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB}",
+        });
+        slide.Comments.Add(comment);
+
+        var identityPreservingClone = SlideCloner.CloneSlidePreservingIdentity(slide);
+        var distinctClone = SlideCloner.CloneSlide(slide);
+
+        identityPreservingClone.Should().NotBeSameAs(slide);
+        identityPreservingClone.Id.Should().Be(slide.Id);
+        identityPreservingClone.NumericId.Should().Be(slide.NumericId);
+        identityPreservingClone.Comments.Single().Should().NotBeSameAs(comment);
+        identityPreservingClone.Comments.Single().ModernCommentId.Should().Be(comment.ModernCommentId);
+        identityPreservingClone.Comments.Single().Replies.Single().Should().NotBeSameAs(comment.Replies.Single());
+        identityPreservingClone.Comments.Single().Replies.Single().ModernReplyId
+            .Should().Be(comment.Replies.Single().ModernReplyId);
+
+        distinctClone.Id.Should().NotBe(slide.Id);
+        distinctClone.NumericId.Should().BeNull();
+        distinctClone.Comments.Single().ModernCommentId.Should().NotBe(comment.ModernCommentId);
+        distinctClone.Comments.Single().Replies.Single().ModernReplyId
+            .Should().NotBe(comment.Replies.Single().ModernReplyId);
     }
 
     [Fact]

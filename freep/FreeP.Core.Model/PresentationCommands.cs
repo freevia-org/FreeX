@@ -3071,6 +3071,12 @@ public sealed class ConvertSmartArtToShapesCommand : IPresentationCommand
 /// </summary>
 public sealed class DeleteShapeCommand : IPresentationCommand
 {
+    private sealed record CommentAnchorSnapshot(
+        string? NormalizedModernCommentId,
+        int OriginalListIndex,
+        string AnchorKind,
+        string AnchorXml);
+
     private static readonly XNamespace PresentationNamespace =
         "http://schemas.openxmlformats.org/presentationml/2006/main";
 
@@ -3084,8 +3090,7 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     private uint[]? _capturedDeletedShapeIds;
     private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
         _capturedConnectorAttachments;
-    private List<(SlideComment Comment, string AnchorKind, string AnchorXml)>?
-        _capturedOrphanedCommentAnchors;
+    private List<CommentAnchorSnapshot>? _capturedOrphanedCommentAnchors;
 
     public DeleteShapeCommand(int slideIndex, uint shapeId)
     {
@@ -3126,12 +3131,18 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         // anchor it cannot resolve: BuildModernAnchorElement falls back to <p188:unknownAnchor/>
         // whenever ModernAnchorXml is empty. Clearing the anchor here reuses that exact fallback
         // instead of inventing a second "orphaned" representation.
-        _capturedOrphanedCommentAnchors = slide.Comments
-            .Where(comment => CommentAnchorReferencesShape(comment, deletedShapeIds))
-            .Select(comment => (comment, comment.ModernAnchorKind, comment.ModernAnchorXml))
-            .ToList();
-        foreach (var (comment, _, _) in _capturedOrphanedCommentAnchors)
+        _capturedOrphanedCommentAnchors = new List<CommentAnchorSnapshot>();
+        for (var commentIndex = 0; commentIndex < slide.Comments.Count; commentIndex++)
         {
+            var comment = slide.Comments[commentIndex];
+            if (!CommentAnchorReferencesShape(comment, deletedShapeIds))
+                continue;
+
+            _capturedOrphanedCommentAnchors.Add(new CommentAnchorSnapshot(
+                NormalizeModernCommentId(comment.ModernCommentId),
+                commentIndex,
+                comment.ModernAnchorKind,
+                comment.ModernAnchorXml));
             comment.ModernAnchorKind = string.Empty;
             comment.ModernAnchorXml = string.Empty;
         }
@@ -3162,15 +3173,6 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         var idx = Math.Clamp(_capturedIndex, 0, shapes.Count);
         shapes.Insert(idx, _captured);
 
-        if (_capturedOrphanedCommentAnchors is not null)
-        {
-            foreach (var (comment, kind, xml) in _capturedOrphanedCommentAnchors)
-            {
-                comment.ModernAnchorKind = kind;
-                comment.ModernAnchorXml = xml;
-            }
-        }
-
         // Every other slide-indexed command in this file re-validates the captured index in both
         // Apply and Revert, because the slide count can differ by the time an undo runs; this was
         // the one that indexed straight into Slides. The shape is already restored above, so
@@ -3179,6 +3181,19 @@ public sealed class DeleteShapeCommand : IPresentationCommand
             return;
 
         var slide = p.Slides[_slideIndex];
+        if (_capturedOrphanedCommentAnchors is not null)
+        {
+            foreach (var snapshot in _capturedOrphanedCommentAnchors)
+            {
+                var comment = ResolveCommentAnchorTarget(slide.Comments, snapshot);
+                if (comment is null)
+                    continue;
+
+                comment.ModernAnchorKind = snapshot.AnchorKind;
+                comment.ModernAnchorXml = snapshot.AnchorXml;
+            }
+        }
+
         if (_capturedAnimations is not null)
         {
             slide.Animations.Clear();
@@ -3194,6 +3209,33 @@ public sealed class DeleteShapeCommand : IPresentationCommand
                 connector.ConnectionEnd = end;
             }
         }
+    }
+
+    private static SlideComment? ResolveCommentAnchorTarget(
+        IReadOnlyList<SlideComment> comments,
+        CommentAnchorSnapshot snapshot)
+    {
+        if (snapshot.NormalizedModernCommentId is { } modernCommentId)
+        {
+            return comments.FirstOrDefault(comment => string.Equals(
+                NormalizeModernCommentId(comment.ModernCommentId),
+                modernCommentId,
+                StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (snapshot.OriginalListIndex < 0 || snapshot.OriginalListIndex >= comments.Count)
+            return null;
+
+        var indexedComment = comments[snapshot.OriginalListIndex];
+        return NormalizeModernCommentId(indexedComment.ModernCommentId) is null
+            ? indexedComment
+            : null;
+    }
+
+    private static string? NormalizeModernCommentId(string? modernCommentId)
+    {
+        var normalized = modernCommentId?.Trim();
+        return string.IsNullOrEmpty(normalized) ? null : normalized;
     }
 
     /// <summary>
