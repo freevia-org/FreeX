@@ -17,7 +17,8 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 internal static class R49MainWindowTestHarness
 {
-    public static (MainWindow Window, Workbook Workbook) CreateWindow()
+    public static (MainWindow Window, Workbook Workbook) CreateWindow(
+        IPlatformClipboard? platformClipboard = null)
     {
         var initialWorkbook = new Workbook("Book1");
         initialWorkbook.AddSheet("Sheet1");
@@ -31,7 +32,8 @@ internal static class R49MainWindowTestHarness
             [],
             workbookRef,
             initialWorkbook,
-            new R49RecordingUserMessageService());
+            new R49RecordingUserMessageService(),
+            platformClipboard: platformClipboard);
 
         window.Show();
         PumpDispatcher();

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Free.Shared.AppServices;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -21,19 +22,18 @@ public sealed class R91_PastePngAlphaPreservationTests
     [Fact]
     public void TryPasteClipboardImage_WhenRichPngFormatPresent_PreservesAlphaChannel()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
-            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
+            var transparentPng = CreateTransparentPngBytes();
+            var clipboard = new ImageClipboard(
+                CreateOpaquePngBytes(),
+                transparentPng);
+            var (window, workbook) = R49MainWindowTestHarness.CreateWindow(clipboard);
             try
             {
                 var sheet = workbook.GetSheetAt(0);
                 var anchor = new CellAddress(sheet.Id, 1, 1);
                 window.SheetGrid.SelectedRange = new GridRange(anchor, anchor);
-
-                var dataObject = new System.Windows.DataObject();
-                dataObject.SetData(System.Windows.DataFormats.Bitmap, CreateOpaqueBitmapSource());
-                dataObject.SetData("PNG", CreateTransparentPngBytes());
-                System.Windows.Clipboard.SetDataObject(dataObject, copy: true);
 
                 var result = (bool)R49MainWindowTestHarness.Invoke(window, "TryPasteClipboardImage", anchor)!;
 
@@ -56,16 +56,15 @@ public sealed class R91_PastePngAlphaPreservationTests
     [Fact]
     public void TryPasteClipboardImage_WhenNoRichPngFormatPresent_StillPastesViaFlattenedBitmap()
     {
-        StaTestRunner.RunClipboardIsolated(() =>
+        StaTestRunner.Run(() =>
         {
-            var (window, workbook) = R49MainWindowTestHarness.CreateWindow();
+            var clipboard = new ImageClipboard(CreateOpaquePngBytes());
+            var (window, workbook) = R49MainWindowTestHarness.CreateWindow(clipboard);
             try
             {
                 var sheet = workbook.GetSheetAt(0);
                 var anchor = new CellAddress(sheet.Id, 1, 1);
                 window.SheetGrid.SelectedRange = new GridRange(anchor, anchor);
-
-                System.Windows.Clipboard.SetImage(CreateOpaqueBitmapSource());
 
                 var result = (bool)R49MainWindowTestHarness.Invoke(window, "TryPasteClipboardImage", anchor)!;
 
@@ -118,5 +117,47 @@ public sealed class R91_PastePngAlphaPreservationTests
         bitmap.WritePixels(new System.Windows.Int32Rect(0, 0, 1, 1), new byte[] { 255, 255, 255, 255 }, 4, 0);
         bitmap.Freeze();
         return bitmap;
+    }
+
+    private static byte[] CreateOpaquePngBytes()
+    {
+        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(CreateOpaqueBitmapSource()));
+        using var stream = new System.IO.MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
+    private sealed class ImageClipboard(byte[] flattenedPng, byte[]? richPng = null)
+        : IPlatformClipboard
+    {
+        private readonly PlatformClipboardImage _image = new(flattenedPng, 1, 1);
+        private readonly byte[]? _richPng = richPng;
+
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var customData = _richPng is not null
+                && request.CustomFormats.Any(static format => format.Name == "PNG")
+                    ? new[] { PlatformClipboardData.FromBytes("PNG", _richPng) }
+                    : [];
+            var content = new PlatformClipboardContent(
+                Image: request.IncludeImage ? _image : null,
+                CustomData: customData);
+            return ValueTask.FromResult(content.IsEmpty
+                ? PlatformClipboardReadResult<PlatformClipboardContent>.Empty()
+                : PlatformClipboardReadResult<PlatformClipboardContent>.Success(content));
+        }
+
+        public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent content,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(PlatformClipboardWriteResult.Success());
     }
 }
