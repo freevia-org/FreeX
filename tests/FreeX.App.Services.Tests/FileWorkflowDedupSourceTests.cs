@@ -489,6 +489,14 @@ public sealed class FileWorkflowDedupSourceTests
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
+        var freepLifecycleSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationFileLifecycleAdapter.cs"));
+        var freepSessionSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationFileCommandSession.cs"));
 
         workflowSource.Should().Contain("CurrentFileName");
         workflowSource.Should().Contain("CurrentFileNameWithoutExtensionOr");
@@ -497,8 +505,12 @@ public sealed class FileWorkflowDedupSourceTests
         freewAvaloniaSource.Should().Contain("FreeWFileTextResources.Document");
         freewAvaloniaSource.Should().NotContain("SisterAppFileTextPlanner.Document");
         freewAvaloniaSource.Should().Contain("_fileWorkflow.CurrentFileNameWithoutExtensionOr(FileText.FallbackDisplayName)");
-        freepWpfSource.Should().Contain("_workflow.CurrentFileName");
+        freepLifecycleSource.Should().Contain("public string DisplayName => _workflow.DisplayName;");
+        freepSessionSource.Should().Contain("public string DisplayName => _lifecycle.DisplayName;");
+        freepWpfSource.Should().Contain("public string DisplayName => _session.DisplayName;");
+        freepWpfSource.Should().NotContain("_workflow.CurrentFileName");
         freepAvaloniaSource.Should().Contain("private readonly PresentationFileCommandSession _fileSession;");
+        freepAvaloniaSource.Should().Contain("new PresentationFileLifecycleAdapter(");
         freepAvaloniaSource.Should().NotContain("_fileWorkflow.CurrentFileName");
 
         freewWpfSource.Should().NotContain("Path.GetFileName(_workflow.CurrentPath)");

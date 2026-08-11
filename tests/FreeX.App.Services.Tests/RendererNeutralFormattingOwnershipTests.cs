@@ -81,8 +81,9 @@ public sealed class RendererNeutralFormattingOwnershipTests
             .Should().Contain("SpreadsheetDisplayFormatter.FormatCellValue(");
         ReadSource("src", "FreeX.App.Services", "DataValidationDropdownPlanner.cs")
             .Should().Contain("SpreadsheetDisplayFormatter.FormatCellValue(");
-        ReadSource("src", "FreeX.App.Services", "HyperlinkDialogPlanner.cs")
-            .Should().Contain("SpreadsheetDisplayFormatter.FormatCellValue(");
+        ReadSource("src", "FreeX.App.Presentation", "Hyperlinks", "HyperlinkDialogPlanner.cs")
+            .Should().Contain("SpreadsheetDisplayFormatter.FormatCellValue(")
+            .And.NotContain("private static string FormatDisplayText(ScalarValue? value) => value switch");
         ReadSource("src", "FreeX.App.Services", "DataValidationDisplayTextPlanner.cs")
             .Should().Contain("SpreadsheetDisplayFormatter.FormatRangeReference(");
     }

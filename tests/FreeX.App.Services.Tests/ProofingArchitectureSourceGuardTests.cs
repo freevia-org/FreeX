@@ -32,9 +32,15 @@ public sealed class ProofingArchitectureSourceGuardTests
         var wpfOptions = Read("src", "FreeX.App.Host", "OptionsDialog.xaml.cs");
         var avaloniaOptions = Read("src", "FreeX.App.Avalonia", "MainWindow.Options.cs");
         var avaloniaProofing = Read("src", "FreeX.App.Avalonia", "MainWindow.Proofing.cs");
+        var optionsSession = Read("src", "FreeX.App.Services", "FreeXOptionsDialogSession.cs");
 
-        wpfOptions.Should().Contain("CustomDictionaryEditorSession");
-        avaloniaOptions.Should().Contain("CustomDictionaryEditorSession");
+        optionsSession.Should().Contain("CustomDictionary = new CustomDictionaryEditorSession(");
+        optionsSession.Should().Contain("public CustomDictionaryEditorSession CustomDictionary { get; }");
+        wpfOptions.Should().Contain("private readonly FreeXOptionsDialogSession _dialogSession;");
+        wpfOptions.Should().Contain("_customDictionaryEditor = _dialogSession.CustomDictionary;");
+        avaloniaOptions.Should().Contain("var customDictionaryEditor = optionsDialogSession.CustomDictionary;");
+        wpfOptions.Should().NotContain("new CustomDictionaryEditorSession(");
+        avaloniaOptions.Should().NotContain("new CustomDictionaryEditorSession(");
         wpfOptions.Should().NotContain("SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext");
         avaloniaOptions.Should().NotContain("SpellCheckWorkflowPlanner.RemoveCustomDictionaryWordAndSelectNext");
 
