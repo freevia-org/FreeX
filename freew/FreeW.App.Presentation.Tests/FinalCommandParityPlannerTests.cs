@@ -1,3 +1,4 @@
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
@@ -18,6 +19,33 @@ public sealed class FinalCommandParityPlannerTests
     {
         DrawTableCommandPlanner.Normalize(rows, columns)
             .Should().Be((expectedRows, expectedColumns));
+    }
+
+    [Fact]
+    public void DrawTableDialogs_ShareLocalizedMetadataAndDefaults()
+    {
+        string? Localize(string key) => $"localized:{key}";
+
+        var draw = DrawTableCommandPlanner.BuildDialog(DrawTableDimensionDialogKind.DrawTable, Localize);
+        var split = DrawTableCommandPlanner.BuildDialog(DrawTableDimensionDialogKind.SplitCells, Localize);
+
+        draw.Title.Should().Be("localized:DrawTable_Dialog_Title");
+        draw.DefaultRows.Should().Be(DrawTableCommandPlanner.DefaultRows);
+        draw.DefaultColumns.Should().Be(DrawTableCommandPlanner.DefaultColumns);
+        split.Title.Should().Be("localized:SplitCells_Dialog_Title");
+        split.DefaultRows.Should().Be(DrawTableCommandPlanner.SplitDefaultRows);
+        split.DefaultColumns.Should().Be(DrawTableCommandPlanner.SplitDefaultColumns);
+    }
+
+    [Fact]
+    public void AltTextDialog_ResolvesSharedLocalizedPrompts()
+    {
+        var text = AltTextDialogPlanner.ResolveText(key => $"localized:{key}");
+
+        text.Title.Should().Be("localized:AltText_Dialog_Title");
+        text.DescriptionLabel.Should().Be("localized:AltText_Description_Label");
+        text.ImageSelectionRequiredMessage.Should().Be("localized:AltText_ImageSelectionRequired_Message");
+        text.ShapeSelectionRequiredMessage.Should().Be("localized:AltText_ShapeSelectionRequired_Message");
     }
 
     [Fact]

@@ -84,7 +84,8 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
 
         source.Should().Contain("SizeToContent = SizeToContent.WidthAndHeight;");
         source.Should().NotContain("Width = 620;");
-        source.Should().Contain("Button(\"Copy →\", () => _ = CopyMasterToCurrentAsync())");
+        source.Should().Contain("Button(text.CopyToCurrentButtonLabel, () => _ = CopyMasterToCurrentAsync())");
+        source.Should().Contain("Button(text.CopyToMasterButtonLabel, () => _ = CopyCurrentToMasterAsync())");
         source.Should().Contain("ApplyButton(button, DialogChromeStyle, minWidth: 72");
     }
 

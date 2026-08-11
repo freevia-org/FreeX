@@ -529,6 +529,38 @@ public sealed class FontDialogPlannerTests
         acceptance.ErrorMessage.Should().Be(FontDialogPlanner.FontSizeValidationMessage);
     }
 
+    [Fact]
+    public void BuildSelectionState_OwnsMixedFormattingPolicy()
+    {
+        var current = RunFormatting.Default with { FontFamily = "Aptos", FontSizePt = 11 };
+        var first = current with { Bold = true, Hidden = false };
+        var second = first with
+        {
+            Bold = false,
+            Hidden = true,
+            FontFamily = "Cambria",
+            FontSizePt = 12,
+        };
+
+        var state = FontDialogPlanner.BuildSelectionState(current, [first, second]);
+
+        state.Run.Should().BeSameAs(current);
+        state.BoldIndeterminate.Should().BeTrue();
+        state.HiddenIndeterminate.Should().BeTrue();
+        state.FamilyIndeterminate.Should().BeTrue();
+        state.SizeIndeterminate.Should().BeTrue();
+        state.ItalicIndeterminate.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildSelectionState_SingleFormattingIsUniform()
+    {
+        var current = RunFormatting.Default with { Italic = true };
+
+        FontDialogPlanner.BuildSelectionState(current, [current])
+            .Should().Be(new FontDialogSelectionState(current));
+    }
+
     private static FontDialogInput ValidInput() => new(
         FontFamilyText: "Calibri",
         FontSizeText: "11",

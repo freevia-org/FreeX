@@ -215,33 +215,6 @@ public sealed record FontDialogWorkflowResult(
     bool AdvancedChanged,
     string? HighlightHex);
 
-public interface IFontDialogResultSource
-{
-    string? Family { get; }
-    double? SizePt { get; }
-    bool? Bold { get; }
-    bool? Italic { get; }
-    bool? Underline { get; }
-    bool? Strikethrough { get; }
-    VerticalAlign VerticalAlign { get; }
-    bool SmallCaps { get; }
-    bool AllCaps { get; }
-    string? ColorHex { get; }
-    string? HighlightHex { get; }
-    bool FamilyChanged { get; }
-    bool SizeChanged { get; }
-    double CharacterSpacingPt { get; }
-    double? KerningMinSizePt { get; }
-    double PositionPt { get; }
-    LigatureMode Ligatures { get; }
-    int? StylisticSet { get; }
-    NumberForm NumberForm { get; }
-    NumberSpacing NumberSpacing { get; }
-    bool AdvancedChanged { get; }
-    bool? DoubleStrikethrough { get; }
-    bool? Hidden { get; }
-}
-
 public sealed record FontDialogAcceptance(
     FontDialogWorkflowResult? Result,
     string? ErrorMessage)
@@ -469,52 +442,6 @@ public sealed class FontDialogSession
         return new FontDialogApplyPlan(UndoLabel, commands);
     }
 
-    public FontDialogWorkflowResult ImportResult(IFontDialogResultSource source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-
-        var original = _selection.Run;
-        var formatting = original with
-        {
-            FontFamily = source.Family,
-            FontSizePt = source.SizePt,
-            Bold = source.Bold ?? original.Bold,
-            Italic = source.Italic ?? original.Italic,
-            Underline = source.Underline ?? original.Underline,
-            Strikethrough = source.Strikethrough ?? original.Strikethrough,
-            DoubleStrikethrough = source.DoubleStrikethrough ?? original.DoubleStrikethrough,
-            Hidden = source.Hidden ?? original.Hidden,
-            VerticalAlign = source.VerticalAlign,
-            SmallCaps = source.SmallCaps,
-            AllCaps = source.AllCaps,
-            ColorHex = source.ColorHex,
-            CharacterSpacingPt = source.AdvancedChanged
-                ? source.CharacterSpacingPt
-                : original.CharacterSpacingPt,
-            KerningMinSizePt = source.AdvancedChanged
-                ? source.KerningMinSizePt
-                : original.KerningMinSizePt,
-            PositionPt = source.AdvancedChanged ? source.PositionPt : original.PositionPt,
-            Ligatures = source.AdvancedChanged ? source.Ligatures : original.Ligatures,
-            StylisticSet = source.AdvancedChanged ? source.StylisticSet : original.StylisticSet,
-            NumberForm = source.AdvancedChanged ? source.NumberForm : original.NumberForm,
-            NumberSpacing = source.AdvancedChanged ? source.NumberSpacing : original.NumberSpacing,
-        };
-
-        return new FontDialogWorkflowResult(
-            formatting,
-            source.Bold,
-            source.Italic,
-            source.Underline,
-            source.Strikethrough,
-            source.DoubleStrikethrough,
-            source.Hidden,
-            source.FamilyChanged,
-            source.SizeChanged,
-            source.AdvancedChanged,
-            source.HighlightHex);
-    }
-
     private static bool ResolveCheck(bool original, bool indeterminate, bool? value) =>
         indeterminate && !value.HasValue ? original : value == true;
 
@@ -690,6 +617,30 @@ public static class FontDialogPlanner
 
     public static FontDialogSession CreateSession(FontDialogSelectionState selection, CultureInfo culture) =>
         new(selection, culture);
+
+    public static FontDialogSelectionState BuildSelectionState(
+        RunFormatting current,
+        IEnumerable<RunFormatting> selectedFormatting)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ArgumentNullException.ThrowIfNull(selectedFormatting);
+
+        var selected = selectedFormatting.ToArray();
+        if (selected.Length < 2)
+            return new FontDialogSelectionState(current);
+
+        var first = selected[0];
+        return new FontDialogSelectionState(
+            current,
+            BoldIndeterminate: selected.Skip(1).Any(formatting => formatting.Bold != first.Bold),
+            ItalicIndeterminate: selected.Skip(1).Any(formatting => formatting.Italic != first.Italic),
+            UnderlineIndeterminate: selected.Skip(1).Any(formatting => formatting.Underline != first.Underline),
+            StrikethroughIndeterminate: selected.Skip(1).Any(formatting => formatting.Strikethrough != first.Strikethrough),
+            FamilyIndeterminate: selected.Skip(1).Any(formatting => formatting.FontFamily != first.FontFamily),
+            SizeIndeterminate: selected.Skip(1).Any(formatting => formatting.FontSizePt != first.FontSizePt),
+            DoubleStrikethroughIndeterminate: selected.Skip(1).Any(formatting => formatting.DoubleStrikethrough != first.DoubleStrikethrough),
+            HiddenIndeterminate: selected.Skip(1).Any(formatting => formatting.Hidden != first.Hidden));
+    }
 
     public static FontDialogControlState CaptureControlState(
         string? fontFamilyText,

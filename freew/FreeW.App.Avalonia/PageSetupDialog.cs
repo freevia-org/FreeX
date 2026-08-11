@@ -15,11 +15,6 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-public sealed record PageSetupDialogOutcome(
-    PageSetupDialogResult Settings,
-    bool LineNumbersRequested,
-    bool BordersRequested);
-
 /// <summary>Avalonia chrome for the shared WPF-authoritative three-tab Page Setup contract.</summary>
 public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControlSource
 {
@@ -150,7 +145,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
                 AvaloniaCompactDialogChrome.ApplyButton(button, actionStyle, metrics.ActionButtonWidth);
             ApplyFocus(_session.InitialFocusPlan);
         };
-        PageLayoutDialogChrome.WireEscape<PageSetupDialogOutcome?>(this);
+        PageLayoutDialogChrome.WireEscape<PageSetupDialogAcceptance?>(this);
     }
 
     private Control BuildTab(PageSetupDialogTabSpec tab)
@@ -236,10 +231,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
             return;
         }
 
-        Close(new PageSetupDialogOutcome(
-            acceptance.Result!,
-            acceptance.FollowUp == PageSetupDialogFollowUp.LineNumbers,
-            acceptance.FollowUp == PageSetupDialogFollowUp.Borders));
+        Close(acceptance);
     }
 
     private void ApplyFocus(PageSetupDialogFocusPlan plan)
@@ -293,14 +285,14 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         Func<Task>? openBorders = null)
     {
         var outcome = await new PageSetupDialog(editor.Document.Page, initialTab)
-            .ShowDialog<PageSetupDialogOutcome?>(owner);
+            .ShowDialog<PageSetupDialogAcceptance?>(owner);
         if (outcome is null)
             return;
 
-        ApplyResult(editor, outcome.Settings);
-        if (outcome.LineNumbersRequested && openLineNumbers is not null)
+        ApplyResult(editor, outcome.Result!);
+        if (outcome.FollowUp == PageSetupDialogFollowUp.LineNumbers && openLineNumbers is not null)
             await openLineNumbers();
-        else if (outcome.BordersRequested && openBorders is not null)
+        else if (outcome.FollowUp == PageSetupDialogFollowUp.Borders && openBorders is not null)
             await openBorders();
         editor.Focus();
     }

@@ -16,7 +16,8 @@ internal sealed class ImageAltTextDialog : FreeWDialogWindow
 
     private ImageAltTextDialog(string seed)
     {
-        Title = "Alt Text";
+        var text = AltTextDialogPlanner.ResolveText(UiText.Get);
+        Title = text.Title;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -30,9 +31,9 @@ internal sealed class ImageAltTextDialog : FreeWDialogWindow
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(_descriptionBox, Style);
 
-        var ok = CreateButton("OK", isDefault: true);
+        var ok = CreateButton(text.OkLabel, isDefault: true);
         ok.Click += (_, _) => Close(_descriptionBox.Text ?? string.Empty);
-        var cancel = CreateButton("Cancel", isCancel: true);
+        var cancel = CreateButton(text.CancelLabel, isCancel: true);
         cancel.Click += (_, _) => Close(null);
 
         Content = new StackPanel
@@ -40,7 +41,7 @@ internal sealed class ImageAltTextDialog : FreeWDialogWindow
             Margin = new Thickness(16),
             Children =
             {
-                new TextBlock { Text = "Description:", Margin = new Thickness(0, 0, 0, 4) },
+                new TextBlock { Text = text.DescriptionLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _descriptionBox,
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]),
             },

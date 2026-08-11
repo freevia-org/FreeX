@@ -479,25 +479,6 @@ public sealed class DocumentView : Control
 
     public sealed record CellEditRequest(int Block, int Row, int Col, string Text);
 
-    /// <summary>
-    /// Extended run+paragraph formatting snapshot for the current selection, produced by
-    /// <see cref="GetSelectionFormatting"/>. The indeterminate flags indicate that the
-    /// corresponding property is non-uniform across the selection (mixed). When a flag is true
-    /// the dialog should show a blank/indeterminate state for that field and skip applying it
-    /// on OK unless the user explicitly changed it.
-    /// </summary>
-    public sealed record SelectionFormatting(
-        RunFormatting Run,
-        ParagraphFormatting Paragraph,
-        bool BoldIndeterminate          = false,
-        bool ItalicIndeterminate        = false,
-        bool UnderlineIndeterminate     = false,
-        bool StrikethroughIndeterminate = false,
-        bool FamilyIndeterminate        = false,
-        bool SizeIndeterminate          = false,
-        bool DoubleStrikethroughIndeterminate = false,
-        bool HiddenIndeterminate        = false);
-
     public string GetCellText(int block, int row, int col)
     {
         if (block >= 0 && block < _doc.Blocks.Count && _doc.Blocks[block] is Table table
@@ -19444,27 +19425,6 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Apply the complete set of paragraph-dialog fields (alignment, indents, spacing, line spacing)
-    /// to every paragraph spanned by the current selection. All changes are issued as one undoable
-    /// action (a single Undo reverts all paragraphs). Mirrors WPF ApplyParagraphDialogFormatting.
-    /// </summary>
-    public void ApplyParagraphDialogFormatting(
-        TextAlignment alignment,
-        double indentLeftPt, double indentRightPt, double firstLineIndentPt,
-        double spaceBeforePt, double spaceAfterPt,
-        LineSpacingRule lineRule, double lineSpacingValue)
-        => ApplySelectedParagraphFormatting(indices => ParagraphEdits.ApplyDialogFormatting(
-            indices,
-            alignment,
-            indentLeftPt,
-            indentRightPt,
-            firstLineIndentPt,
-            spaceBeforePt,
-            spaceAfterPt,
-            lineRule,
-            lineSpacingValue));
-
-    /// <summary>
     /// Apply the WPF-authoritative Paragraph dialog fields to every selected paragraph in one undo step.
     /// </summary>
     public void ApplyParagraphDialogFormatting(
@@ -22064,60 +22024,28 @@ public sealed class DocumentView : Control
     /// (single-cell read, no indeterminate flags).
     /// </para>
     /// </summary>
-    public SelectionFormatting GetSelectionFormatting()
+    public FontDialogSelectionState GetSelectionFormatting()
     {
-        var (run, paragraph) = GetCaretFormatting();
+        var (run, _) = GetCaretFormatting();
 
         var sel = NormalizedSelection();
         if (sel is not { } s || s.Start.Block != s.End.Block)
-            return new SelectionFormatting(run, paragraph); // no selection or multi-block — no indeterminate
+            return new FontDialogSelectionState(run);
 
         if (_doc.Blocks[s.Start.Block] is not Paragraph selPara || !IsEditable(selPara))
-            return new SelectionFormatting(run, paragraph);
+            return new FontDialogSelectionState(run);
 
         var allCells = ParaCells(selPara);
         var a = Math.Clamp(s.Start.Offset, 0, allCells.Count);
         var b = Math.Clamp(s.End.Offset, 0, allCells.Count);
         if (b <= a)
-            return new SelectionFormatting(run, paragraph);
+            return new FontDialogSelectionState(run);
 
-        var selected = allCells.Skip(a).Take(b - a).ToList();
-
-        // Scan for uniformity.
-        var firstFmt = ResolveRunFmt(selected[0].Fmt, selPara);
-        var boldMixed       = false;
-        var italicMixed     = false;
-        var underlineMixed  = false;
-        var strikeMixed     = false;
-        var doubleStrikeMixed = false;
-        var hiddenMixed     = false;
-        var familyMixed     = false;
-        var sizeMixed       = false;
-
-        foreach (var cell in selected.Skip(1))
-        {
-            var fmt = ResolveRunFmt(cell.Fmt, selPara);
-            if (fmt.Bold        != firstFmt.Bold)        boldMixed      = true;
-            if (fmt.Italic      != firstFmt.Italic)      italicMixed    = true;
-            if (fmt.Underline   != firstFmt.Underline)   underlineMixed = true;
-            if (fmt.Strikethrough != firstFmt.Strikethrough) strikeMixed = true;
-            if (fmt.DoubleStrikethrough != firstFmt.DoubleStrikethrough) doubleStrikeMixed = true;
-            if (fmt.Hidden      != firstFmt.Hidden)      hiddenMixed    = true;
-            if (fmt.FontFamily  != firstFmt.FontFamily)  familyMixed    = true;
-            if (fmt.FontSizePt  != firstFmt.FontSizePt)  sizeMixed      = true;
-        }
-
-        return new SelectionFormatting(
-            run,
-            paragraph,
-            BoldIndeterminate:          boldMixed,
-            ItalicIndeterminate:        italicMixed,
-            UnderlineIndeterminate:     underlineMixed,
-            StrikethroughIndeterminate: strikeMixed,
-            FamilyIndeterminate:        familyMixed,
-            SizeIndeterminate:          sizeMixed,
-            DoubleStrikethroughIndeterminate: doubleStrikeMixed,
-            HiddenIndeterminate:        hiddenMixed);
+        var selectedFormatting = allCells
+            .Skip(a)
+            .Take(b - a)
+            .Select(cell => ResolveRunFmt(cell.Fmt, selPara));
+        return FontDialogPlanner.BuildSelectionState(run, selectedFormatting);
     }
 
     // ── Undo-group pass-throughs (used by FontDialog to group all format steps) ─────────────────
@@ -22260,10 +22188,10 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var formatting = GetSelectionFormatting();
+        var (run, paragraph) = GetCaretFormatting();
         _editingSession.Interaction.ToggleFormatPainter(
-            formatting.Run,
-            formatting.Paragraph,
+            run,
+            paragraph,
             locked);
     }
 

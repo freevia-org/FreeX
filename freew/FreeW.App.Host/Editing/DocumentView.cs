@@ -399,18 +399,6 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Toggle the View ribbon's "Print Layout" button: flip between Print Layout and the plain continuous
-    /// (Draft) view, returning whether Print Layout is now on. Backward-compatible shim over
-    /// <see cref="SetViewMode"/> so existing callers keep working; the dedicated Web Layout / Draft commands
-    /// call <see cref="SetViewMode"/> directly.
-    /// </summary>
-    public bool TogglePrintLayout()
-    {
-        SetViewMode(PrintLayoutEnabled ? DocumentViewMode.Draft : DocumentViewMode.PrintLayout);
-        return PrintLayoutEnabled;
-    }
-
-    /// <summary>
     /// The current document's file name (without path), used to resolve FILENAME field runs at render.
     /// Null/empty when the document is unsaved, in which case a FILENAME field falls back to its cached
     /// text. The host sets this when a document is opened or saved; the model/IO never see it.
@@ -7792,14 +7780,6 @@ public sealed class DocumentView : RichTextBox
             Stretch = Stretch.Fill
         };
     }
-
-    /// <summary>Legacy overload — adapts a bare text string to a default <see cref="WatermarkOptions"/>.</summary>
-    internal static Brush BuildWatermarkBrush(string text) =>
-        BuildWatermarkBrush(WatermarkOptions.FromLegacyText(text), Colors.White);
-
-    /// <summary>Legacy overload — adapts a bare text string to a default <see cref="WatermarkOptions"/>.</summary>
-    internal static Brush BuildWatermarkBrush(string text, Color pageColor) =>
-        BuildWatermarkBrush(WatermarkOptions.FromLegacyText(text), pageColor);
 
     private static Color ParseColor(string hex, Color fallback)
         => WpfRgbColorAdapter.ParseColorTokenOrDefault(hex, fallback);

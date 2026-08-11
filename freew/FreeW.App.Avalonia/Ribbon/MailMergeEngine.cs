@@ -4,13 +4,6 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Ribbon;
 
-internal sealed record MailMergeFinishBuildResult(MailMergeFinishExecution Execution)
-{
-    public TextDocument Document => Execution.Document!;
-    public int MergedRecordCount => Execution.MergedRecordCount;
-    public int SkippedRecordCount => Execution.SkippedRecordCount;
-}
-
 /// <summary>
 /// AV-MAIL: the Avalonia shell's mail-merge glue between the Mailings ribbon commands and the portable
 /// <see cref="MailMerge"/> engine. Owns a single <see cref="MailMergeSession"/> shared by every Mailings
@@ -375,12 +368,13 @@ internal sealed class MailMergeEngine
         return execution.Document;
     }
 
-    internal TextDocument ApplyFinishedMerge(MailMergeFinishBuildResult result)
+    internal TextDocument ApplyFinishedMerge(MailMergeFinishExecution result)
     {
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(result.Document);
         _editor.LoadDocument(result.Document);
-        _workflow.CompleteFinish(result.Execution);
-        ShowInfo(result.Execution.Message);
+        _workflow.CompleteFinish(result);
+        ShowInfo(result.Message);
         return result.Document;
     }
 
@@ -389,7 +383,7 @@ internal sealed class MailMergeEngine
     /// state. Print Documents uses this path so cancelling or completing printer submission leaves the merge
     /// template open and reusable.
     /// </summary>
-    public MailMergeFinishBuildResult? BuildFinishedMerge(
+    public MailMergeFinishExecution? BuildFinishedMerge(
         MailMergeFinishPlan finishPlan,
         MergeState? mergeState = null,
         TextDocument? templateSnapshot = null)
@@ -401,7 +395,7 @@ internal sealed class MailMergeEngine
         if (!execution.Success || execution.Document is null)
             return null;
 
-        return new MailMergeFinishBuildResult(execution);
+        return execution;
     }
 
     public MailMergeFinishRoutingPlan RouteFinish(

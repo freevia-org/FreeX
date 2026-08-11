@@ -63,24 +63,13 @@ public sealed class FontDialog : FreeWDialogWindow
     private readonly TextBlock _status = new();
 
     public FontDialog(RunFormatting current)
-        : this(new DocumentView.SelectionFormatting(current, ParagraphFormatting.Default))
+        : this(new FontDialogSelectionState(current))
     {
     }
 
-    public FontDialog(DocumentView.SelectionFormatting selection)
+    public FontDialog(FontDialogSelectionState selection)
     {
-        _session = FontDialogPlanner.CreateSession(
-            new FontDialogSelectionState(
-                selection.Run,
-                selection.BoldIndeterminate,
-                selection.ItalicIndeterminate,
-                selection.UnderlineIndeterminate,
-                selection.StrikethroughIndeterminate,
-                selection.FamilyIndeterminate,
-                selection.SizeIndeterminate,
-                selection.DoubleStrikethroughIndeterminate,
-                selection.HiddenIndeterminate),
-            CultureInfo.CurrentCulture);
+        _session = FontDialogPlanner.CreateSession(selection, CultureInfo.CurrentCulture);
 
         Title = Surface.Title;
         Width = Surface.WindowWidth;
@@ -238,33 +227,6 @@ public sealed class FontDialog : FreeWDialogWindow
         };
     }
 
-    // Compatibility input retained for existing editor-facing tests and callers. Production dialog
-    // acceptance returns FontDialogWorkflowResult directly; conversion policy remains in the session.
-    public sealed record FontDialogResult(
-        string? Family,
-        double? SizePt,
-        bool? Bold,
-        bool? Italic,
-        bool? Underline,
-        bool? Strikethrough,
-        VerticalAlign VerticalAlign,
-        bool SmallCaps,
-        bool AllCaps,
-        string? ColorHex,
-        string? HighlightHex,
-        bool FamilyChanged = true,
-        bool SizeChanged = true,
-        double CharacterSpacingPt = 0,
-        double? KerningMinSizePt = null,
-        double PositionPt = 0,
-        LigatureMode Ligatures = LigatureMode.None,
-        int? StylisticSet = null,
-        NumberForm NumberForm = NumberForm.Default,
-        NumberSpacing NumberSpacing = NumberSpacing.Default,
-        bool AdvancedChanged = false,
-        bool? DoubleStrikethrough = null,
-        bool? Hidden = null) : IFontDialogResultSource;
-
     private void OnOk()
     {
         _status.IsVisible = false;
@@ -298,15 +260,6 @@ public sealed class FontDialog : FreeWDialogWindow
 
         var session = FontDialogPlanner.CreateSession(original, CultureInfo.CurrentCulture);
         ExecuteApplyPlan(editor, session.BuildApplyPlan(result));
-    }
-
-    public static void ApplyResult(DocumentView editor, FontDialogResult result, RunFormatting original)
-    {
-        ArgumentNullException.ThrowIfNull(editor);
-        ArgumentNullException.ThrowIfNull(result);
-
-        var session = FontDialogPlanner.CreateSession(original, CultureInfo.CurrentCulture);
-        ExecuteApplyPlan(editor, session.BuildApplyPlan(session.ImportResult(result)));
     }
 
     private static void ExecuteApplyPlan(DocumentView editor, FontDialogApplyPlan plan)

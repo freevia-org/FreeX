@@ -2928,7 +2928,9 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var dims = DrawTableDimensionPicker.Ask(Window.GetWindow(editor));
+            var dims = DrawTableDimensionPicker.Ask(
+                Window.GetWindow(editor),
+                DrawTableDimensionDialogKind.DrawTable);
             if (dims is null)
                 return;
             var (rows, cols) = dims.Value;
@@ -2944,9 +2946,7 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             var dimensions = DrawTableDimensionPicker.Ask(
                 Window.GetWindow(editor),
-                title: "Split Cells",
-                defaultRows: 1,
-                defaultColumns: 2);
+                DrawTableDimensionDialogKind.SplitCells);
             if (dimensions is not { } value)
                 return;
             editor.Focus();
@@ -2970,20 +2970,19 @@ internal static class FreeWRibbonCommands
     {
         public static (int Rows, int Cols)? Ask(
             Window? owner,
-            string title = "Draw Table",
-            int defaultRows = DrawTableCommandPlanner.DefaultRows,
-            int defaultColumns = DrawTableCommandPlanner.DefaultColumns)
+            DrawTableDimensionDialogKind kind)
         {
+            var plan = DrawTableCommandPlanner.BuildDialog(kind, UiText.Get);
             (int Rows, int Cols)? result = null;
 
-            var rowsBox = new System.Windows.Controls.TextBox { Text = defaultRows.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
-            var colsBox = new System.Windows.Controls.TextBox { Text = defaultColumns.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
-            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
+            var rowsBox = new System.Windows.Controls.TextBox { Text = plan.DefaultRows.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
+            var colsBox = new System.Windows.Controls.TextBox { Text = plan.DefaultColumns.ToString(), MinWidth = 60, Margin = new Thickness(0, 0, 0, 8) };
+            var ok     = new System.Windows.Controls.Button { Content = plan.OkLabel,     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = plan.CancelLabel, IsCancel = true,  MinWidth = 72 };
 
             var dialog = new Window
             {
-                Title = title,
+                Title = plan.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -3006,9 +3005,9 @@ internal static class FreeWRibbonCommands
             closeRow.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Number of rows:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.RowsLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(rowsBox);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Number of columns:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.ColumnsLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(colsBox);
             panel.Children.Add(closeRow);
             dialog.Content = panel;
@@ -3212,17 +3211,18 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            var surface = AltTextDialogPlanner.ResolveText(UiText.Get);
             var image = editor.SelectedImage();
             if (image is null)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Select an image first, then choose Alt Text.",
-                    "FreeW");
+                    surface.ImageSelectionRequiredMessage,
+                    surface.ImageSelectionRequiredTitle);
                 return;
             }
 
-            var text = TextPrompt.Ask(Window.GetWindow(editor), "Alt Text", "Description:", image.AltText ?? string.Empty);
+            var text = TextPrompt.Ask(Window.GetWindow(editor), surface.Title, surface.DescriptionLabel, image.AltText ?? string.Empty);
             // A null result is a cancel (leave unchanged); an empty/blank string clears the alt text.
             if (text is not null)
                 editor.SetSelectedImageAltText(text);
@@ -5202,14 +5202,9 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    /// <summary>Return type for <see cref="ManageSourcesDialog.Ask"/>.</summary>
-    private sealed record ManageSourcesResult(
-        IReadOnlyList<Source> CurrentSources,
-        IReadOnlyList<Source> MasterSources);
-
     private static class ManageSourcesDialog
     {
-        public static ManageSourcesResult? Ask(
+        public static SourceManagementDialogResult? Ask(
             Window? owner,
             IReadOnlyList<Source> sources,
             IReadOnlyList<Source> masterSources)
@@ -5234,7 +5229,7 @@ internal static class FreeWRibbonCommands
                 Margin = new Thickness(0, 0, 0, 4)
             };
 
-            ManageSourcesResult? result = null;
+            SourceManagementDialogResult? result = null;
             var dialog = new Window
             {
                 Title = text.ManageSourcesTitle,
@@ -5450,8 +5445,7 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                var plannedResult = SourceManagementDialogPlanner.BuildResult(state);
-                result = new ManageSourcesResult(plannedResult.CurrentSources, plannedResult.MasterSources);
+                result = SourceManagementDialogPlanner.BuildResult(state);
                 dialog.DialogResult = true;
             };
 
@@ -8369,16 +8363,17 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            var surface = AltTextDialogPlanner.ResolveText(UiText.Get);
             var shape = editor.SelectedShape();
             var wordArt = editor.SelectedWordArt();
             if (shape is null && wordArt is null)
             {
                 DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    "Select a shape or WordArt first, then choose Alt Text.", "Alt Text");
+                    surface.ShapeSelectionRequiredMessage, surface.Title);
                 return;
             }
             var current = shape?.AltText ?? wordArt?.AltText ?? string.Empty;
-            var text = TextPrompt.Ask(Window.GetWindow(editor), "Alt Text", "Description:", current);
+            var text = TextPrompt.Ask(Window.GetWindow(editor), surface.Title, surface.DescriptionLabel, current);
             if (text is not null)
             {
                 if (shape is not null)
@@ -8620,9 +8615,10 @@ internal static class FreeWRibbonCommands
         private static string? ShowDialog(Window? owner, string? current)
         {
             string? result = null;
+            var plan = ProofingLanguageDialogPlanner.Build(current, UiText.Get);
             var window = new Window
             {
-                Title = "Set Proofing Language",
+                Title = plan.Text.Title,
                 Width = 320,
                 Height = 420,
                 ResizeMode = ResizeMode.NoResize,
@@ -8632,12 +8628,11 @@ internal static class FreeWRibbonCommands
             };
 
             var listBox = new System.Windows.Controls.ListBox { Margin = new Thickness(0, 0, 0, 8) };
-            var plan = ProofingLanguageDialogPlanner.Build(current);
             foreach (var choice in plan.Choices)
                 listBox.Items.Add(new System.Windows.Controls.ListBoxItem { Content = choice.DisplayText, Tag = choice.Tag });
             listBox.SelectedIndex = plan.SelectedIndex;
-            var ok = new Button { Content = "OK", Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new Button { Content = "Cancel", Width = 80, IsCancel = true };
+            var ok = new Button { Content = plan.Text.OkLabel, Width = 80, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new Button { Content = plan.Text.CancelLabel, Width = 80, IsCancel = true };
             ok.Click += (_, _) =>
             {
                 if (listBox.SelectedItem is System.Windows.Controls.ListBoxItem selected)
@@ -8655,7 +8650,7 @@ internal static class FreeWRibbonCommands
             btnRow.Children.Add(cancel);
 
             var outer = new StackPanel { Margin = new Thickness(12) };
-            outer.Children.Add(new System.Windows.Controls.TextBlock { Text = "Select the proofing language for the selected text:", TextWrapping = System.Windows.TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
+            outer.Children.Add(new System.Windows.Controls.TextBlock { Text = plan.Text.Instruction, TextWrapping = System.Windows.TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8) });
             outer.Children.Add(listBox);
             outer.Children.Add(btnRow);
 

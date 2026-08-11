@@ -133,14 +133,14 @@ internal sealed class FieldPickerDialog : FreeWDialogWindow
 
 internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
 {
-    private readonly TextBox _rows = new() { Text = DrawTableCommandPlanner.DefaultRows.ToString(), Width = 72 };
-    private readonly TextBox _columns = new() { Text = DrawTableCommandPlanner.DefaultColumns.ToString(), Width = 72 };
+    private readonly TextBox _rows;
+    private readonly TextBox _columns;
 
-    private DrawTableDimensionDialog(string title, int defaultRows, int defaultColumns)
+    private DrawTableDimensionDialog(DrawTableDimensionDialogPlan plan)
     {
-        Title = title;
-        _rows.Text = defaultRows.ToString();
-        _columns.Text = defaultColumns.ToString();
+        Title = plan.Title;
+        _rows = new TextBox { Text = plan.DefaultRows.ToString(), Width = 72 };
+        _columns = new TextBox { Text = plan.DefaultColumns.ToString(), Width = 72 };
         Width = 290;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -148,26 +148,27 @@ internal sealed class DrawTableDimensionDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         var panel = QuickPartNameDialog.DialogPanel();
-        panel.Children.Add(new TextBlock { Text = "Number of rows:" });
+        panel.Children.Add(new TextBlock { Text = plan.RowsLabel });
         panel.Children.Add(_rows);
-        panel.Children.Add(new TextBlock { Text = "Number of columns:" });
+        panel.Children.Add(new TextBlock { Text = plan.ColumnsLabel });
         panel.Children.Add(_columns);
         panel.Children.Add(QuickPartNameDialog.ButtonRow(
-            QuickPartNameDialog.Button("OK", Accept, isDefault: true),
-            QuickPartNameDialog.Button("Cancel", () => Close(null), isCancel: true)));
+            QuickPartNameDialog.Button(plan.OkLabel, Accept, isDefault: true),
+            QuickPartNameDialog.Button(plan.CancelLabel, () => Close(null), isCancel: true)));
         Content = panel;
         Opened += (_, _) => _rows.Focus();
         QuickPartNameDialog.CloseOnEscape(this);
     }
 
     public static Task<(int Rows, int Columns)?> AskAsync(Window owner) =>
-        new DrawTableDimensionDialog(
-            "Draw Table",
-            DrawTableCommandPlanner.DefaultRows,
-            DrawTableCommandPlanner.DefaultColumns).ShowDialog<(int Rows, int Columns)?>(owner);
+        new DrawTableDimensionDialog(DrawTableCommandPlanner.BuildDialog(
+            DrawTableDimensionDialogKind.DrawTable,
+            UiText.Get)).ShowDialog<(int Rows, int Columns)?>(owner);
 
     public static Task<(int Rows, int Columns)?> AskSplitCellAsync(Window owner) =>
-        new DrawTableDimensionDialog("Split Cells", defaultRows: 1, defaultColumns: 2)
+        new DrawTableDimensionDialog(DrawTableCommandPlanner.BuildDialog(
+            DrawTableDimensionDialogKind.SplitCells,
+            UiText.Get))
             .ShowDialog<(int Rows, int Columns)?>(owner);
 
     private void Accept() => Close(DrawTableCommandPlanner.Normalize(_rows.Text, _columns.Text));

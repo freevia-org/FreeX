@@ -1,13 +1,56 @@
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Editing;
 
 namespace FreeW.App.Presentation.Ribbon;
 
+public enum DrawTableDimensionDialogKind
+{
+    DrawTable,
+    SplitCells,
+}
+
+public sealed record DrawTableDimensionDialogPlan(
+    string Title,
+    string RowsLabel,
+    string ColumnsLabel,
+    string OkLabel,
+    string CancelLabel,
+    int DefaultRows,
+    int DefaultColumns);
+
 public static class DrawTableCommandPlanner
 {
     public const int DefaultRows = 3;
     public const int DefaultColumns = 3;
+    public const int SplitDefaultRows = 1;
+    public const int SplitDefaultColumns = 2;
     public const int MaximumDimension = 63;
+
+    private static readonly ResourceTextDescriptor[] DialogTexts =
+    [
+        new("DrawTable_Dialog_Title", "Draw Table"),
+        new("SplitCells_Dialog_Title", "Split Cells"),
+        new("TableDimensions_Rows_Label", "Number of rows:"),
+        new("TableDimensions_Columns_Label", "Number of columns:"),
+        new("Common_Ok", "OK"),
+        new("Common_Cancel", "Cancel"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        DialogTexts.Select(text => text.ResourceKey).ToArray();
+
+    public static DrawTableDimensionDialogPlan BuildDialog(
+        DrawTableDimensionDialogKind kind,
+        Func<string, string?>? getText = null) =>
+        new(
+            DialogTexts[kind == DrawTableDimensionDialogKind.DrawTable ? 0 : 1].Resolve(getText),
+            DialogTexts[2].Resolve(getText),
+            DialogTexts[3].Resolve(getText),
+            DialogTexts[4].Resolve(getText),
+            DialogTexts[5].Resolve(getText),
+            kind == DrawTableDimensionDialogKind.DrawTable ? DefaultRows : SplitDefaultRows,
+            kind == DrawTableDimensionDialogKind.DrawTable ? DefaultColumns : SplitDefaultColumns);
 
     public static (int Rows, int Columns) Normalize(string? rowsText, string? columnsText) =>
         (NormalizeDimension(rowsText, DefaultRows), NormalizeDimension(columnsText, DefaultColumns));

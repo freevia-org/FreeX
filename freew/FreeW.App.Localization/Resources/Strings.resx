@@ -512,4 +512,17 @@
   <data name="Design_Effects_Set_Label" xml:space="preserve"><value>Effect set:</value></data>
   <data name="Design_StyleSets_Title" xml:space="preserve"><value>Style Sets</value></data>
   <data name="Design_StyleSets_Set_Label" xml:space="preserve"><value>Style set:</value></data>
+  <data name="DrawTable_Dialog_Title" xml:space="preserve"><value>Draw Table</value></data>
+  <data name="SplitCells_Dialog_Title" xml:space="preserve"><value>Split Cells</value></data>
+  <data name="TableDimensions_Rows_Label" xml:space="preserve"><value>Number of rows:</value></data>
+  <data name="TableDimensions_Columns_Label" xml:space="preserve"><value>Number of columns:</value></data>
+  <data name="ProofingLanguage_Dialog_Title" xml:space="preserve"><value>Set Proofing Language</value></data>
+  <data name="ProofingLanguage_Language_Label" xml:space="preserve"><value>Language:</value></data>
+  <data name="ProofingLanguage_Instruction" xml:space="preserve"><value>Select the proofing language for the selected text:</value></data>
+  <data name="ProofingLanguage_Clear_Label" xml:space="preserve"><value>(None - clear language)</value></data>
+  <data name="AltText_Dialog_Title" xml:space="preserve"><value>Alt Text</value></data>
+  <data name="AltText_Description_Label" xml:space="preserve"><value>Description:</value></data>
+  <data name="AltText_ImageSelectionRequired_Message" xml:space="preserve"><value>Select an image first, then choose Alt Text.</value></data>
+  <data name="AltText_ShapeSelectionRequired_Message" xml:space="preserve"><value>Select a shape or WordArt first, then choose Alt Text.</value></data>
+  <data name="FreeW_ProductName" xml:space="preserve"><value>FreeW</value></data>
 </root>

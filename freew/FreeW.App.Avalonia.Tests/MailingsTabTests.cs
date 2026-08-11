@@ -449,12 +449,14 @@ public sealed class MailingsTabTests
         result.Should().NotBeNull();
         result!.MergedRecordCount.Should().Be(2);
         result.SkippedRecordCount.Should().Be(1);
-        var text = PlainText(result.Document);
+        result.Document.Should().NotBeNull();
+        var document = result.Document!;
+        var text = PlainText(document);
         text.Should().Contain("Grace Hopper");
         text.Should().Contain("Dorothy Vaughan");
         text.Should().NotContain("Ada Lovelace", "record 1 is outside the selected range");
         text.Should().NotContain("Katherine Johnson", "the selected record is skipped by its merge rule");
-        result.Document.Sections.Should().HaveCount(expectedSectionCount);
+        document.Sections.Should().HaveCount(expectedSectionCount);
 
         template.Document.Should().BeSameAs(visiblePreview);
         engine.Session.Template.Should().BeSameAs(stashedTemplate);
@@ -481,8 +483,9 @@ public sealed class MailingsTabTests
         var result = engine.BuildFinishedMerge(plan, state);
 
         result.Should().NotBeNull();
-        PlainText(result!.Document).Should().Contain("Engineering | Margaret | Ada");
-        PlainText(result.Document).Should().Contain("Engineering | Margaret | Grace");
+        result!.Document.Should().NotBeNull();
+        PlainText(result.Document!).Should().Contain("Engineering | Margaret | Ada");
+        PlainText(result.Document!).Should().Contain("Engineering | Margaret | Grace");
         state.Bookmarks["Manager"].Should().Be("Margaret");
         engine.GetInteractiveFinishPrompts().Should().Equal(
             new MailMergeInteractivePrompt(MailMergeInteractivePromptKind.FillIn, "Department", "Department"),
@@ -511,8 +514,9 @@ public sealed class MailingsTabTests
         var result = engine.BuildFinishedMerge(plan, state);
 
         result.Should().NotBeNull();
-        PlainText(result!.Document).Should().Contain("Department 1 | Ada");
-        PlainText(result.Document).Should().Contain("Department 2 | Grace");
+        result!.Document.Should().NotBeNull();
+        PlainText(result.Document!).Should().Contain("Department 1 | Ada");
+        PlainText(result.Document!).Should().Contain("Department 2 | Grace");
     }
 
     [Fact]

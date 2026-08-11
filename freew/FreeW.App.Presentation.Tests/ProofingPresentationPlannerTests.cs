@@ -38,6 +38,17 @@ public sealed class ProofingPresentationPlannerTests
     }
 
     [Fact]
+    public void Proofing_language_dialog_planner_resolves_localized_surface()
+    {
+        var plan = ProofingLanguageDialogPlanner.Build("", key => $"localized:{key}");
+
+        plan.Text.Title.Should().Be("localized:ProofingLanguage_Dialog_Title");
+        plan.Text.LanguageLabel.Should().Be("localized:ProofingLanguage_Language_Label");
+        plan.Text.Instruction.Should().Be("localized:ProofingLanguage_Instruction");
+        plan.Choices[0].DisplayText.Should().Be("localized:ProofingLanguage_Clear_Label");
+    }
+
+    [Fact]
     public void Proofing_language_apply_planner_normalizes_tag_and_single_range()
     {
         var plan = ProofingLanguageApplyPlanner.Build(" fr-FR ", [2], 3, 8);

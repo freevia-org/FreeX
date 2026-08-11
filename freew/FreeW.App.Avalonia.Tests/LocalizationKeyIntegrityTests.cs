@@ -49,6 +49,9 @@ public sealed class LocalizationKeyIntegrityTests
             .Concat(SourceManagementDialogPlanner.RequiredResourceKeys)
             .Concat(BackstageInfoSafetyPanePlanner.RequiredResourceKeys)
             .Concat(DesignDialogTextCatalog.RequiredResourceKeys)
+            .Concat(DrawTableCommandPlanner.RequiredResourceKeys)
+            .Concat(ProofingLanguageDialogPlanner.RequiredResourceKeys)
+            .Concat(AltTextDialogPlanner.RequiredResourceKeys)
             .Distinct(StringComparer.Ordinal);
 
         required.Should().OnlyContain(key => available.Contains(key));

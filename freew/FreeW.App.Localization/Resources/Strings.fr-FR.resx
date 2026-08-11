@@ -58,4 +58,17 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
+  <data name="DrawTable_Dialog_Title" xml:space="preserve"><value>Dessiner un tableau</value></data>
+  <data name="SplitCells_Dialog_Title" xml:space="preserve"><value>Fractionner les cellules</value></data>
+  <data name="TableDimensions_Rows_Label" xml:space="preserve"><value>Nombre de lignes :</value></data>
+  <data name="TableDimensions_Columns_Label" xml:space="preserve"><value>Nombre de colonnes :</value></data>
+  <data name="ProofingLanguage_Dialog_Title" xml:space="preserve"><value>Définir la langue de vérification</value></data>
+  <data name="ProofingLanguage_Language_Label" xml:space="preserve"><value>Langue :</value></data>
+  <data name="ProofingLanguage_Instruction" xml:space="preserve"><value>Sélectionnez la langue de vérification du texte sélectionné :</value></data>
+  <data name="ProofingLanguage_Clear_Label" xml:space="preserve"><value>(Aucune - effacer la langue)</value></data>
+  <data name="AltText_Dialog_Title" xml:space="preserve"><value>Texte de remplacement</value></data>
+  <data name="AltText_Description_Label" xml:space="preserve"><value>Description :</value></data>
+  <data name="AltText_ImageSelectionRequired_Message" xml:space="preserve"><value>Sélectionnez d'abord une image, puis choisissez Texte de remplacement.</value></data>
+  <data name="AltText_ShapeSelectionRequired_Message" xml:space="preserve"><value>Sélectionnez d'abord une forme ou un objet WordArt, puis choisissez Texte de remplacement.</value></data>
+  <data name="FreeW_ProductName" xml:space="preserve"><value>FreeW</value></data>
 </root>

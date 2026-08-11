@@ -253,28 +253,6 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         editor.Focus();
     }
 
-    // Compatibility for existing callers that construct the pre-parity Avalonia result directly.
-    public sealed record ParagraphDialogResult(
-        TextAlignment Alignment,
-        double IndentLeftPt,
-        double IndentRightPt,
-        double FirstLineIndentPt,
-        double SpaceBeforePt,
-        double SpaceAfterPt,
-        LineSpacingRule LineRule,
-        double LineSpacingValue);
-
-    public static void ApplyResult(DocumentView editor, ParagraphDialogResult result, ParagraphFormatting original) =>
-        editor.ApplyParagraphDialogFormatting(
-            result.Alignment,
-            result.IndentLeftPt,
-            result.IndentRightPt,
-            result.FirstLineIndentPt,
-            result.SpaceBeforePt,
-            result.SpaceAfterPt,
-            result.LineRule,
-            result.LineSpacingValue);
-
     private void ApplyParagraphChrome()
     {
         foreach (var box in new[] { _left, _right, _specialAmount, _before, _after, _lineSpacing })

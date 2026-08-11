@@ -70,6 +70,25 @@ public sealed class FreeWFinalResidualOwnershipSourceTests
         }
     }
 
+    [Fact]
+    public void Final_freew_compatibility_results_are_retired()
+    {
+        var avaloniaFont = Read("freew", "FreeW.App.Avalonia", "FontDialog.cs");
+        var avaloniaParagraph = Read("freew", "FreeW.App.Avalonia", "ParagraphDialog.cs");
+        var avaloniaPageSetup = Read("freew", "FreeW.App.Avalonia", "PageSetupDialog.cs");
+        var avaloniaMail = Read("freew", "FreeW.App.Avalonia", "Ribbon", "MailMergeEngine.cs");
+        var wpfEditor = Read("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var wpfCommands = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+
+        avaloniaFont.Should().NotContain("FontDialogResult");
+        avaloniaParagraph.Should().NotContain("ParagraphDialogResult");
+        avaloniaPageSetup.Should().NotContain("PageSetupDialogOutcome");
+        avaloniaMail.Should().NotContain("MailMergeFinishBuildResult");
+        wpfEditor.Should().NotContain("TogglePrintLayout()");
+        wpfEditor.Should().NotContain("BuildWatermarkBrush(string");
+        wpfCommands.Should().NotContain("ManageSourcesResult");
+    }
+
     private static string Read(params string[] parts) =>
         File.ReadAllText(TestWorkspaceFileLocator.Find(parts));
 }

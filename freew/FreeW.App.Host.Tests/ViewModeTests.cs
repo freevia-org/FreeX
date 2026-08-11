@@ -146,14 +146,16 @@ public sealed class ViewModeTests
     }
 
     [StaFact]
-    public void TogglePrintLayout_FlipsBetweenPrintLayoutAndDraft()
+    public void SetViewMode_SwitchesBetweenPrintLayoutAndDraft()
     {
         var view = NewEditor();
 
-        view.TogglePrintLayout().Should().BeFalse("toggling off Print Layout lands on the continuous view");
+        view.SetViewMode(DocumentViewMode.Draft);
+        view.PrintLayoutEnabled.Should().BeFalse();
         view.ViewMode.Should().Be(DocumentViewMode.Draft);
 
-        view.TogglePrintLayout().Should().BeTrue("toggling again restores Print Layout");
+        view.SetViewMode(DocumentViewMode.PrintLayout);
+        view.PrintLayoutEnabled.Should().BeTrue();
         view.ViewMode.Should().Be(DocumentViewMode.PrintLayout);
     }
 }
