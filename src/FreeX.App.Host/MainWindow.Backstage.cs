@@ -310,27 +310,8 @@ public partial class MainWindow
 
         var settings = _backstagePrintPreviewSettings;
 
-        // Resolve the printer to a PrintQueue (null = Windows default).
-        System.Printing.PrintQueue? printQueue = null;
-        if (!string.IsNullOrWhiteSpace(settings.PrinterName))
-        {
-            try
-            {
-                using var server = new System.Printing.LocalPrintServer();
-                foreach (var q in server.GetPrintQueues())
-                {
-                    if (string.Equals(q.FullName, settings.PrinterName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        printQueue = q;
-                        break;
-                    }
-                }
-            }
-            catch (System.Printing.PrintSystemException)
-            {
-                // Fall through to null (Windows default).
-            }
-        }
+        // A missing saved queue falls through to null so the native dialog uses Windows' default.
+        var printQueue = Free.Shared.Shell.Wpf.WpfPrintQueueCatalog.Resolve(settings.PrinterName);
 
         // Apply page range if one was requested.
         System.Windows.Documents.DocumentPaginator paginator = _backstagePrintPreviewDocument.DocumentPaginator;

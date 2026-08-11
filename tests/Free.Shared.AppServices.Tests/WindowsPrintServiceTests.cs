@@ -1,9 +1,8 @@
 using System.Diagnostics;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.AppServices.Windows;
-using FreeW.App.Avalonia.Printing;
 
-namespace FreeW.App.Avalonia.Tests.Printing;
+namespace Free.Shared.AppServices.Tests;
 
 public sealed class WindowsPrintServiceTests : IDisposable
 {
@@ -111,6 +110,58 @@ public sealed class WindowsPrintServiceTests : IDisposable
 
             result.Status.Should().Be(PrintSubmissionStatus.Failed);
             result.Message.Should().Be("No PDF handler");
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_CompatibilityOptionsPreserveValidatedQueueAndNativeExitCode()
+    {
+        var pdfPath = await CreatePdfAsync();
+        try
+        {
+            var catalog = new FakeCatalog(["Office"], "Office");
+            var service = new WindowsPrintService(
+                catalog,
+                new FakeHandoff(WindowsShellPdfPrintHandoffResult.HandlerExited(7)),
+                new WindowsPrintServiceOptions(
+                    RequirePrinterDiscoveryBeforeSubmission: false,
+                    RejectNonZeroHandlerExitCode: false),
+                isSupportedOverride: true);
+
+            var result = await service.SubmitAsync(
+                pdfPath,
+                new PrintSelection("Office", JobTitle: "Quarterly review"));
+
+            result.Status.Should().Be(PrintSubmissionStatus.Submitted);
+            result.NativeExitCode.Should().Be(7);
+            catalog.Calls.Should().Be(0);
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_PropagatesNativeHandoffFailureDetails()
+    {
+        var pdfPath = await CreatePdfAsync();
+        try
+        {
+            var service = new WindowsPrintService(
+                new FakeCatalog(["Office"], "Office"),
+                new FakeHandoff(WindowsShellPdfPrintHandoffResult.Failed("No PDF handler", 1155)),
+                isSupportedOverride: true);
+
+            var result = await service.SubmitAsync(pdfPath, new PrintSelection("Office"));
+
+            result.Status.Should().Be(PrintSubmissionStatus.Failed);
+            result.Message.Should().Be("No PDF handler");
+            result.NativeErrorCode.Should().Be(1155);
         }
         finally
         {

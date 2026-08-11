@@ -110,7 +110,9 @@ public sealed record PrintSubmissionResult(
     PrintSubmissionStatus Status,
     string? PrinterName,
     string? JobDescription = null,
-    string? Message = null)
+    string? Message = null,
+    int? NativeExitCode = null,
+    int? NativeErrorCode = null)
 {
     public bool Succeeded => Status == PrintSubmissionStatus.Submitted;
 }

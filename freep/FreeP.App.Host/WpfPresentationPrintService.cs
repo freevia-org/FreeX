@@ -6,6 +6,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Free.Shared.Pdf.Skia;
+using Free.Shared.Shell.Wpf;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -28,24 +29,11 @@ internal static class WpfNativePrintCapabilityDetector
         if (!OperatingSystem.IsWindows())
             return WpfNativePrintCapability.Unavailable("Native WPF printing is available only on Windows.");
 
-        try
-        {
-            using var server = new LocalPrintServer();
-            var hasQueue = server.GetPrintQueues().Any();
-            return hasQueue
-                ? new WpfNativePrintCapability(true, "WPF native printer dialog is available.")
-                : WpfNativePrintCapability.Unavailable("Windows reported no available printer queue.");
-        }
-        catch (PrintSystemException ex)
-        {
-            return WpfNativePrintCapability.Unavailable(
-                $"Windows printer discovery failed: {ex.Message}");
-        }
-        catch (InvalidOperationException ex)
-        {
-            return WpfNativePrintCapability.Unavailable(
-                $"Windows printer discovery failed: {ex.Message}");
-        }
+        var discovery = WpfPrintQueueCatalog.Discover();
+        return discovery.HasQueues
+            ? new WpfNativePrintCapability(true, "WPF native printer dialog is available.")
+            : WpfNativePrintCapability.Unavailable(
+                discovery.FailureReason ?? "Windows reported no available printer queue.");
     }
 }
 

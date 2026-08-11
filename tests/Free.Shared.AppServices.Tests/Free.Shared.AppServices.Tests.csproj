@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\..\freew\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
   </ItemGroup>

@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeW.App.Avalonia.Tests" />
+    <InternalsVisibleTo Include="Free.Shared.AppServices.Tests" />
   </ItemGroup>
 
 </Project>

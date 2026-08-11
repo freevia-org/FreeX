@@ -2,6 +2,7 @@ using System.Printing;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 
@@ -49,39 +50,19 @@ internal static class WpfPrintPreviewToolbarPlanner
             return;
         }
 
-        try
+        var discovery = WpfPrintQueueCatalog.Discover();
+        foreach (var queue in discovery.Queues)
+            printerBox.Items.Add(queue);
+
+        if (printerBox.Items.Count > 0)
         {
-            using var server = new LocalPrintServer();
-            foreach (var queue in server.GetPrintQueues())
-                printerBox.Items.Add(queue);
+            printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
+            if (discovery.DefaultQueue is not null)
+                printerBox.SelectedItem = discovery.DefaultQueue;
+            else
+                printerBox.SelectedIndex = 0;
 
-            if (printerBox.Items.Count > 0)
-            {
-                printerBox.DisplayMemberPath = nameof(PrintQueue.FullName);
-                printerBox.SelectedItem = null;
-                foreach (var item in printerBox.Items)
-                {
-                    if (item is not PrintQueue queue)
-                        continue;
-
-                    if (string.Equals(
-                        queue.FullName,
-                        server.DefaultPrintQueue.FullName,
-                        StringComparison.OrdinalIgnoreCase))
-                    {
-                        printerBox.SelectedItem = queue;
-                        break;
-                    }
-                }
-
-                if (printerBox.SelectedItem is null)
-                    printerBox.SelectedIndex = 0;
-
-                return;
-            }
-        }
-        catch (PrintSystemException)
-        {
+            return;
         }
 
         printerBox.IsEnabled = false;

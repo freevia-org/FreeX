@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <!-- Host tests exercise internal dialog sizing and startup diagnostics contracts. -->
+    <InternalsVisibleTo Include="Free.Shared.Shell.Wpf.Tests" />
     <InternalsVisibleTo Include="FreeX.App.Host.Tests" />
     <InternalsVisibleTo Include="FreeW.App.Host.Tests" />
     <InternalsVisibleTo Include="FreeP.App.Host.Tests" />

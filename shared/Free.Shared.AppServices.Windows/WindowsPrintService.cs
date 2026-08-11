@@ -1,24 +1,30 @@
 using Free.Shared.AppServices.Printing;
-using Free.Shared.AppServices.Windows;
 
-namespace FreeW.App.Avalonia.Printing;
+namespace Free.Shared.AppServices.Windows;
+
+public sealed record WindowsPrintServiceOptions(
+    bool RequirePrinterDiscoveryBeforeSubmission = true,
+    bool RejectNonZeroHandlerExitCode = true);
 
 /// <summary>
-/// Windows printer discovery and PDF shell handoff for the portable Avalonia host.
+/// App-neutral Windows printer discovery and PDF shell handoff for portable application hosts.
 /// </summary>
-internal sealed class WindowsPrintService : IPlatformPrintService
+public sealed class WindowsPrintService : IPlatformPrintService
 {
     private readonly IWindowsPrinterCatalog _catalog;
     private readonly IWindowsPdfPrintHandoff _handoff;
+    private readonly WindowsPrintServiceOptions _options;
     private readonly bool? _isSupportedOverride;
 
     public WindowsPrintService(
         IWindowsPrinterCatalog? catalog = null,
         IWindowsPdfPrintHandoff? handoff = null,
+        WindowsPrintServiceOptions? options = null,
         bool? isSupportedOverride = null)
     {
         _catalog = catalog ?? new WindowsPrinterCatalog();
         _handoff = handoff ?? new WindowsShellPdfPrintHandoff();
+        _options = options ?? new WindowsPrintServiceOptions();
         _isSupportedOverride = isSupportedOverride;
     }
 
@@ -135,51 +141,66 @@ internal sealed class WindowsPrintService : IPlatformPrintService
                 Message: "The Windows PDF handoff supports all pages in document orientation. Use Create PDF for custom page ranges or orientation.");
         }
 
-        var discovery = await DiscoverAsync(cancellationToken).ConfigureAwait(false);
-        if (discovery.Status == PrinterDiscoveryStatus.Cancelled)
-            return CancelledSubmission(selection.PrinterName);
-        if (discovery.Status == PrinterDiscoveryStatus.NoPrinters)
-            return new PrintSubmissionResult(PrintSubmissionStatus.NoPrinters, null, Message: discovery.Message);
-        if (!discovery.IsAvailable)
+        var printer = selection.PrinterName;
+        if (_options.RequirePrinterDiscoveryBeforeSubmission || string.IsNullOrWhiteSpace(printer))
         {
-            return new PrintSubmissionResult(
-                discovery.Status == PrinterDiscoveryStatus.Unavailable
-                    ? PrintSubmissionStatus.Unavailable
-                    : PrintSubmissionStatus.Failed,
-                null,
-                Message: discovery.Message);
-        }
+            var discovery = await DiscoverAsync(cancellationToken).ConfigureAwait(false);
+            if (discovery.Status == PrinterDiscoveryStatus.Cancelled)
+                return CancelledSubmission(selection.PrinterName);
+            if (discovery.Status == PrinterDiscoveryStatus.NoPrinters)
+                return new PrintSubmissionResult(PrintSubmissionStatus.NoPrinters, null, Message: discovery.Message);
+            if (!discovery.IsAvailable)
+            {
+                return new PrintSubmissionResult(
+                    discovery.Status == PrinterDiscoveryStatus.Unavailable
+                        ? PrintSubmissionStatus.Unavailable
+                        : PrintSubmissionStatus.Failed,
+                    null,
+                    Message: discovery.Message);
+            }
 
-        var printer = ResolvePrinter(selection.PrinterName, discovery);
-        if (printer is null)
+            printer = ResolvePrinter(printer, discovery);
+            if (printer is null)
+            {
+                return new PrintSubmissionResult(
+                    PrintSubmissionStatus.Failed,
+                    selection.PrinterName,
+                    Message: $"The selected printer is not available: {selection.PrinterName}");
+            }
+        }
+        else
         {
-            return new PrintSubmissionResult(
-                PrintSubmissionStatus.Failed,
-                selection.PrinterName,
-                Message: $"The selected printer is not available: {selection.PrinterName}");
+            printer = printer!.Trim();
         }
 
         try
         {
+            int? lastExitCode = null;
             for (var copy = 0; copy < selection.Copies; copy++)
             {
                 var result = await _handoff.SubmitAsync(pdfPath, printer, cancellationToken)
                     .ConfigureAwait(false);
                 if (result.Status == WindowsShellPdfPrintHandoffStatus.Canceled)
                     return CancelledSubmission(printer);
-                if (!result.Started || result.ExitCode is not null and not 0)
+                if (!result.Started ||
+                    (_options.RejectNonZeroHandlerExitCode && result.ExitCode is not null and not 0))
                 {
                     return new PrintSubmissionResult(
                         PrintSubmissionStatus.Failed,
                         printer,
-                        Message: result.FailureReason ?? "Windows could not start the PDF print handoff.");
+                        Message: result.FailureReason ?? "Windows could not start the PDF print handoff.",
+                        NativeExitCode: result.ExitCode,
+                        NativeErrorCode: result.NativeErrorCode);
                 }
+
+                lastExitCode = result.ExitCode;
             }
 
             return new PrintSubmissionResult(
                 PrintSubmissionStatus.Submitted,
                 printer,
-                $"{selection.Copies} print job{(selection.Copies == 1 ? string.Empty : "s")} handed to Windows.");
+                $"{selection.Copies} print job{(selection.Copies == 1 ? string.Empty : "s")} handed to Windows.",
+                NativeExitCode: lastExitCode);
         }
         catch (OperationCanceledException)
         {
@@ -212,7 +233,7 @@ internal sealed class WindowsPrintService : IPlatformPrintService
         new(PrintSubmissionStatus.Cancelled, printerName, Message: "Print submission was cancelled.");
 }
 
-internal static class PlatformPrintServiceFactory
+public static class PlatformPrintServiceFactory
 {
     public static IPlatformPrintService Create() =>
         OperatingSystem.IsWindows()

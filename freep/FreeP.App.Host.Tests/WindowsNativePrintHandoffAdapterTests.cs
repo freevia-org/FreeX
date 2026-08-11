@@ -1,5 +1,5 @@
 using System.IO;
-using Free.Shared.AppServices.Windows;
+using Free.Shared.AppServices.Printing;
 using FreeP.App.Recording;
 using FreeP.App.Recording.Windows;
 
@@ -10,18 +10,20 @@ public sealed class WindowsNativePrintHandoffAdapterTests
     [Fact]
     public async Task Adapter_TranslatesAcceptedSharedHandoffAndDeletesTemporaryPdf()
     {
-        var handoff = new FakeHandoff(WindowsShellPdfPrintHandoffResult.Accepted());
+        var printService = new FakePrintService(new PrintSubmissionResult(
+            PrintSubmissionStatus.Submitted,
+            "Office"));
         var adapter = new WindowsNativePrintHandoffAdapter(
             AvailableCapability(),
-            handoff);
+            printService);
 
         var result = await adapter.PrintAsync("%PDF-1.4 test"u8.ToArray(), "Quarterly review");
 
         result.Succeeded.Should().BeTrue();
         result.ExitCode.Should().BeNull();
-        handoff.PrinterName.Should().Be("Office");
-        handoff.PdfPath.Should().NotBeNull();
-        File.Exists(handoff.PdfPath!).Should().BeFalse();
+        printService.Selection.Should().Be(new PrintSelection("Office", JobTitle: "Quarterly review"));
+        printService.PdfPath.Should().NotBeNull();
+        File.Exists(printService.PdfPath!).Should().BeFalse();
     }
 
     [Fact]
@@ -29,10 +31,17 @@ public sealed class WindowsNativePrintHandoffAdapterTests
     {
         var exited = new WindowsNativePrintHandoffAdapter(
             AvailableCapability(),
-            new FakeHandoff(WindowsShellPdfPrintHandoffResult.HandlerExited(7)));
+            new FakePrintService(new PrintSubmissionResult(
+                PrintSubmissionStatus.Submitted,
+                "Office",
+                NativeExitCode: 7)));
         var failed = new WindowsNativePrintHandoffAdapter(
             AvailableCapability(),
-            new FakeHandoff(WindowsShellPdfPrintHandoffResult.Failed("No PDF handler", 1155)));
+            new FakePrintService(new PrintSubmissionResult(
+                PrintSubmissionStatus.Failed,
+                "Office",
+                Message: "No PDF handler",
+                NativeErrorCode: 1155)));
 
         var exitedResult = await exited.PrintAsync("%PDF-1.4 test"u8.ToArray(), "Quarterly review");
         var failedResult = await failed.PrintAsync("%PDF-1.4 test"u8.ToArray(), "Quarterly review");
@@ -51,19 +60,28 @@ public sealed class WindowsNativePrintHandoffAdapterTests
             PrinterName: "Office",
             Reason: "Available");
 
-    private sealed class FakeHandoff(
-        WindowsShellPdfPrintHandoffResult result) : IWindowsPdfPrintHandoff
+    private sealed class FakePrintService(
+        PrintSubmissionResult result) : IPlatformPrintService
     {
         public string? PdfPath { get; private set; }
-        public string? PrinterName { get; private set; }
+        public PrintSelection? Selection { get; private set; }
 
-        public Task<WindowsShellPdfPrintHandoffResult> SubmitAsync(
+        public bool IsSupported => true;
+
+        public Task<PrinterDiscoveryResult> DiscoverAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Available,
+                [new PrinterInfo("Office", IsDefault: true)],
+                "Office"));
+
+        public Task<PrintSubmissionResult> SubmitAsync(
             string pdfPath,
-            string printerName,
+            PrintSelection selection,
             CancellationToken cancellationToken = default)
         {
             PdfPath = pdfPath;
-            PrinterName = printerName;
+            Selection = selection;
             return Task.FromResult(result);
         }
     }

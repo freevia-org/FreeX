@@ -15,6 +15,7 @@ using System.Globalization;
 using System.Text.Json;
 using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
+using Free.Shared.AppServices.Windows;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
