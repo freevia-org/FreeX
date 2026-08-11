@@ -96,6 +96,46 @@ public static class PresentationShellTextCatalog
     public static LocalizedTextDescriptor VideoExportPlannedStatus { get; } =
         Text("Export_Status_VideoPlanned");
 
+    public static LocalizedTextDescriptor ExportCompletedStatus { get; } =
+        Text("Export_Status_Completed");
+
+    public static LocalizedTextDescriptor VideoExportCancelledStatus { get; } =
+        Text("Export_Status_VideoCancelled");
+
+    public static LocalizedTextDescriptor VideoExportFailedStatus { get; } =
+        Text("Export_Status_VideoFailed");
+
+    public static LocalizedTextDescriptor VideoExportCompletedVideoOnlyStatus { get; } =
+        Text("Export_Status_VideoCompletedVideoOnly");
+
+    public static LocalizedTextDescriptor VideoExportCompletedWithTracksStatus(
+        int narrationTrackCount,
+        int cameraTrackCount,
+        int captionTrackCount) =>
+        Text(
+            "Export_Status_VideoCompletedWithTracks",
+            narrationTrackCount,
+            cameraTrackCount,
+            captionTrackCount);
+
+    public static LocalizedTextDescriptor WpfVideoExportHostName { get; } =
+        Text("Export_VideoHost_Wpf");
+
+    public static LocalizedTextDescriptor WpfWindowsVideoExportHostName { get; } =
+        Text("Export_VideoHost_WpfWindows");
+
+    public static LocalizedTextDescriptor AvaloniaLinuxVideoExportHostName { get; } =
+        Text("Export_VideoHost_AvaloniaLinux");
+
+    public static LocalizedTextDescriptor AvaloniaWindowsVideoExportHostName { get; } =
+        Text("Export_VideoHost_AvaloniaWindows");
+
+    public static LocalizedTextDescriptor FfmpegNarrationAvailableStatus { get; } =
+        Text("Export_VideoHost_FfmpegNarrationAvailable");
+
+    public static LocalizedTextDescriptor FfmpegVideoOnlyAvailableStatus { get; } =
+        Text("Export_VideoHost_FfmpegVideoOnlyAvailable");
+
     public static LocalizedTextDescriptor PrintCustomRangeApplyHelp { get; } =
         Text("Print_Help_CustomRangeApply");
 

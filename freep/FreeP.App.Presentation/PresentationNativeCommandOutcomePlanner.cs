@@ -1,4 +1,5 @@
 using Free.Shared.AppServices;
+using Free.Shared.AppServices.Printing;
 
 namespace FreeP.App.Compositor;
 
@@ -40,9 +41,29 @@ public sealed record PresentationFileCommandFeedbackPlan(
     string? UnavailableDialogTitle,
     string? UnavailableDialogMessage);
 
+public enum PresentationVideoExportHostProfile
+{
+    Wpf,
+    WpfWindows,
+    AvaloniaLinux,
+    AvaloniaWindows,
+}
+
 /// <summary>Owns renderer-neutral file-command labels, native print outcomes, and feedback copy.</summary>
 public static class PresentationNativeCommandOutcomePlanner
 {
+    public static PresentationNativePrintPortResult BuildSystemPrintResult(
+        PrintSubmissionResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        return BuildSystemPrintResult(
+            result.Succeeded,
+            result.Status == PrintSubmissionStatus.Cancelled,
+            result.Succeeded || result.Status == PrintSubmissionStatus.Cancelled
+                ? null
+                : result.Message ?? PrintSubmissionFailureFallback);
+    }
+
     public static PresentationNativePrintPortResult BuildSystemPrintResult(
         bool succeeded,
         bool cancelled,
@@ -98,6 +119,9 @@ public static class PresentationNativeCommandOutcomePlanner
             : statusText;
     }
 
+    public static string BuildPrintStatusText(PrintSubmissionResult result) =>
+        BuildPrintStatusText(BuildSystemPrintResult(result));
+
     public static string BuildPrintPackageFailureStatus(string? failureReason) =>
         string.IsNullOrWhiteSpace(failureReason)
             ? PrintPackageNotBuiltFailure
@@ -111,6 +135,82 @@ public static class PresentationNativeCommandOutcomePlanner
 
     public static string PrintSubmissionFailureFallback =>
         Resolve(PresentationShellTextCatalog.PrintSubmissionFailureFallback);
+
+    public static string ExportCompletedStatus =>
+        Resolve(PresentationShellTextCatalog.ExportCompletedStatus);
+
+    public static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
+        PresentationVideoExportHostProfile profile,
+        bool canEncodeMp4,
+        bool canCaptureNarration,
+        bool canCaptureCameraAndMedia,
+        bool canMuxTimedCaptions,
+        string capabilityReason)
+    {
+        var hostName = Resolve(profile switch
+        {
+            PresentationVideoExportHostProfile.Wpf => PresentationShellTextCatalog.WpfVideoExportHostName,
+            PresentationVideoExportHostProfile.WpfWindows =>
+                PresentationShellTextCatalog.WpfWindowsVideoExportHostName,
+            PresentationVideoExportHostProfile.AvaloniaLinux =>
+                PresentationShellTextCatalog.AvaloniaLinuxVideoExportHostName,
+            PresentationVideoExportHostProfile.AvaloniaWindows =>
+                PresentationShellTextCatalog.AvaloniaWindowsVideoExportHostName,
+            _ => throw new ArgumentOutOfRangeException(nameof(profile), profile, "Unsupported video host profile."),
+        });
+        var unavailableReason = profile == PresentationVideoExportHostProfile.AvaloniaLinux && canEncodeMp4
+            ? Resolve(canCaptureNarration
+                ? PresentationShellTextCatalog.FfmpegNarrationAvailableStatus
+                : PresentationShellTextCatalog.FfmpegVideoOnlyAvailableStatus)
+            : capabilityReason;
+        return new PresentationVideoExportHandoffHostCapabilities(
+            hostName,
+            canEncodeMp4,
+            canCaptureNarration,
+            canCaptureCameraAndMedia,
+            unavailableReason,
+            canMuxTimedCaptions);
+    }
+
+    public static string BuildVideoExportStatusText(
+        bool succeeded,
+        bool cancelled,
+        int narrationTrackCount = 0,
+        int cameraTrackCount = 0,
+        int captionTrackCount = 0) =>
+        cancelled
+            ? Resolve(PresentationShellTextCatalog.VideoExportCancelledStatus)
+            : !succeeded
+                ? Resolve(PresentationShellTextCatalog.VideoExportFailedStatus)
+                : narrationTrackCount == 0 && cameraTrackCount == 0 && captionTrackCount == 0
+                    ? Resolve(PresentationShellTextCatalog.VideoExportCompletedVideoOnlyStatus)
+                    : Resolve(PresentationShellTextCatalog.VideoExportCompletedWithTracksStatus(
+                        narrationTrackCount,
+                        cameraTrackCount,
+                        captionTrackCount));
+
+    public static PresentationNativeCommandResult BuildVideoExportCommandResult(
+        bool succeeded,
+        bool cancelled,
+        string? failureReason,
+        int narrationTrackCount,
+        int cameraTrackCount,
+        int captionTrackCount)
+    {
+        var statusText = BuildVideoExportStatusText(
+            succeeded,
+            cancelled,
+            narrationTrackCount,
+            cameraTrackCount,
+            captionTrackCount);
+        return succeeded
+            ? PresentationNativeCommandResult.Success(statusText)
+            : cancelled
+                ? PresentationNativeCommandResult.Cancel(statusText)
+                : PresentationNativeCommandResult.Failure(
+                    statusText,
+                    failureReason ?? PresentationFileTextResources.VideoExportFailed);
+    }
 
     public static PresentationFileCommandFeedbackPlan BuildFileFeedback(
         PresentationFileCommandResult result)

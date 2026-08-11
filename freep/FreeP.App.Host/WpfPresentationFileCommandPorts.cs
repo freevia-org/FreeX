@@ -81,15 +81,18 @@ internal static class WpfPresentationFileCommandSessionFactory
 
     private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
         LinuxVideoEncoderCapability capability) =>
-        new(
-            string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
-                ? "WPF Windows video export host"
-                : "WPF video export host",
+        PresentationNativeCommandOutcomePlanner.BuildVideoExportHostCapabilities(
+            string.Equals(
+                capability.ExecutablePath,
+                WindowsNativeVideoExportAdapter.ExecutablePath,
+                StringComparison.Ordinal)
+                ? PresentationVideoExportHostProfile.WpfWindows
+                : PresentationVideoExportHostProfile.Wpf,
             capability.CanEncodeMp4,
             capability.CanCaptureNarration,
             capability.CanCaptureCameraAndMedia,
-            capability.Reason,
-            capability.CanMuxTimedCaptions);
+            capability.CanMuxTimedCaptions,
+            capability.Reason);
 }
 
 internal sealed class WpfPresentationFilePickerPort : IPresentationFilePickerPort
@@ -242,30 +245,14 @@ internal sealed class WpfPresentationVideoPort : IPresentationVideoPort
             outputPath,
             cancellationToken,
             recordingMediaArtifacts).ConfigureAwait(true);
-        LastResult = result with { StatusText = BuildWpfStatusText(result) };
-        return LastResult.Succeeded
-            ? PresentationNativeCommandResult.Success(LastResult.StatusText)
-            : LastResult.Canceled
-                ? PresentationNativeCommandResult.Cancel(LastResult.StatusText)
-                : PresentationNativeCommandResult.Failure(
-                    LastResult.StatusText,
-                    LastResult.FailureReason ?? PresentationFileTextResources.VideoExportFailed);
-    }
-
-    private static string BuildWpfStatusText(LinuxVideoExportResult result)
-    {
-        if (result.Canceled)
-            return "Video export canceled";
-        if (!result.Succeeded)
-            return "Video export failed";
-
-        return result.MuxedNarrationTrackCount == 0 &&
-            result.MuxedCameraTrackCount == 0 &&
-            result.MuxedCaptionTrackCount == 0
-                ? "Video export completed (video-only)"
-                : $"Video export completed with {result.MuxedNarrationTrackCount} narration track(s), " +
-                    $"{result.MuxedCameraTrackCount} camera track(s), and " +
-                    $"{result.MuxedCaptionTrackCount} caption track(s)";
+        LastResult = result;
+        return PresentationNativeCommandOutcomePlanner.BuildVideoExportCommandResult(
+            result.Succeeded,
+            result.Canceled,
+            result.FailureReason,
+            result.MuxedNarrationTrackCount,
+            result.MuxedCameraTrackCount,
+            result.MuxedCaptionTrackCount);
     }
 }
 
@@ -292,7 +279,7 @@ internal sealed class WpfPresentationFileFeedbackPort : IPresentationFileCommand
         else if (result.Succeeded && result.ImageDiagnostics.Count > 0)
         {
             _workflow.ShowExportImageWarnings(
-                result.Message ?? "Export completed",
+                result.Message ?? PresentationNativeCommandOutcomePlanner.ExportCompletedStatus,
                 result.ImageDiagnostics);
         }
         return Task.CompletedTask;

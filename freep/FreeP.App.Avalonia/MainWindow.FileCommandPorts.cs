@@ -172,12 +172,7 @@ public sealed partial class MainWindow
                 request,
                 buildPackage,
                 cancellationToken).ConfigureAwait(true);
-            return PresentationNativeCommandOutcomePlanner.BuildSystemPrintResult(
-                result.Succeeded,
-                result.Canceled,
-                result.FailureReason,
-                completedStatusHasPeriod: result.Succeeded &&
-                    result.StatusText.EndsWith(".", StringComparison.Ordinal));
+            return PresentationNativeCommandOutcomePlanner.BuildSystemPrintResult(result);
         }
     }
 
@@ -213,13 +208,13 @@ public sealed partial class MainWindow
             }
 
             var result = _owner.LastVideoExportResult;
-            return result.Succeeded
-                ? PresentationNativeCommandResult.Success(result.StatusText)
-                : result.Canceled
-                    ? PresentationNativeCommandResult.Cancel(result.StatusText)
-                    : PresentationNativeCommandResult.Failure(
-                        result.StatusText,
-                        result.FailureReason ?? PresentationFileTextResources.VideoExportFailed);
+            return PresentationNativeCommandOutcomePlanner.BuildVideoExportCommandResult(
+                result.Succeeded,
+                result.Canceled,
+                result.FailureReason,
+                result.MuxedNarrationTrackCount,
+                result.MuxedCameraTrackCount,
+                result.MuxedCaptionTrackCount);
         }
     }
 
@@ -241,9 +236,9 @@ public sealed partial class MainWindow
                 await _owner._fileWorkflow.ShowFileCommandErrorAsync(error.Summary, error.Exception);
             }
             else if (result.Succeeded &&
-                     UserMessageServiceFileCommandExtensions.BuildExportImageWarningMessage(
-                         result.Message ?? "Export completed",
-                         result.ImageDiagnostics) is { } warningMessage)
+                      UserMessageServiceFileCommandExtensions.BuildExportImageWarningMessage(
+                          result.Message ?? PresentationNativeCommandOutcomePlanner.ExportCompletedStatus,
+                          result.ImageDiagnostics) is { } warningMessage)
             {
                 await AvaloniaUserMessageDialog.ShowWarningAsync(
                     _owner,

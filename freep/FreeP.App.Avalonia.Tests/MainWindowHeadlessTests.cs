@@ -15,6 +15,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Themes.Fluent;
 using Avalonia.VisualTree;
 using Free.Shared.AppServices;
+using Free.Shared.AppServices.Printing;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell;
@@ -215,7 +216,6 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 {
                     Interlocked.Increment(ref detectorCalls);
                     var result = new LinuxNativeOutputCapabilities(
-                        new LinuxNativePrintCapability(true, "lp", "office", "ready"),
                         new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
                     detectorCompleted.TrySetResult(result);
                     return result;
@@ -232,14 +232,13 @@ public sealed class MainWindowHeadlessTests : IDisposable
     }
 
     [Fact]
-    public async Task Native_print_handoff_uses_a_ready_direct_submission_without_claiming_a_dialog()
+    public async Task Print_workflow_submits_a_validated_temporary_pdf_through_the_shared_service()
     {
-        var printAdapter = new RecordingPrintAdapter();
-        LinuxNativePrintResult? result = null;
+        var printService = new RecordingPrintService();
+        PrintSubmissionResult? result = null;
         MainWindow? window = null;
-        Task<LinuxNativePrintResult>? printTask = null;
+        Task<PrintSubmissionResult>? printTask = null;
         var capabilities = new LinuxNativeOutputCapabilities(
-            new LinuxNativePrintCapability(true, "lp", "office", "ready"),
             LinuxVideoEncoderCapability.Unavailable("no encoder"));
 
         var ran = await OnUiThread(() =>
@@ -248,9 +247,10 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 Array.Empty<string>(),
                 loadRecentFilesStore: null,
                 nativeOutputCapabilities: capabilities,
-                nativePrintAdapter: printAdapter,
                 videoExportAdapter: new RecordingVideoAdapter(capabilities.Video),
-                printOutputPackageFactory: _ => BuildTestPrintPackage());
+                printOutputPackageFactory: _ => BuildTestPrintPackage(),
+                printService: printService,
+                showPrintSelectionDialog: SelectRequestedPrinter);
         });
 
         if (!ran) return;
@@ -258,26 +258,26 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var planRan = await OnUiThread(() =>
         {
             handoff = window!.RefreshNativePrintHandoffPlan();
-            printTask = window.ExecuteNativePrintHandoffAsync();
+            printTask = window.ExecutePrintForTests();
         });
         if (!planRan) return;
-        handoff!.CanOpenNativePrintDialog.Should().BeFalse();
-        handoff.CanSubmitToNativePrinter.Should().BeTrue();
+        handoff!.CanOpenNativePrintDialog.Should().BeTrue();
         result = await printTask!;
-        result.Succeeded.Should().BeTrue(result.FailureReason);
-        printAdapter.PdfBytes.Should().NotBeNullOrEmpty();
-        printAdapter.PdfBytes!.AsSpan().StartsWith("%PDF-"u8).Should().BeTrue();
+        result.Succeeded.Should().BeTrue(result.Message);
+        printService.PdfBytes.Should().NotBeNullOrEmpty();
+        printService.PdfBytes!.AsSpan().StartsWith("%PDF-"u8).Should().BeTrue();
+        printService.PdfExistedDuringSubmission.Should().BeTrue();
+        File.Exists(printService.PdfPath!).Should().BeFalse();
     }
 
     [Fact]
     public async Task Backstage_print_actions_route_layout_selection_to_native_handoff()
     {
-        var printAdapter = new RecordingPrintAdapter();
+        var printService = new RecordingPrintService();
         PresentationPrintRequest? printedRequest = null;
         IReadOnlyList<(string AutomationId, bool IsEnabled)> actions = [];
         MainWindow? window = null;
         var capabilities = new LinuxNativeOutputCapabilities(
-            new LinuxNativePrintCapability(true, "lp", "office", "ready"),
             LinuxVideoEncoderCapability.Unavailable("no encoder"));
 
         var ran = await OnUiThread(() =>
@@ -286,13 +286,14 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 Array.Empty<string>(),
                 loadRecentFilesStore: null,
                 nativeOutputCapabilities: capabilities,
-                nativePrintAdapter: printAdapter,
                 videoExportAdapter: new RecordingVideoAdapter(capabilities.Video),
                 printOutputPackageFactory: request =>
                 {
                     printedRequest = request;
                     return BuildTestPrintPackage();
-                });
+                },
+                printService: printService,
+                showPrintSelectionDialog: SelectRequestedPrinter);
 
             window.ShowBackstageForTests();
             window.ActivateBackstageEntryForTests("Print").Should().BeTrue();
@@ -305,11 +306,39 @@ public sealed class MainWindowHeadlessTests : IDisposable
         if (!ran) return;
         var result = await window!.BackstagePrintOperationForTests;
 
-        result.Succeeded.Should().BeTrue(result.FailureReason);
+        result.Succeeded.Should().BeTrue(result.Message);
         printedRequest.Should().NotBeNull();
         printedRequest!.Layout.Should().Be(
             window.LastPrintBackstagePlan!.LayoutChoices[0].Layout.Layout);
-        printAdapter.PdfBytes.Should().NotBeNullOrEmpty();
+        printService.PdfBytes.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
+    public async Task Print_workflow_rejects_an_invalid_pdf_before_shared_submission()
+    {
+        var printService = new RecordingPrintService();
+        PrintSubmissionResult? result = null;
+        var capabilities = new LinuxNativeOutputCapabilities(
+            LinuxVideoEncoderCapability.Unavailable("no encoder"));
+        var ran = await OnUiThread(async () =>
+        {
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                nativeOutputCapabilities: capabilities,
+                videoExportAdapter: new RecordingVideoAdapter(capabilities.Video),
+                printOutputPackageFactory: _ => BuildTestPrintPackage() with { Bytes = [1, 2, 3] },
+                printService: printService,
+                showPrintSelectionDialog: SelectRequestedPrinter);
+
+            result = await window.ExecutePrintForTests();
+        });
+
+        if (!ran) return;
+        result.Should().NotBeNull();
+        result!.Succeeded.Should().BeFalse();
+        result.Message.Should().Contain("PDF header");
+        printService.SubmissionCount.Should().Be(0);
     }
 
     [Fact]
@@ -317,7 +346,6 @@ public sealed class MainWindowHeadlessTests : IDisposable
     {
         var output = Path.Combine(TempDirectory, "host-video.mp4");
         var capabilities = new LinuxNativeOutputCapabilities(
-            LinuxNativePrintCapability.Unavailable("no queue"),
             new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
         var videoAdapter = new RecordingVideoAdapter(capabilities.Video);
         var videoArtifact = new PresentationVideoFramePackageArtifact(
@@ -331,7 +359,6 @@ public sealed class MainWindowHeadlessTests : IDisposable
                     Array.Empty<string>(),
                     loadRecentFilesStore: null,
                     nativeOutputCapabilities: capabilities,
-                    nativePrintAdapter: new RecordingPrintAdapter(),
                     videoExportAdapter: videoAdapter,
                     videoFramePackageArtifactFactory: _ => videoArtifact);
             });
@@ -3686,7 +3713,6 @@ public sealed class MainWindowHeadlessTests : IDisposable
     {
         PresentationVideoExportPlan? plan = null;
         var capabilities = new LinuxNativeOutputCapabilities(
-            LinuxNativePrintCapability.Unavailable("no queue"),
             new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
 
         var ran = await OnUiThread(() =>
@@ -9090,19 +9116,41 @@ public sealed class MainWindowHeadlessTests : IDisposable
     private static string FindRepoFile(params string[] parts) =>
         Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"), Path.Combine(parts));
 
-    private sealed class RecordingPrintAdapter : ILinuxNativePrintHandoffAdapter
-    {
-        public LinuxNativePrintCapability Capability { get; } =
-            new(true, "lp", "office", "ready");
-        public byte[]? PdfBytes { get; private set; }
+    private static Task<PrintSelection?> SelectRequestedPrinter(
+        Window owner,
+        PrinterDiscoveryResult discovery,
+        PrintSelection? requested,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<PrintSelection?>(requested);
 
-        public Task<LinuxNativePrintResult> PrintAsync(
-            byte[] pdfBytes,
-            string documentName,
+    private sealed class RecordingPrintService : IPlatformPrintService
+    {
+        public byte[]? PdfBytes { get; private set; }
+        public string? PdfPath { get; private set; }
+        public bool PdfExistedDuringSubmission { get; private set; }
+        public PrintSelection? Selection { get; private set; }
+        public int SubmissionCount { get; private set; }
+
+        public bool IsSupported => true;
+
+        public Task<PrinterDiscoveryResult> DiscoverAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new PrinterDiscoveryResult(
+                PrinterDiscoveryStatus.Available,
+                [new PrinterInfo("office", IsDefault: true)],
+                "office"));
+
+        public async Task<PrintSubmissionResult> SubmitAsync(
+            string pdfPath,
+            PrintSelection selection,
             CancellationToken cancellationToken = default)
         {
-            PdfBytes = pdfBytes;
-            return Task.FromResult(LinuxNativePrintResult.Success(0));
+            SubmissionCount++;
+            PdfPath = pdfPath;
+            Selection = selection;
+            PdfExistedDuringSubmission = File.Exists(pdfPath);
+            PdfBytes = await File.ReadAllBytesAsync(pdfPath, cancellationToken);
+            return new PrintSubmissionResult(PrintSubmissionStatus.Submitted, selection.PrinterName);
         }
     }
 

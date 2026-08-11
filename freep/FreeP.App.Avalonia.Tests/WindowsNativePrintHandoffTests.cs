@@ -9,32 +9,28 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class WindowsNativePrintHandoffTests
 {
     [Fact]
-    public void AvaloniaWindowRoutesWindowsBuildsToNativePrintOutput()
+    public void AvaloniaWindowUsesSharedWindowsPrintingAndKeepsNativeQueueSelection()
     {
         var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("WindowsNativePrintOutput.Detect()");
-        source.Should().Contain("WindowsNativePrintOutput.CreateAdapter(capability)");
+        source.Should().Contain("new WindowsPrintService(");
+        source.Should().Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog(");
         source.Should().Contain("WindowsNativePrintOutput.CreateVideoAdapter(capability)");
+        source.Should().NotContain("WindowsNativePrintHandoffAdapter");
         source.Should().Contain("FREEP_WINDOWS_CAPTURE");
     }
 
     [Fact]
-    public async Task WindowsAdapterRejectsNonPdfBeforeStartingShell()
+    public void AvaloniaWindowValidatesPdfBeforeSharedSubmission()
     {
-        var capability = new LinuxNativePrintCapability(
-            CanPrint: true,
-            ExecutablePath: "windows-shell-print",
-            PrinterName: "test-printer",
-            Reason: "ready");
-        var adapter = new WindowsNativePrintHandoffAdapter(capability);
+        var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
-        var result = await adapter.PrintAsync([1, 2, 3], "test");
-
-        result.Succeeded.Should().BeFalse();
-        result.Canceled.Should().BeFalse();
-        result.FailureReason.Should().Contain("valid non-empty PDF");
+        source.Should().Contain("PresentationPrintOutputPackageExecutor.ValidatePackage(package)");
+        source.IndexOf("ValidatePackage(package)", StringComparison.Ordinal).Should().BeLessThan(
+            source.IndexOf("_printService.SubmitAsync(", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -141,7 +137,7 @@ public sealed class WindowsNativePrintHandoffTests
             if (!result.Succeeded)
                 throw new Xunit.Sdk.XunitException(
                     $"Native export failed: canceled={result.Canceled}; bytes={result.ByteCount}; " +
-                    $"encoder=[{result.EncoderName}]; reason=[{result.FailureReason}]; status=[{result.StatusText}].");
+                    $"encoder=[{result.EncoderName}]; reason=[{result.FailureReason}].");
             result.ByteCount.Should().BeGreaterThan(0);
             File.Exists(outputPath).Should().BeTrue();
 

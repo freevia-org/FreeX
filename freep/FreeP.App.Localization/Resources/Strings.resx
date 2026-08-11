@@ -3697,6 +3697,39 @@
   <data name="Export_Status_VideoPlanned" xml:space="preserve">
     <value>Video export planned</value>
   </data>
+  <data name="Export_Status_Completed" xml:space="preserve">
+    <value>Export completed</value>
+  </data>
+  <data name="Export_Status_VideoCancelled" xml:space="preserve">
+    <value>Video export canceled</value>
+  </data>
+  <data name="Export_Status_VideoFailed" xml:space="preserve">
+    <value>Video export failed</value>
+  </data>
+  <data name="Export_Status_VideoCompletedVideoOnly" xml:space="preserve">
+    <value>Video export completed (video-only)</value>
+  </data>
+  <data name="Export_Status_VideoCompletedWithTracks" xml:space="preserve">
+    <value>Video export completed with {0} narration track(s), {1} camera track(s), and {2} caption track(s)</value>
+  </data>
+  <data name="Export_VideoHost_Wpf" xml:space="preserve">
+    <value>WPF video export host</value>
+  </data>
+  <data name="Export_VideoHost_WpfWindows" xml:space="preserve">
+    <value>WPF Windows video export host</value>
+  </data>
+  <data name="Export_VideoHost_AvaloniaLinux" xml:space="preserve">
+    <value>Avalonia Linux video export host</value>
+  </data>
+  <data name="Export_VideoHost_AvaloniaWindows" xml:space="preserve">
+    <value>Avalonia Windows video export host</value>
+  </data>
+  <data name="Export_VideoHost_FfmpegNarrationAvailable" xml:space="preserve">
+    <value>ffmpeg video export, persisted narration muxing, and captured camera picture-in-picture are available.</value>
+  </data>
+  <data name="Export_VideoHost_FfmpegVideoOnlyAvailable" xml:space="preserve">
+    <value>Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable.</value>
+  </data>
   <data name="Print_Help_CustomRangeApply" xml:space="preserve">
     <value>Apply the custom slide range to the print preview and output.</value>
   </data>

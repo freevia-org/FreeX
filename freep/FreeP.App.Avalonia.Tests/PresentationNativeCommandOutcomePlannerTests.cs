@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using Free.Shared.AppServices.Printing;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia.Tests;
@@ -56,6 +57,11 @@ public sealed class PresentationNativeCommandOutcomePlannerTests
                 succeeded: false,
                 cancelled: false,
                 failureReason: "Queue offline");
+            var sharedSubmission = PresentationNativeCommandOutcomePlanner.BuildSystemPrintResult(
+                new PrintSubmissionResult(
+                    PrintSubmissionStatus.Failed,
+                    "Office",
+                    Message: "Shared queue offline"));
 
             dialogSuccess.StatusText.Should().Be("Printed presentation");
             dialogCancel.StatusText.Should().Be("Print cancelled");
@@ -67,6 +73,44 @@ public sealed class PresentationNativeCommandOutcomePlannerTests
                 .Should().Be("Linux print handoff completed.");
             PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(handoffFailure)
                 .Should().Be("Linux print handoff failed: Queue offline");
+            PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(sharedSubmission)
+                .Should().Be("Linux print handoff failed: Shared queue offline");
+        });
+    }
+
+    [Fact]
+    public void Video_host_profiles_and_feedback_preserve_names_and_track_counts()
+    {
+        WithInvariantCulture(() =>
+        {
+            var wpf = PresentationNativeCommandOutcomePlanner.BuildVideoExportHostCapabilities(
+                PresentationVideoExportHostProfile.WpfWindows,
+                canEncodeMp4: true,
+                canCaptureNarration: true,
+                canCaptureCameraAndMedia: true,
+                canMuxTimedCaptions: true,
+                capabilityReason: "ready");
+            var avalonia = PresentationNativeCommandOutcomePlanner.BuildVideoExportHostCapabilities(
+                PresentationVideoExportHostProfile.AvaloniaLinux,
+                canEncodeMp4: true,
+                canCaptureNarration: false,
+                canCaptureCameraAndMedia: false,
+                canMuxTimedCaptions: true,
+                capabilityReason: "ready");
+            var result = PresentationNativeCommandOutcomePlanner.BuildVideoExportCommandResult(
+                succeeded: true,
+                cancelled: false,
+                failureReason: null,
+                narrationTrackCount: 2,
+                cameraTrackCount: 1,
+                captionTrackCount: 3);
+
+            wpf.HostName.Should().Be("WPF Windows video export host");
+            avalonia.HostName.Should().Be("Avalonia Linux video export host");
+            avalonia.UnavailableReason.Should().Be(
+                "Video-only ffmpeg export is available; narration and captured camera picture-in-picture are unavailable.");
+            result.StatusText.Should().Be(
+                "Video export completed with 2 narration track(s), 1 camera track(s), and 3 caption track(s)");
         });
     }
 
@@ -122,13 +166,20 @@ public sealed class PresentationNativeCommandOutcomePlannerTests
         avaloniaPorts.Should().NotContain("static string CommandText")
             .And.NotContain("\"Printing failed.\"")
             .And.NotContain("\"The command failed.\"")
+            .And.NotContain("\"Export completed\"")
             .And.Contain("BuildSystemPrintResult")
+            .And.Contain("BuildVideoExportCommandResult")
             .And.Contain("BuildFileFeedback(result)");
         avaloniaWindow.Should().NotContain(
                 "$\"{LastNativePrintResult.StatusText}: {LastNativePrintResult.FailureReason}\"")
             .And.NotContain("\"Portable print submission failed.\"")
             .And.NotContain("\"Printable package was not built.\"")
-            .And.Contain("BuildSystemPrintStatusText");
+            .And.NotContain("\"Copy\"")
+            .And.NotContain("\"Cut\"")
+            .And.NotContain("Avalonia Windows video export host")
+            .And.NotContain("Avalonia Linux video export host")
+            .And.Contain("BuildPrintStatusText(")
+            .And.Contain("BuildVideoExportHostCapabilities(");
     }
 
     private static string Read(params string[] pathParts) =>

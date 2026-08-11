@@ -40,7 +40,8 @@ public sealed class PhysicalValidationSourceTests
         var source = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/PhysicalValidation.cs"));
 
         source.Should().Contain("window.ExecuteVideoExportAsync(");
-        source.Should().Contain("window.ExecuteNativePrintHandoffAsync(");
+        source.Should().Contain("window.ExecutePrintForPhysicalValidationAsync(");
+        source.Should().Contain("window.DiscoverPrintersForPhysicalValidationAsync(");
         source.Should().Contain("new SlideShowWindow(");
         source.Should().Contain("ffprobe");
         source.Should().Contain("MediaPlaybackAvailabilityForTest");

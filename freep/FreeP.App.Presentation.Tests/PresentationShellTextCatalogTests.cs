@@ -45,6 +45,16 @@ public sealed class PresentationShellTextCatalogTests
                 .Should().Be("Apply the custom slide range to the print preview and output.");
             PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrinterSelectedStatus("Office Printer"))
                 .Should().Be("Printer selected: Office Printer");
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.ExportCompletedStatus)
+                .Should().Be("Export completed");
+            PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.VideoExportCompletedWithTracksStatus(2, 1, 3))
+                .Should().Be(
+                    "Video export completed with 2 narration track(s), 1 camera track(s), and 3 caption track(s)");
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.WpfWindowsVideoExportHostName)
+                .Should().Be("WPF Windows video export host");
+            PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.AvaloniaLinuxVideoExportHostName)
+                .Should().Be("Avalonia Linux video export host");
         }
         finally
         {
@@ -156,6 +166,14 @@ public sealed class PresentationShellTextCatalogTests
         wpfBackstage.Should().NotContain(
             "\"Apply the custom slide range to the print preview and output.\"");
         wpfFileCommands.Should().NotContain("\"Could not complete the presentation command\"");
+        wpfFileCommands.Should().NotContain("\"Export completed\"")
+            .And.NotContain("BuildWpfStatusText")
+            .And.NotContain("WPF Windows video export host")
+            .And.Contain("BuildVideoExportHostCapabilities(")
+            .And.Contain("BuildVideoExportCommandResult(");
+        avaloniaPorts.Should().NotContain("\"Export completed\"")
+            .And.Contain("PresentationNativeCommandOutcomePlanner.ExportCompletedStatus")
+            .And.Contain("BuildVideoExportCommandResult(");
         fileSession.Should().Contain("PresentationFileTextResources.ErrorSummary(")
             .And.NotContain("\"Could not open the presentation\"")
             .And.NotContain("\"Could not save the presentation\"")

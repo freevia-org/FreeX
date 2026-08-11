@@ -109,9 +109,10 @@ internal static class PhysicalValidationCoordinator
         try
         {
             var capabilities = await WaitForCapabilitiesAsync(window);
+            var printerDiscovery = await window.DiscoverPrintersForPhysicalValidationAsync();
             ffmpegPath = capabilities.Video.ExecutablePath;
             ffprobePath = FindExecutable("ffprobe");
-            cupsQueue = capabilities.Print.PrinterName;
+            cupsQueue = printerDiscovery.DefaultPrinter;
 
             await CaptureAsync(outputDirectory, "owner-before.png");
             screenshots.Add("owner-before.png");
@@ -242,9 +243,8 @@ internal static class PhysicalValidationCoordinator
             }
 
             var printMode = Environment.GetEnvironmentVariable("FREEX_CUPS_DRY_RUN_MODE") ?? "success";
-            var printResult = capabilities.Print.CanPrint
-                ? await window.ExecuteNativePrintHandoffAsync(new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides))
-                : LinuxNativePrintResult.Failed(capabilities.Print.Reason);
+            var printResult = await window.ExecutePrintForPhysicalValidationAsync(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides));
             var submittedPath = "/work/cups-dry-run/last-submitted.pdf";
             var invocationPath = "/work/cups-dry-run/last-invocation.txt";
             var submitted = File.Exists(submittedPath) && new FileInfo(submittedPath).Length > 0;
@@ -264,7 +264,7 @@ internal static class PhysicalValidationCoordinator
                 submitted
                     ? ["cups-submitted.pdf", "cups-invocation.txt"]
                     : ["owner-before.png"],
-                $"mode={printMode}; result={printResult.StatusText}; succeeded={printResult.Succeeded}; submittedPdf={submitted}; queue={cupsQueue ?? "none"}.");
+                $"mode={printMode}; result={PresentationNativeCommandOutcomePlanner.BuildPrintStatusText(printResult)}; succeeded={printResult.Succeeded}; submittedPdf={submitted}; queue={cupsQueue ?? "none"}.");
             AddRow(
                 rows,
                 "print.pdf-package",
@@ -317,7 +317,7 @@ internal static class PhysicalValidationCoordinator
         while (DateTime.UtcNow < deadline)
         {
             var capabilities = window.NativeOutputCapabilitiesForPhysicalValidation;
-            if (capabilities.Print.CanPrint || capabilities.Video.CanEncodeMp4)
+            if (window.NativeOutputCapabilityDetectionCompletedForPhysicalValidation)
                 return capabilities;
             await Task.Delay(100);
         }

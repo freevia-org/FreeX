@@ -130,4 +130,37 @@
   <data name="Edit_Command_SelectAll" xml:space="preserve">
     <value>Tout sélectionner</value>
   </data>
+  <data name="Export_Status_Completed" xml:space="preserve">
+    <value>Exportation termin&#233;e</value>
+  </data>
+  <data name="Export_Status_VideoCancelled" xml:space="preserve">
+    <value>Exportation vid&#233;o annul&#233;e</value>
+  </data>
+  <data name="Export_Status_VideoFailed" xml:space="preserve">
+    <value>&#201;chec de l'exportation vid&#233;o</value>
+  </data>
+  <data name="Export_Status_VideoCompletedVideoOnly" xml:space="preserve">
+    <value>Exportation vid&#233;o termin&#233;e (vid&#233;o uniquement)</value>
+  </data>
+  <data name="Export_Status_VideoCompletedWithTracks" xml:space="preserve">
+    <value>Exportation vid&#233;o termin&#233;e avec {0} piste(s) de narration, {1} piste(s) de cam&#233;ra et {2} piste(s) de sous-titres</value>
+  </data>
+  <data name="Export_VideoHost_Wpf" xml:space="preserve">
+    <value>H&#244;te d'exportation vid&#233;o WPF</value>
+  </data>
+  <data name="Export_VideoHost_WpfWindows" xml:space="preserve">
+    <value>H&#244;te d'exportation vid&#233;o WPF Windows</value>
+  </data>
+  <data name="Export_VideoHost_AvaloniaLinux" xml:space="preserve">
+    <value>H&#244;te d'exportation vid&#233;o Avalonia Linux</value>
+  </data>
+  <data name="Export_VideoHost_AvaloniaWindows" xml:space="preserve">
+    <value>H&#244;te d'exportation vid&#233;o Avalonia Windows</value>
+  </data>
+  <data name="Export_VideoHost_FfmpegNarrationAvailable" xml:space="preserve">
+    <value>L'exportation vid&#233;o ffmpeg, le multiplexage de la narration et l'incrustation de la cam&#233;ra sont disponibles.</value>
+  </data>
+  <data name="Export_VideoHost_FfmpegVideoOnlyAvailable" xml:space="preserve">
+    <value>L'exportation ffmpeg vid&#233;o uniquement est disponible ; la narration et l'incrustation de la cam&#233;ra ne sont pas disponibles.</value>
+  </data>
 </root>

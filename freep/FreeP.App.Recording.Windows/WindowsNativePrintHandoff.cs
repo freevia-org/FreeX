@@ -1,8 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text;
-using Free.Shared.AppServices;
-using Free.Shared.AppServices.Printing;
-using Free.Shared.AppServices.Windows;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
 
@@ -15,17 +11,13 @@ namespace FreeP.App.Recording.Windows;
 /// </summary>
 public static class WindowsNativePrintOutput
 {
-    private static readonly IPlatformPrintService PrintService = CreatePrintService();
-
     public static LinuxNativeOutputCapabilities Detect()
     {
         if (!OperatingSystem.IsWindows())
             return LinuxNativeOutputCapabilities.Unavailable(
                 "Windows native output is available only on Windows.");
 
-        var print = DetectPrint();
         return new LinuxNativeOutputCapabilities(
-            print,
             DetectWindowsVideoCapability(new WindowsNativeRecordingDeviceCatalog()));
     }
 
@@ -92,56 +84,6 @@ public static class WindowsNativePrintOutput
         canMuxTimedCaptions
             ? $"{reason} Timed captions use the available ffmpeg mov_text fallback."
             : reason;
-
-    public static LinuxNativePrintCapability DetectPrint()
-    {
-        if (!OperatingSystem.IsWindows())
-            return LinuxNativePrintCapability.Unavailable(
-                "Windows native printing is available only on Windows.");
-
-        var discovery = PrintService.DiscoverAsync().GetAwaiter().GetResult();
-        var printer = discovery.DefaultPrinter;
-        return string.IsNullOrWhiteSpace(printer)
-            ? LinuxNativePrintCapability.Unavailable(
-                discovery.Message ?? "Windows reported no default printer queue.")
-            : new LinuxNativePrintCapability(
-                CanPrint: true,
-                ExecutablePath: "windows-shell-print",
-                PrinterName: printer,
-                Reason: $"Windows printer queue '{printer}' is available through the native print handoff.");
-    }
-
-    public static LinuxNativePrintCapability ForPrinter(string printerName)
-    {
-        if (!OperatingSystem.IsWindows())
-            return LinuxNativePrintCapability.Unavailable(
-                "Windows native printing is available only on Windows.");
-
-        var normalized = printerName?.Trim() ?? string.Empty;
-        if (normalized.Length == 0)
-            return LinuxNativePrintCapability.Unavailable("Select a Windows printer queue first.");
-
-        var knownPrinters = PrintService.DiscoverAsync().GetAwaiter().GetResult().Printers;
-        return knownPrinters.Any(printer =>
-                string.Equals(printer.Name, normalized, StringComparison.OrdinalIgnoreCase))
-            ? new LinuxNativePrintCapability(
-                CanPrint: true,
-                ExecutablePath: "windows-shell-print",
-                PrinterName: normalized,
-                Reason: $"Windows printer queue '{normalized}' is available through the native print handoff.")
-            : LinuxNativePrintCapability.Unavailable(
-                $"Windows printer queue '{normalized}' is no longer available.");
-    }
-
-    public static IReadOnlyList<string> GetPrinters()
-    {
-        if (!OperatingSystem.IsWindows())
-            return [];
-
-        return PrintService.DiscoverAsync().GetAwaiter().GetResult().Printers
-            .Select(static printer => printer.Name)
-            .ToArray();
-    }
 
     /// <summary>
     /// Opens the native Windows printer-selection dialog and returns the queue selected by the
@@ -213,15 +155,6 @@ public static class WindowsNativePrintOutput
         }
     }
 
-    public static ILinuxNativePrintHandoffAdapter CreateAdapter(
-        LinuxNativePrintCapability capability) =>
-        new WindowsNativePrintHandoffAdapter(capability);
-
-    private static WindowsPrintService CreatePrintService() =>
-        new(options: new WindowsPrintServiceOptions(
-            RequirePrinterDiscoveryBeforeSubmission: false,
-            RejectNonZeroHandlerExitCode: false));
-
     public static ILinuxVideoExportAdapter CreateVideoAdapter(
         LinuxVideoEncoderCapability capability) =>
         string.Equals(capability.ExecutablePath, WindowsNativeVideoExportAdapter.ExecutablePath, StringComparison.Ordinal)
@@ -289,71 +222,5 @@ public static class WindowsNativePrintOutput
         public ushort OutputOffset;
         public ushort Default;
     }
-
-}
-
-public sealed class WindowsNativePrintHandoffAdapter : ILinuxNativePrintHandoffAdapter
-{
-    private readonly LinuxNativePrintCapability _capability;
-    private readonly IPlatformPrintService _printService;
-
-    public WindowsNativePrintHandoffAdapter(
-        LinuxNativePrintCapability capability,
-        IPlatformPrintService? printService = null)
-    {
-        _capability = capability ?? throw new ArgumentNullException(nameof(capability));
-        _printService = printService ?? new WindowsPrintService(
-            options: new WindowsPrintServiceOptions(
-                RequirePrinterDiscoveryBeforeSubmission: false,
-                RejectNonZeroHandlerExitCode: false));
-    }
-
-    public LinuxNativePrintCapability Capability => _capability;
-
-    public async Task<LinuxNativePrintResult> PrintAsync(
-        byte[] pdfBytes,
-        string documentName,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(pdfBytes);
-        if (!_capability.CanPrint || string.IsNullOrWhiteSpace(_capability.PrinterName))
-            return LinuxNativePrintResult.Failed(_capability.Reason);
-        if (!HasPdfPayload(pdfBytes))
-            return LinuxNativePrintResult.Failed("The printable package is not a valid non-empty PDF.");
-
-        try
-        {
-            using var temporaryFile = TemporaryFileLease.Create("freep-print-", ".pdf");
-            var temporaryPath = temporaryFile.Path;
-            await temporaryFile.WriteAllBytesAsync(pdfBytes, cancellationToken).ConfigureAwait(false);
-            var submission = await _printService.SubmitAsync(
-                temporaryPath,
-                new PrintSelection(
-                    _capability.PrinterName,
-                    JobTitle: documentName),
-                cancellationToken).ConfigureAwait(false);
-            return submission.Status switch
-            {
-                PrintSubmissionStatus.Submitted =>
-                    LinuxNativePrintResult.Success(submission.NativeExitCode),
-                PrintSubmissionStatus.Cancelled =>
-                    LinuxNativePrintResult.CanceledResult(),
-                _ => LinuxNativePrintResult.Failed(
-                    submission.Message ?? "Windows could not start the native PDF print handoff.",
-                    submission.NativeErrorCode ?? submission.NativeExitCode),
-            };
-        }
-        catch (OperationCanceledException)
-        {
-            return LinuxNativePrintResult.CanceledResult();
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            return LinuxNativePrintResult.Failed(ex.Message);
-        }
-    }
-
-    private static bool HasPdfPayload(byte[] bytes) =>
-        bytes.Length >= 5 && Encoding.ASCII.GetString(bytes, 0, 5) == "%PDF-";
 
 }

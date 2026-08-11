@@ -20,23 +20,18 @@ public sealed class LinuxNativeOutputTests : IDisposable
     }
 
     [Fact]
-    public void Capability_detection_requires_a_real_queue_and_software_encoder()
+    public void Capability_detection_reports_the_available_software_encoder()
     {
         var detector = new LinuxNativeOutputCapabilityDetector(
             new FakeExecutableLocator(
-                ("lp", "/usr/bin/lp"),
-                ("lpstat", "/usr/bin/lpstat"),
                 ("ffmpeg", "/usr/bin/ffmpeg")),
             new FakeProbeRunner
             {
-                DefaultPrinterOutput = "system default destination: office",
                 EncoderOutput = " V..... libx264              libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
             });
 
         var capabilities = detector.Detect(canCaptureNarrationOverride: true);
 
-        capabilities.Print.CanPrint.Should().BeTrue();
-        capabilities.Print.PrinterName.Should().Be("office");
         capabilities.Video.CanEncodeMp4.Should().BeTrue();
         capabilities.Video.EncoderName.Should().Be("libx264");
         capabilities.Video.CanCaptureNarration.Should().BeTrue();
@@ -44,63 +39,21 @@ public sealed class LinuxNativeOutputTests : IDisposable
     }
 
     [Fact]
-    public void Capability_detection_does_not_claim_printing_without_a_cups_queue()
+    public void Recording_source_does_not_own_printer_discovery_or_submission()
     {
-        var detector = new LinuxNativeOutputCapabilityDetector(
-            new FakeExecutableLocator(
-                ("lp", "/usr/bin/lp"),
-                ("lpstat", "/usr/bin/lpstat"),
-                ("ffmpeg", "/usr/bin/ffmpeg")),
-            new FakeProbeRunner
-            {
-                DefaultPrinterOutput = "no system default destination",
-                QueueOutput = string.Empty,
-                EncoderOutput = " V..... mpeg4              MPEG-4 part 2",
-            });
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Recording",
+            "Recording",
+            "LinuxNativeOutput.cs"));
 
-        var capabilities = detector.Detect(canCaptureNarrationOverride: false);
-
-        capabilities.Print.CanPrint.Should().BeFalse();
-        capabilities.Print.Reason.Should().Contain("No available Linux print queue");
-        capabilities.Video.CanEncodeMp4.Should().BeTrue();
-        capabilities.Video.CanCaptureNarration.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task Print_adapter_rejects_empty_or_non_pdf_payload_without_starting_a_process()
-    {
-        var adapter = new LinuxNativePrintHandoffAdapter(
-            new LinuxNativePrintCapability(true, "/usr/bin/lp", "office", "ready"));
-
-        var result = await adapter.PrintAsync(Array.Empty<byte>(), "Deck");
-
-        result.Succeeded.Should().BeFalse();
-        result.Canceled.Should().BeFalse();
-        result.FailureReason.Should().Contain("valid non-empty PDF");
-    }
-
-    [Fact]
-    public async Task Linux_print_adapter_submits_the_pdf_to_the_exact_lp_process_when_available()
-    {
-        if (!OperatingSystem.IsLinux())
-            return;
-
-        var directory = _temporaryDirectory.Path;
-        var executable = Path.Combine(directory, "lp");
-        var captured = Path.Combine(directory, "submitted.pdf");
-        {
-            await File.WriteAllTextAsync(
-                executable,
-                $"#!/bin/sh\ncp \"$5\" \"{captured}\"\nexit 0\n");
-            File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-
-            var result = await new LinuxNativePrintHandoffAdapter(
-                new LinuxNativePrintCapability(true, executable, "office", "ready"))
-                .PrintAsync(Encoding.ASCII.GetBytes("%PDF-1.7\n%%EOF\n"), "Deck");
-
-            result.Succeeded.Should().BeTrue(result.FailureReason);
-            File.ReadAllText(captured).Should().Contain("%PDF-1.7");
-        }
+        source.Should().NotContain("LinuxNativePrint")
+            .And.NotContain("ILinuxNativePrintHandoffAdapter")
+            .And.NotContain("lpstat")
+            .And.NotContain("BuildLpArguments")
+            .And.NotContain("BuildLprArguments");
     }
 
     [Fact]
@@ -457,8 +410,6 @@ public sealed class LinuxNativeOutputTests : IDisposable
 
     private sealed class FakeProbeRunner : ILinuxRecordingProbeRunner
     {
-        public string DefaultPrinterOutput { get; init; } = string.Empty;
-        public string QueueOutput { get; init; } = string.Empty;
         public string EncoderOutput { get; init; } = string.Empty;
 
         public LinuxRecordingProbeResult Run(
@@ -466,14 +417,6 @@ public sealed class LinuxNativeOutputTests : IDisposable
             IReadOnlyList<string> arguments,
             TimeSpan timeout)
         {
-            if (fileName.EndsWith("lpstat", StringComparison.Ordinal))
-            {
-                var output = arguments.Contains("-d", StringComparer.Ordinal)
-                    ? DefaultPrinterOutput
-                    : QueueOutput;
-                return new LinuxRecordingProbeResult(0, output, string.Empty);
-            }
-
             return new LinuxRecordingProbeResult(0, EncoderOutput, string.Empty);
         }
     }

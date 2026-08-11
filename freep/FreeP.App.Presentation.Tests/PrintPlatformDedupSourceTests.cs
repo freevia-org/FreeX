@@ -9,6 +9,7 @@ public sealed class PrintPlatformDedupSourceTests
     {
         var root = FindWorkspaceRoot();
         var freeP = Read(root, "freep", "FreeP.App.Recording.Windows", "WindowsNativePrintHandoff.cs");
+        var freePAvalonia = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var sharedService = Read(root, "shared", "Free.Shared.AppServices.Windows", "WindowsPrintService.cs");
         var catalog = Read(root, "shared", "Free.Shared.AppServices.Windows", "WindowsPrinterCatalog.cs");
         var handoff = Read(root, "shared", "Free.Shared.AppServices.Windows", "WindowsShellPdfPrintHandoff.cs");
@@ -20,8 +21,13 @@ public sealed class PrintPlatformDedupSourceTests
             "WindowsPrintService.cs");
 
         File.Exists(formerFreeWOwner).Should().BeFalse();
-        freeP.Should().Contain("IPlatformPrintService");
-        freeP.Should().Contain("new WindowsPrintService(");
+        freeP.Should().Contain("TryShowPrinterSelectionDialog(");
+        freeP.Should().NotContain("IPlatformPrintService");
+        freeP.Should().NotContain("SubmitAsync(");
+        freeP.Should().NotContain("WindowsNativePrintHandoffAdapter");
+        freePAvalonia.Should().Contain("IPlatformPrintService");
+        freePAvalonia.Should().Contain("new WindowsPrintService(");
+        freePAvalonia.Should().Contain("_printService.SubmitAsync(");
         freeP.Should().NotContain("IWindowsPdfPrintHandoff");
         freeP.Should().NotContain("EnumPrinters(");
         freeP.Should().NotContain("GetDefaultPrinter(");
@@ -65,6 +71,10 @@ public sealed class PrintPlatformDedupSourceTests
         avaloniaWindow.Should().NotContain("?? \"Video export failed.\"");
         avaloniaWindow.Should().NotContain("?? \"FreeP presentation\"");
         linuxOutput.Should().NotContain("? \"FreeP presentation\"");
+        linuxOutput.Should().NotContain("LinuxNativePrint")
+            .And.NotContain("lpstat")
+            .And.NotContain("BuildLpArguments")
+            .And.NotContain("BuildLprArguments");
     }
 
     [Fact]
