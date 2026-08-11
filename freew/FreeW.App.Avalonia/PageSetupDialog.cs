@@ -126,7 +126,6 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         Grid.SetRow(_status, 1);
         var actionStyle = DialogChromeStyle with
         {
-            DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
             ActionSpacing = AuthorityActionSpacing
         };
         var actions = PageLayoutDialogChrome.Actions(

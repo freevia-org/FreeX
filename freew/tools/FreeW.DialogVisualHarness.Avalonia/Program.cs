@@ -12,6 +12,8 @@ using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
@@ -372,7 +374,14 @@ static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = Jso
 
 sealed class HarnessApp : Application
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
+    public override void Initialize()
+    {
+        Styles.Add(new FluentTheme());
+        // Keep the capture host aligned with FreeW.App.Avalonia.App. Shared controls may
+        // resolve brand-neutral and accent aliases even when their immediate chrome uses
+        // literal fallbacks, so the harness must expose the production resource contract.
+        AvaloniaThemeApplier.Apply(this, BrandThemes.FreeW, "FreeW");
+    }
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<HarnessApp>()
         .UseSkia()
         .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });

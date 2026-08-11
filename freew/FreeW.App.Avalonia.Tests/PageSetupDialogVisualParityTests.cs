@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -22,10 +23,16 @@ public sealed class PageSetupDialogVisualParityTests
             root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "AvaloniaDialogRouteFactory.cs"));
         var wpfFactory = File.ReadAllText(Path.Combine(
             root, "freew", "tools", "FreeW.DialogVisualHarness.Wpf", "WpfDialogRouteFactory.cs"));
+        var wpfHarness = File.ReadAllText(Path.Combine(
+            root, "freew", "tools", "FreeW.DialogVisualHarness.Wpf", "Program.cs"));
+        var avaloniaHarness = File.ReadAllText(Path.Combine(
+            root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "Program.cs"));
 
         avaloniaFactory.Should().Contain("sectionStart: PageSetupDialogPlanner.VisualHarnessSectionStart");
         wpfFactory.Should().Contain("type == typeof(SectionBreakKind)");
         wpfFactory.Should().Contain("PageSetupDialogPlanner.VisualHarnessSectionStart");
+        wpfHarness.Should().Contain("WpfThemeApplier.Apply(application, BrandThemes.FreeW, \"FreeW\")");
+        avaloniaHarness.Should().Contain("AvaloniaThemeApplier.Apply(this, BrandThemes.FreeW, \"FreeW\")");
     }
 
     [Theory]
@@ -90,6 +97,9 @@ public sealed class PageSetupDialogVisualParityTests
                     .ToArray();
                 actionButtons.Where(button => button.Content?.ToString() is "OK" or "Cancel")
                     .Should().OnlyContain(button => button.MinWidth == metrics.ActionButtonWidth);
+                var okButton = actionButtons.Single(button => button.IsDefault);
+                okButton.IsDefault.Should().BeTrue();
+                ((ISolidColorBrush)okButton.BorderBrush!).Color.Should().Be(Color.FromRgb(15, 109, 140));
                 var actions = dialog.GetLogicalDescendants().OfType<StackPanel>()
                     .Single(panel => panel.Children.OfType<Button>().Count() == 2
                         && panel.Children.OfType<Button>()
@@ -149,12 +159,12 @@ public sealed class PageSetupDialogVisualParityTests
     }
 
     [Fact]
-    public void Default_action_border_override_runs_after_shared_chrome_normalization()
+    public void Default_action_uses_shared_accent_border_after_chrome_normalization()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "PageSetupDialog.cs"));
 
-        source.Should().Contain("DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush");
+        source.Should().NotContain("DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush");
         source.Should().Contain("foreach (var button in ((Panel)actions).Children.OfType<Button>())");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, actionStyle, metrics.ActionButtonWidth);");
     }
