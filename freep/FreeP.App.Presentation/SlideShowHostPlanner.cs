@@ -78,6 +78,7 @@ public sealed record SlideShowPresenterDisplayIntent(
 
 public sealed record SlideShowPresenterSlideState(
     int SlideIndex,
+    int PresentationSlideIndex,
     string SlideId,
     string Title,
     Slide Slide);
@@ -626,18 +627,26 @@ public static class SlideShowHostPlanner
         DateTimeOffset startedAtUtc,
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null,
-        SlideShowPresenterToolPlan? toolPlan = null)
+        SlideShowPresenterToolPlan? toolPlan = null,
+        IReadOnlyList<int>? sourceSlideIndices = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(controller);
         ArgumentNullException.ThrowIfNull(slides);
 
+        if (sourceSlideIndices is not null && sourceSlideIndices.Count != slides.Count)
+        {
+            throw new ArgumentException(
+                "The presenter slide list and source slide index list must have the same count.",
+                nameof(sourceSlideIndices));
+        }
+
         var hostState = BuildState(controller, slides.Count);
         var currentSlide = hostState.HasSlides
-            ? BuildPresenterSlideState(slides, hostState.CurrentSlideIndex)
+            ? BuildPresenterSlideState(slides, hostState.CurrentSlideIndex, sourceSlideIndices)
             : null;
         var nextSlide = hostState.HasSlides
-            ? BuildPresenterSlideState(slides, hostState.CurrentSlideIndex + 1)
+            ? BuildPresenterSlideState(slides, hostState.CurrentSlideIndex + 1, sourceSlideIndices)
             : null;
         var elapsed = nowUtc >= startedAtUtc
             ? nowUtc - startedAtUtc
@@ -866,7 +875,8 @@ public static class SlideShowHostPlanner
 
     private static SlideShowPresenterSlideState? BuildPresenterSlideState(
         IReadOnlyList<Slide> slides,
-        int slideIndex)
+        int slideIndex,
+        IReadOnlyList<int>? sourceSlideIndices)
     {
         if (slideIndex < 0 || slideIndex >= slides.Count)
         {
@@ -876,6 +886,7 @@ public static class SlideShowHostPlanner
         var slide = slides[slideIndex];
         return new SlideShowPresenterSlideState(
             slideIndex,
+            sourceSlideIndices?[slideIndex] ?? slideIndex,
             slide.Id,
             slide.Title,
             slide);

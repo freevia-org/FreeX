@@ -552,9 +552,11 @@ public sealed class SlideShowHostPlannerTests
         state.HostState.StatusText.Should().Be("Slide 2 of 3");
         state.CurrentSlide.Should().NotBeNull();
         state.CurrentSlide!.SlideIndex.Should().Be(1);
+        state.CurrentSlide.PresentationSlideIndex.Should().Be(1);
         state.CurrentSlide.Slide.Should().BeSameAs(pres.Slides[1]);
         state.NextSlide.Should().NotBeNull();
         state.NextSlide!.SlideIndex.Should().Be(2);
+        state.NextSlide.PresentationSlideIndex.Should().Be(2);
         state.NextSlide.Slide.Should().BeSameAs(pres.Slides[2]);
         state.NotesText.Should().Be("speaker notes\nsecond line");
         state.StartedAtUtc.Should().Be(started);

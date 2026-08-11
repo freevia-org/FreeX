@@ -327,10 +327,14 @@ public sealed class SlideShowPresenterSessionDedupTests
     }
 
     [Fact]
-    public void PresenterViewRefreshPlan_CommitsNotesToTheSlideThatPopulatedTheEditor()
+    public void PresenterViewRefreshPlan_CommitsNotesToThePresentationSlideThatPopulatedTheEditor()
     {
-        var presentation = MakePresentation(2);
-        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var presentation = MakePresentation(3);
+        var route = new SlideShowPlaybackRoute(
+            "Reordered show",
+            [presentation.Slides[2], presentation.Slides[0]],
+            [2, 0],
+            startIndex: 0);
         var started = new DateTimeOffset(2026, 8, 11, 10, 0, 0, TimeSpan.Zero);
         var slideshow = new SlideShowSessionController(
             presentation,
@@ -341,6 +345,14 @@ public sealed class SlideShowPresenterSessionDedupTests
         var presenter = new SlideShowPresenterViewSession(
             () => slideshow.CreatePresenterState(started),
             setNotesText: (slideIndex, text) => committed.Add((slideIndex, text)));
+
+        var initialState = slideshow.CreatePresenterState(started);
+        initialState.CurrentSlide.Should().NotBeNull();
+        initialState.CurrentSlide!.SlideIndex.Should().Be(0);
+        initialState.CurrentSlide.PresentationSlideIndex.Should().Be(2);
+        initialState.NextSlide.Should().NotBeNull();
+        initialState.NextSlide!.SlideIndex.Should().Be(1);
+        initialState.NextSlide.PresentationSlideIndex.Should().Be(0);
 
         presenter.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(
             NotesFocused: false,
@@ -353,7 +365,8 @@ public sealed class SlideShowPresenterSessionDedupTests
             NoOpCallbacks());
 
         presenter.CommitNotes(notesDirty: true, notesText: "Edited during auto-advance").Should().BeTrue();
-        committed.Should().Equal((0, "Edited during auto-advance"));
+        slideshow.CurrentPresentationSlideIndex.Should().Be(0);
+        committed.Should().Equal((2, "Edited during auto-advance"));
     }
 
     [Fact]

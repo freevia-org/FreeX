@@ -157,7 +157,8 @@ public sealed class SlideShowSessionController
             StartedAtUtc,
             nowUtc,
             displayIntent,
-            ToolPlan);
+            ToolPlan,
+            _playbackRoute.SourceSlideIndices);
 
     public SlideShowHostDisplayPlan BuildDisplayPlan(
         bool animated,

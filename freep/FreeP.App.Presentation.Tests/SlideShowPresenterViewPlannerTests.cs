@@ -15,8 +15,8 @@ public sealed class SlideShowPresenterViewPlannerTests
         next.Title = "Launch plan";
         var state = new SlideShowPresenterState(
             new SlideShowHostState(3, 0, true, true, false, false, "Slide 1 of 3"),
-            new SlideShowPresenterSlideState(0, "current", current.Title, current),
-            new SlideShowPresenterSlideState(1, "next", next.Title, next),
+            new SlideShowPresenterSlideState(0, 0, "current", current.Title, current),
+            new SlideShowPresenterSlideState(1, 1, "next", next.Title, next),
             "Confirm the launch date.",
             DateTimeOffset.UtcNow.AddMinutes(-2),
             TimeSpan.FromSeconds(125),
@@ -70,7 +70,7 @@ public sealed class SlideShowPresenterViewPlannerTests
         var slide = new Slide { Id = "last" };
         var state = new SlideShowPresenterState(
             new SlideShowHostState(1, 0, true, true, true, true, "Slide 1 of 1"),
-            new SlideShowPresenterSlideState(0, slide.Id, "Last", slide),
+            new SlideShowPresenterSlideState(0, 0, slide.Id, "Last", slide),
             null,
             string.Empty,
             DateTimeOffset.UtcNow,
@@ -86,7 +86,7 @@ public sealed class SlideShowPresenterViewPlannerTests
     {
         var state = new SlideShowPresenterState(
             new SlideShowHostState(1, 0, true, true, true, false, "Slide 1 of 1"),
-            new SlideShowPresenterSlideState(0, "slide", "Slide", new Slide { Id = "slide" }),
+            new SlideShowPresenterSlideState(0, 0, "slide", "Slide", new Slide { Id = "slide" }),
             null,
             string.Empty,
             DateTimeOffset.UtcNow,
@@ -102,7 +102,7 @@ public sealed class SlideShowPresenterViewPlannerTests
     {
         var state = new SlideShowPresenterState(
             new SlideShowHostState(1, 0, true, true, true, false, "Slide 1 of 1"),
-            new SlideShowPresenterSlideState(0, "slide", "Slide", new Slide { Id = "slide" }),
+            new SlideShowPresenterSlideState(0, 0, "slide", "Slide", new Slide { Id = "slide" }),
             null,
             string.Empty,
             DateTimeOffset.UtcNow,

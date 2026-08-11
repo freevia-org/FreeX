@@ -46,7 +46,7 @@ public sealed class SlideShowPresenterViewSession
     private readonly Func<SlideShowRecordingReviewPlan>? _recordingReviewProvider;
     private readonly Func<SlideShowRecordingReviewApplyResult>? _applyRecordingReview;
     private readonly Action<int, string?>? _setNotesText;
-    private int? _notesSlideIndex;
+    private int? _notesPresentationSlideIndex;
 
     public SlideShowPresenterViewSession(SlideShowPresenterViewOperations operations)
         : this(
@@ -137,7 +137,7 @@ public sealed class SlideShowPresenterViewSession
         var shouldUpdateNotesText = !request.NotesFocused && !notesRemainDirty;
         if (shouldUpdateNotesText)
         {
-            _notesSlideIndex = state.CurrentSlide?.SlideIndex;
+            _notesPresentationSlideIndex = state.CurrentSlide?.PresentationSlideIndex;
         }
 
         return new(
@@ -235,7 +235,8 @@ public sealed class SlideShowPresenterViewSession
             return false;
         }
 
-        var slideIndex = _notesSlideIndex ?? _stateProvider().CurrentSlide?.SlideIndex;
+        var slideIndex = _notesPresentationSlideIndex ??
+            _stateProvider().CurrentSlide?.PresentationSlideIndex;
         if (slideIndex is not int index)
         {
             return false;
