@@ -1581,29 +1581,23 @@ public sealed partial class SlideCanvas : FrameworkElement
         double y,
         FlowDirection flowDirection)
     {
-        var glyph = TextLayoutPlanner.GetTabLeaderGlyph(leader);
-        double width = endX - startX;
-        if (glyph == '\0' || width < 1)
-            return;
-
-        var glyphText = BuildSingleRunFormattedTextAt(
-            run,
-            glyph.ToString(),
-            flowDirection: flowDirection);
-        double glyphWidth = glyphText.WidthIncludingTrailingWhitespace;
-        if (glyphWidth <= 0)
-            return;
-
-        int count = (int)Math.Floor(width / glyphWidth);
-        if (count <= 0)
+        var plan = TextLayoutPlanner.PlanTabLeaderFill(
+            leader,
+            startX,
+            endX,
+            glyph => BuildSingleRunFormattedTextAt(
+                run,
+                glyph.ToString(),
+                flowDirection: flowDirection).WidthIncludingTrailingWhitespace);
+        if (!plan.ShouldDraw)
             return;
 
         dc.DrawText(
             BuildSingleRunFormattedTextAt(
                 run,
-                new string(glyph, count),
+                plan.Text,
                 flowDirection: flowDirection),
-            new Point(startX, y));
+            new Point(plan.StartX, y));
     }
 
     /// <summary>

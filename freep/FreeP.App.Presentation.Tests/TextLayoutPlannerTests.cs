@@ -1231,6 +1231,54 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanTabLeaderFill_OwnsGlyphCountSpanAndText()
+    {
+        var measuredGlyph = '\0';
+
+        var plan = TextLayoutPlanner.PlanTabLeaderFill(
+            TabStopLeader.Dots,
+            startX: 12,
+            endX: 35,
+            glyph =>
+            {
+                measuredGlyph = glyph;
+                return 5;
+            });
+
+        measuredGlyph.Should().Be('.');
+        plan.ShouldDraw.Should().BeTrue();
+        plan.Glyph.Should().Be('.');
+        plan.GlyphCount.Should().Be(4);
+        plan.StartX.Should().Be(12);
+        plan.EndX.Should().Be(35);
+        plan.SpanWidth.Should().Be(23);
+        plan.Text.Should().Be("....");
+    }
+
+    [Theory]
+    [InlineData(TabStopLeader.None, 0, 20, 5)]
+    [InlineData(TabStopLeader.Dots, 0, 0.5, 5)]
+    [InlineData(TabStopLeader.Dots, 20, 10, 5)]
+    [InlineData(TabStopLeader.Dots, 0, 20, 0)]
+    [InlineData(TabStopLeader.Dots, 0, 20, double.NaN)]
+    public void PlanTabLeaderFill_SuppressesInvalidOrUnpaintableSpans(
+        TabStopLeader leader,
+        double startX,
+        double endX,
+        double glyphWidth)
+    {
+        var plan = TextLayoutPlanner.PlanTabLeaderFill(
+            leader,
+            startX,
+            endX,
+            _ => glyphWidth);
+
+        plan.ShouldDraw.Should().BeFalse();
+        plan.GlyphCount.Should().Be(0);
+        plan.Text.Should().BeEmpty();
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateTextLayoutMathToSharedPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
@@ -1247,6 +1295,7 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
         wpf.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
         wpf.Should().Contain("TextLayoutPlanner.PlanTabStops");
+        wpf.Should().Contain("TextLayoutPlanner.PlanTabLeaderFill(");
         wpf.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         wpf.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
         wpf.Should().Contain("placement.Bullet");
@@ -1259,6 +1308,8 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().NotContain("const double DefaultSpacingDip");
         wpf.Should().NotContain("const double DefaultTabDip");
         wpf.Should().NotContain("Math.Floor(relX /");
+        wpf.Should().NotContain("Math.Floor(width / glyphWidth)");
+        wpf.Should().NotContain("new string(glyph, count)");
         wpf.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         wpf.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
 
@@ -1272,6 +1323,7 @@ public sealed class TextLayoutPlannerTests
         wpf.Should().Contain("DrawTabLeaderWpf");
         avalonia.Should().Contain("DrawTabLeaderAvalonia");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanTabLeaderFill(");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         avalonia.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
         avalonia.Should().Contain("placement.Bullet");
@@ -1284,6 +1336,8 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().NotContain("const double DefaultSpacingDip");
         avalonia.Should().NotContain("const double DefaultTabDip");
         avalonia.Should().NotContain("Math.Floor(relX /");
+        avalonia.Should().NotContain("Math.Floor(width / glyphWidth)");
+        avalonia.Should().NotContain("new string(glyph, count)");
         avalonia.Should().NotContain("TableCellAnchor.Middle => bounds.Y");
         avalonia.Should().NotContain("VerticalAnchor.Middle => bounds.Y");
     }

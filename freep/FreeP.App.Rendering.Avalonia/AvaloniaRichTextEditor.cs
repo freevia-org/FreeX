@@ -107,13 +107,25 @@ internal sealed class AvaloniaRichTextEditor : Grid
             InputBox,
             PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId);
 
-        _copyContextMenuItem = new MenuItem { Header = "Copy" };
+        _copyContextMenuItem = new MenuItem
+        {
+            Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand),
+        };
         _copyContextMenuItem.Click += async (_, _) => { _ = await CopySelectionAsync(); };
-        _cutContextMenuItem = new MenuItem { Header = "Cut" };
+        _cutContextMenuItem = new MenuItem
+        {
+            Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCutCommand),
+        };
         _cutContextMenuItem.Click += async (_, _) => { _ = await CutSelectionAsync(); };
-        _pasteContextMenuItem = new MenuItem { Header = "Paste" };
+        _pasteContextMenuItem = new MenuItem
+        {
+            Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditPasteCommand),
+        };
         _pasteContextMenuItem.Click += async (_, _) => { _ = await PasteClipboardAsync(); };
-        var selectAllContextMenuItem = new MenuItem { Header = "Select All" };
+        var selectAllContextMenuItem = new MenuItem
+        {
+            Header = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditSelectAllCommand),
+        };
         selectAllContextMenuItem.Click += (_, _) =>
         {
             SelectionStart = 0;

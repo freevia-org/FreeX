@@ -88,4 +88,46 @@
   <data name="FreeP_Backstage_Options_EditText" xml:space="preserve">
     <value>Modifier les options…</value>
   </data>
+  <data name="File_Error_OpenPresentation" xml:space="preserve">
+    <value>Impossible d'ouvrir la présentation</value>
+  </data>
+  <data name="File_Error_SavePresentation" xml:space="preserve">
+    <value>Impossible d'enregistrer la présentation</value>
+  </data>
+  <data name="File_Error_ExportPdf" xml:space="preserve">
+    <value>Impossible d'exporter la présentation au format PDF</value>
+  </data>
+  <data name="File_Error_ExportNotesPagePdf" xml:space="preserve">
+    <value>Impossible d'exporter les pages de notes de la présentation au format PDF</value>
+  </data>
+  <data name="File_Error_ExportImages" xml:space="preserve">
+    <value>Impossible d'exporter les diapositives de la présentation sous forme d'images</value>
+  </data>
+  <data name="File_Error_PrintPresentation" xml:space="preserve">
+    <value>Impossible d'imprimer la présentation</value>
+  </data>
+  <data name="File_Error_ExportVideo" xml:space="preserve">
+    <value>Impossible d'exporter la vidéo de la présentation</value>
+  </data>
+  <data name="File_Error_PresentationCommand" xml:space="preserve">
+    <value>Impossible d'exécuter la commande de fichier de présentation</value>
+  </data>
+  <data name="File_Error_NativePickerUnavailable" xml:space="preserve">
+    <value>Le sélecteur de fichiers natif n'est pas disponible.</value>
+  </data>
+  <data name="File_Error_NonLocalSelection" xml:space="preserve">
+    <value>L'élément sélectionné n'a pas de chemin local.</value>
+  </data>
+  <data name="Edit_Command_Copy" xml:space="preserve">
+    <value>Copier</value>
+  </data>
+  <data name="Edit_Command_Cut" xml:space="preserve">
+    <value>Couper</value>
+  </data>
+  <data name="Edit_Command_Paste" xml:space="preserve">
+    <value>Coller</value>
+  </data>
+  <data name="Edit_Command_SelectAll" xml:space="preserve">
+    <value>Tout sélectionner</value>
+  </data>
 </root>

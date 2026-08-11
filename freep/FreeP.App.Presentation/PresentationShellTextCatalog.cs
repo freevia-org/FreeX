@@ -30,6 +30,18 @@ public static class PresentationShellTextCatalog
     public static LocalizedTextDescriptor PictureBulletCommandName { get; } =
         Text("Shell_Command_PictureBullet");
 
+    public static LocalizedTextDescriptor EditCopyCommand { get; } =
+        Text("Edit_Command_Copy");
+
+    public static LocalizedTextDescriptor EditCutCommand { get; } =
+        Text("Edit_Command_Cut");
+
+    public static LocalizedTextDescriptor EditPasteCommand { get; } =
+        Text("Edit_Command_Paste");
+
+    public static LocalizedTextDescriptor EditSelectAllCommand { get; } =
+        Text("Edit_Command_SelectAll");
+
     public static LocalizedTextDescriptor PresentationCommandUnavailableStatus { get; } =
         Text("Shell_Status_PresentationCommandUnavailable");
 

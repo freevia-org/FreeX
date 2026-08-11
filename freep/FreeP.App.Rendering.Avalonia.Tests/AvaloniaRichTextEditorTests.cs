@@ -50,7 +50,11 @@ public sealed class AvaloniaRichTextEditorTests
             menu.Should().NotBeNull();
             menu!.Items.OfType<MenuItem>()
                 .Select(item => item.Header?.ToString())
-                .Should().Equal("Cut", "Copy", "Paste", "Select All");
+                .Should().Equal(
+                    PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCutCommand),
+                    PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditCopyCommand),
+                    PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditPasteCommand),
+                    PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.EditSelectAllCommand));
             menu.Items.OfType<MenuItem>().Take(2)
                 .Should().OnlyContain(item => !item.IsEnabled);
 

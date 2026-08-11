@@ -255,7 +255,7 @@ internal static class PresentationFileOperationOutcomeMapper
             OperationOutcome<string, string, string>.Unavailable(message, path),
         PresentationFilePickerStatus.NonLocalSelection =>
             OperationOutcome<string, string, string>.ValidationFailure(
-                message ?? "The selected item does not have a local path.",
+                message ?? PresentationFileTextResources.NonLocalSelection,
                 message,
                 path),
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported picker status."),
@@ -662,7 +662,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Failure(
                     command,
-                    "Could not export the presentation to PDF",
+                    PresentationFileTextResources.ErrorSummary(command),
                     ex,
                     selection.Path),
                 cancellationToken);
@@ -681,7 +681,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Invalid(
                     command,
-                    "Could not export the presentation notes pages to PDF",
+                    PresentationFileTextResources.ErrorSummary(command),
                     exportPlan.DisabledReason ?? "No notes pages can be exported."),
                 cancellationToken);
         }
@@ -724,7 +724,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Failure(
                     command,
-                    "Could not export the presentation notes pages to PDF",
+                    PresentationFileTextResources.ErrorSummary(command),
                     ex,
                     selection.Path),
                 cancellationToken);
@@ -775,7 +775,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Failure(
                     PresentationFileCommand.ExportImages,
-                    "Could not export the presentation slides to images",
+                    PresentationFileTextResources.ErrorSummary(PresentationFileCommand.ExportImages),
                     ex,
                     outputDirectory),
                 cancellationToken);
@@ -888,7 +888,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Failure(
                     PresentationFileCommand.Print,
-                    "Could not print the presentation",
+                    PresentationFileTextResources.ErrorSummary(PresentationFileCommand.Print),
                     ex),
                 cancellationToken);
         }
@@ -953,7 +953,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Invalid(
                     PresentationFileCommand.ExportVideo,
-                    "Could not export the presentation video",
+                    PresentationFileTextResources.ErrorSummary(PresentationFileCommand.ExportVideo),
                     plan.DisabledReason ?? "Video export requires at least one slide."),
                 cancellationToken);
         }
@@ -998,7 +998,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Failure(
                     PresentationFileCommand.ExportVideo,
-                    "Could not export the presentation video",
+                    PresentationFileTextResources.ErrorSummary(PresentationFileCommand.ExportVideo),
                     ex,
                     outputPath),
                 cancellationToken);
@@ -1030,7 +1030,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Failure(
                     PresentationFileCommand.Open,
-                    "Could not open the presentation",
+                    PresentationFileTextResources.ErrorSummary(PresentationFileCommand.Open),
                     ex,
                     path),
                 cancellationToken);
@@ -1056,7 +1056,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Invalid(
                     PresentationFileCommand.SaveAs,
-                    "Could not save the presentation",
+                    PresentationFileTextResources.ErrorSummary(PresentationFileCommand.SaveAs),
                     PresentationFileDialogPlanner.UnsupportedSavePathMessage,
                     selection.Path),
                 cancellationToken);
@@ -1089,7 +1089,7 @@ public sealed class PresentationFileCommandSession
             return await CompleteAsync(
                 PresentationFileCommandResult.Failure(
                     command,
-                    "Could not save the presentation",
+                    PresentationFileTextResources.ErrorSummary(command),
                     ex,
                     path),
                 cancellationToken);
@@ -1113,11 +1113,11 @@ public sealed class PresentationFileCommandSession
             PresentationFilePickerStatus.Cancelled => PresentationFileCommandResult.Cancel(command),
             PresentationFilePickerStatus.Unavailable => PresentationFileCommandResult.Unavailable(
                 command,
-                selection.Message ?? "The native picker is unavailable."),
+                selection.Message ?? PresentationFileTextResources.NativePickerUnavailable),
             PresentationFilePickerStatus.NonLocalSelection => PresentationFileCommandResult.Invalid(
                 command,
-                ErrorSummary(command),
-                selection.Message ?? "The selected item does not have a local path."),
+                PresentationFileTextResources.ErrorSummary(command),
+                selection.Message ?? PresentationFileTextResources.NonLocalSelection),
             _ => throw new ArgumentOutOfRangeException(nameof(selection), selection.Status, "Unsupported picker result."),
         };
 
@@ -1134,7 +1134,7 @@ public sealed class PresentationFileCommandSession
                 ? PresentationFileCommandResult.Cancel(command, native.StatusText)
                 : PresentationFileCommandResult.Failure(
                     command,
-                    ErrorSummary(command),
+                    PresentationFileTextResources.ErrorSummary(command),
                     new InvalidOperationException(native.FailureReason ?? native.StatusText),
                     path,
                     native.StatusText);
@@ -1151,15 +1151,4 @@ public sealed class PresentationFileCommandSession
         return result;
     }
 
-    private static string ErrorSummary(PresentationFileCommand command) => command switch
-    {
-        PresentationFileCommand.Open => "Could not open the presentation",
-        PresentationFileCommand.Save or PresentationFileCommand.SaveAs => "Could not save the presentation",
-        PresentationFileCommand.ExportPdf => "Could not export the presentation to PDF",
-        PresentationFileCommand.ExportNotesPagePdf => "Could not export the presentation notes pages to PDF",
-        PresentationFileCommand.ExportImages => "Could not export the presentation slides to images",
-        PresentationFileCommand.Print => "Could not print the presentation",
-        PresentationFileCommand.ExportVideo => "Could not export the presentation video",
-        _ => "Could not complete the presentation file command",
-    };
 }

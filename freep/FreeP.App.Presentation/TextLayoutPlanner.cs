@@ -268,6 +268,17 @@ public sealed record TextContinuousColumnFlowPlan<TArtifact>(
 public sealed record TextTabLayoutPlan(
     IReadOnlyList<TextTabSegmentPlacement> Segments);
 
+public sealed record TextTabLeaderFillPlan(
+    char Glyph,
+    int GlyphCount,
+    double StartX,
+    double EndX)
+{
+    public bool ShouldDraw => Glyph != '\0' && GlyphCount > 0;
+    public double SpanWidth => Math.Max(0, EndX - StartX);
+    public string Text => ShouldDraw ? new string(Glyph, GlyphCount) : string.Empty;
+}
+
 public static class TextLayoutPlanner
 {
     public const double DipPerPoint = 96.0 / 72.0;
@@ -289,6 +300,28 @@ public static class TextLayoutPlanner
             TabStopLeader.Equal => '=',
             _ => '\0',
         };
+
+    public static TextTabLeaderFillPlan PlanTabLeaderFill(
+        TabStopLeader leader,
+        double startX,
+        double endX,
+        Func<char, double> measureGlyphWidth)
+    {
+        ArgumentNullException.ThrowIfNull(measureGlyphWidth);
+
+        var glyph = GetTabLeaderGlyph(leader);
+        var spanWidth = endX - startX;
+        if (glyph == '\0' || !double.IsFinite(spanWidth) || spanWidth < 1)
+            return new(glyph, 0, startX, endX);
+
+        var glyphWidth = measureGlyphWidth(glyph);
+        if (!double.IsFinite(glyphWidth) || glyphWidth <= 0)
+            return new(glyph, 0, startX, endX);
+
+        var glyphCount = (int)Math.Floor(spanWidth / glyphWidth);
+        return new(glyph, Math.Max(0, glyphCount), startX, endX);
+    }
+
     public const double ImportedAptosBodyOriginOffsetY = 6.0;
     public const double RuntimeAutoFitMinimumFontScale = 0.60;
     public const double RuntimeAutoFitMaximumLineSpacingReduction = 0.20;

@@ -3019,6 +3019,36 @@
   <data name="File_VideoExportFailed" xml:space="preserve">
     <value>Video export failed.</value>
   </data>
+  <data name="File_Error_OpenPresentation" xml:space="preserve">
+    <value>Could not open the presentation</value>
+  </data>
+  <data name="File_Error_SavePresentation" xml:space="preserve">
+    <value>Could not save the presentation</value>
+  </data>
+  <data name="File_Error_ExportPdf" xml:space="preserve">
+    <value>Could not export the presentation to PDF</value>
+  </data>
+  <data name="File_Error_ExportNotesPagePdf" xml:space="preserve">
+    <value>Could not export the presentation notes pages to PDF</value>
+  </data>
+  <data name="File_Error_ExportImages" xml:space="preserve">
+    <value>Could not export the presentation slides to images</value>
+  </data>
+  <data name="File_Error_PrintPresentation" xml:space="preserve">
+    <value>Could not print the presentation</value>
+  </data>
+  <data name="File_Error_ExportVideo" xml:space="preserve">
+    <value>Could not export the presentation video</value>
+  </data>
+  <data name="File_Error_PresentationCommand" xml:space="preserve">
+    <value>Could not complete the presentation file command</value>
+  </data>
+  <data name="File_Error_NativePickerUnavailable" xml:space="preserve">
+    <value>The native picker is unavailable.</value>
+  </data>
+  <data name="File_Error_NonLocalSelection" xml:space="preserve">
+    <value>The selected item does not have a local path.</value>
+  </data>
   <data name="File_NewPresentationAction" xml:space="preserve">
     <value>creating a new presentation</value>
   </data>
@@ -3600,6 +3630,18 @@
   </data>
   <data name="Shell_Command_PictureBullet" xml:space="preserve">
     <value>Picture Bullet</value>
+  </data>
+  <data name="Edit_Command_Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Edit_Command_Cut" xml:space="preserve">
+    <value>Cut</value>
+  </data>
+  <data name="Edit_Command_Paste" xml:space="preserve">
+    <value>Paste</value>
+  </data>
+  <data name="Edit_Command_SelectAll" xml:space="preserve">
+    <value>Select All</value>
   </data>
   <data name="Shell_Status_PresentationCommandUnavailable" xml:space="preserve">
     <value>The presentation command is unavailable.</value>
