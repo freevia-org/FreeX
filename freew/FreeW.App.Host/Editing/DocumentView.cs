@@ -17505,14 +17505,9 @@ public sealed class DocumentView : RichTextBox
     public void ApplyInspectorRemovals(bool comments, bool revisions, bool properties, bool bookmarks)
     {
         CommitToModel();
-        if (comments)
-            DocumentInspector.RemoveComments(_model);
-        if (revisions)
-            DocumentInspector.RemoveRevisions(_model);
-        if (properties)
-            DocumentInspector.RemoveProperties(_model);
-        if (bookmarks)
-            DocumentInspector.RemoveBookmarks(_model);
+        DocumentInspector.RemoveSelected(
+            _model,
+            new InspectionRemovalSelection(comments, revisions, properties, bookmarks));
         Render();
     }
 

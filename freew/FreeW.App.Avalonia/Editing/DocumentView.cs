@@ -25524,14 +25524,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ApplyInspectorRemovals(bool comments, bool revisions, bool properties, bool bookmarks)
     {
-        if (comments)
-            DocumentInspector.RemoveComments(_doc);
-        if (revisions)
-            DocumentInspector.RemoveRevisions(_doc);
-        if (properties)
-            DocumentInspector.RemoveProperties(_doc);
-        if (bookmarks)
-            DocumentInspector.RemoveBookmarks(_doc);
+        DocumentInspector.RemoveSelected(
+            _doc,
+            new InspectionRemovalSelection(comments, revisions, properties, bookmarks));
 
         InvalidateAfterExternalMutation();
     }
