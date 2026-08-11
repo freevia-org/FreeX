@@ -26,7 +26,6 @@ namespace FreeW.Core.Model;
 /// </summary>
 public static class OutlineTools
 {
-    private const string TitleStyleId = "Title";
     private const string HeadingPrefix = "Heading";
 
     /// <summary>The deepest heading level <see cref="Demote"/> will produce (a <c>Heading6</c> cap).</summary>
@@ -43,10 +42,10 @@ public static class OutlineTools
 
         // Title (level 0) is already the top of the outline.
         if (level <= 0)
-            return TitleStyleId;
+            return StyleForLevel(0);
 
         // Heading1 promotes to Title; deeper headings step up one level.
-        return level == 1 ? TitleStyleId : StyleForLevel(level - 1);
+        return StyleForLevel(level - 1);
     }
 
     /// <summary>
@@ -65,8 +64,13 @@ public static class OutlineTools
     }
 
     // Build the style id for an outline level: 0 -> Title, N>0 -> "HeadingN".
-    private static string StyleForLevel(int level) =>
-        level <= 0 ? TitleStyleId : HeadingPrefix + level.ToString(CultureInfo.InvariantCulture);
+    private static string StyleForLevel(int level)
+    {
+        if (BuiltInStyles.FindByOutlineLevel(Math.Max(0, level)) is { } descriptor)
+            return descriptor.Id;
+
+        return HeadingPrefix + level.ToString(CultureInfo.InvariantCulture);
+    }
 
     /// <summary>
     /// The contiguous block span "owned" by the heading at <paramref name="headingIndex"/> in

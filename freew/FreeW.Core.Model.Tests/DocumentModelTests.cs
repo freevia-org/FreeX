@@ -76,6 +76,7 @@ public class DocumentModelTests
             doc => DocumentStyleSet.Apply(doc, DocumentStyleSet.FindByName("Elegant")!)));
         document.DefaultRun.FontFamily.Should().Be("Georgia");
         document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+        document.Styles["Heading4"].Run.FontFamily.Should().Be("Cambria");
 
         bus.Undo();
         document.DefaultRun.Should().Be(defaultRun);
@@ -90,6 +91,7 @@ public class DocumentModelTests
         bus.Redo();
         document.DefaultRun.FontFamily.Should().Be("Georgia");
         document.Styles["Heading1"].Run.FontFamily.Should().Be("Cambria");
+        document.Styles["Heading4"].Run.FontFamily.Should().Be("Cambria");
     }
 
     [Fact]

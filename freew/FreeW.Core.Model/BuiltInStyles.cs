@@ -1,15 +1,29 @@
 namespace FreeW.Core.Model;
 
 /// <summary>
+/// Semantic roles shared by the built-in paragraph styles that participate in FreeW's portable
+/// document-formatting policies. <see cref="None"/> keeps gallery-only styles out of those policies.
+/// </summary>
+public enum BuiltInStyleRole
+{
+    None,
+    Normal,
+    Title,
+    Subtitle,
+    Heading,
+    Quote,
+}
+
+/// <summary>
 /// The catalog of built-in Word styles surfaced by the Home &gt; Styles gallery, and a helper that
 /// seeds any that are missing from a document so that <see cref="Paragraph.StyleId"/> /
 /// run-level style application resolves to real formatting.
 ///
 /// <para>
-/// <see cref="TextDocument.CreateEmpty"/> already seeds the core ranks (Normal, Heading 1–3, Title,
-/// Subtitle, Quote) via its private <c>AddBuiltInStyles</c>. This adds the broader gallery set Word
-/// shows (No Spacing, Heading 4, Strong, Emphasis, Subtle/Intense Emphasis, Intense Quote, List
-/// Paragraph) — both paragraph and character styles — and a <see cref="EnsureSeeded"/> entry point
+/// <see cref="TextDocument.CreateEmpty"/> seeds the role catalog (Normal, Heading 1–4, Title,
+/// Subtitle, Quote). This catalog also includes the broader gallery set Word shows (No Spacing,
+/// Strong, Emphasis, Subtle/Intense Emphasis, Intense Quote, List Paragraph) — both paragraph and
+/// character styles — and a <see cref="EnsureSeeded"/> entry point
 /// that the editor calls before applying a named style so a freshly-loaded document (e.g. one read
 /// from a .docx that lacks one of these) still resolves the look. Seeded styles round-trip through
 /// the existing <c>DocxWriter.BuildStyles</c> path like any other catalog entry.
@@ -22,7 +36,13 @@ public static class BuiltInStyles
     /// key + <see cref="Paragraph.StyleId"/> value), its display name, whether it is a character or
     /// paragraph style, and a factory for its definition when it must be seeded.
     /// </summary>
-    public sealed record Descriptor(string Id, string Name, StyleType Type, Func<DocumentStyle> Create);
+    public sealed record Descriptor(
+        string Id,
+        string Name,
+        StyleType Type,
+        Func<DocumentStyle> Create,
+        BuiltInStyleRole Role = BuiltInStyleRole.None,
+        int? HeadingLevel = null);
 
     private const string Accent = "#2F5496";
     private const string AccentDark = "#1F3864";
@@ -32,7 +52,8 @@ public static class BuiltInStyles
     public static readonly IReadOnlyList<Descriptor> Gallery =
     [
         new("Normal",     "Normal",     StyleType.Paragraph,
-            () => new DocumentStyle { Id = "Normal", Name = "Normal" }),
+            () => new DocumentStyle { Id = "Normal", Name = "Normal" },
+            BuiltInStyleRole.Normal),
 
         new("NoSpacing",  "No Spacing", StyleType.Paragraph,
             () => new DocumentStyle
@@ -54,7 +75,7 @@ public static class BuiltInStyles
                 {
                     SpaceBeforePt = 12, SpaceAfterPt = 4, SpaceBeforeIsSet = true, SpaceAfterIsSet = true,
                 },
-            }),
+            }, BuiltInStyleRole.Heading, HeadingLevel: 1),
 
         new("Heading2", "Heading 2", StyleType.Paragraph,
             () => new DocumentStyle
@@ -66,7 +87,7 @@ public static class BuiltInStyles
                 {
                     SpaceBeforePt = 10, SpaceAfterPt = 4, SpaceBeforeIsSet = true, SpaceAfterIsSet = true,
                 },
-            }),
+            }, BuiltInStyleRole.Heading, HeadingLevel: 2),
 
         new("Heading3", "Heading 3", StyleType.Paragraph,
             () => new DocumentStyle
@@ -78,7 +99,7 @@ public static class BuiltInStyles
                 {
                     SpaceBeforePt = 8, SpaceAfterPt = 4, SpaceBeforeIsSet = true, SpaceAfterIsSet = true,
                 },
-            }),
+            }, BuiltInStyleRole.Heading, HeadingLevel: 3),
 
         new("Heading4", "Heading 4", StyleType.Paragraph,
             () => new DocumentStyle
@@ -90,7 +111,7 @@ public static class BuiltInStyles
                 {
                     SpaceBeforePt = 6, SpaceAfterPt = 2, SpaceBeforeIsSet = true, SpaceAfterIsSet = true,
                 },
-            }),
+            }, BuiltInStyleRole.Heading, HeadingLevel: 4),
 
         new("Title", "Title", StyleType.Paragraph,
             () => new DocumentStyle
@@ -98,7 +119,7 @@ public static class BuiltInStyles
                 Id = "Title", Name = "Title", BasedOnStyleId = "Normal",
                 Run = new RunFormatting { Bold = true, FontSizePt = 28 },
                 Paragraph = new ParagraphFormatting { SpaceAfterPt = 8, SpaceAfterIsSet = true },
-            }),
+            }, BuiltInStyleRole.Title),
 
         new("Subtitle", "Subtitle", StyleType.Paragraph,
             () => new DocumentStyle
@@ -106,7 +127,7 @@ public static class BuiltInStyles
                 Id = "Subtitle", Name = "Subtitle", BasedOnStyleId = "Normal",
                 Run = new RunFormatting { Italic = true, FontSizePt = 15, ColorHex = "#5A5A5A" },
                 Paragraph = new ParagraphFormatting { SpaceAfterPt = 8, SpaceAfterIsSet = true },
-            }),
+            }, BuiltInStyleRole.Subtitle),
 
         new("ListParagraph", "List Paragraph", StyleType.Paragraph,
             () => new DocumentStyle
@@ -125,7 +146,7 @@ public static class BuiltInStyles
                     SpaceBeforePt = 10, SpaceAfterPt = 10, SpaceBeforeIsSet = true, SpaceAfterIsSet = true,
                     IndentLeftPt = 36, IndentRightPt = 36,
                 },
-            }),
+            }, BuiltInStyleRole.Quote),
 
         new("IntenseQuote", "Intense Quote", StyleType.Paragraph,
             () => new DocumentStyle
@@ -169,9 +190,25 @@ public static class BuiltInStyles
             }),
     ];
 
+    /// <summary>
+    /// The built-in paragraph styles owned by the shared document-formatting policies. Derived from
+    /// <see cref="Gallery"/> so role membership and each style's seed definition cannot drift apart.
+    /// </summary>
+    public static readonly IReadOnlyList<Descriptor> RoleCatalog =
+        Gallery.Where(descriptor => descriptor.Role != BuiltInStyleRole.None).ToArray();
+
     /// <summary>Look up a gallery descriptor by style id, or null when the id is not a built-in gallery style.</summary>
     public static Descriptor? Find(string styleId) =>
         Gallery.FirstOrDefault(d => string.Equals(d.Id, styleId, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Find the catalog descriptor for Title (level 0) or a registered Heading level. Deeper outline
+    /// levels remain valid Word outline styles but are not portable document-formatting roles.
+    /// </summary>
+    public static Descriptor? FindByOutlineLevel(int level) =>
+        RoleCatalog.FirstOrDefault(descriptor => level == 0
+            ? descriptor.Role == BuiltInStyleRole.Title
+            : descriptor.Role == BuiltInStyleRole.Heading && descriptor.HeadingLevel == level);
 
     /// <summary>True when <paramref name="styleId"/> names a character (run-level) gallery style.</summary>
     public static bool IsCharacterStyle(string styleId) =>

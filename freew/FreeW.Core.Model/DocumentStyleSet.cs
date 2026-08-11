@@ -34,7 +34,8 @@ public sealed record DocumentStyleSet(string Name, string BodyFont, string Headi
     public static DocumentStyleSet? FindMatching(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        if (!document.Styles.TryGetValue("Heading1", out var heading1))
+        if (BuiltInStyles.FindByOutlineLevel(1) is not { } heading1Descriptor
+            || !document.Styles.TryGetValue(heading1Descriptor.Id, out var heading1))
             return null;
 
         var bodyFont = document.DefaultRun.FontFamily;
@@ -53,46 +54,58 @@ public sealed record DocumentStyleSet(string Name, string BodyFont, string Headi
 
         doc.DefaultRun = doc.DefaultRun with { FontFamily = styleSet.BodyFont, FontSizePt = 11 };
 
-        Set(doc, "Normal",
-            run => run with { FontFamily = styleSet.BodyFont, FontSizePt = 11, Bold = false, Italic = false, ColorHex = null },
-            para => para with { SpaceBeforePt = 0, SpaceAfterPt = 8, LineSpacing = 1.15 });
-
-        Set(doc, "Title",
-            run => run with { FontFamily = styleSet.HeadingFont, FontSizePt = 28, Bold = true, Italic = false, ColorHex = styleSet.AccentColorHex },
-            para => para with { SpaceBeforePt = 0, SpaceAfterPt = 8 });
-
-        Set(doc, "Subtitle",
-            run => run with { FontFamily = styleSet.BodyFont, FontSizePt = 15, Bold = false, Italic = true, ColorHex = "#5A5A5A" },
-            para => para with { SpaceBeforePt = 0, SpaceAfterPt = 8 });
-
-        Set(doc, "Heading1",
-            run => run with { FontFamily = styleSet.HeadingFont, FontSizePt = 16, Bold = true, Italic = false, ColorHex = styleSet.AccentColorHex },
-            para => para with { SpaceBeforePt = 12, SpaceAfterPt = 4 });
-
-        Set(doc, "Heading2",
-            run => run with { FontFamily = styleSet.HeadingFont, FontSizePt = 13, Bold = true, Italic = false, ColorHex = styleSet.AccentColorHex },
-            para => para with { SpaceBeforePt = 10, SpaceAfterPt = 4 });
-
-        Set(doc, "Heading3",
-            run => run with { FontFamily = styleSet.HeadingFont, FontSizePt = 12, Bold = true, Italic = false, ColorHex = DarkerAccent(styleSet.AccentColorHex) },
-            para => para with { SpaceBeforePt = 8, SpaceAfterPt = 4 });
-
-        Set(doc, "Quote",
-            run => run with { FontFamily = styleSet.BodyFont, FontSizePt = 11, Bold = false, Italic = true, ColorHex = "#404040" },
-            para => para with { SpaceBeforePt = 10, SpaceAfterPt = 10, IndentLeftPt = 36, IndentRightPt = 36 });
+        foreach (var descriptor in BuiltInStyles.RoleCatalog)
+            Set(doc, descriptor, styleSet);
     }
 
     private static void Set(
         TextDocument doc,
-        string styleId,
-        Func<RunFormatting, RunFormatting> run,
-        Func<ParagraphFormatting, ParagraphFormatting> paragraph)
+        BuiltInStyles.Descriptor descriptor,
+        DocumentStyleSet styleSet)
     {
-        if (!doc.Styles.TryGetValue(styleId, out var style))
+        if (!doc.Styles.TryGetValue(descriptor.Id, out var style))
             return;
 
-        style.Run = run(style.Run);
-        style.Paragraph = paragraph(style.Paragraph);
+        var template = descriptor.Create();
+        var fontFamily = descriptor.Role switch
+        {
+            BuiltInStyleRole.Normal or BuiltInStyleRole.Subtitle or BuiltInStyleRole.Quote => styleSet.BodyFont,
+            BuiltInStyleRole.Title or BuiltInStyleRole.Heading => styleSet.HeadingFont,
+            _ => throw new InvalidOperationException($"Style '{descriptor.Id}' has no portable formatting role."),
+        };
+        var color = descriptor.Role switch
+        {
+            BuiltInStyleRole.Normal => null,
+            BuiltInStyleRole.Title => styleSet.AccentColorHex,
+            BuiltInStyleRole.Heading when descriptor.HeadingLevel is <= 2 => styleSet.AccentColorHex,
+            BuiltInStyleRole.Heading => DarkerAccent(styleSet.AccentColorHex),
+            _ => template.Run.ColorHex,
+        };
+
+        style.Run = style.Run with
+        {
+            FontFamily = fontFamily,
+            FontSizePt = template.Run.FontSizePt ?? 11,
+            Bold = template.Run.Bold,
+            Italic = template.Run.Italic,
+            ColorHex = color,
+        };
+        style.Paragraph = style.Paragraph with
+        {
+            SpaceBeforePt = template.Paragraph.SpaceBeforePt,
+            SpaceAfterPt = template.Paragraph.SpaceAfterPt,
+        };
+
+        if (descriptor.Role == BuiltInStyleRole.Normal)
+            style.Paragraph = style.Paragraph with { LineSpacing = template.Paragraph.LineSpacing };
+        else if (descriptor.Role == BuiltInStyleRole.Quote)
+        {
+            style.Paragraph = style.Paragraph with
+            {
+                IndentLeftPt = template.Paragraph.IndentLeftPt,
+                IndentRightPt = template.Paragraph.IndentRightPt,
+            };
+        }
     }
 
     private static string DarkerAccent(string hex) => hex.ToUpperInvariant() switch

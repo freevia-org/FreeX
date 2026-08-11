@@ -32,18 +32,25 @@ public sealed record DocumentFontSet(string Name, string HeadingFont, string Bod
         };
         doc.DefaultRun = doc.DefaultRun with { FontFamily = fontSet.BodyFont };
 
-        SetRun(doc, "Normal", run => run with { FontFamily = fontSet.BodyFont });
-        SetRun(doc, "Title", run => run with { FontFamily = fontSet.HeadingFont });
-        SetRun(doc, "Subtitle", run => run with { FontFamily = fontSet.BodyFont });
-        SetRun(doc, "Heading1", run => run with { FontFamily = fontSet.HeadingFont });
-        SetRun(doc, "Heading2", run => run with { FontFamily = fontSet.HeadingFont });
-        SetRun(doc, "Heading3", run => run with { FontFamily = fontSet.HeadingFont });
-        SetRun(doc, "Quote", run => run with { FontFamily = fontSet.BodyFont });
+        foreach (var descriptor in BuiltInStyles.RoleCatalog)
+        {
+            var fontFamily = descriptor.Role switch
+            {
+                BuiltInStyleRole.Normal or BuiltInStyleRole.Subtitle or BuiltInStyleRole.Quote => fontSet.BodyFont,
+                BuiltInStyleRole.Title or BuiltInStyleRole.Heading => fontSet.HeadingFont,
+                _ => null,
+            };
+            if (fontFamily is not null)
+                SetRun(doc, descriptor, run => run with { FontFamily = fontFamily });
+        }
     }
 
-    private static void SetRun(TextDocument doc, string styleId, Func<RunFormatting, RunFormatting> transform)
+    private static void SetRun(
+        TextDocument doc,
+        BuiltInStyles.Descriptor descriptor,
+        Func<RunFormatting, RunFormatting> transform)
     {
-        if (doc.Styles.TryGetValue(styleId, out var style))
+        if (doc.Styles.TryGetValue(descriptor.Id, out var style))
             style.Run = transform(style.Run);
     }
 }

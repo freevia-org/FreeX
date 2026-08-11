@@ -6,6 +6,7 @@ public class OutlineToolsTests
 
     [Theory]
     [InlineData("Heading6", "Heading5")]
+    [InlineData("Heading4", "Heading3")]
     [InlineData("Heading3", "Heading2")]
     [InlineData("Heading2", "Heading1")]
     [InlineData("Heading1", "Title")] // Heading1 promotes to the title
@@ -32,6 +33,8 @@ public class OutlineToolsTests
     [InlineData("Title", "Heading1")] // Title demotes to Heading1
     [InlineData("Heading1", "Heading2")]
     [InlineData("Heading2", "Heading3")]
+    [InlineData("Heading3", "Heading4")]
+    [InlineData("Heading4", "Heading5")]
     [InlineData("Heading5", "Heading6")]
     [InlineData("Heading6", "Heading6")] // capped at the deepest level
     [InlineData("Heading10", "Heading6")] // already past the cap — clamps down to the cap
@@ -62,6 +65,7 @@ public class OutlineToolsTests
     [InlineData("Heading1")]
     [InlineData("Heading2")]
     [InlineData("Heading3")]
+    [InlineData("Heading4")]
     public void PromoteThenDemote_RoundTripsInteriorHeadings(string styleId)
     {
         // Promote then demote returns to the same level for headings that are not at an outline edge.
