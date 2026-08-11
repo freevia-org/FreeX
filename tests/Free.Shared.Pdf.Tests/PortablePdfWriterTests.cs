@@ -206,7 +206,10 @@ public sealed class PortablePdfWriterTests
 
     [Theory]
     [InlineData("pct10", PdfPatternKind.Horizontal)]
+    [InlineData("pct25", PdfPatternKind.Vertical)]
     [InlineData("pct50", PdfPatternKind.DownDiagonal)]
+    [InlineData("pct60", PdfPatternKind.UpDiagonal)]
+    [InlineData("pct75", PdfPatternKind.Cross)]
     [InlineData("pct90", PdfPatternKind.Dot)]
     [InlineData("horzBrick", PdfPatternKind.Brick)]
     [InlineData("diagCross", PdfPatternKind.DiagonalCross)]

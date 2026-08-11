@@ -120,7 +120,31 @@ public sealed class ContentControlEditorTests
         view.InsertDropDownListControl();
 
         var run = CommittedControlRun(view);
-        run.Control!.Items.Should().NotBeEmpty("a list control inserted without items gets a default sample");
+        run.Control!.Items.Should().Equal(ContentControlInteractionPlanner.DefaultListItems);
+        run.Text.Should().Be(ContentControlInteractionPlanner.DefaultListItems[0].DisplayText);
+    }
+
+    [StaFact]
+    public void InsertControlsWithoutValues_UseEverySharedPlannerPolicy()
+    {
+        var plainView = NewView();
+        plainView.InsertPlainTextControl();
+        CommittedControlRun(plainView).Text.Should().Be(ContentControlInteractionPlanner.DefaultPromptText);
+
+        var richView = NewView();
+        richView.InsertRichTextControl();
+        CommittedControlRun(richView).Text.Should().Be(ContentControlInteractionPlanner.DefaultPromptText);
+
+        var dateView = NewView();
+        dateView.InsertDatePickerControl();
+        var date = CommittedControlRun(dateView);
+        date.Control!.DateFormat.Should().Be(ContentControlInteractionPlanner.DateFormatOrDefault(null));
+        date.Text.Should().Be(ContentControlInteractionPlanner.FormatDate((string?)null, DateTime.Today));
+
+        var comboView = NewView();
+        comboView.InsertComboBoxControl([]);
+        CommittedControlRun(comboView).Control!.Items.Should().Equal(
+            ContentControlInteractionPlanner.DefaultListItems);
     }
 
     [StaTheory]

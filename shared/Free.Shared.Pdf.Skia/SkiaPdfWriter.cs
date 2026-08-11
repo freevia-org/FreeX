@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.Drawing;
 using Free.Shared.Pdf;
 using SkiaSharp;
 
@@ -958,49 +959,49 @@ public static class SkiaPdfWriter
         var height = Math.Max(1, (int)Math.Round(pattern.TileHeight));
         var scaleX = width / pattern.TileWidth;
         var scaleY = height / pattern.TileHeight;
-        var unit = pattern.UnitScale * Math.Min(scaleX, scaleY);
-        var midX = width / 2f;
-        var midY = height / 2f;
         var bitmap = new SKBitmap(width, height);
         using (var canvas = new SKCanvas(bitmap))
-        using (var background = new SKPaint { Color = ToSkColor(pattern.Background), Style = SKPaintStyle.Fill, IsAntialias = true })
-        using (var foreground = new SKPaint { Color = ToSkColor(pattern.Foreground), Style = SKPaintStyle.Stroke, StrokeWidth = (float)(pattern.StrokeWidth * Math.Min(scaleX, scaleY)), IsAntialias = true })
         {
-            canvas.DrawRect(new SKRect(0, 0, width, height), background);
-            switch (pattern.Kind)
+            foreach (var primitive in pattern.Recipe.Primitives)
             {
-                case PdfPatternKind.Horizontal:
-                    canvas.DrawLine(0, midY, width, midY, foreground);
-                    break;
-                case PdfPatternKind.Vertical:
-                    canvas.DrawLine(midX, 0, midX, height, foreground);
-                    break;
-                case PdfPatternKind.DownDiagonal:
-                    canvas.DrawLine(0, 0, width, height, foreground);
-                    break;
-                case PdfPatternKind.UpDiagonal:
-                    canvas.DrawLine(0, height, width, 0, foreground);
-                    break;
-                case PdfPatternKind.Cross:
-                    canvas.DrawLine(0, midY, width, midY, foreground);
-                    canvas.DrawLine(midX, 0, midX, height, foreground);
-                    break;
-                case PdfPatternKind.Dot:
-                    foreground.Style = SKPaintStyle.Fill;
-                    canvas.DrawCircle(midX, midY, (float)(unit / 2), foreground);
-                    break;
-                case PdfPatternKind.Brick:
-                    canvas.DrawLine(0, 0, width, 0, foreground);
-                    canvas.DrawLine(6 * (float)unit, 4 * (float)unit, width, 4 * (float)unit, foreground);
-                    canvas.DrawLine(0, 4 * (float)unit, 3 * (float)unit, 4 * (float)unit, foreground);
-                    canvas.DrawLine(6 * (float)unit, 0, 6 * (float)unit, 4 * (float)unit, foreground);
-                    canvas.DrawLine(0, 4 * (float)unit, 0, height, foreground);
-                    canvas.DrawLine(width, 4 * (float)unit, width, height, foreground);
-                    break;
-                case PdfPatternKind.DiagonalCross:
-                    canvas.DrawLine(0, 0, width, height, foreground);
-                    canvas.DrawLine(width, 0, 0, height, foreground);
-                    break;
+                var color = primitive.ColorRole == DrawingMlPatternFillColorRole.Foreground
+                    ? pattern.Foreground
+                    : pattern.Background;
+                using var paint = new SKPaint { Color = ToSkColor(color), IsAntialias = true };
+                switch (primitive)
+                {
+                    case DrawingMlPatternFillRectangle rectangle:
+                        paint.Style = SKPaintStyle.Fill;
+                        canvas.DrawRect(
+                            (float)(rectangle.X * pattern.UnitScale * scaleX),
+                            (float)(rectangle.Y * pattern.UnitScale * scaleY),
+                            (float)(rectangle.Width * pattern.UnitScale * scaleX),
+                            (float)(rectangle.Height * pattern.UnitScale * scaleY),
+                            paint);
+                        break;
+                    case DrawingMlPatternFillLine line:
+                        paint.Style = SKPaintStyle.Stroke;
+                        paint.StrokeWidth = (float)(line.StrokeWidth * pattern.UnitScale * Math.Min(scaleX, scaleY));
+                        canvas.DrawLine(
+                            (float)(line.Start.X * pattern.UnitScale * scaleX),
+                            (float)(line.Start.Y * pattern.UnitScale * scaleY),
+                            (float)(line.End.X * pattern.UnitScale * scaleX),
+                            (float)(line.End.Y * pattern.UnitScale * scaleY),
+                            paint);
+                        break;
+                    case DrawingMlPatternFillEllipse ellipse:
+                        paint.Style = SKPaintStyle.Fill;
+                        canvas.DrawOval(
+                            new SKRect(
+                                (float)((ellipse.CenterX - ellipse.RadiusX) * pattern.UnitScale * scaleX),
+                                (float)((ellipse.CenterY - ellipse.RadiusY) * pattern.UnitScale * scaleY),
+                                (float)((ellipse.CenterX + ellipse.RadiusX) * pattern.UnitScale * scaleX),
+                                (float)((ellipse.CenterY + ellipse.RadiusY) * pattern.UnitScale * scaleY)),
+                            paint);
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Unsupported pattern primitive {primitive.GetType().Name}.");
+                }
             }
         }
 

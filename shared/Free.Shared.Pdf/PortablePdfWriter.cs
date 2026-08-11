@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
+using Free.Shared.Drawing;
 
 namespace Free.Shared.Pdf;
 
@@ -704,10 +705,6 @@ public static class PortablePdfWriter
     {
         var stream = new StringBuilder();
         stream.AppendLine("q");
-        AppendRgb(stream, pattern.Background, "rg");
-        stream.AppendLine($"0 0 {FormatNumber(pattern.TileWidth)} {FormatNumber(pattern.TileHeight)} re f");
-        AppendRgb(stream, pattern.Foreground, "RG");
-        stream.AppendLine($"{FormatNumber(pattern.StrokeWidth)} w");
         AppendPatternTileGeometry(stream, pattern);
         stream.AppendLine("Q");
 
@@ -727,49 +724,45 @@ public static class PortablePdfWriter
 
     private static void AppendPatternTileGeometry(StringBuilder content, PdfPatternFill pattern)
     {
-        var width = pattern.TileWidth;
-        var height = pattern.TileHeight;
-        var unit = pattern.UnitScale;
-        var midX = width / 2;
-        var midY = height / 2;
-
-        switch (pattern.Kind)
+        foreach (var primitive in pattern.Recipe.Primitives)
         {
-            case PdfPatternKind.Horizontal:
-                content.AppendLine($"0 {FormatNumber(midY)} m {FormatNumber(width)} {FormatNumber(midY)} l S");
-                break;
-            case PdfPatternKind.Vertical:
-                content.AppendLine($"{FormatNumber(midX)} 0 m {FormatNumber(midX)} {FormatNumber(height)} l S");
-                break;
-            case PdfPatternKind.DownDiagonal:
-                // The shared kind names the WPF screen-space direction. PDF uses y-up.
-                content.AppendLine($"0 {FormatNumber(height)} m {FormatNumber(width)} 0 l S");
-                break;
-            case PdfPatternKind.UpDiagonal:
-                content.AppendLine($"0 0 m {FormatNumber(width)} {FormatNumber(height)} l S");
-                break;
-            case PdfPatternKind.Cross:
-                content.AppendLine($"0 {FormatNumber(midY)} m {FormatNumber(width)} {FormatNumber(midY)} l S");
-                content.AppendLine($"{FormatNumber(midX)} 0 m {FormatNumber(midX)} {FormatNumber(height)} l S");
-                break;
-            case PdfPatternKind.Dot:
-                AppendRgb(content, pattern.Foreground, "rg");
-                AppendPatternEllipse(content, midX, midY, unit, unit);
-                content.AppendLine("f");
-                break;
-            case PdfPatternKind.Brick:
-                content.AppendLine($"0 0 m {FormatNumber(width)} 0 l S");
-                content.AppendLine($"{FormatNumber(6 * unit)} {FormatNumber(4 * unit)} m {FormatNumber(width)} {FormatNumber(4 * unit)} l S");
-                content.AppendLine($"0 {FormatNumber(4 * unit)} m {FormatNumber(3 * unit)} {FormatNumber(4 * unit)} l S");
-                content.AppendLine($"{FormatNumber(6 * unit)} 0 m {FormatNumber(6 * unit)} {FormatNumber(4 * unit)} l S");
-                content.AppendLine($"0 {FormatNumber(4 * unit)} m 0 {FormatNumber(height)} l S");
-                content.AppendLine($"{FormatNumber(width)} {FormatNumber(4 * unit)} m {FormatNumber(width)} {FormatNumber(height)} l S");
-                break;
-            case PdfPatternKind.DiagonalCross:
-                content.AppendLine($"0 {FormatNumber(height)} m {FormatNumber(width)} 0 l S");
-                content.AppendLine($"0 0 m {FormatNumber(width)} {FormatNumber(height)} l S");
-                break;
+            var color = primitive.ColorRole == DrawingMlPatternFillColorRole.Foreground
+                ? pattern.Foreground
+                : pattern.Background;
+            switch (primitive)
+            {
+                case DrawingMlPatternFillRectangle rectangle:
+                    AppendRgb(content, color, "rg");
+                    content.AppendLine(
+                        $"{FormatNumber(rectangle.X * pattern.UnitScale)} " +
+                        $"{FormatNumber(ToPdfY(rectangle.Y + rectangle.Height, pattern))} " +
+                        $"{FormatNumber(rectangle.Width * pattern.UnitScale)} " +
+                        $"{FormatNumber(rectangle.Height * pattern.UnitScale)} re f");
+                    break;
+                case DrawingMlPatternFillLine line:
+                    AppendRgb(content, color, "RG");
+                    content.AppendLine($"{FormatNumber(line.StrokeWidth * pattern.UnitScale)} w");
+                    content.AppendLine(
+                        $"{FormatNumber(line.Start.X * pattern.UnitScale)} {FormatNumber(ToPdfY(line.Start.Y, pattern))} m " +
+                        $"{FormatNumber(line.End.X * pattern.UnitScale)} {FormatNumber(ToPdfY(line.End.Y, pattern))} l S");
+                    break;
+                case DrawingMlPatternFillEllipse ellipse:
+                    AppendRgb(content, color, "rg");
+                    AppendPatternEllipse(
+                        content,
+                        ellipse.CenterX * pattern.UnitScale,
+                        ToPdfY(ellipse.CenterY, pattern),
+                        ellipse.RadiusX * 2 * pattern.UnitScale,
+                        ellipse.RadiusY * 2 * pattern.UnitScale);
+                    content.AppendLine("f");
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported pattern primitive {primitive.GetType().Name}.");
+            }
         }
+
+        static double ToPdfY(double screenY, PdfPatternFill pattern) =>
+            pattern.TileHeight - (screenY * pattern.UnitScale);
     }
 
     private static void AppendPatternEllipse(StringBuilder content, double centerX, double centerY, double width, double height)

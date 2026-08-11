@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using Free.Shared.AppServices;
+using Free.Shared.Drawing;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
@@ -13099,121 +13100,47 @@ public sealed class DocumentView : RichTextBox
     {
         TryParseColor(fill.PatternFgColorHex ?? "#4472C4", out var fg);
         TryParseColor(fill.PatternBgColorHex ?? "#FFFFFF", out var bg);
-
-        var preset = fill.PatternPreset ?? string.Empty;
         var fgBrush = new SolidColorBrush(fg);
-        var pen = new System.Windows.Media.Pen(fgBrush, 1);
+        var bgBrush = new SolidColorBrush(bg);
+        var recipe = DrawingMlPatternFillPlanner.Plan(fill.PatternPreset);
+        var tile = new System.Windows.Media.DrawingGroup();
 
-        // Build a tile drawing based on the preset family.
-        // Tile is 8×8 device-independent pixels; complex patterns use 12×12.
-        System.Windows.Media.Drawing tile;
-
-        if (preset is "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20")
+        foreach (var primitive in recipe.Primitives)
         {
-            // Horizontal lines
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(8, 4))));
-            tile = g;
-        }
-        else if (preset is "vert" or "ltVert" or "dkVert" or "pct25" or "pct30")
-        {
-            // Vertical lines
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(4, 0), new System.Windows.Point(4, 8))));
-            tile = g;
-        }
-        else if (preset is "diagStripe" or "ltDnDiag" or "dkDnDiag" or "dnDiag" or "pct50")
-        {
-            // Diagonal top-left to bottom-right
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
-            tile = g;
-        }
-        else if (preset is "ltUpDiag" or "dkUpDiag" or "upDiag" or "pct60" or "pct70")
-        {
-            // Diagonal bottom-left to top-right
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 8), new System.Windows.Point(8, 0))));
-            tile = g;
-        }
-        else if (preset is "cross" or "ltGrid" or "dkGrid" or "pct75" or "pct80")
-        {
-            // Cross (horizontal + vertical grid)
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(8, 4))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(4, 0), new System.Windows.Point(4, 8))));
-            tile = g;
-        }
-        else if (preset is "dotGrid" or "dotDmnd" or "smGrid" or "pct90")
-        {
-            // Dotted / dot grid — single dot per cell
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(fgBrush, null,
-                new System.Windows.Media.EllipseGeometry(new System.Windows.Point(4, 4), 1, 1)));
-            tile = g;
-        }
-        else if (preset is "horzBrick" or "divot" or "weave")
-        {
-            // Brick — alternating horizontal dashes
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 12, 8));
-            var thinPen = new System.Windows.Media.Pen(fgBrush, 0.5);
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(12, 0))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(6, 4), new System.Windows.Point(12, 4))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(3, 4))));
-            // Vertical grout lines at offsets
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(6, 0), new System.Windows.Point(6, 4))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 4), new System.Windows.Point(0, 8))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, thinPen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(12, 4), new System.Windows.Point(12, 8))));
-            tile = g;
-            // 12-wide tile — return early with custom viewport
-            return new System.Windows.Media.DrawingBrush(tile)
+            var brush = primitive.ColorRole == DrawingMlPatternFillColorRole.Foreground ? fgBrush : bgBrush;
+            tile.Children.Add(primitive switch
             {
-                TileMode      = System.Windows.Media.TileMode.Tile,
-                Viewport      = new System.Windows.Rect(0, 0, 12, 8),
-                ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
-            };
-        }
-        else
-        {
-            // Default / diagCross — covers "diagCross", "ltDiagCross", "dkDiagCross", and unknowns.
-            var g = new System.Windows.Media.DrawingGroup();
-            g.Children.Add(BgRect(bg, 8, 8));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(0, 0), new System.Windows.Point(8, 8))));
-            g.Children.Add(new System.Windows.Media.GeometryDrawing(null, pen,
-                new System.Windows.Media.LineGeometry(new System.Windows.Point(8, 0), new System.Windows.Point(0, 8))));
-            tile = g;
+                DrawingMlPatternFillRectangle rectangle => new System.Windows.Media.GeometryDrawing(
+                    brush,
+                    null,
+                    new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(
+                        rectangle.X,
+                        rectangle.Y,
+                        rectangle.Width,
+                        rectangle.Height))),
+                DrawingMlPatternFillLine line => new System.Windows.Media.GeometryDrawing(
+                    null,
+                    new System.Windows.Media.Pen(brush, line.StrokeWidth),
+                    new System.Windows.Media.LineGeometry(
+                        new System.Windows.Point(line.Start.X, line.Start.Y),
+                        new System.Windows.Point(line.End.X, line.End.Y))),
+                DrawingMlPatternFillEllipse ellipse => new System.Windows.Media.GeometryDrawing(
+                    brush,
+                    null,
+                    new System.Windows.Media.EllipseGeometry(
+                        new System.Windows.Point(ellipse.CenterX, ellipse.CenterY),
+                        ellipse.RadiusX,
+                        ellipse.RadiusY)),
+                _ => throw new InvalidOperationException($"Unsupported pattern primitive {primitive.GetType().Name}.")
+            });
         }
 
         return new System.Windows.Media.DrawingBrush(tile)
         {
             TileMode      = System.Windows.Media.TileMode.Tile,
-            Viewport      = new System.Windows.Rect(0, 0, 8, 8),
+            Viewport      = new System.Windows.Rect(0, 0, recipe.TileWidth, recipe.TileHeight),
             ViewportUnits = System.Windows.Media.BrushMappingMode.Absolute,
         };
-
-        static System.Windows.Media.GeometryDrawing BgRect(Color c, double w, double h) =>
-            new(new SolidColorBrush(c), null,
-                new System.Windows.Media.RectangleGeometry(new System.Windows.Rect(0, 0, w, h)));
     }
 
     /// <summary>
@@ -14993,7 +14920,7 @@ public sealed class DocumentView : RichTextBox
         Focus();
 
         var selected = Selection?.Text;
-        var text = string.IsNullOrEmpty(selected) ? "Click to enter text" : selected;
+        var text = ContentControlInteractionPlanner.PromptText(selected);
         if (Selection is { IsEmpty: false })
             Selection.Text = string.Empty;
 
@@ -15029,7 +14956,7 @@ public sealed class DocumentView : RichTextBox
         Focus();
 
         var selected = Selection?.Text;
-        var text = string.IsNullOrEmpty(selected) ? "Click to enter text" : selected;
+        var text = ContentControlInteractionPlanner.PromptText(selected);
         if (Selection is { IsEmpty: false })
             Selection.Text = string.Empty;
 
@@ -15048,8 +14975,8 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
-        var fmt = string.IsNullOrEmpty(dateFormat) ? ModelContentControl.DefaultDateFormat : dateFormat!;
-        var today = System.DateTime.Today.ToString(fmt, System.Globalization.CultureInfo.CurrentCulture);
+        var fmt = ContentControlInteractionPlanner.DateFormatOrDefault(dateFormat);
+        var today = ContentControlInteractionPlanner.FormatDate(fmt, System.DateTime.Today);
         var run = BuildControlRun(ModelRun.DatePickerControl(today, tag, alias, fmt));
         InsertInlineAtCaret(run);
     }
@@ -15066,7 +14993,10 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
-        var run = BuildControlRun(ModelRun.DropDownListControl(items ?? DefaultListItems, tag: tag, alias: alias));
+        var run = BuildControlRun(ModelRun.DropDownListControl(
+            ContentControlInteractionPlanner.ListItemsOrDefault(items),
+            tag: tag,
+            alias: alias));
         InsertInlineAtCaret(run);
     }
 
@@ -15082,18 +15012,12 @@ public sealed class DocumentView : RichTextBox
             return;
 
         Focus();
-        var run = BuildControlRun(ModelRun.ComboBoxControl(items ?? DefaultListItems, tag: tag, alias: alias));
+        var run = BuildControlRun(ModelRun.ComboBoxControl(
+            ContentControlInteractionPlanner.ListItemsOrDefault(items),
+            tag: tag,
+            alias: alias));
         InsertInlineAtCaret(run);
     }
-
-    /// <summary>A small default choice sample used when a list/combo control is inserted without items.</summary>
-    private static readonly IReadOnlyList<ContentControlListItem> DefaultListItems =
-    [
-        new ContentControlListItem("Choose an item"),
-        new ContentControlListItem("Item 1"),
-        new ContentControlListItem("Item 2"),
-        new ContentControlListItem("Item 3")
-    ];
 
     /// <summary>Builds the WPF inline for a content-control model run (shaded region + marker tag).</summary>
     private Inline BuildControlRun(ModelRun run) => BuildRun(run, new ModelParagraph(), _model);

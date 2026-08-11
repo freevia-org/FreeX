@@ -10708,88 +10708,54 @@ public sealed class DocumentView : Control
         TryParseAvaloniaColor(fill.PatternFgColorHex ?? "#4472C4", out var fg);
         TryParseAvaloniaColor(fill.PatternBgColorHex ?? "#FFFFFF", out var bg);
 
-        var preset = fill.PatternPreset ?? string.Empty;
-
-        // Build a small DrawingBrush tile matching the WPF reference.
-        // Avalonia DrawingBrush with TileMode=Tile mirrors WPF's DrawingBrush.
         var fgBrush = new SolidColorBrush(fg);
-        var pen     = new Pen(fgBrush, 1.0);
+        var bgBrush = new SolidColorBrush(bg);
+        var recipe = DrawingMlPatternFillPlanner.Plan(fill.PatternPreset);
+        var tile = new global::Avalonia.Media.DrawingGroup();
 
-        // Each family gets a distinct 8×8 tile.
-        Drawing tile;
-
-        // UU2 fix: preset→family bucketing aligned to WPF BuildPatternBrush groupings.
-        // Previously: upDiag/ltUpDiag were NW→SE (wrong); pct50/60/70 were dot (wrong);
-        //             dkDiag was grouped with down-diag (wrong); cross/smGrid/lgGrid were grouped
-        //             together (wrong — WPF puts smGrid with dot family).
-        // Now matches WPF exactly: down-diag vs up-diag are separate; pct50 → down-diag;
-        // pct60/pct70 → up-diag; cross/ltGrid/dkGrid/pct75/pct80 → H+V grid;
-        // dotGrid/dotDmnd/smGrid/pct90 → dot tile.
-
-        if (preset is "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20")
+        foreach (var primitive in recipe.Primitives)
         {
-            // Horizontal line across the middle (matches WPF)
-            var dg = new global::Avalonia.Media.DrawingGroup();
-            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 4), new Point(8, 4)) });
-            tile = dg;
-        }
-        else if (preset is "vert" or "ltVert" or "dkVert" or "pct25" or "pct30")
-        {
-            // Vertical line (matches WPF)
-            var dg = new global::Avalonia.Media.DrawingGroup();
-            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(4, 0), new Point(4, 8)) });
-            tile = dg;
-        }
-        else if (preset is "diagStripe" or "ltDnDiag" or "dkDnDiag" or "dnDiag" or "pct50")
-        {
-            // Down-diagonal: top-left to bottom-right (NW→SE). Matches WPF "diagStripe/ltDnDiag/dkDnDiag/dnDiag/pct50".
-            var dg = new global::Avalonia.Media.DrawingGroup();
-            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 0), new Point(8, 8)) });
-            tile = dg;
-        }
-        else if (preset is "ltUpDiag" or "dkUpDiag" or "upDiag" or "pct60" or "pct70")
-        {
-            // Up-diagonal: bottom-left to top-right (SW→NE). Matches WPF "ltUpDiag/dkUpDiag/upDiag/pct60/pct70".
-            var dg = new global::Avalonia.Media.DrawingGroup();
-            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 8), new Point(8, 0)) });
-            tile = dg;
-        }
-        else if (preset is "cross" or "ltGrid" or "dkGrid" or "pct75" or "pct80")
-        {
-            // Horizontal + vertical cross/grid. Matches WPF "cross/ltGrid/dkGrid/pct75/pct80".
-            var dg = new global::Avalonia.Media.DrawingGroup();
-            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 4), new Point(8, 4)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(4, 0), new Point(4, 8)) });
-            tile = dg;
-        }
-        else if (preset is "dotGrid" or "dotDmnd" or "smGrid" or "smDot" or "pct40" or "pct90")
-        {
-            // Dot tile. Matches WPF "dotGrid/dotDmnd/smGrid/pct90".
-            var dg = new global::Avalonia.Media.DrawingGroup();
-            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Brush = fgBrush, Geometry = new EllipseGeometry(new Rect(3, 3, 2, 2)) });
-            tile = dg;
-        }
-        else
-        {
-            // Default / diagCross: covers "diagCross", "dkDiag", "lgGrid", "lgConfetti", "smConfetti", unknowns.
-            // Matches WPF fallback (both diagonals).
-            var dg = new global::Avalonia.Media.DrawingGroup();
-            dg.Children.Add(new GeometryDrawing { Brush = new SolidColorBrush(bg), Geometry = new RectangleGeometry(new Rect(0, 0, 8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(0, 0), new Point(8, 8)) });
-            dg.Children.Add(new GeometryDrawing { Pen = pen,  Geometry = new LineGeometry(new Point(8, 0), new Point(0, 8)) });
-            tile = dg;
+            var brush = primitive.ColorRole == DrawingMlPatternFillColorRole.Foreground ? fgBrush : bgBrush;
+            tile.Children.Add(primitive switch
+            {
+                DrawingMlPatternFillRectangle rectangle => new GeometryDrawing
+                {
+                    Brush = brush,
+                    Geometry = new RectangleGeometry(new Rect(
+                        rectangle.X,
+                        rectangle.Y,
+                        rectangle.Width,
+                        rectangle.Height))
+                },
+                DrawingMlPatternFillLine line => new GeometryDrawing
+                {
+                    Pen = new Pen(brush, line.StrokeWidth),
+                    Geometry = new LineGeometry(
+                        new Point(line.Start.X, line.Start.Y),
+                        new Point(line.End.X, line.End.Y))
+                },
+                DrawingMlPatternFillEllipse ellipse => new GeometryDrawing
+                {
+                    Brush = brush,
+                    Geometry = new EllipseGeometry(new Rect(
+                        ellipse.CenterX - ellipse.RadiusX,
+                        ellipse.CenterY - ellipse.RadiusY,
+                        ellipse.RadiusX * 2,
+                        ellipse.RadiusY * 2))
+                },
+                _ => throw new InvalidOperationException($"Unsupported pattern primitive {primitive.GetType().Name}.")
+            });
         }
 
         return new DrawingBrush(tile)
         {
             TileMode        = TileMode.Tile,
-            DestinationRect = new RelativeRect(0, 0, 8, 8, RelativeUnit.Absolute),
+            DestinationRect = new RelativeRect(
+                0,
+                0,
+                recipe.TileWidth,
+                recipe.TileHeight,
+                RelativeUnit.Absolute),
         };
     }
 

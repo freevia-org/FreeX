@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- App-agnostic PDF page/document model + the dependency-free WinAnsi emitter shared by
          FreeX and FreeW (and future app#3). The portable WinAnsi writer was moved here verbatim
          from FreeX.App.Services so FreeX's byte-exact PDF tests stay green. -->
