@@ -1323,7 +1323,7 @@ function Test-SourceWiring {
                 "WorkbookStatisticsService.GetStatistics(_session.Workbook)",
                 "AutomationProperties.SetAutomationId(dialog, `"WorkbookStatisticsDialog`");",
                 "AutomationProperties.SetAutomationId(okButton, `"WorkbookStatisticsOkButton`");",
-                "AutomationProperties.SetAutomationId(statisticsBlock, `"WorkbookStatisticsSummary`");",
+                "FreeXAutomationIdCatalog.WorkbookStatisticsSummary",
                 "private static string FormatWorkbookStatistics(WorkbookStatistics statistics)",
                 "WorkbookStatisticsFormatter.Format(statistics)",
                 "private readonly NativeMenuItem _formatCellsMenuItem = new();",
@@ -1431,7 +1431,7 @@ function Test-SourceWiring {
                 "private NativeMenu CreateNativeFillCellsMenu()",
                 "private void FillSelectedRange(FillCellsDirection direction)",
                 "_session.FillSelectedRange(direction)",
-                "FormatFillCellsAction(direction)",
+                "WorksheetCommandPresentationCatalog.FormatFillStatus(direction, rangeReference)",
                 "e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U",
                 "WorkbookApplicationCommandIntent.FillDown =>",
                 "WorkbookApplicationCommandIntent.FillRight =>",
@@ -1585,12 +1585,12 @@ function Test-SourceWiring {
                 "private async Task PasteSpecialExternalTextFromClipboardAsync(string label)",
                 "_session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed, html: html)",
                 "_session.ShouldPreferExternalClipboardImage(text)",
-                "private async Task<bool> TryPasteClipboardImageAsync(IClipboard clipboard)",
-                "await clipboard.TryGetBitmapAsync()",
-                "bitmap.Save(stream)",
+                "private async Task<bool> TryPasteClipboardImageAsync()",
+                "await _platformClipboard.ReadImageAsync()",
+                "read.Value is not { PngBytes.Length: > 0 } image",
                 "_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)",
                 "internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()",
-                "return await TryPasteClipboardImageAsync(clipboard);",
+                "return await TryPasteClipboardImageAsync();",
                 "private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)",
                 "_session.PastePictureFromClipboardAtActiveCell(text, linkedPicture)",
                 "private async Task PasteColumnWidthsFromClipboardAsync(string label)",
@@ -2820,11 +2820,7 @@ function Test-SourceWiring {
                 "public WorkbookCellEditResult RemoveSelectedRangeSubtotals()",
                 "new SubtotalCommand(",
                 "new RemoveSubtotalRowsCommand(sheetId, sheetRange)",
-                "private static string GetFillCellsTitle(FillCellsDirection direction)",
-                "FillCellsDirection.Down => `"Fill Down`"",
-                "FillCellsDirection.Right => `"Fill Right`"",
-                "FillCellsDirection.Up => `"Fill Up`"",
-                "FillCellsDirection.Left => `"Fill Left`"",
+                "WorksheetCommandPresentationCatalog.DescribeFill(direction).CommandTitle",
                 "public bool CanSortSelectedRange => SelectedRange.RowCount > 1;",
                 "public WorkbookCellEditResult SortSelectedRange(bool ascending)",
                 "QuickSortRangePlanner.Create(ActiveSheet, range, ActiveCell)",
@@ -3139,7 +3135,7 @@ function Test-SourceWiring {
             Path = "shared\Free.Shared.AppServices\AtomicFileWriter.cs"
             Markers = @(
                 "public static class AtomicFileWriter",
-                "fs.Flush(flushToDisk: true);",
+                "fileStream.Flush(flushToDisk: true);",
                 "File.Move(sourceTempPath, destinationPath, overwrite: true);"
             )
             OrderedPairs = @()
@@ -3158,7 +3154,7 @@ function Test-SourceWiring {
                 "VerifyFormatCellsStartupSmokeStyle(",
                 "PortPreviewWorkbookFactory.PreviewShapeName",
                 "public static class PackagingSmokeCommand",
-                "public const string Argument = `"--packaging-smoke`";",
+                "public const string Argument = SisterAppPackagingSmoke.Argument;",
                 "Packaging smoke opened",
                 "edited, saved, and reopened"
             )
