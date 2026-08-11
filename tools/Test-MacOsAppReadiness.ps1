@@ -1087,21 +1087,35 @@ function Test-SourceWiring {
                 "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)",
                 "MacOsLaunchSmokeOptions.TryParse(",
                 "AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory)",
-                "diagnostics.RegisterUnhandledExceptionHandlers();",
+                "SisterAvaloniaApplicationStartupRunner.Run(",
+                "RegisterUnhandledExceptionHandlers: diagnostics.RegisterUnhandledExceptionHandlers",
+                "RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)",
                 "diagnostics.RecordEvent(`"app_start`"",
                 "App.StartupArguments = startupArguments;",
                 "App.LaunchSmokeOptions = launchSmokeOptions;",
                 "App.Diagnostics = diagnostics;",
                 "diagnostics.RecordEvent(`"app_exit`"",
-                "diagnostics.RecordCrash(ex, `"avalonia_startup`")",
-                "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);"
+                "CompletedExitCode = 0",
+                "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)"
             )
             OrderedPairs = @(
                 @{
                     First = "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)"
-                    Second = "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);"
+                    Second = "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)"
                 }
             )
+        },
+        @{
+            Path = "shared\Free.Shared.Shell.Avalonia\SisterAvaloniaApplicationStartupRunner.cs"
+            Markers = @(
+                "spec.RegisterUnhandledExceptionHandlers();",
+                "spec.RegisterRibbonCommandFaultHandler(",
+                "RibbonCommandCrashSourcePrefix + commandId",
+                "spec.BeforeRun?.Invoke();",
+                "spec.AfterRun?.Invoke(lifetimeExitCode);",
+                "spec.RecordCrash(ex, spec.StartupCrashSource)"
+            )
+            OrderedPairs = @()
         },
         @{
             Path = "src\FreeX.App.Avalonia\App.cs"

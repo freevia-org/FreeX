@@ -1136,7 +1136,8 @@ public sealed class AvaloniaShellSourceTests
         programSource.Should().Contain("AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory)");
         programSource.Should().Contain("diagnostics.RecordEvent(\"app_start\"");
         programSource.Should().Contain("diagnostics.RecordEvent(\"app_exit\"");
-        programSource.Should().Contain("diagnostics.RecordCrash(ex, \"avalonia_startup\")");
+        programSource.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(");
+        programSource.Should().Contain("RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)");
         programSource.Should().Contain("App.LaunchSmokeOptions = launchSmokeOptions;");
         programSource.Should().Contain("App.Diagnostics = diagnostics;");
         programSource.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");

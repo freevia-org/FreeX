@@ -140,10 +140,16 @@ public sealed class SisterAvaloniaProgramRunnerTests
     {
         var freeWProgram = ReadSource("freew", "FreeW.App.Avalonia", "Program.cs");
         var freePProgram = ReadSource("freep", "FreeP.App.Avalonia", "Program.cs");
-        var sharedRunner = ReadSource(
+        var freeXProgram = ReadSource("src", "FreeX.App.Avalonia", "Program.cs");
+        var freeXApp = ReadSource("src", "FreeX.App.Avalonia", "App.cs");
+        var sharedProgramRunner = ReadSource(
             "shared",
             "Free.Shared.Shell.Avalonia",
             "SisterAvaloniaProgramRunner.cs");
+        var sharedApplicationRunner = ReadSource(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAvaloniaApplicationStartupRunner.cs");
 
         foreach (var source in new[] { freeWProgram, freePProgram })
         {
@@ -155,8 +161,17 @@ public sealed class SisterAvaloniaProgramRunnerTests
             source.Should().NotContain("RibbonCommandFaultReporter.Handler");
         }
 
-        sharedRunner.Should().Contain("RegisterRibbonCommandFaultHandler(");
-        sharedRunner.Should().Contain("\"ribbon_command:\" + commandId");
+        freeXProgram.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(")
+            .And.Contain("RegisterUnhandledExceptionHandlers: diagnostics.RegisterUnhandledExceptionHandlers")
+            .And.Contain("RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)")
+            .And.Contain("CompletedExitCode = 0")
+            .And.NotContain("RibbonCommandFaultReporter.Handler");
+        freeXApp.Should().NotContain("RibbonCommandFaultReporter.Handler");
+        sharedProgramRunner.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(")
+            .And.NotContain("catch (Exception ex)");
+        sharedApplicationRunner.Should().Contain("spec.RegisterRibbonCommandFaultHandler(")
+            .And.Contain("RibbonCommandCrashSourcePrefix + commandId")
+            .And.Contain("spec.RecordCrash(ex, spec.StartupCrashSource)");
     }
 
     private static string ReadSource(params string[] parts)

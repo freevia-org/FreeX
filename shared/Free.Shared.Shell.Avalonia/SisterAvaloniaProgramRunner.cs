@@ -61,21 +61,16 @@ public static class SisterAvaloniaProgramRunner
 
         ArgumentNullException.ThrowIfNull(preparation.StartupArguments);
         var diagnostics = runtime.CreateDiagnostics(runtime.ResolveVersion());
-        diagnostics.RegisterCrashHandlers();
-        runtime.RegisterRibbonCommandFaultHandler(
-            (exception, commandId) => diagnostics.RecordCrash(
-                exception,
-                "ribbon_command:" + commandId));
-
-        try
+        return SisterAvaloniaApplicationStartupRunner.Run(
+            preparation.StartupArguments,
+            new SisterAvaloniaApplicationStartupSpec(
+                spec.StartApplication,
+                diagnostics.RegisterCrashHandlers,
+                diagnostics.RecordCrash)
         {
-            return spec.StartApplication(preparation.StartupArguments);
-        }
-        catch (Exception ex)
-        {
-            diagnostics.RecordCrash(ex, spec.CrashSource);
-            throw;
-        }
+            RegisterRibbonCommandFaultHandler = runtime.RegisterRibbonCommandFaultHandler,
+            StartupCrashSource = spec.CrashSource
+        });
     }
 }
 

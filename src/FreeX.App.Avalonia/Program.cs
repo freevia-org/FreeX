@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Fonts.Inter;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -61,36 +62,37 @@ internal static class Program
         }
 
         var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
-        diagnostics.RegisterUnhandledExceptionHandlers();
-        diagnostics.RecordEvent("app_start", new Dictionary<string, string?>
+        return SisterAvaloniaApplicationStartupRunner.Run(
+            startupArguments,
+            new SisterAvaloniaApplicationStartupSpec(
+                StartApplication: _ => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments),
+                RegisterUnhandledExceptionHandlers: diagnostics.RegisterUnhandledExceptionHandlers,
+                RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source))
         {
-            ["source"] = "avalonia",
-            ["scope"] = "app",
-            ["status"] = "starting"
-        });
+            BeforeRun = () =>
+            {
+                diagnostics.RecordEvent("app_start", new Dictionary<string, string?>
+                {
+                    ["source"] = "avalonia",
+                    ["scope"] = "app",
+                    ["status"] = "starting"
+                });
 
-        App.StartupArguments = startupArguments;
-        App.LaunchSmokeOptions = launchSmokeOptions;
-        App.ParityCaptureOptions = parityCaptureOptions;
-        App.GridCaptureOptions = gridCaptureOptions;
-        App.InteractionValidationOptions = interactionValidationOptions;
-        App.Diagnostics = diagnostics;
-        try
-        {
-            BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
-            diagnostics.RecordEvent("app_exit", new Dictionary<string, string?>
+                App.StartupArguments = startupArguments;
+                App.LaunchSmokeOptions = launchSmokeOptions;
+                App.ParityCaptureOptions = parityCaptureOptions;
+                App.GridCaptureOptions = gridCaptureOptions;
+                App.InteractionValidationOptions = interactionValidationOptions;
+                App.Diagnostics = diagnostics;
+            },
+            AfterRun = _ => diagnostics.RecordEvent("app_exit", new Dictionary<string, string?>
             {
                 ["source"] = "avalonia",
                 ["scope"] = "app",
                 ["status"] = "completed"
-            });
-            return 0;
-        }
-        catch (Exception ex)
-        {
-            diagnostics.RecordCrash(ex, "avalonia_startup");
-            throw;
-        }
+            }),
+            CompletedExitCode = 0
+        });
     }
 
     public static AppBuilder BuildAvaloniaApp() =>
