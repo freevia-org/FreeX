@@ -18,6 +18,21 @@ public sealed record TableOfAuthoritiesDialogState(
     CitationCategory? CategoryFilter,
     ToaTabLeader TabLeader);
 
+public readonly record struct TableOfAuthoritiesDialogVisualMetrics(
+    double DialogWidth,
+    double OuterInset,
+    double LabelBottomMargin,
+    double ComboBoxHeight,
+    double ComboBottomMargin,
+    double PassimBottomMargin,
+    double KeepFormattingBottomMargin,
+    double ActionTopMargin,
+    double ActionButtonWidth,
+    double ActionSpacing,
+    double AvaloniaComboBoxHeightCompensation,
+    double AvaloniaOuterRightCompensation,
+    double AvaloniaActionTopCompensation);
+
 public static class TableOfAuthoritiesDialogPlanner
 {
     public const string Title = "Table of Authorities";
@@ -26,6 +41,28 @@ public static class TableOfAuthoritiesDialogPlanner
     public const string KeepOriginalFormattingLabel = "Keep original formatting";
     public const string TabLeaderLabel = "Tab leader:";
     public const string AllCategoriesLabel = "(All)";
+
+    /// <summary>
+    /// WPF-authority geometry at the dialog harness's 96-DPI logical coordinate space. The
+    /// Avalonia compensation values describe measured template paint offsets, not alternate
+    /// product layout: its combo template paints the same compact field two pixels shorter, its
+    /// content needs one additional right inset, and its action row needs a one-pixel downward
+    /// offset to occupy the same painted bounds as WPF.
+    /// </summary>
+    public static TableOfAuthoritiesDialogVisualMetrics VisualMetrics { get; } = new(
+        DialogWidth: 380,
+        OuterInset: 16,
+        LabelBottomMargin: 4,
+        ComboBoxHeight: 24,
+        ComboBottomMargin: 8,
+        PassimBottomMargin: 6,
+        KeepFormattingBottomMargin: 8,
+        ActionTopMargin: 12,
+        ActionButtonWidth: 80,
+        ActionSpacing: 14,
+        AvaloniaComboBoxHeightCompensation: -2,
+        AvaloniaOuterRightCompensation: 1,
+        AvaloniaActionTopCompensation: 1);
 
     public static TableOfAuthoritiesDialogState DefaultState { get; } =
         BuildInitialState(ToaOptions.Default);

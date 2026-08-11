@@ -13,7 +13,9 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle Chrome =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ComboBoxHeight = 22,
+            ComboBoxHeight = TableOfAuthoritiesDialogPlanner.VisualMetrics.ComboBoxHeight
+                + TableOfAuthoritiesDialogPlanner.VisualMetrics.AvaloniaComboBoxHeightCompensation,
+            ActionSpacing = TableOfAuthoritiesDialogPlanner.VisualMetrics.ActionSpacing,
             DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
         };
     private readonly IReadOnlyList<TableOfAuthoritiesCategoryChoice> _categories;
@@ -25,11 +27,12 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 
     internal TableOfAuthoritiesDialog(ToaOptions options)
     {
+        var metrics = TableOfAuthoritiesDialogPlanner.VisualMetrics;
         var state = TableOfAuthoritiesDialogPlanner.BuildInitialState(options);
         _categories = TableOfAuthoritiesDialogPlanner.BuildCategoryChoices();
         _leaders = TableOfAuthoritiesDialogPlanner.BuildTabLeaderChoices();
         Title = TableOfAuthoritiesDialogPlanner.Title;
-        Width = 380;
+        Width = metrics.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -37,30 +40,44 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 
         _category = Combo(_categories,
             TableOfAuthoritiesDialogPlanner.SelectCategoryIndex(_categories, state.CategoryFilter));
-        _category.Margin = new Thickness(0, 0, 0, 8);
-        _passim = CheckBox(TableOfAuthoritiesDialogPlanner.UsePassimLabel, state.UsePassim, new Thickness(0, 0, 0, 6));
-        _keepFormatting = CheckBox(TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel, state.KeepOriginalFormatting, new Thickness(0, 0, 0, 8));
+        _category.Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin);
+        _passim = CheckBox(
+            TableOfAuthoritiesDialogPlanner.UsePassimLabel,
+            state.UsePassim,
+            new Thickness(0, 0, 0, metrics.PassimBottomMargin));
+        _keepFormatting = CheckBox(
+            TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel,
+            state.KeepOriginalFormatting,
+            new Thickness(0, 0, 0, metrics.KeepFormattingBottomMargin));
         _leader = Combo(_leaders,
             TableOfAuthoritiesDialogPlanner.SelectTabLeaderIndex(_leaders, state.TabLeader));
-        _leader.Margin = new Thickness(0, 0, 0, 8);
+        _leader.Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin);
 
         var ok = Button("OK", true, false, Accept);
         var cancel = Button("Cancel", false, true, () => Close(null));
         Content = new StackPanel
         {
-            // WPF's painted client content ends one pixel earlier on the right while its action
-            // row paints one pixel farther down. Preserve that measured authority geometry in the
-            // otherwise shared 16-DIP dialog inset.
-            Margin = new Thickness(16, 16, 17, 16),
+            Margin = new Thickness(
+                metrics.OuterInset,
+                metrics.OuterInset,
+                metrics.OuterInset + metrics.AvaloniaOuterRightCompensation,
+                metrics.OuterInset),
             Children =
             {
-                new TextBlock { Text = TableOfAuthoritiesDialogPlanner.CategoryLabel, Margin = new Thickness(0, 0, 0, 4) },
+                Label(TableOfAuthoritiesDialogPlanner.CategoryLabel),
                 _category,
                 _passim,
                 _keepFormatting,
-                new TextBlock { Text = TableOfAuthoritiesDialogPlanner.TabLeaderLabel, Margin = new Thickness(0, 0, 0, 4) },
+                Label(TableOfAuthoritiesDialogPlanner.TabLeaderLabel),
                 _leader,
-                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
+                AvaloniaCompactDialogChrome.CreateActionRow(
+                    [ok, cancel],
+                    new Thickness(
+                        0,
+                        metrics.ActionTopMargin + metrics.AvaloniaActionTopCompensation,
+                        0,
+                        0),
+                    Chrome),
             },
         };
         Opened += (_, _) =>
@@ -115,10 +132,24 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
     private static Button Button(string text, bool isDefault, bool isCancel, Action click)
     {
         var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, Chrome, 80, isDefault);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            button,
+            Chrome,
+            TableOfAuthoritiesDialogPlanner.VisualMetrics.ActionButtonWidth,
+            isDefault);
         button.Background = Brushes.White;
         button.CornerRadius = new CornerRadius(3);
         button.Click += (_, _) => click();
         return button;
     }
+
+    private static TextBlock Label(string text) => new()
+    {
+        Text = text,
+        Margin = new Thickness(
+            0,
+            0,
+            0,
+            TableOfAuthoritiesDialogPlanner.VisualMetrics.LabelBottomMargin)
+    };
 }

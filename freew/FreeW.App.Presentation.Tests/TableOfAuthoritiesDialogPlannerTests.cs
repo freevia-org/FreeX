@@ -5,6 +5,26 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class TableOfAuthoritiesDialogPlannerTests
 {
     [Fact]
+    public void VisualMetrics_capture_the_Wpf_authority_layout()
+    {
+        var metrics = TableOfAuthoritiesDialogPlanner.VisualMetrics;
+
+        metrics.DialogWidth.Should().Be(380);
+        metrics.OuterInset.Should().Be(16);
+        metrics.LabelBottomMargin.Should().Be(4);
+        metrics.ComboBoxHeight.Should().Be(24);
+        metrics.ComboBottomMargin.Should().Be(8);
+        metrics.PassimBottomMargin.Should().Be(6);
+        metrics.KeepFormattingBottomMargin.Should().Be(8);
+        metrics.ActionTopMargin.Should().Be(12);
+        metrics.ActionButtonWidth.Should().Be(80);
+        metrics.ActionSpacing.Should().Be(14);
+        metrics.AvaloniaComboBoxHeightCompensation.Should().Be(-2);
+        metrics.AvaloniaOuterRightCompensation.Should().Be(1);
+        metrics.AvaloniaActionTopCompensation.Should().Be(1);
+    }
+
+    [Fact]
     public void BuildCategoryChoices_ListsAllCategoriesAfterAllChoice()
     {
         var choices = TableOfAuthoritiesDialogPlanner.BuildCategoryChoices();

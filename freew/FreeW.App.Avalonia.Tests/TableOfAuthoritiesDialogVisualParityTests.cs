@@ -20,6 +20,7 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
     {
         await Session.Dispatch(() =>
         {
+            var metrics = TableOfAuthoritiesDialogPlanner.VisualMetrics;
             var dialog = CreateDialog();
             var category = Field<ComboBox>(dialog, "_category");
             var passim = Field<CheckBox>(dialog, "_passim");
@@ -29,17 +30,17 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
                 .Where(button => button is not ToggleButton)
                 .ToArray();
 
-            dialog.Width.Should().Be(380);
-            category.Height.Should().Be(22);
-            category.Margin.Should().Be(new Thickness(0, 0, 0, 8));
+            dialog.Width.Should().Be(metrics.DialogWidth);
+            category.Height.Should().Be(metrics.ComboBoxHeight + metrics.AvaloniaComboBoxHeightCompensation);
+            category.Margin.Should().Be(new Thickness(0, 0, 0, metrics.ComboBottomMargin));
             passim.Height.Should().Be(18);
-            passim.Margin.Should().Be(new Thickness(0, 0, 0, 6));
+            passim.Margin.Should().Be(new Thickness(0, 0, 0, metrics.PassimBottomMargin));
             keepFormatting.Height.Should().Be(18);
-            keepFormatting.Margin.Should().Be(new Thickness(0, 0, 0, 8));
-            leader.Height.Should().Be(22);
-            leader.Margin.Should().Be(new Thickness(0, 0, 0, 8));
+            keepFormatting.Margin.Should().Be(new Thickness(0, 0, 0, metrics.KeepFormattingBottomMargin));
+            leader.Height.Should().Be(metrics.ComboBoxHeight + metrics.AvaloniaComboBoxHeightCompensation);
+            leader.Margin.Should().Be(new Thickness(0, 0, 0, metrics.ComboBottomMargin));
             buttons.Select(button => button.Content?.ToString()).Should().Equal("OK", "Cancel");
-            buttons.Should().OnlyContain(button => button.MinWidth == 80 && button.Height == 26);
+            buttons.Should().OnlyContain(button => button.MinWidth == metrics.ActionButtonWidth && button.Height == 26);
             buttons.Should().OnlyContain(button => button.CornerRadius == new CornerRadius(3));
             buttons.Should().OnlyContain(button => ((ISolidColorBrush)button.Background!).Color == Colors.White);
             buttons.Should().OnlyContain(button => ((ISolidColorBrush)button.BorderBrush!).Color == Color.FromRgb(200, 200, 200));
@@ -87,6 +88,7 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
     {
         await Session.Dispatch(() =>
         {
+            var metrics = TableOfAuthoritiesDialogPlanner.VisualMetrics;
             var options = TableOfAuthoritiesDialogPlanner.BuildEvidenceOptions(state);
             var dialog = (TableOfAuthoritiesDialog)Activator.CreateInstance(
                 typeof(TableOfAuthoritiesDialog),
@@ -97,8 +99,17 @@ public sealed class TableOfAuthoritiesDialogVisualParityTests
             var root = (StackPanel)dialog.Content!;
             var actionRow = root.Children.OfType<StackPanel>().Single();
 
-            root.Margin.Should().Be(new Thickness(16, 16, 17, 16));
-            actionRow.Margin.Should().Be(new Thickness(0, 12, 0, 0));
+            root.Margin.Should().Be(new Thickness(
+                metrics.OuterInset,
+                metrics.OuterInset,
+                metrics.OuterInset + metrics.AvaloniaOuterRightCompensation,
+                metrics.OuterInset));
+            actionRow.Spacing.Should().Be(metrics.ActionSpacing);
+            actionRow.Margin.Should().Be(new Thickness(
+                0,
+                metrics.ActionTopMargin + metrics.AvaloniaActionTopCompensation,
+                0,
+                0));
         }, CancellationToken.None);
     }
 
