@@ -34,6 +34,15 @@ public sealed record AccessibleTextRange(int Start, int Length)
     public int End => Start + Length;
 }
 
+/// <summary>
+/// A caret or selection endpoint inside rich text owned by a drawing object. Keeping the run address
+/// in the shared layer lets every renderer use the same flattening and range semantics.
+/// </summary>
+public sealed record AccessibleShapeTextPosition(
+    int ParagraphIndex,
+    int RunIndex,
+    int Offset);
+
 public enum AccessibleTextUnit
 {
     Character,
@@ -111,6 +120,26 @@ public sealed record AccessibleDocumentSnapshot(
 /// </summary>
 public static class AccessibleDocumentSnapshotPlanner
 {
+    public static AccessibleDocumentSnapshot BuildShapeText(
+        IReadOnlyList<Paragraph> paragraphs,
+        AccessibleShapeTextPosition caret,
+        AccessibleShapeTextPosition? selectionAnchor,
+        string storyLabel)
+    {
+        ArgumentNullException.ThrowIfNull(paragraphs);
+        ArgumentNullException.ThrowIfNull(caret);
+        ArgumentException.ThrowIfNullOrWhiteSpace(storyLabel);
+
+        var storyDocument = new TextDocument();
+        storyDocument.Blocks.AddRange(paragraphs);
+        var caretLocation = ShapeTextLocation(paragraphs, caret);
+        var anchorLocation = selectionAnchor is null
+            ? null
+            : ShapeTextLocation(paragraphs, selectionAnchor);
+        var snapshot = Build(storyDocument, caretLocation, anchorLocation);
+        return snapshot with { Status = $"{storyLabel}; {snapshot.Status}" };
+    }
+
     public static AccessibleDocumentSnapshot BuildHeaderFooter(
         HeaderFooter story,
         int paragraphIndex,
@@ -171,6 +200,26 @@ public static class AccessibleDocumentSnapshotPlanner
         {
             ParagraphRanges = flattened.Paragraphs
         };
+    }
+
+    private static AccessibleDocumentLocation ShapeTextLocation(
+        IReadOnlyList<Paragraph> paragraphs,
+        AccessibleShapeTextPosition position)
+    {
+        if (paragraphs.Count == 0)
+            return AccessibleDocumentLocation.Body(0, 0);
+
+        var paragraphIndex = Math.Clamp(position.ParagraphIndex, 0, paragraphs.Count - 1);
+        var paragraph = paragraphs[paragraphIndex];
+        if (paragraph.Runs.Count == 0)
+            return AccessibleDocumentLocation.Body(paragraphIndex, 0);
+
+        var runIndex = Math.Clamp(position.RunIndex, 0, paragraph.Runs.Count - 1);
+        var paragraphOffset = 0;
+        for (var index = 0; index < runIndex; index++)
+            paragraphOffset += paragraph.Runs[index].Text.Length;
+        paragraphOffset += Math.Clamp(position.Offset, 0, paragraph.Runs[runIndex].Text.Length);
+        return AccessibleDocumentLocation.Body(paragraphIndex, paragraphOffset);
     }
 
     private static FlattenedDocument Flatten(TextDocument document)

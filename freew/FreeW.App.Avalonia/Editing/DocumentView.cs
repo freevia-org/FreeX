@@ -1075,6 +1075,33 @@ public sealed class DocumentView : Control
     /// </summary>
     internal AccessibleDocumentSnapshot AutomationSnapshot()
     {
+        if (_shapeCaret is { } shapeCaret
+            && TryGetShapeTextTarget(
+                shapeCaret.BlockIndex,
+                shapeCaret.RunIndex,
+                _activeShapeTextChildPath,
+                out _,
+                out var shape))
+        {
+            AccessibleShapeTextPosition? shapeSelectionAnchor = _shapeSelectionAnchor is { } shapeAnchor
+                ? new AccessibleShapeTextPosition(
+                    shapeAnchor.TextParagraphIndex,
+                    shapeAnchor.TextRunIndex,
+                    shapeAnchor.Offset)
+                : null;
+            var label = string.IsNullOrWhiteSpace(shape.AltText)
+                ? "Shape text"
+                : $"Shape text: {shape.AltText.Trim()}";
+            return AccessibleDocumentSnapshotPlanner.BuildShapeText(
+                shape.TextParagraphs,
+                new AccessibleShapeTextPosition(
+                    shapeCaret.TextParagraphIndex,
+                    shapeCaret.TextRunIndex,
+                    shapeCaret.Offset),
+                shapeSelectionAnchor,
+                label);
+        }
+
         if (_hfCaret is { } headerFooterCaret
             && ResolveHfStore(headerFooterCaret.Target) is { } store
             && GetHfSlot(store, headerFooterCaret.Target.Slot) is { } story)
@@ -1119,6 +1146,8 @@ public sealed class DocumentView : Control
 
     internal string AutomationSelectionStatus()
     {
+        if (_shapeCaret is not null)
+            return AutomationSnapshot().Status;
         if (_selectedFloatingObjects.Count > 1)
             return $"{_selectedFloatingObjects.Count} drawing objects selected";
         if (_selectedFloating is { } selected)

@@ -115,4 +115,28 @@ public sealed class AccessibleDocumentSnapshotPlannerTests
         snapshot.Word.Should().Be(new AccessibleTextRange(19, 1));
         snapshot.Status.Should().StartWith("Section 2 default footer; Caret 19 of 20;");
     }
+
+    [Fact]
+    public void BuildShapeText_maps_run_addresses_and_cross_paragraph_selection()
+    {
+        var first = new Paragraph();
+        first.Runs.Add(new Run("Alpha "));
+        first.Runs.Add(new Run("beta", new RunFormatting { Bold = true }));
+        var second = new Paragraph();
+        second.Runs.Add(new Run("Gamma"));
+        second.Runs.Add(new Run(" delta", new RunFormatting { Italic = true }));
+
+        var snapshot = AccessibleDocumentSnapshotPlanner.BuildShapeText(
+            [first, second],
+            new AccessibleShapeTextPosition(1, 1, 3),
+            new AccessibleShapeTextPosition(0, 1, 1),
+            "Shape text: Results callout");
+
+        snapshot.Text.Should().Be("Alpha beta\nGamma delta");
+        snapshot.CaretOffset.Should().Be(19);
+        snapshot.Selection.Should().Be(new AccessibleTextRange(7, 12));
+        snapshot.GetText(snapshot.Selection!).Should().Be("eta\nGamma de");
+        snapshot.Status.Should().StartWith("Shape text: Results callout; Caret 19 of 22;");
+        snapshot.Status.Should().Contain("selected 12 characters: eta\nGamma de");
+    }
 }

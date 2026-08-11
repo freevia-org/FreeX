@@ -7,6 +7,7 @@ using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -225,5 +226,44 @@ public sealed class DocumentViewAutomationPeerTests
         raisedProperty.Should().Be(AutomationElementIdentifiers.ItemStatusProperty);
         helpTextRaisedCount.Should().BeGreaterThan(0,
             "caret context is projected through HelpText as well as ItemStatus");
+    }
+
+    [Fact]
+    public async Task Editing_shape_text_reports_the_shape_caret_and_selection_instead_of_only_object_selection()
+    {
+        AccessibleDocumentSnapshot? snapshot = null;
+        string? status = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var shape = Shape.TextBoxWith("Alpha beta", 160, 60);
+            shape.AltText = "Results callout";
+            shape.Placement = new FloatingPlacement { Wrapping = ImageWrapping.Square };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromShape(shape));
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 400));
+            view.SelectFloating(0, 0);
+            view.EnterSelectedShapeTextEditing().Should().BeTrue();
+            view.SelectShapeTextRangeForTest(0, 2, 7).Should().BeTrue();
+
+            snapshot = view.AutomationSnapshot();
+            status = view.AutomationSelectionStatus();
+        });
+
+        if (!ran)
+            return;
+
+        snapshot.Should().NotBeNull();
+        snapshot!.Text.Should().Be("Alpha beta");
+        snapshot.Selection.Should().Be(new AccessibleTextRange(2, 5));
+        snapshot.GetText(snapshot.Selection!).Should().Be("pha b");
+        status.Should().StartWith("Shape text: Results callout; Caret 7 of 10;")
+            .And.Contain("selected 5 characters: pha b");
     }
 }
