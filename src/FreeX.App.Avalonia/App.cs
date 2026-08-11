@@ -230,10 +230,14 @@ public sealed class App : Application
         try
         {
             // This process's OWN just-started coordinator has not written a snapshot yet at this
-            // point in startup, so every candidate here necessarily belongs to a previous launch —
-            // no self-recovery filtering is needed.
+            // point in startup, so every candidate here necessarily belongs to a previous launch OR
+            // another currently-running FreeX process. Round134-remediation (family fix): a second
+            // FreeX process launched while a first is still open with unsaved edits would otherwise
+            // see and could offer/delete the first process's still-live snapshot — the same
+            // "list/delete another live window's snapshot" defect the WPF host's AutosaveCoordinator
+            // had. ExcludeLiveOwned filters those out via the shared OS-lock liveness check.
             var candidates = FilterCandidatesWithNewerOriginal(
-                DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates()));
+                DeduplicateCandidatesByDocument(snapshotStore.ExcludeLiveOwned(snapshotStore.EnumerateCandidates())));
             if (candidates.Count == 0)
                 return;
 
@@ -617,6 +621,10 @@ internal sealed class AvaloniaAutosaveCoordinator
         _timer?.Stop();
         _timer = null;
         _coordinator.DeleteSnapshot();
+        // Releases this window's Round134-remediation liveness lock deterministically on close,
+        // rather than leaving it to whenever the GC finalizes the underlying handle — see
+        // AutosaveSnapshotCoordinator.Dispose / ReleaseOwnershipLock.
+        _coordinator.Dispose();
         lock (ActiveCoordinatorsGate)
             ActiveCoordinators.Remove(this);
     }

@@ -225,6 +225,11 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         }
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        // R134-commands-pivotchart-stale-datarange: "Change Data Source" can grow/shrink/relocate the
+        // pivot's materialized output just like every other refresh-triggering mutation -- without this,
+        // a PivotChart bound to this pivot table keeps rendering the cells the pivot occupied against the
+        // OLD source, silently inconsistent with the pivot right next to it.
+        PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 
@@ -237,6 +242,8 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
             _snapshot.Restore(pivotTable, ctx.Workbook);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+        if (pivotTable is not null)
+            PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         _snapshot = null;
         _targetSnapshot = null;
     }

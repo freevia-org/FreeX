@@ -81,10 +81,16 @@ public sealed class AutosaveAdapterTests
     {
         var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(dir);
+        // Round134-remediation: declared outside try so `finally` can Dispose() it — the coordinator
+        // now holds an OS-level liveness lock file open for its whole lifetime (see
+        // AutosaveSnapshotCoordinator's ownership lock), which must be released before the temp
+        // directory can be deleted, exactly like a real window's clean-close path does
+        // (AutosaveAdapter.StopAsync/OnWindowClosed).
+        AutosaveSnapshotCoordinator? coordinator = null;
         try
         {
             var store = new AutosaveSnapshotStore(dir);
-            var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
+            coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
 
             // A fake source that is NOT dirty.
             var source = new FakeSnapshotSource { IsDirty = false };
@@ -97,6 +103,7 @@ public sealed class AutosaveAdapterTests
         }
         finally
         {
+            coordinator?.Dispose();
             Directory.Delete(dir, recursive: true);
         }
     }
@@ -112,10 +119,13 @@ public sealed class AutosaveAdapterTests
         // of the headless session, so this test verifies the coordinator layer directly.
         var dir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
         Directory.CreateDirectory(dir);
+        // Round134-remediation: declared outside try so `finally` can Dispose() it — see the
+        // matching comment on Snapshot_is_skipped_when_source_is_not_dirty above.
+        AutosaveSnapshotCoordinator? coordinator = null;
         try
         {
             var store = new AutosaveSnapshotStore(dir);
-            var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
+            coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
             var source = new FakeSnapshotSource { IsDirty = false };
 
             // Start + immediate stop — should not throw.
@@ -137,6 +147,7 @@ public sealed class AutosaveAdapterTests
         }
         finally
         {
+            coordinator?.Dispose();
             Directory.Delete(dir, recursive: true);
         }
     }

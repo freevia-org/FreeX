@@ -467,6 +467,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
     internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
     internal int CurrentPresentationSlideIndex => _session.CurrentPresentationSlideIndex;
+    internal Slide? RevealedHiddenSlideForTest => _revealedHiddenSlide;
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
@@ -621,6 +622,30 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
             return;
         }
 
+        // While the audience screen is blanked (B/W), only the keys that legitimately
+        // affect the blank state itself may act: toggling B/W again, and Escape to end
+        // the show. Every other key — advance, back, slide-number jump, H reveal — must
+        // NOT silently move the deck or fire an animation underneath the blank screen.
+        if (SlideShowScreenModePlanner.IsBlank(_screenMode))
+        {
+            if (SlideShowScreenModePlanner.TryPlanKey(e.Key.ToString(), _screenMode, out var blankScreenMode))
+            {
+                SetScreenMode(blankScreenMode);
+                e.Handled = true;
+                return;
+            }
+
+            if (SlideShowHostPlanner.IntentFromKeyName(e.Key.ToString()) == SlideShowHostIntent.Close)
+            {
+                ApplyHostCommand(SlideShowHostCommand.Close(stopAutoAdvance: true));
+                e.Handled = true;
+                return;
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.H)
         {
             ExecuteHiddenSlideReveal();
@@ -683,6 +708,15 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // The audience sees a blank (black/white) screen; a stray click underneath it
+        // must not ink, trigger an animation, follow a hyperlink, or advance the deck.
+        // Only the B/W/Escape keyboard shortcuts may change the blank state.
+        if (SlideShowScreenModePlanner.IsBlank(_screenMode))
+        {
+            e.Handled = true;
+            return;
+        }
+
         var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
         var clickPt = e.GetPosition(_slideCanvas);
         var inkResult = BeginPresenterInkStroke(clickPt.X, clickPt.Y);
@@ -797,10 +831,28 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         }
         else if (hlink.TargetSlideId is not null)
         {
-            ApplyHostCommand(SlideShowHostPlanner.PlanInternalSlideJump(
+            var command = SlideShowHostPlanner.PlanInternalSlideJump(
                 _controller,
                 _playbackRoute.Slides,
-                hlink.TargetSlideId));
+                hlink.TargetSlideId);
+            if (command.Kind == SlideShowHostCommandKind.NavigateToSlide)
+            {
+                ApplyHostCommand(command);
+                return;
+            }
+
+            // The target isn't in the playback route — normal advance skips hidden
+            // slides, but PowerPoint still honours an explicit hyperlink to one.
+            // Reveal it the same way the H key does, without moving the controller's
+            // own slide index, so a later Advance resumes where the presenter left off.
+            var hiddenTarget = SlideShowHostPlanner.FindHiddenSlideById(_presentation, hlink.TargetSlideId);
+            if (hiddenTarget is not null)
+            {
+                _autoAdvanceTimer.Stop();
+                _revealedHiddenSlide = hiddenTarget.Slide;
+                _revealedHiddenSlideSourceIndex = hiddenTarget.SourceSlideIndex;
+                DisplayCurrentSlide(animated: false);
+            }
         }
     }
 

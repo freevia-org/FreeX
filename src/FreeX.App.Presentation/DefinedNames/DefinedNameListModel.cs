@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.App.Presentation.DefinedNames;
 
 /// <summary>What a defined name resolves to, used to drive the Name Manager's "kind" column and icons.</summary>
@@ -37,13 +39,23 @@ public enum DefinedNameFilter
 /// cheap value preview, a comment, and the derived <see cref="DefinedNameKind"/>. Built by
 /// <see cref="DefinedNameListProjector"/> from the workbook's defined names; carries no renderer types.
 /// </summary>
+/// <param name="ScopeSheetId">
+/// The row's real scope identity: null for the workbook-global scope, or the owning sheet's id for a
+/// worksheet-scoped name. <see cref="ScopeLabel"/> is a display string only (the workbook's sentinel text
+/// for the global scope, or a sheet's display name) and must never be re-parsed to recover this identity --
+/// nothing reserves "Workbook" as a sheet name, so a worksheet can legally be named exactly "Workbook",
+/// making its scope label collide with the global sentinel while <see cref="ScopeSheetId"/> still
+/// disambiguates them correctly. Callers that need to route a command (delete/define) by scope must use
+/// this field, not <see cref="ScopeLabel"/>. Mirrors the WPF host's NamedRangeViewModel.ScopeSheetId.
+/// </param>
 public sealed record DefinedNameRow(
     string Name,
     string ScopeLabel,
     string RefersTo,
     string Value,
     string Comment,
-    DefinedNameKind Kind)
+    DefinedNameKind Kind,
+    SheetId? ScopeSheetId = null)
 {
     /// <summary>True when this row is workbook-scoped (case-insensitive on the scope label).</summary>
     public bool IsWorkbookScoped => DefinedNameScope.IsWorkbookLabel(ScopeLabel);
@@ -93,10 +105,11 @@ public static class DefinedNameListProjector
         string scopeLabel,
         string refersTo,
         string value = "",
-        string comment = "")
+        string comment = "",
+        SheetId? scopeSheetId = null)
     {
         var kind = DeriveKind(refersTo, value);
-        return new DefinedNameRow(name, scopeLabel, refersTo, value, comment, kind);
+        return new DefinedNameRow(name, scopeLabel, refersTo, value, comment, kind, scopeSheetId);
     }
 
     /// <summary>Apply a <see cref="DefinedNameFilter"/> to a set of rows, preserving order.</summary>

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace FreeW.Core.Model.Tests;
 
 public class MailMergeTests
@@ -530,6 +532,55 @@ public class MailMergeTests
             new Dictionary<string, string> { ["When"] = "06.08.2026" });
 
         merged.PlainText.Should().Be("Donnerstag, 6. August 2026");
+    }
+
+    // Round 134 (b): the \# numeric picture used to parse its data value with a hard-coded
+    // InvariantCulture, so comma-decimal data (the normal CSV export format across much of Europe) was
+    // misread as a thousands-grouped integer: "1,5" became 15. Parsing now uses the field's own declared
+    // language (mirroring the date-picture parsing right above), falling back to the current culture —
+    // exactly like WordFieldDateTimeFormatter already does for \@ date pictures.
+    [Fact]
+    public void MergeRecord_NumericPictureParsesCommaDecimalUsingRunLanguage()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Price \\# \"0.00\" \\* MERGEFORMAT ",
+                    "«Price»",
+                    formatting: new RunFormatting { LanguageTag = "de-DE" })
+            }
+        });
+        var row = new Dictionary<string, string> { ["Price"] = "1,5" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("1.50");
+        MailMerge.MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1)
+            .PlainText.Should().Be("1.50");
+    }
+
+    // Sibling/no-regression: en-US data (or any culture sharing the comma-group/dot-decimal convention)
+    // must keep reading "1,234" as one thousand two hundred thirty-four, not be corrupted into 1.234 by
+    // the culture-aware parse. Passes both before and after the fix — it documents the case the fix must
+    // NOT change.
+    [Fact]
+    public void MergeRecord_NumericPictureKeepsUsThousandsGroupingUnderUsRunLanguage()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                Run.ComplexFieldRun(
+                    " MERGEFIELD Price \\# \"#,##0\" \\* MERGEFORMAT ",
+                    "«Price»",
+                    formatting: new RunFormatting { LanguageTag = "en-US" })
+            }
+        });
+        var row = new Dictionary<string, string> { ["Price"] = "1,234" };
+
+        MailMerge.MergeRecord(template, row).PlainText.Should().Be("1,234");
     }
 
     [Fact]
@@ -1917,6 +1968,63 @@ public class MailMergeTests
         MergeRuleEvaluator.EvaluateCondition(fieldValue, op, value).Should().Be(expected);
     }
 
+    // Round 134 (b): numeric comparison used to parse both sides with a hard-coded InvariantCulture, so
+    // comma-decimal data corrupted If/Skip Record If/Next Record If conditions the same way it corrupted
+    // \# picture formatting above — "2,50" (two and a half) read as 250, flipping comparisons against a
+    // genuinely larger threshold like "3,0" (three). Passing the data source's own culture parses each
+    // side correctly; passing none falls back to the current (ambient) culture, matching how the rest of
+    // this evaluator already treats the process culture as the data-source locale.
+    [Fact]
+    public void EvaluateCondition_ParsesCommaDecimalUnderExplicitCulture()
+    {
+        var german = CultureInfo.GetCultureInfo("de-DE");
+
+        // 2.50 > 3.0 is false — under InvariantCulture's misparse (250 > 30) it would wrongly read true.
+        MergeRuleEvaluator.EvaluateCondition("2,50", MergeConditionOperator.GreaterThan, "3,0", german)
+            .Should().BeFalse();
+        MergeRuleEvaluator.EvaluateCondition("1,5", MergeConditionOperator.Equal, "1,50", german)
+            .Should().BeTrue();
+    }
+
+    // Sibling/no-regression: en-US (and invariant) data must keep comparing "1,234" as the thousands-
+    // grouped 1234, not be corrupted into 1.234. Passes both before and after the fix.
+    [Fact]
+    public void EvaluateCondition_KeepsUsThousandsGroupingUnderInvariantCulture()
+    {
+        MergeRuleEvaluator.EvaluateCondition("1,234", MergeConditionOperator.GreaterThan, "999", CultureInfo.InvariantCulture)
+            .Should().BeTrue();
+    }
+
+    // Integration proof that the production call path (MergeRuleEvaluator.Evaluate, reached from
+    // MergeAllWithRules with no culture argument available) actually picks up the fix: it defaults to
+    // CultureInfo.CurrentCulture, so temporarily switching the ambient culture to a comma-decimal locale
+    // changes the outcome of a bracket «If» condition evaluated against comma-decimal row data.
+    [Fact]
+    public void MergeAllWithRules_IfCondition_ParsesCommaDecimalUnderCurrentCulture()
+    {
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+
+            var template = new TextDocument();
+            var instruction = MergeRuleEvaluator.BuildIfInstruction(
+                "Amount", MergeConditionOperator.GreaterThan, "3,0", "Big", "Small");
+            template.Blocks.Add(new Paragraph(
+                $"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}"));
+            var data = new MergeData(["Amount"], [["2,50"]]);
+
+            var merged = MailMerge.MergeAllWithRules(template, data, new MergeState());
+
+            // 2.50 is not greater than 3.0 under the correct German-culture parse.
+            merged[0].PlainText.Should().Be("Small");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
+
     // ── MailMerge.MergeAllWithRules — integration tests ──────────────────────────────────────────
 
     [Fact]
@@ -2471,6 +2579,135 @@ public class MailMergeTests
             MailMerge.MergeSequenceNumberInstruction);
         fields.Select(run => run.Text).Should().Equal(string.Empty, "4", "2");
         state.AdvanceRecordRequested.Should().BeTrue();
+    }
+
+    // Round 134 (a): Mailings > Preview Results and Mailings > Send E-mail Messages both merge a single
+    // record via MailMerge.MergeRecord. It used to substitute only plain «Field» placeholders, so a
+    // native IF field and a native MERGEREC field both went silently blank there while Finish & Merge
+    // (MergeRecordWithRules) resolved them correctly — the preview (and the message actually sent) lied
+    // about what merging produced. MergeRecord now routes through MergeRecordWithRules, so both resolve.
+    [Fact]
+    public void MergeRecord_ResolvesNativeIfAndMergeRecordFields_InsteadOfBlankingThem()
+    {
+        var template = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("")
+        {
+            ComplexField = MergeRuleEvaluator.BuildNativeIfField(
+                "City", MergeConditionOperator.Equal, "London", "UK", "Other")
+        });
+        paragraph.Runs.Add(new Run(" / "));
+        paragraph.Runs.Add(Run.ComplexFieldRun($" {MailMerge.MergeRecordNumberInstruction} ", ""));
+        template.Blocks.Add(paragraph);
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["City"] = "London" });
+
+        merged.PlainText.Should().Be("UK / 1");
+    }
+
+    // Sibling/no-regression: the other branch of the same IF field must still resolve correctly through
+    // MergeRecord (proves the fix isn't accidentally always emitting the true-branch).
+    [Fact]
+    public void MergeRecord_ResolvesNativeIfField_FalseBranch()
+    {
+        var template = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("")
+        {
+            ComplexField = MergeRuleEvaluator.BuildNativeIfField(
+                "City", MergeConditionOperator.Equal, "London", "UK", "Other")
+        });
+        template.Blocks.Add(paragraph);
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["City"] = "Paris" });
+
+        merged.PlainText.Should().Be("Other");
+    }
+
+    // Round 134 (c): MERGEREC used to report the row's position within whatever (possibly narrowed)
+    // selection MergeAllWithRules was called with — the position within the SELECTED merge range — not
+    // its absolute position in the full recipient list, so Current Record / a From…To range showed the
+    // wrong record number. Word's MERGEREC is the record's position in the data source; MERGESEQ
+    // (Merge Sequence #) is correctly "within-range" already (it counts non-skipped records emitted by
+    // this run) and must stay that way. This mirrors a Finish & Merge "From record 3 To record 4" — a
+    // 5-row recipient list narrowed to its last two rows, absolute rows 3 and 4 (1-based).
+    [Fact]
+    public void MergeAllWithRules_MergeRecordField_ReportsAbsoluteRecipientRowNotSelectionPosition()
+    {
+        var template = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun($" {MailMerge.MergeRecordNumberInstruction} ", ""));
+        paragraph.Runs.Add(new Run(" / "));
+        paragraph.Runs.Add(Run.ComplexFieldRun($" {MailMerge.MergeSequenceNumberInstruction} ", ""));
+        template.Blocks.Add(paragraph);
+
+        // Rows 3 and 4 (0-based indices 2 and 3) of a 5-row recipient list, narrowed to a selection.
+        var selection = new MergeData(["Name"], [["Carol"], ["Dave"]]);
+
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            selection,
+            new MergeState(),
+            recordNumbers: [3, 4]);
+
+        merged.Should().HaveCount(2);
+        // MERGEREC is the absolute recipient-list row; MERGESEQ stays within-range (1, 2).
+        merged[0].PlainText.Should().Be("3 / 1");
+        merged[1].PlainText.Should().Be("4 / 2");
+    }
+
+    // Sibling/no-regression: omitting recordNumbers (every other production/test caller) must keep the
+    // prior behavior — MERGEREC falls back to the row's 1-based position within data itself.
+    [Fact]
+    public void MergeAllWithRules_MergeRecordField_FallsBackToPositionWithinDataWhenRecordNumbersOmitted()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph(
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}"));
+        var data = new MergeData(["Name"], [["Ada"], ["Grace"]]);
+
+        var merged = MailMerge.MergeAllWithRules(template, data, new MergeState());
+
+        merged.Select(d => d.PlainText).Should().Equal("1", "2");
+    }
+
+    // Round 134 (a) + (c) together: verifies both fixes on the shared field-evaluation path in the same
+    // document, previewed (MergeRecord — single record, no selection concept) and merged (MergeAllWithRules
+    // with a narrowed, absolute-numbered selection), exactly as the round's brief asks.
+    [Fact]
+    public void PreviewAndMerge_DocumentWithIfAndMergeRecordFields_BothResolveConsistently()
+    {
+        var template = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("")
+        {
+            ComplexField = MergeRuleEvaluator.BuildNativeIfField(
+                "Tier", MergeConditionOperator.Equal, "VIP", "Gold", "Standard")
+        });
+        paragraph.Runs.Add(new Run(" / "));
+        paragraph.Runs.Add(Run.ComplexFieldRun($" {MailMerge.MergeRecordNumberInstruction} ", ""));
+        template.Blocks.Add(paragraph);
+
+        // Preview Results: a single record merged in isolation (record 3 of the recipient list).
+        var previewed = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["Tier"] = "VIP" });
+        previewed.PlainText.Should().Be("Gold / 1");
+
+        // Finish & Merge: the same template merged for real over a "From record 3 To record 3" selection
+        // (absolute row 3 of a larger recipient list) — MERGEREC must show the real row, "3", not "1".
+        var selection = new MergeData(["Tier"], [["VIP"]]);
+        var merged = MailMerge.MergeAllWithRules(
+            template,
+            selection,
+            new MergeState(),
+            recordNumbers: [3]);
+        merged.Should().ContainSingle();
+        merged[0].PlainText.Should().Be("Gold / 3");
     }
 
     [Theory]

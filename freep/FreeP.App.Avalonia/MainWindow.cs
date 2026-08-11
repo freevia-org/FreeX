@@ -5490,14 +5490,48 @@ public sealed partial class MainWindow : Window
 
     internal PresentationImageExportResult FileExportImagesToFolder(
         string outputDirectory,
-        PresentationSlideRangeRequest? range = null) =>
-        PresentationImageExportExecutor.Export(
+        PresentationSlideRangeRequest? range = null)
+    {
+        var imageDiagnostics = new List<string>();
+        var result = FileExportImagesToFolderCore(
             _presentation,
             new PresentationImageExportRequest(
                 outputDirectory,
                 BaseFileName: Path.GetFileNameWithoutExtension(_fileWorkflow.CurrentFileName),
                 SlideRange: range),
-            SlideRenderer.RenderToBytes);
+            imageDiagnostics);
+        if (imageDiagnostics.Count > 0)
+        {
+            _statusText.Text =
+                $"Exported {result.ExportedSlides.Count} image(s) to {Path.GetFileName(outputDirectory)} " +
+                $"({imageDiagnostics.Count} image warning(s)): {string.Join(" ", imageDiagnostics)}";
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Renders every requested slide to a PNG exactly as <see cref="FileExportImagesToFolder"/> does, and
+    /// appends into <paramref name="imageDiagnostics"/> any picture <c>SlideCanvas</c> drops while
+    /// compositing a slide -- the same loss point <see cref="ExportPdfRasterBytes"/> surfaces for the raster
+    /// PDF path (see <see cref="SlideImageRenderDiagnostics"/>), but was previously unwired here, so an
+    /// undecodable embedded picture silently disappeared from File &gt; Export &gt; Images with no
+    /// diagnostic at all. Internal (not private) so FreeP.App.Avalonia.Tests can exercise this exact
+    /// production composition.
+    /// </summary>
+    internal static PresentationImageExportResult FileExportImagesToFolderCore(
+        Presentation presentation,
+        PresentationImageExportRequest request,
+        List<string> imageDiagnostics)
+    {
+        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
+        {
+            return PresentationImageExportExecutor.Export(
+                presentation,
+                request,
+                SlideRenderer.RenderToBytes);
+        }
+    }
 
     private async Task<bool> FileExportImagesAsync()
     {
@@ -6112,14 +6146,31 @@ public sealed partial class MainWindow : Window
         return result.Succeeded;
     }
 
+    /// <summary>
+    /// Diagnostics collected the last time <see cref="RefreshVideoFramePackage"/> rendered video frames --
+    /// pictures <c>SlideCanvas</c> dropped while compositing a frame (see
+    /// <see cref="SlideImageRenderDiagnostics"/>). Reset on every call, so it always reflects only the
+    /// most recent build.
+    /// </summary>
+    internal IReadOnlyList<string> LastVideoFrameImageDiagnostics { get; private set; } = [];
+
     internal PresentationVideoFramePackage RefreshVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
-        LastVideoFramePackage = _videoFramePackageFactory?.Invoke(request) ??
-            PresentationVideoFramePackageExecutor.BuildPackage(
-                _presentation,
-                request,
-                SlideRenderer.RenderToBytes,
-                _videoExportHostCapabilities);
+        if (_videoFramePackageFactory is { } factory)
+        {
+            // Test-only override: bypasses the SlideRenderer-based render entirely, so there is
+            // nothing for SlideImageRenderDiagnostics to observe.
+            LastVideoFramePackage = factory(request);
+            LastVideoFrameImageDiagnostics = [];
+        }
+        else
+        {
+            var imageDiagnostics = new List<string>();
+            LastVideoFramePackage = BuildVideoFramePackageCore(
+                _presentation, request, _videoExportHostCapabilities, imageDiagnostics);
+            LastVideoFrameImageDiagnostics = imageDiagnostics;
+        }
+
         LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
         LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
             LastVideoFramePackage,
@@ -6128,6 +6179,32 @@ public sealed partial class MainWindow : Window
         LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
         _statusText.Text = LastVideoExportHandoffPlan.StatusText;
         return LastVideoFramePackage;
+    }
+
+    /// <summary>
+    /// Renders every video frame exactly as <see cref="RefreshVideoFramePackage"/> does (absent a
+    /// test-only factory override), and appends into <paramref name="imageDiagnostics"/> any picture
+    /// <c>SlideCanvas</c> drops while compositing a frame -- the same loss point
+    /// <see cref="ExportPdfRasterBytes"/> surfaces for the raster PDF path (see
+    /// <see cref="SlideImageRenderDiagnostics"/>), but was previously unwired here, so an undecodable
+    /// embedded picture silently disappeared from File &gt; Export &gt; Video with no diagnostic at
+    /// all. Internal (not private) so FreeP.App.Avalonia.Tests can exercise this exact production
+    /// composition.
+    /// </summary>
+    internal static PresentationVideoFramePackage BuildVideoFramePackageCore(
+        Presentation presentation,
+        PresentationVideoExportRequest? request,
+        PresentationVideoExportHandoffHostCapabilities hostCapabilities,
+        List<string> imageDiagnostics)
+    {
+        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
+        {
+            return PresentationVideoFramePackageExecutor.BuildPackage(
+                presentation,
+                request,
+                SlideRenderer.RenderToBytes,
+                hostCapabilities);
+        }
     }
 
     internal async Task<LinuxVideoExportResult> ExecuteVideoExportAsync(
@@ -6164,6 +6241,12 @@ public sealed partial class MainWindow : Window
             LastVideoExportResult.FailureReason is not null)
         {
             _statusText.Text = $"{LastVideoExportResult.StatusText}: {LastVideoExportResult.FailureReason}";
+        }
+        else if (LastVideoExportResult.Succeeded && LastVideoFrameImageDiagnostics.Count > 0)
+        {
+            _statusText.Text =
+                $"{LastVideoExportResult.StatusText} ({LastVideoFrameImageDiagnostics.Count} image warning(s)): " +
+                string.Join(" ", LastVideoFrameImageDiagnostics);
         }
 
         return LastVideoExportResult;

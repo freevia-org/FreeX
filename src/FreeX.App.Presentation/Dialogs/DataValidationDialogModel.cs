@@ -419,9 +419,16 @@ public sealed record DataValidationDialogModel(
         return !inQuotes && (hasItemText || currentHasText);
     }
 
+    // Delegates to the ONE shared parse (FreeX.Core.Model.DataValidationNumericBoundText) also used
+    // by live enforcement while the session runs (DataValidationBoundsParser) and by save-time
+    // canonicalization (XlsxDataValidationClosedXmlMapper). Before this was unified, this
+    // dialog-entry gate used NumberStyles.Float -- no thousands grouping at all -- so a
+    // legitimately thousands-grouped bound like "1,234" was rejected here as invalid input even
+    // though live-eval and save both accepted and parsed it; a value that got past this gate any
+    // other way (e.g. loaded from a file) could then enforce one number in-session and a different
+    // one after save/reload, because the three call sites disagreed on what the text even meant.
     private static bool TryParseNumber(string text, out double value) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out value) ||
-        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        DataValidationNumericBoundText.TryParse(text, out value);
 
     private static bool IsWholeNumber(double value) =>
         double.IsFinite(value) && Math.Abs(value - Math.Round(value)) <= double.Epsilon;

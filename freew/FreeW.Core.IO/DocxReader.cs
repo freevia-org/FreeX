@@ -2727,6 +2727,32 @@ public static class DocxReader
             }
             paragraph.Runs.Add(run);
         }
+        else if (child.Name == M + "oMathPara")
+        {
+            // A display-mode equation: Word's paragraph-level "Professional"/centred layout wraps one or
+            // more m:oMath children (each a separate stacked line of the same display group). Parse every
+            // nested m:oMath exactly like the inline case, but flag the resulting Equation as display math
+            // so DocxWriter re-wraps it in m:oMathPara on save instead of the bare inline m:oMath — without
+            // this branch the whole oMathPara (and its equation) was silently dropped on open.
+            foreach (var mathElement in child.Elements(M + "oMath"))
+            {
+                var displayEquation = ReadOMath(mathElement);
+                displayEquation.IsDisplayMath = true;
+                var displayRun = Run.FromEquation(displayEquation);
+                displayRun.Control = control;
+                displayRun.HyperlinkUrl = hyperlinkUrl;
+                displayRun.HyperlinkAnchor = hyperlinkAnchor;
+                displayRun.HyperlinkTooltip = hyperlinkTooltip;
+                if (revision.Kind != RevisionKind.None)
+                {
+                    displayRun.Revision = revision.Kind;
+                    displayRun.RevisionAuthor = revision.Author;
+                    displayRun.RevisionDateXml = revision.DateXml;
+                    displayRun.MoveRevisionId = revision.MoveId;
+                }
+                paragraph.Runs.Add(displayRun);
+            }
+        }
         else if (child.Name == W + "bookmarkStart")
         {
             // Keep the exact invisible boundary at the current run index. _GoBack remains hidden from
@@ -3177,28 +3203,36 @@ public static class DocxReader
 
     /// <summary>
     /// Reads a delimiter (m:d): the begin/end glyphs from m:dPr/m:begChr / m:endChr (default round
-    /// brackets) and the content from the first m:e. Mirrors <c>DocxWriter.BuildDelimiter</c>.
+    /// brackets) and the content from every m:e child. A binomial/case/matrix-style delimiter carries more
+    /// than one m:e, separated by m:dPr/m:sepChr (default ","); the first becomes the ordinary
+    /// Base/DelimiterContentEquation slot and the rest are preserved in AdditionalDelimiterArguments /
+    /// AdditionalDelimiterContentEquations so none are dropped. Mirrors <c>DocxWriter.BuildDelimiter</c>.
     /// </summary>
     private static MathRun ReadDelimiter(XElement d)
     {
         var dPr = d.Element(M + "dPr");
         var open = dPr?.Element(M + "begChr")?.Attribute(M + "val")?.Value;
         var close = dPr?.Element(M + "endChr")?.Attribute(M + "val")?.Value;
-        var content = d.Element(M + "e");
+        var sep = dPr?.Element(M + "sepChr")?.Attribute(M + "val")?.Value;
+        var arguments = d.Elements(M + "e").ToList();
+        var content = arguments.Count > 0 ? arguments[0] : null;
         var contentText = MathTextOf(content);
-        return HasStructuredMathSlot(content)
-            ? new MathRun
-            {
-                Kind = MathRunKind.Delimiter,
-                Base = contentText,
-                OpenChar = string.IsNullOrEmpty(open) ? "(" : open,
-                CloseChar = string.IsNullOrEmpty(close) ? ")" : close,
-                DelimiterContentEquation = ReadMathSlot(content)
-            }
-            : MathRun.Delimiter(
-                contentText,
-                string.IsNullOrEmpty(open) ? "(" : open,
-                string.IsNullOrEmpty(close) ? ")" : close);
+        var additionalArguments = arguments.Skip(1).Select(MathTextOf).ToList();
+        var additionalEquations = arguments.Skip(1)
+            .Select(e => HasStructuredMathSlot(e) ? ReadMathSlot(e) : null)
+            .ToList();
+
+        return new MathRun
+        {
+            Kind = MathRunKind.Delimiter,
+            Base = contentText,
+            OpenChar = string.IsNullOrEmpty(open) ? "(" : open,
+            CloseChar = string.IsNullOrEmpty(close) ? ")" : close,
+            DelimiterContentEquation = HasStructuredMathSlot(content) ? ReadMathSlot(content) : null,
+            AdditionalDelimiterArguments = additionalArguments,
+            AdditionalDelimiterContentEquations = additionalEquations,
+            DelimiterSeparator = string.IsNullOrEmpty(sep) ? "," : sep
+        };
     }
 
     /// <summary>

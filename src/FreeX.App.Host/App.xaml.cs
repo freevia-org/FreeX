@@ -800,8 +800,14 @@ public partial class App : Application
     {
         try
         {
+            // Round134-remediation (family fix): this process's OWN just-started coordinator has
+            // no snapshot file to protect yet at this point, but a SECOND FreeX.exe process
+            // launched while a FIRST one is still open with unsaved edits would otherwise see and
+            // could offer/delete the first process's still-live snapshot — the same "list/delete
+            // another live window's snapshot" defect the WPF host's AutosaveCoordinator had.
+            // ExcludeLiveOwned filters those out via the shared OS-lock liveness check.
             var candidates = FilterCandidatesWithNewerOriginal(
-                DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates()));
+                DeduplicateCandidatesByDocument(snapshotStore.ExcludeLiveOwned(snapshotStore.EnumerateCandidates())));
             if (candidates.Count == 0)
                 return false;
 

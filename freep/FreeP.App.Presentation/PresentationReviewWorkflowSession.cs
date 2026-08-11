@@ -508,8 +508,9 @@ public sealed class PresentationReviewWorkflowSession
         string? editInitials = null)
     {
         var editor = _getEditor();
-        var result = PresentationCommentMutationService.Apply(
-            editor.Presentation.Slides,
+        var slides = editor.Presentation.Slides;
+        var plan = PresentationCommentMutationService.BuildPlan(
+            slides,
             new PresentationCommentMutationRequest(
                 intent,
                 editor.CurrentSlideIndex,
@@ -546,17 +547,57 @@ public sealed class PresentationReviewWorkflowSession
                 ResolvedAt: resolvedAt,
                 ResolvedBy: resolvedBy));
 
-        if (result.Applied)
+        if (plan.ShouldApply)
         {
-            SelectedCommentIndex = result.SelectedCommentIndex;
-            _callbacks.MarkDirty();
-            ShowReviewCommentsPane();
-            RefreshReviewWorkflowPlans();
-            _callbacks.UpdateAfterCommentMutation();
+            var slide = plan.SlideIndex >= 0 && plan.SlideIndex < slides.Count
+                ? slides[plan.SlideIndex]
+                : null;
+            if (slide is not null)
+            {
+                var isAdd = intent == PresentationReviewWorkflowIntentKind.AddComment;
+                var isDelete = intent == PresentationReviewWorkflowIntentKind.DeleteComment;
+                var index = isAdd ? slide.Comments.Count : plan.CommentIndex ?? -1;
+                if (index >= 0)
+                {
+                    var before = isAdd
+                        ? null
+                        : index < slide.Comments.Count ? slide.Comments[index] : null;
+                    var after = isDelete ? null : plan.Comment;
+                    if (before is not null || after is not null)
+                    {
+                        editor.Bus.Execute(new CommentMutationCommand(
+                            CommentMutationLabel(intent),
+                            plan.SlideIndex,
+                            index,
+                            before,
+                            after));
+
+                        SelectedCommentIndex = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(
+                            slides,
+                            plan,
+                            SelectedCommentIndex);
+                        _callbacks.MarkDirty();
+                        ShowReviewCommentsPane();
+                        RefreshReviewWorkflowPlans();
+                        _callbacks.UpdateAfterCommentMutation();
+                    }
+                }
+            }
         }
 
-        return result.Plan;
+        return plan;
     }
+
+    private static string CommentMutationLabel(PresentationReviewWorkflowIntentKind intent) => intent switch
+    {
+        PresentationReviewWorkflowIntentKind.AddComment => "Add Comment",
+        PresentationReviewWorkflowIntentKind.EditComment => "Edit Comment",
+        PresentationReviewWorkflowIntentKind.DeleteComment => "Delete Comment",
+        PresentationReviewWorkflowIntentKind.ResolveComment => "Resolve Comment",
+        PresentationReviewWorkflowIntentKind.ReopenComment => "Reopen Comment",
+        PresentationReviewWorkflowIntentKind.ReplyComment => "Reply to Comment",
+        _ => "Edit Comment"
+    };
 
     public string? GetCommentText(int commentIndex)
     {

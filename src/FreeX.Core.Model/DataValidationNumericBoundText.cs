@@ -1,0 +1,123 @@
+using System.Globalization;
+
+namespace FreeX.Core.Model;
+
+/// <summary>
+/// Single shared parse/format for a data-validation numeric bound (the text typed into
+/// Formula1/Formula2 for a WholeNumber/Decimal/Date/Time rule).
+/// <para>
+/// Before this helper existed, the identical bound text was parsed with THREE different
+/// <see cref="NumberStyles"/> across three independent call sites that all needed to agree on the
+/// same number: the Data Validation dialog's entry gate
+/// (FreeX.App.Presentation.Dialogs.DataValidationDialogModel, which used
+/// <see cref="NumberStyles.Float"/> -- no thousands grouping at all, so a legitimately
+/// thousands-grouped bound like "1,234" was rejected outright as invalid input), live enforcement
+/// while the session runs (FreeX.Core.Commands.DataValidationBoundsParser, which used
+/// <see cref="NumberStyles.Any"/> with a grouping-shape guard), and file-save canonicalization
+/// (FreeX.Core.IO.XlsxDataValidationClosedXmlMapper, which used a hand-picked style set that also
+/// omitted thousands grouping, so a bound that reached save with a grouping separator -- e.g.
+/// loaded from a file, or entered through some path other than the gated dialog -- fell through
+/// unparsed and was written to the XLSX verbatim, with its locale-specific grouping character
+/// still embedded, instead of being canonicalized to invariant digits). A thousands-grouped bound
+/// could therefore be accepted/rejected inconsistently by the dialog, enforced as one number while
+/// the session ran, and end up persisted as a completely different (and locale-dependent) value on
+/// disk. All three call sites now derive from this one helper so they can never drift apart again.
+/// </para>
+/// </summary>
+public static class DataValidationNumericBoundText
+{
+    private const NumberStyles Styles =
+        NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite |
+        NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint |
+        NumberStyles.AllowThousands;
+
+    /// <summary>
+    /// Parses a numeric bound the way a user actually types (or a file actually stores) it: first
+    /// under the current UI culture, so a comma-decimal locale (e.g. de-DE "1,5") is read as
+    /// intended, then falling back to invariant (dot-decimal) parsing for bounds authored/stored in
+    /// invariant form. Rejects a grouping separator that doesn't fall on 3-digit boundaries --
+    /// .NET's <see cref="NumberStyles.AllowThousands"/> parsing does not itself validate that
+    /// shape, so under a '.'-grouping culture (de-DE, es-ES, it-IT, ...) an invariant dot-decimal
+    /// literal like "1.5" would otherwise be silently misread as the grouped integer 15 by the
+    /// current-culture attempt instead of falling through to the invariant attempt below.
+    /// </summary>
+    public static bool TryParse(string? text, out double value) =>
+        TryParseCore(text, CultureInfo.CurrentCulture, out value) ||
+        TryParseCore(text, CultureInfo.InvariantCulture, out value);
+
+    /// <summary>
+    /// Formats a bound value back to the culture-invariant dot-decimal text Excel/OOXML always
+    /// stores in Formula1/Formula2, regardless of the authoring or reloading UI culture. Persisted
+    /// data-validation bounds must never carry a locale-dependent decimal or grouping separator --
+    /// a file saved on a comma-decimal machine and reopened on a dot-decimal one (or vice versa)
+    /// would otherwise silently change what the rule enforces.
+    /// </summary>
+    public static string ToInvariantString(double value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static bool TryParseCore(string? text, CultureInfo culture, out double value)
+    {
+        if (double.TryParse(text, Styles, culture, out value) && HasValidGroupingShape(text, culture))
+            return true;
+
+        value = default;
+        return false;
+    }
+
+    private static bool HasValidGroupingShape(ReadOnlySpan<char> field, CultureInfo culture)
+    {
+        var numberFormat = culture.NumberFormat;
+        var groupSeparator = numberFormat.NumberGroupSeparator;
+        if (string.IsNullOrEmpty(groupSeparator))
+            return true;
+
+        var groupIndex = field.IndexOf(groupSeparator, StringComparison.Ordinal);
+        if (groupIndex < 0)
+            return true; // No grouping separator present — nothing to validate.
+
+        var decimalSeparator = numberFormat.NumberDecimalSeparator;
+        var decimalIndex = string.IsNullOrEmpty(decimalSeparator)
+            ? -1
+            : field.IndexOf(decimalSeparator, StringComparison.Ordinal);
+
+        var integerPart = decimalIndex >= 0 ? field[..decimalIndex] : field;
+
+        // Strip a single leading sign so it doesn't get counted as part of the first digit group.
+        if (integerPart.Length > 0 && (integerPart[0] == '+' || integerPart[0] == '-'))
+            integerPart = integerPart[1..];
+
+        var groups = new List<int>();
+        var currentGroupDigits = 0;
+        var index = 0;
+        while (index < integerPart.Length)
+        {
+            if (integerPart[index..].StartsWith(groupSeparator, StringComparison.Ordinal))
+            {
+                groups.Add(currentGroupDigits);
+                currentGroupDigits = 0;
+                index += groupSeparator.Length;
+                continue;
+            }
+
+            if (!char.IsDigit(integerPart[index]))
+                return true; // Not a plain grouped-digit shape (e.g. currency symbols) — let styles decide.
+
+            currentGroupDigits++;
+            index++;
+        }
+
+        groups.Add(currentGroupDigits);
+
+        // Valid Excel/.NET-style grouping: every group except the first has exactly 3 digits, and
+        // the first group has 1-3 digits.
+        if (groups[0] is < 1 or > 3)
+            return false;
+
+        for (var i = 1; i < groups.Count; i++)
+        {
+            if (groups[i] != 3)
+                return false;
+        }
+
+        return true;
+    }
+}

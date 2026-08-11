@@ -458,12 +458,21 @@ public sealed partial class MainWindow
         // or adding another new sheet. Only fall through to the fresh-resolve path below when there is no
         // remembered anchor (first import) or its sheet has since been deleted.
         CellAddress destination;
+        // R134-io-getdata-refresh-shrink-1: the extent (row/col count) the PREVIOUS import wrote to this
+        // exact anchor, if this is a refresh reusing it. Handed to ImportSheetCommand below so it can
+        // clear the leftover cells when the refreshed source has since lost rows/columns -- otherwise
+        // those cells keep the prior, larger import's stale values and read as if they were still part
+        // of the current import. Only set when the remembered source's anchor still matches the one
+        // being reused; a stale _lastImportSource pointing elsewhere must never drive clearing here.
+        (uint RowCount, uint ColCount)? previousExtent = null;
         if (anchorOverride is { } anchor && _session.Workbook.GetSheet(anchor.Sheet) is not null)
         {
             // The anchor's sheet still exists (SelectSheet's bool return only reports whether the active
             // sheet/selection changed, not whether the sheet exists, so existence is checked directly).
             _session.SelectSheet(anchor.Sheet);
             destination = anchor;
+            if (_lastImportSource is { } previousSource && previousSource.Anchor == anchor)
+                previousExtent = (previousSource.LastRowCount, previousSource.LastColCount);
         }
         else
         {
@@ -483,7 +492,7 @@ public sealed partial class MainWindow
                 : _session.SelectedRange.Start;
         }
 
-        var command = new ImportSheetCommand(destination.Sheet, destination, sourceSheet);
+        var command = new ImportSheetCommand(destination.Sheet, destination, sourceSheet, previousExtent);
         var outcome = _session.ExecuteReviewCommand(command);
         if (!outcome.Success)
         {
@@ -492,9 +501,10 @@ public sealed partial class MainWindow
         }
 
         _session.SelectCell(destination);
-        _lastImportSource = new ImportDataSource(filePath, options, resolvedDestination, destination);
-
         var used = sourceSheet.GetUsedRange()!.Value;
+        _lastImportSource = new ImportDataSource(
+            filePath, options, resolvedDestination, destination, used.RowCount, used.ColCount);
+
         RefreshShell(UiText.Format(
             "GetData_ImportedStatus",
             System.IO.Path.GetFileName(filePath),

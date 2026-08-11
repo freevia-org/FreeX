@@ -11,17 +11,23 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace FreeX.App.Host.Tests;
 
 /// <summary>
-/// Regression coverage for R69-services-file-open-save-6-2 (src/FreeX.App.Host/MainWindow.Backstage.cs,
-/// OpenFileAsync). Before the fix, a workbook saved with "Read-Only Recommended"
-/// (<c>Workbook.FileSharing.ReadOnlyRecommended</c>) or a write-reservation password
-/// (<c>ReservationPassword</c>) opened fully editable with no prompt at all -- the metadata
-/// round-tripped through Save/Open but was never enforced. <c>ApplyReadOnlyRecommendedPromptIfNeeded</c>
-/// (invoked by <c>OpenFileAsync</c> right after a successful load) now prompts once and records the
-/// user's choice on the session's <c>_isWorkbookReadOnly</c> flag.
+/// Regression coverage for R69-services-file-open-save-6-2 and the round-134 SECURITY fix
+/// (src/FreeX.App.Host/MainWindow.Backstage.cs, OpenFileAsync). Before R69, a workbook saved with
+/// "Read-Only Recommended" (<c>Workbook.FileSharing.ReadOnlyRecommended</c>) or a write-reservation
+/// password (<c>ReservationPassword</c>) opened fully editable with no prompt at all -- the metadata
+/// round-tripped through Save/Open but was never enforced.
 ///
-/// This is the minimal fix scope noted at <c>_isWorkbookReadOnly</c>'s declaration: it surfaces the
-/// prompt and records the session's read-only intent, but does not yet block Save-over or individual
-/// edit commands (residual enforcement work, out of scope here).
+/// R69 added a prompt for both cases, but for the password case that prompt was a plain Yes/No "open
+/// read-only?" question -- the password itself was never actually asked for or checked, so declining
+/// (answering "No") granted full write access with zero verification. The round-134 fix replaces that
+/// with a real password prompt verified against the stored hash via
+/// <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/>: the correct password unlocks a writable
+/// session, and -- matching Excel -- a wrong password or Cancel falls back to read-only rather than
+/// refusing to open.
+///
+/// This is still the minimal fix scope noted at <c>_isWorkbookReadOnly</c>'s declaration: it enforces
+/// write-reservation on open, but does not yet block individual edit commands (residual enforcement
+/// work, out of scope here) beyond forcing Save-over through Save-As (R83).
 /// </summary>
 public sealed class R69_ReadOnlyRecommendedPromptTests
 {
@@ -46,11 +52,31 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
     }
 
     [Fact]
-    public void ReservationPasswordWorkbook_PromptsUser_AndDecliningLeavesSessionEditable()
+    public void ReadOnlyRecommendedWorkbook_DecliningPrompt_LeavesSessionEditable()
     {
+        // Sibling/no-regression case: the plain "Read-Only Recommended" Yes/No flow (no password
+        // involved at all) is untouched by the round-134 password-verification fix.
         StaTestRunner.Run(() =>
         {
             using var harness = ReadOnlyPromptHarness.Create(acceptReadOnly: false);
+
+            var workbook = new Workbook("Budget.xlsx");
+            workbook.AddSheet("Sheet1");
+            workbook.FileSharing = new WorkbookFileSharingModel { ReadOnlyRecommended = true };
+
+            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+
+            harness.IsWorkbookReadOnly.Should().BeFalse(
+                "declining the plain Read-Only-Recommended prompt (no password involved) must leave the session editable");
+        });
+    }
+
+    [Fact]
+    public void ReservationPasswordWorkbook_CorrectPassword_UnlocksEditableSession()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = ReadOnlyPromptHarness.Create(acceptReadOnly: true, reservationPasswordEntry: _ => "secret");
 
             var workbook = new Workbook("Locked.xlsx");
             workbook.AddSheet("Sheet1");
@@ -58,10 +84,58 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
 
             harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
 
-            harness.MessageService.Calls.Should().Be(1,
-                "a write-reservation-password workbook must also prompt, not just ReadOnlyRecommended");
             harness.IsWorkbookReadOnly.Should().BeFalse(
-                "declining the read-only prompt must leave the session editable");
+                "typing the correct write-reservation password must unlock a fully editable session");
+            harness.MessageService.Calls.Should().Be(0,
+                "a correct password must not trigger the 'opened as read-only' warning");
+        });
+    }
+
+    [Fact]
+    public void ReservationPasswordWorkbook_WrongPassword_OpensReadOnlyAndWarns()
+    {
+        // THE security case: before the round-134 fix, this path never asked for a password at all --
+        // it showed a Yes/No "open read-only?" question, and answering "No" granted full write access
+        // with zero verification. Now a wrong password must fall back to a genuinely read-only session.
+        // acceptReadOnly is deliberately false: under the pre-fix Yes/No prompt this simulates the
+        // user declining read-only (answering "No"), which is exactly the click that used to hand out
+        // full write access with the password never checked -- acceptReadOnly:true would coincidentally
+        // yield the same IsWorkbookReadOnly=true result under both the old and new code, certifying
+        // nothing.
+        StaTestRunner.Run(() =>
+        {
+            using var harness = ReadOnlyPromptHarness.Create(acceptReadOnly: false, reservationPasswordEntry: _ => "not-the-password");
+
+            var workbook = new Workbook("Locked.xlsx");
+            workbook.AddSheet("Sheet1");
+            workbook.FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" };
+
+            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+
+            harness.IsWorkbookReadOnly.Should().BeTrue(
+                "a wrong write-reservation password must fall back to a read-only session, not grant write access");
+            harness.MessageService.Calls.Should().Be(1,
+                "a wrong password must surface an 'opened as read-only' notice");
+        });
+    }
+
+    [Fact]
+    public void ReservationPasswordWorkbook_CancelledPrompt_OpensReadOnlyWithoutIncorrectPasswordWarning()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = ReadOnlyPromptHarness.Create(acceptReadOnly: true, reservationPasswordEntry: _ => null);
+
+            var workbook = new Workbook("Locked.xlsx");
+            workbook.AddSheet("Sheet1");
+            workbook.FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" };
+
+            harness.ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+
+            harness.IsWorkbookReadOnly.Should().BeTrue(
+                "cancelling the write-reservation password prompt must fall back to a read-only session");
+            harness.MessageService.Calls.Should().Be(0,
+                "a plain Cancel already communicates its own intent and should not also show an 'incorrect password' warning");
         });
     }
 
@@ -110,7 +184,7 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
         public void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook) =>
             _applyMethod.Invoke(Window, [workbook]);
 
-        public static ReadOnlyPromptHarness Create(bool acceptReadOnly)
+        public static ReadOnlyPromptHarness Create(bool acceptReadOnly, Func<string, string?>? reservationPasswordEntry = null)
         {
             var initialWorkbook = new Workbook("Book1");
             initialWorkbook.AddSheet("Sheet1");
@@ -129,6 +203,14 @@ public sealed class R69_ReadOnlyRecommendedPromptTests
 
             window.Show();
             PumpDispatcher();
+
+            if (reservationPasswordEntry is not null)
+            {
+                var overrideField = typeof(MainWindow).GetField(
+                    "_reservationPasswordPromptOverrideForTest", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?? throw new MissingFieldException(nameof(MainWindow), "_reservationPasswordPromptOverrideForTest");
+                overrideField.SetValue(window, reservationPasswordEntry);
+            }
 
             return new ReadOnlyPromptHarness(window, messageService);
         }

@@ -7741,6 +7741,15 @@ Changing cell value: {2}</value>
   <data name="MainWindowMessage_ReadOnlyRecommendedBodyFormat" xml:space="preserve">
     <value>The author of '{0}' recommends opening this file as read-only, unless you need to make changes. Open as read-only?</value>
   </data>
+  <data name="MainWindowMessage_ReservationPasswordTitle" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="MainWindowMessage_ReservationPasswordPromptFormat" xml:space="preserve">
+    <value>'{0}' is reserved for editing. Enter the password to modify, or click Cancel to open read-only.</value>
+  </data>
+  <data name="MainWindowMessage_ReservationPasswordIncorrectBody" xml:space="preserve">
+    <value>The password is not correct. The workbook will be opened as read-only.</value>
+  </data>
   <data name="MainWindowMessage_LossyFormatFeatureLossTitle" xml:space="preserve">
     <value>Possible Data Loss</value>
   </data>

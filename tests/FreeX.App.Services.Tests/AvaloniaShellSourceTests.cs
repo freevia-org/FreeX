@@ -5697,11 +5697,17 @@ public sealed class AvaloniaShellSourceTests
         // Refresh can re-run it back into the same anchor rather than the current selection.
         getDataSource.Should().Contain("new DelimitedTextFileAdapter(");
         getDataSource.Should().Contain("delimiter, allowSeparatorDirective, options.TreatConsecutiveDelimitersAsOne).Load(stream)");
-        getDataSource.Should().Contain("new ImportSheetCommand(destination.Sheet, destination, sourceSheet)");
+        getDataSource.Should().Contain("new ImportSheetCommand(destination.Sheet, destination, sourceSheet, previousExtent)");
         getDataSource.Should().Contain("_session.ExecuteReviewCommand(command)");
         getDataSource.Should().Contain("_session.AddSheet()");
-        getDataSource.Should().Contain("_lastImportSource = new ImportDataSource(filePath, options, resolvedDestination, destination)");
+        getDataSource.Should().Contain("filePath, options, resolvedDestination, destination, used.RowCount, used.ColCount);");
         getDataSource.Should().Contain("private void RefreshImportedData()");
+
+        // R134 fix: the extent (row/col count) the previous import wrote at this same anchor is
+        // remembered and fed back into the next refresh's ImportSheetCommand so a source that has
+        // shrunk since the last refresh gets its leftover cells cleared instead of left stale.
+        getDataSource.Should().Contain("(uint RowCount, uint ColCount)? previousExtent = null;");
+        getDataSource.Should().Contain("previousExtent = (previousSource.LastRowCount, previousSource.LastColCount);");
 
         // User-facing strings go through UiText with the unique GetData_ key prefix.
         getDataSource.Should().Contain("UiText.Get(\"GetData_DialogTitle\")");

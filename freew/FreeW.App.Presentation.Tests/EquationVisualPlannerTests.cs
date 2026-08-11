@@ -731,6 +731,77 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_MultiArgumentDelimiter_PlansEveryArgumentAndSeparator_NotJustTheFirst()
+    {
+        // Regression for the visual-truncation gap: the model has always round-tripped every m:e under a
+        // multi-argument m:d (AdditionalDelimiterArguments), but AddDelimiterElement only ever read the
+        // first argument, so a 3-argument binomial/case delimiter displayed as "(n)" no matter how many
+        // arguments the file actually held. Assert the planned element (and flattened segments) carry all
+        // three arguments plus both separators, not just the first.
+        var run = MathRun.Delimiter(["n", "k", "m"], "(", ")", ",");
+        var plan = EquationVisualPlanner.Build(new Equation([run]));
+
+        plan.LinearText.Should().Be("(n,k,m)");
+        plan.Elements.Should().ContainSingle();
+        var delimiter = plan.Elements[0];
+        delimiter.Kind.Should().Be(EquationVisualElementKind.Delimiter);
+        delimiter.OpenDelimiter.Should().Be("(");
+        delimiter.CloseDelimiter.Should().Be(")");
+        delimiter.BaseText.Should().Be("n");
+        delimiter.DelimiterSeparatorText.Should().Be(",");
+        delimiter.AdditionalDelimiterArgumentTexts.Should().Equal("k", "m");
+
+        // The flattened segment list (what both shells' equation renderers ultimately draw/build from) must
+        // contain every argument and every separator in document order, not just open/first-arg/close.
+        plan.Segments.Select(segment => segment.Text).Should().Equal("(", "n", ",", "k", ",", "m", ")");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.DelimiterOpen,
+            EquationVisualSegmentRole.DelimiterContent,
+            EquationVisualSegmentRole.DelimiterSeparator,
+            EquationVisualSegmentRole.DelimiterContent,
+            EquationVisualSegmentRole.DelimiterSeparator,
+            EquationVisualSegmentRole.DelimiterContent,
+            EquationVisualSegmentRole.DelimiterClose);
+
+        // Same element's own Segments must match (it's what the WPF shell iterates directly to build TextBlocks).
+        delimiter.Segments.Select(segment => segment.Text).Should().Equal("(", "n", ",", "k", ",", "m", ")");
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_MultiArgumentDelimiter_WithStructuredArguments_SurfacesEveryArgumentPlan()
+    {
+        // Same gap, but with nested OMML structure in the additional arguments (not just plain text) — the
+        // Avalonia shell draws each argument via its own EquationVisualPlan (for correct nested geometry),
+        // so AdditionalDelimiterArgumentPlans must be populated in parallel with AdditionalDelimiterArgumentTexts.
+        var run = new MathRun
+        {
+            Kind = MathRunKind.Delimiter,
+            Base = "n",
+            OpenChar = "{",
+            CloseChar = "}",
+            DelimiterSeparator = ";",
+            AdditionalDelimiterArguments = ["k", "x^2"],
+            AdditionalDelimiterContentEquations =
+            [
+                null,
+                new Equation([MathRun.Superscript("x", "2")])
+            ]
+        };
+
+        var plan = EquationVisualPlanner.Build(new Equation([run]));
+        var delimiter = plan.Elements.Single();
+
+        delimiter.AdditionalDelimiterArgumentTexts.Should().Equal("k", "x^2");
+        delimiter.AdditionalDelimiterArgumentPlans.Should().HaveCount(2);
+        delimiter.AdditionalDelimiterArgumentPlans[0].Should().BeNull();
+        delimiter.AdditionalDelimiterArgumentPlans[1].Should().NotBeNull();
+        delimiter.AdditionalDelimiterArgumentPlans[1]!.Segments.Select(segment => segment.Role)
+            .Should().Equal(EquationVisualSegmentRole.Base, EquationVisualSegmentRole.Superscript);
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal("{", "n", ";", "k", ";", "x^2", "}");
+    }
+
+    [Fact]
     public void EquationVisualPlanner_GroupChar_BuildsStructuredTopAndBottomGroupElements()
     {
         var plan = EquationVisualPlanner.Build(new Equation([

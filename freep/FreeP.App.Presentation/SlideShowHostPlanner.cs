@@ -261,6 +261,33 @@ public static class SlideShowHostPlanner
         return null;
     }
 
+    /// <summary>
+    /// Resolves an explicit hyperlink's target slide id against the FULL presentation
+    /// (not the playback route), but only when that slide is hidden. Normal advance and
+    /// <see cref="PlanInternalSlideJump"/> deliberately only see the route's visible
+    /// slides so hidden slides are skipped during ordinary playback; PowerPoint still
+    /// lets an authored hyperlink jump straight to a hidden slide, so callers use this
+    /// as the fallback once a route-relative lookup comes up empty.
+    /// </summary>
+    public static SlideShowHiddenSlideTarget? FindHiddenSlideById(
+        Presentation presentation,
+        string? targetSlideId)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        if (string.IsNullOrEmpty(targetSlideId))
+            return null;
+
+        for (var sourceIndex = 0; sourceIndex < presentation.Slides.Count; sourceIndex++)
+        {
+            var slide = presentation.Slides[sourceIndex];
+            if (slide.IsHidden && slide.Id == targetSlideId)
+                return new SlideShowHiddenSlideTarget(slide, sourceIndex);
+        }
+
+        return null;
+    }
+
     public static SlideShowHostIntent IntentFromKeyName(string? keyName) =>
         keyName?.Trim() switch
         {

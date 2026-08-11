@@ -31,7 +31,11 @@ public sealed class AutosaveServiceTests
     {
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
-        var service = new AutosaveService(store);
+        // Round134-remediation: `using` so the underlying coordinator's OS-level liveness lock
+        // file is released (via AutosaveService.Dispose -> AutosaveSnapshotCoordinator.Dispose)
+        // before `dir`'s own Dispose() tries to recursively delete the temp directory — C# disposes
+        // `using` locals in reverse declaration order, so this runs before `dir`'s cleanup.
+        using var service = new AutosaveService(store);
         var source = new StubSource(dirty: true, generation: 1);
 
         service.Attach(source, "test-w0");
@@ -46,7 +50,11 @@ public sealed class AutosaveServiceTests
     {
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
-        var service = new AutosaveService(store);
+        // Round134-remediation: `using` so the underlying coordinator's OS-level liveness lock
+        // file is released (via AutosaveService.Dispose -> AutosaveSnapshotCoordinator.Dispose)
+        // before `dir`'s own Dispose() tries to recursively delete the temp directory — C# disposes
+        // `using` locals in reverse declaration order, so this runs before `dir`'s cleanup.
+        using var service = new AutosaveService(store);
         var source = new StubSource(dirty: false, generation: 1);
 
         service.Attach(source, "test-nodirty-w0");
@@ -60,7 +68,11 @@ public sealed class AutosaveServiceTests
     {
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
-        var service = new AutosaveService(store);
+        // Round134-remediation: `using` so the underlying coordinator's OS-level liveness lock
+        // file is released (via AutosaveService.Dispose -> AutosaveSnapshotCoordinator.Dispose)
+        // before `dir`'s own Dispose() tries to recursively delete the temp directory — C# disposes
+        // `using` locals in reverse declaration order, so this runs before `dir`'s cleanup.
+        using var service = new AutosaveService(store);
         var source = new StubSource(dirty: true, generation: 1);
 
         service.Attach(source, "test-gen-w0");
@@ -79,7 +91,11 @@ public sealed class AutosaveServiceTests
     {
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
-        var service = new AutosaveService(store);
+        // Round134-remediation: `using` so the underlying coordinator's OS-level liveness lock
+        // file is released (via AutosaveService.Dispose -> AutosaveSnapshotCoordinator.Dispose)
+        // before `dir`'s own Dispose() tries to recursively delete the temp directory — C# disposes
+        // `using` locals in reverse declaration order, so this runs before `dir`'s cleanup.
+        using var service = new AutosaveService(store);
         var source = new StubSource(dirty: true, generation: 1);
 
         service.Attach(source, "test-adv-w0");
@@ -100,7 +116,11 @@ public sealed class AutosaveServiceTests
     {
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
-        var service = new AutosaveService(store);
+        // Round134-remediation: `using` so the underlying coordinator's OS-level liveness lock
+        // file is released (via AutosaveService.Dispose -> AutosaveSnapshotCoordinator.Dispose)
+        // before `dir`'s own Dispose() tries to recursively delete the temp directory — C# disposes
+        // `using` locals in reverse declaration order, so this runs before `dir`'s cleanup.
+        using var service = new AutosaveService(store);
         var source = new StubSource(dirty: true, generation: 1);
 
         service.Attach(source, "test-del-w0");
@@ -119,7 +139,11 @@ public sealed class AutosaveServiceTests
     {
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
-        var service = new AutosaveService(store);
+        // Round134-remediation: `using` so the underlying coordinator's OS-level liveness lock
+        // file is released (via AutosaveService.Dispose -> AutosaveSnapshotCoordinator.Dispose)
+        // before `dir`'s own Dispose() tries to recursively delete the temp directory — C# disposes
+        // `using` locals in reverse declaration order, so this runs before `dir`'s cleanup.
+        using var service = new AutosaveService(store);
         service.Attach(new StubSource(), "emergency-placeholder");
 
         var source = new StubSource(dirty: true, generation: 7, filePath: @"C:\work.xlsx", name: "work");
@@ -145,7 +169,11 @@ public sealed class AutosaveServiceTests
         // crash time — so no snapshot (and later no recovery offer) should be produced for it.
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
-        var service = new AutosaveService(store);
+        // Round134-remediation: `using` so the underlying coordinator's OS-level liveness lock
+        // file is released (via AutosaveService.Dispose -> AutosaveSnapshotCoordinator.Dispose)
+        // before `dir`'s own Dispose() tries to recursively delete the temp directory — C# disposes
+        // `using` locals in reverse declaration order, so this runs before `dir`'s cleanup.
+        using var service = new AutosaveService(store);
         service.Attach(new StubSource(), "emergency-clean-placeholder");
 
         var source = new StubSource(dirty: false, generation: 7, filePath: @"C:\work.xlsx", name: "work");
@@ -163,7 +191,11 @@ public sealed class AutosaveServiceTests
     {
         using var dir = new TestTemporaryDirectory();
         var store = new AutosaveSnapshotStore(dir.Path);
-        var service = new AutosaveService(store);
+        // Round134-remediation: `using` so the underlying coordinator's OS-level liveness lock
+        // file is released (via AutosaveService.Dispose -> AutosaveSnapshotCoordinator.Dispose)
+        // before `dir`'s own Dispose() tries to recursively delete the temp directory — C# disposes
+        // `using` locals in reverse declaration order, so this runs before `dir`'s cleanup.
+        using var service = new AutosaveService(store);
         var source = new StubSource(dirty: true, generation: 1);
 
         service.Attach(source, "test-dispose-w0");

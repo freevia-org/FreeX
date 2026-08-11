@@ -17,8 +17,14 @@ namespace FreeX.App.Avalonia.Tests;
 /// </summary>
 public sealed class R88_NameManagerScopeDuplicateGuardTests
 {
+    // A fixed sheet identity shared by every "Sheet1"-labelled scope in these tests, standing in for the
+    // real SheetId that DefinedNamesShellGlue.BuildRows/BuildScopeChoices would carry for the actual
+    // Sheet1 in a workbook -- same sheet, same identity, matching production (unique sheet names always
+    // pair with a single stable SheetId).
+    private static readonly SheetId Sheet1Id = SheetId.New();
+
     private static DefinedNameRow SheetScopedSeed(string name, string sheetScopeLabel) =>
-        DefinedNameListProjector.CreateRow(name, sheetScopeLabel, "Sheet1!$A$1");
+        DefinedNameListProjector.CreateRow(name, sheetScopeLabel, "Sheet1!$A$1", scopeSheetId: Sheet1Id);
 
     [Fact]
     public void OriginalNameExcluded_OnlyWhenCandidateScopeMatchesSeedsOriginalScope()
@@ -50,9 +56,10 @@ public sealed class R88_NameManagerScopeDuplicateGuardTests
         // must still exclude the seed's own name from the duplicate check, or every plain edit of an
         // existing name would start failing with a false "already exists" error.
         var seed = SheetScopedSeed("Foo", "Sheet1");
-        // A scope whose Label matches the seed's original scope label exactly, the way the Define
-        // Name editor's own scope choices are built (label-keyed) -- same sheet name, unchanged scope.
-        var sameLabelScope = DefinedNameScope.ForSheet(SheetId.New(), "Sheet1");
+        // The SAME sheet identity as the seed's (Sheet1Id) -- an unchanged scope, the way the Define
+        // Name editor's own scope choices are actually built (identity-keyed, from the real
+        // workbook.Sheets): editing back with Scope left on Sheet1 re-selects this exact identity.
+        var sameLabelScope = DefinedNameScope.ForSheet(Sheet1Id, "Sheet1");
 
         var excludedForSameScope = MainWindow.OriginalNameForDuplicateCheckForTest(seed, sameLabelScope);
 

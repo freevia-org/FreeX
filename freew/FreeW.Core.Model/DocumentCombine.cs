@@ -74,6 +74,7 @@ public static class DocumentCombine
     {
         var result = new TextDocument();
         CopyShell(blacklineB, result);
+        var commentIdMapA = MergeComments(blacklineA, blacklineB, result);
 
         var aParagraphs = blacklineA.Blocks.OfType<Paragraph>().ToList();
         var bBlocks = blacklineB.Blocks;
@@ -89,10 +90,78 @@ public static class DocumentCombine
 
             var aParagraph = bParagraphIndex < aParagraphs.Count ? aParagraphs[bParagraphIndex] : null;
             bParagraphIndex++;
-            result.Blocks.Add(MergeParagraph(aParagraph, bParagraph, authorA, authorB, dateXml));
+            result.Blocks.Add(MergeParagraph(aParagraph, bParagraph, authorA, authorB, dateXml, commentIdMapA));
         }
 
         return result;
+    }
+
+    // Carry both blacklines' comment threads into the combined result. blacklineB's ids are kept as-is
+    // (most surviving spine text/anchors are sourced from blacklineB — see MergeParagraph). blacklineA's
+    // threads are then added, renumbering only the ones whose id collides with a blacklineB id already in
+    // use, so two independently-authored reviews that both happened to start their comment ids at 0 don't
+    // clobber each other. Returns the id remap so A-sourced body runs can be pointed at the (possibly
+    // renumbered) comment record that now lives in result.Comments.
+    private static Dictionary<int, int> MergeComments(TextDocument blacklineA, TextDocument blacklineB, TextDocument result)
+    {
+        foreach (var (id, comment) in blacklineB.Comments)
+            result.Comments[id] = CloneComment(comment, static id => id);
+
+        var usedIds = result.Comments.Values
+            .SelectMany(comment => comment.ThreadInOrder())
+            .Select(comment => comment.Id)
+            .ToHashSet();
+
+        var commentIdMapA = new Dictionary<int, int>();
+        foreach (var (_, comment) in blacklineA.Comments)
+        {
+            foreach (var node in comment.ThreadInOrder())
+            {
+                var id = node.Id;
+                if (!usedIds.Add(id))
+                    id = NextUnusedCommentId(usedIds);
+                commentIdMapA[node.Id] = id;
+            }
+
+            var remapped = CloneComment(comment, id => commentIdMapA[id]);
+            result.Comments[remapped.Id] = remapped;
+        }
+
+        return commentIdMapA;
+    }
+
+    private static int NextUnusedCommentId(HashSet<int> usedIds)
+    {
+        var id = usedIds.Count == 0 ? 0 : usedIds.Max() + 1;
+        while (!usedIds.Add(id))
+            id++;
+        return id;
+    }
+
+    private static Comment CloneComment(Comment source, Func<int, int> mapId)
+    {
+        var clone = new Comment(mapId(source.Id))
+        {
+            Author = source.Author,
+            Initials = source.Initials,
+            DateXml = source.DateXml,
+            Resolved = source.Resolved,
+        };
+        foreach (var paragraph in source.Content)
+            clone.Content.Add(ClonePlain(paragraph));
+        foreach (var reply in source.Replies)
+            clone.Replies.Add(CloneComment(reply, mapId));
+        return clone;
+    }
+
+    // Remap a run cloned from blacklineA's side (off-spine deletions / A-only survivors) onto the id its
+    // comment thread now has in the merged result's Comments dictionary. Runs sourced from blacklineB's
+    // spine never need this — their CommentId already matches a blacklineB id, which MergeComments keeps.
+    private static Run RemapAComment(Run run, IReadOnlyDictionary<int, int> commentIdMapA)
+    {
+        if (run.CommentId is int id && commentIdMapA.TryGetValue(id, out var mapped))
+            run.CommentId = mapped;
+        return run;
     }
 
     // Merge one paragraph from A's blackline and the positionally-matching paragraph from B's blackline into
@@ -110,7 +179,8 @@ public static class DocumentCombine
         Paragraph bParagraph,
         string authorA,
         string authorB,
-        string? dateXml)
+        string? dateXml,
+        IReadOnlyDictionary<int, int> commentIdMapA)
     {
         var merged = new Paragraph
         {
@@ -137,7 +207,7 @@ public static class DocumentCombine
             // A's deletions (base-only text struck by A) are off-spine: emit them, attributed to authorA.
             if (ai < aRuns.Count && aRuns[ai].Revision == RevisionKind.Deleted)
             {
-                merged.Runs.Add(Stamp(aRuns[ai], RevisionKind.Deleted, authorA, dateXml));
+                merged.Runs.Add(RemapAComment(Stamp(aRuns[ai], RevisionKind.Deleted, authorA, dateXml), commentIdMapA));
                 ai++;
                 continue;
             }
@@ -166,9 +236,9 @@ public static class DocumentCombine
                 if (aRun is not null)
                 {
                     if (aRun.Revision == RevisionKind.Inserted)
-                        merged.Runs.Add(Stamp(aRun, RevisionKind.Inserted, authorA, dateXml));
+                        merged.Runs.Add(RemapAComment(Stamp(aRun, RevisionKind.Inserted, authorA, dateXml), commentIdMapA));
                     else
-                        merged.Runs.Add(Stamp(aRun, RevisionKind.None, null, null));
+                        merged.Runs.Add(RemapAComment(Stamp(aRun, RevisionKind.None, null, null), commentIdMapA));
                     ai++;
                 }
                 continue;
@@ -207,6 +277,7 @@ public static class DocumentCombine
         copy.Revision = kind;
         copy.RevisionAuthor = kind == RevisionKind.None ? null : author;
         copy.RevisionDateXml = kind == RevisionKind.None ? null : dateXml;
+        copy.MoveRevisionId = kind == RevisionKind.None ? null : copy.MoveRevisionId;
         return copy;
     }
 
@@ -337,6 +408,7 @@ public static class DocumentCombine
         Revision = source.Revision,
         RevisionAuthor = source.RevisionAuthor,
         RevisionDateXml = source.RevisionDateXml,
+        MoveRevisionId = source.MoveRevisionId,
         Control = source.Control,
         Citation = source.Citation,
         CrossReference = source.CrossReference,

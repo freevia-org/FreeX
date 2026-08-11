@@ -54,7 +54,12 @@ public interface IAutosaveSnapshotSource
 /// Thread note: serialization runs synchronously on the calling (dispatcher) thread, matching the
 /// prior per-app behavior.
 /// </summary>
-public sealed class AutosaveSnapshotCoordinator
+// IDisposable, not just a Dispose() method: R134 gave this type an OS ownership lock held from
+// construction until Dispose, which makes deterministic release part of its contract rather than a
+// nicety. Without the interface a `using` on it is a compile error and no analyzer flags a caller
+// that forgets, so a leaked coordinator keeps its snapshot slot marked "live" and ExcludeLiveOwned
+// silently hides that snapshot from every recovery offer.
+public sealed class AutosaveSnapshotCoordinator : IDisposable
 {
     private const int BufferSize = 1024 * 128;
 
@@ -64,12 +69,22 @@ public sealed class AutosaveSnapshotCoordinator
     private int _lastSnapshotGeneration = -1;
     private bool _disposed;
 
+    // Round134-remediation: held for this coordinator's entire lifetime (construction through
+    // Dispose) as the liveness marker AutosaveSnapshotStore.ExcludeLiveOwned checks before any
+    // recovery UI offers or deletes a candidate — see TryAcquireOwnershipLock's doc comment for
+    // why an OS file lock, not a PID/heartbeat marker, needs no staleness handling. Acquired even
+    // before this session has written its first snapshot file: there is nothing to protect yet,
+    // but claiming the slot immediately means a sibling window's recovery scan can never race
+    // this one's very first write.
+    private FileStream? _ownershipLock;
+
     public AutosaveSnapshotCoordinator(AutosaveSnapshotStore store, string snapshotId)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentException.ThrowIfNullOrWhiteSpace(snapshotId);
         _store = store;
         _snapshotId = snapshotId;
+        _ownershipLock = _store.TryAcquireOwnershipLock(_snapshotId);
     }
 
     /// <summary>The stable session snapshot id this coordinator writes under.</summary>
@@ -206,5 +221,31 @@ public sealed class AutosaveSnapshotCoordinator
         return new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None, BufferSize);
     }
 
-    public void Dispose() => _disposed = true;
+    public void Dispose()
+    {
+        _disposed = true;
+        ReleaseOwnershipLock();
+    }
+
+    /// <summary>
+    /// Releases this session's liveness lock (see <see cref="_ownershipLock"/>) so
+    /// <see cref="AutosaveSnapshotStore.ExcludeLiveOwned"/> stops reporting this snapshot slot as
+    /// live. Deliberately NOT called from <see cref="DeleteSnapshot"/>: that method also runs on a
+    /// clean SAVE mid-session (not just a clean close — see e.g. FreeX's
+    /// MainWindow.Autosave.cs NotifyAutosaveSaved), while the window itself keeps running and may
+    /// autosave again under the SAME snapshot id; releasing the lock there would let another
+    /// window's recovery scan treat this one as "gone" the moment it saves, even though it is very
+    /// much still open. The lock is only released when the coordinator itself is disposed — i.e.
+    /// the window/session it backs is actually going away.
+    /// </summary>
+    private void ReleaseOwnershipLock()
+    {
+        var handle = _ownershipLock;
+        if (handle is null)
+            return;
+
+        _ownershipLock = null;
+        try { handle.Dispose(); } catch { /* best-effort */ }
+        try { File.Delete(_store.GetLockPath(_snapshotId)); } catch { /* best-effort */ }
+    }
 }

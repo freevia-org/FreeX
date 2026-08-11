@@ -57,7 +57,11 @@ internal static class DefinedNamesShellGlue
                 : DefinedNameScope.WorkbookLabel;
             var comment = metadata?.Comment ?? "";
             var refersTo = FormatRefersTo(range, workbook);
-            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, comment));
+            // This name lives in the workbook-global NamedRanges dictionary, so its real scope
+            // identity is the workbook (null) regardless of what display text scopeLabel carries --
+            // see the ScopeSheetId doc comment on DefinedNameRow for why scopeLabel alone must never
+            // be used to recover this identity (a sheet can legally be named "Workbook").
+            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, comment, scopeSheetId: null));
         }
 
         // Formula/constant-valued names (e.g. "TaxRate" = "=1.05" or "Total" = "=SUM(Sheet1!A:A)") are stored
@@ -70,7 +74,8 @@ internal static class DefinedNamesShellGlue
         {
             var comment = workbook.TryGetNamedRangeMetadata(name, out var formulaMetadata) ? formulaMetadata.Comment : "";
             var refersTo = "=" + formulaText;
-            rows.Add(DefinedNameListProjector.CreateRow(name, DefinedNameScope.WorkbookLabel, refersTo, refersTo, comment));
+            // Workbook-global NamedFormulas dictionary: real scope identity is the workbook (null).
+            rows.Add(DefinedNameListProjector.CreateRow(name, DefinedNameScope.WorkbookLabel, refersTo, refersTo, comment, scopeSheetId: null));
         }
 
         // Sheet-scoped named ranges (Excel "localSheetId") are stored separately from the workbook-global
@@ -82,7 +87,10 @@ internal static class DefinedNamesShellGlue
             var scopeLabel = workbook.GetSheet(sheetId)?.Name ?? metadata.Scope;
             var comment = metadata.Comment ?? "";
             var refersTo = FormatRefersTo(range, workbook);
-            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, comment));
+            // sheetId here is the row's real scope identity -- carry it through even though
+            // scopeLabel (the sheet's display name) may read "Workbook" and collide with the global
+            // sentinel text; identity, not the label, is what any command routing must key off.
+            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, comment, scopeSheetId: sheetId));
         }
 
         // Sheet-scoped named formulas (Excel "localSheetId") are stored separately from the workbook-global
@@ -94,7 +102,8 @@ internal static class DefinedNamesShellGlue
             workbook.TryGetScopedNamedRangeMetadata(name, sheetId, out var scopedFormulaMetadata);
             var scopeLabel = workbook.GetSheet(sheetId)?.Name ?? scopedFormulaMetadata.Scope;
             var refersTo = "=" + formulaText;
-            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, scopedFormulaMetadata.Comment));
+            // Same identity requirement as the scoped-ranges loop above.
+            rows.Add(DefinedNameListProjector.CreateRow(name, scopeLabel, refersTo, refersTo, scopedFormulaMetadata.Comment, scopeSheetId: sheetId));
         }
 
         return rows;
@@ -180,10 +189,15 @@ internal static class DefinedNamesShellGlue
     }
 
     /// <summary>
-    /// Resolves a Name Manager scope label (<see cref="DefinedNameScope.WorkbookLabel"/> or a sheet's display
-    /// name) to the sheet-scope <see cref="SheetId"/> to pass to <see cref="BuildDeleteCommand"/> /
-    /// <see cref="DefineNamedRangeCommand"/>, or null for the workbook scope. Mirrors the WPF host's
-    /// NamedRangeDialog.ResolveScopeSheetId.
+    /// Resolves a bare Name Manager scope label (<see cref="DefinedNameScope.WorkbookLabel"/> or a sheet's
+    /// display name) to a sheet-scope <see cref="SheetId"/> by looking the label up as a sheet name, or null
+    /// for the workbook scope. LOSSY: nothing reserves "Workbook" as a sheet name, so a worksheet can legally
+    /// be named exactly "Workbook" -- for a name actually scoped to that sheet, this method cannot tell that
+    /// case apart from the true workbook-global scope and returns null either way. Do not use this to resolve
+    /// a <see cref="DefinedNameRow"/>'s scope for command routing (delete/define) -- read the row's own
+    /// <see cref="DefinedNameRow.ScopeSheetId"/> instead, which was captured from the real identity when the
+    /// row was built and carries no such ambiguity. This helper only remains for callers that truly have
+    /// nothing but a label in hand (e.g. resolving a freshly-typed sheet name against the workbook).
     /// </summary>
     public static SheetId? ResolveScopeSheetId(Workbook workbook, string? scopeLabel)
     {

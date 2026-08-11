@@ -3328,6 +3328,8 @@ public sealed class DeleteShapeCommand : IPresentationCommand
     private uint[]? _capturedDeletedShapeIds;
     private List<(SlideShape Connector, ConnectorAttachment? Start, ConnectorAttachment? End)>?
         _capturedConnectorAttachments;
+    private List<(SlideComment Comment, string AnchorKind, string AnchorXml)>?
+        _capturedOrphanedCommentAnchors;
 
     public DeleteShapeCommand(int slideIndex, uint shapeId)
     {
@@ -3360,6 +3362,24 @@ public sealed class DeleteShapeCommand : IPresentationCommand
                 (connector, connector.ConnectionStart, connector.ConnectionEnd))
             .ToList();
 
+        // Modern (p188) comment threads can be anchored to a specific shape (deMkLst/txMkLst
+        // anchor kinds carry the shape's id). If that shape is deleted, the anchor would point
+        // at an id that no longer exists in the slide. PowerPoint itself never destroys a review
+        // comment thread just because the annotated shape was removed — comments are independent
+        // review data — so we re-anchor the thread the same way the writer already represents an
+        // anchor it cannot resolve: BuildModernAnchorElement falls back to <p188:unknownAnchor/>
+        // whenever ModernAnchorXml is empty. Clearing the anchor here reuses that exact fallback
+        // instead of inventing a second "orphaned" representation.
+        _capturedOrphanedCommentAnchors = slide.Comments
+            .Where(comment => CommentAnchorReferencesShape(comment, deletedShapeIds))
+            .Select(comment => (comment, comment.ModernAnchorKind, comment.ModernAnchorXml))
+            .ToList();
+        foreach (var (comment, _, _) in _capturedOrphanedCommentAnchors)
+        {
+            comment.ModernAnchorKind = string.Empty;
+            comment.ModernAnchorXml = string.Empty;
+        }
+
         shapes.RemoveAt(_capturedIndex);
         slide.Animations.RemoveAll(animation => deletedShapeIds.Contains(animation.ShapeId));
         slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
@@ -3386,6 +3406,15 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         var idx = Math.Clamp(_capturedIndex, 0, shapes.Count);
         shapes.Insert(idx, _captured);
 
+        if (_capturedOrphanedCommentAnchors is not null)
+        {
+            foreach (var (comment, kind, xml) in _capturedOrphanedCommentAnchors)
+            {
+                comment.ModernAnchorKind = kind;
+                comment.ModernAnchorXml = xml;
+            }
+        }
+
         // Every other slide-indexed command in this file re-validates the captured index in both
         // Apply and Revert, because the slide count can differ by the time an undo runs; this was
         // the one that indexed straight into Slides. The shape is already restored above, so
@@ -3409,6 +3438,42 @@ public sealed class DeleteShapeCommand : IPresentationCommand
                 connector.ConnectionEnd = end;
             }
         }
+    }
+
+    /// <summary>
+    /// True when <paramref name="comment"/> carries a modern (p188) shape/text-range anchor
+    /// (<c>deMkLst</c> or <c>txMkLst</c>) that references one of <paramref name="shapeIds"/>.
+    /// Shape references inside those anchor kinds show up as an <c>id</c> or <c>spid</c>
+    /// attribute on a descendant element (the two attribute names already used across this
+    /// codebase — see p188:cm/id and p:spTgt/spid — for referencing a shape by its numeric id).
+    /// </summary>
+    private static bool CommentAnchorReferencesShape(SlideComment comment, IReadOnlySet<uint> shapeIds)
+    {
+        if (comment.ModernAnchorKind is not ("deMkLst" or "txMkLst"))
+            return false;
+        if (string.IsNullOrWhiteSpace(comment.ModernAnchorXml))
+            return false;
+
+        XElement anchor;
+        try
+        {
+            anchor = XElement.Parse(comment.ModernAnchorXml);
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+
+        foreach (var element in anchor.DescendantsAndSelf())
+        {
+            var idValue = element.Attribute("id")?.Value ?? element.Attribute("spid")?.Value;
+            if (idValue is not null &&
+                uint.TryParse(idValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var referencedId) &&
+                shapeIds.Contains(referencedId))
+                return true;
+        }
+
+        return false;
     }
 
     private static IEnumerable<uint> CollectShapeIds(SlideShape shape)

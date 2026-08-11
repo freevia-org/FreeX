@@ -75,12 +75,24 @@ internal sealed class AutosaveCoordinator
     internal string SnapshotIdForTests => _coordinator.SnapshotId;
     internal void SnapshotNowForTests() => _coordinator.Snapshot(_source);
 
+    /// <summary>Test seam: simulates this window's process having crashed — releases the
+    /// Round134-remediation liveness lock (exactly what the OS does automatically on a real
+    /// process exit) while deliberately leaving the already-written snapshot + sidecar files on
+    /// disk, so a test can build an orphaned-but-real recovery candidate without an actual crash.
+    /// Does NOT call <see cref="Stop"/>/DeleteSnapshot — those would delete the very files a real
+    /// crash leaves behind.</summary>
+    internal void SimulateCrashForTests() => _coordinator.Dispose();
+
     public void Start() => _timer.Start();
 
     public void Stop()
     {
         _timer.Stop();
         try { _coordinator.DeleteSnapshot(); } catch { /* best-effort cleanup */ }
+        // Releases this window's liveness lock (Round134-remediation) deterministically on close,
+        // rather than leaving it to whenever the GC finalizes the underlying handle — see
+        // AutosaveSnapshotCoordinator.Dispose / ReleaseOwnershipLock.
+        try { _coordinator.Dispose(); } catch { /* best-effort cleanup */ }
     }
 
     /// <summary>
@@ -97,7 +109,13 @@ internal sealed class AutosaveCoordinator
     {
         try
         {
-            var candidates = AutosaveRecoveryPlanner.SelectAllOrdered(_store.EnumerateCandidates());
+            // Round134-remediation: a snapshot still owned by a currently-open window (this
+            // process or another) must never be listed here — offering it risks the user
+            // "recovering" a stale copy while the live window keeps editing, and accepting it
+            // would delete the live window's own snapshot out from under it. See
+            // AutosaveSnapshotStore.ExcludeLiveOwned.
+            var candidates = AutosaveRecoveryPlanner.SelectAllOrdered(
+                _store.ExcludeLiveOwned(_store.EnumerateCandidates()));
             if (candidates.Count == 0)
                 return false;
 
@@ -152,7 +170,11 @@ internal sealed class AutosaveCoordinator
     {
         try
         {
-            var candidates = AutosaveRecoveryPlanner.SelectAllOrdered(_store.EnumerateCandidates());
+            // Round134-remediation: same live-ownership exclusion as OfferRecovery above — the
+            // menu-driven "Recover Unsaved Documents" command must never list or delete another
+            // still-open window's snapshot either.
+            var candidates = AutosaveRecoveryPlanner.SelectAllOrdered(
+                _store.ExcludeLiveOwned(_store.EnumerateCandidates()));
             if (candidates.Count == 0)
             {
                 DialogMessageHelper.ShowInfo(owner,

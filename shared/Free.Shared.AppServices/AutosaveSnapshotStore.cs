@@ -58,6 +58,7 @@ public sealed class AutosaveSnapshotStore
     public const string RecoveryDirectoryName = "Recovery";
     private const string SnapshotExtension = ".fxl";
     private const string SidecarExtension = ".sidecar.json";
+    private const string LockExtension = ".lock";
 
     /// <summary>
     /// Unique identifier for this process launch. Embedded in every snapshot ID so that a
@@ -107,6 +108,55 @@ public sealed class AutosaveSnapshotStore
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(snapshotId);
         return Path.Combine(_recoveryDirectory, snapshotId + SidecarExtension);
+    }
+
+    /// <summary>
+    /// Computes the ownership-lock path for a given stable session ID. See
+    /// <see cref="TryAcquireOwnershipLock"/> / <see cref="ExcludeLiveOwned"/>.
+    /// </summary>
+    public string GetLockPath(string snapshotId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotId);
+        return Path.Combine(_recoveryDirectory, snapshotId + LockExtension);
+    }
+
+    /// <summary>
+    /// Round134-remediation: claims an OS-level advisory lock (<c>FileShare.None</c>) on
+    /// <paramref name="snapshotId"/>'s slot, marking it "live" to <see cref="ExcludeLiveOwned"/>
+    /// for as long as the returned handle stays open. <see cref="AutosaveSnapshotCoordinator"/>
+    /// (the only production caller) acquires this once at construction and holds it for the
+    /// entire lifetime of the window/session it backs, releasing it on <c>Dispose</c>.
+    /// <para>
+    /// Deliberately an OS file lock rather than a PID, timestamp, or heartbeat marker: the OS
+    /// releases a process's open handles automatically and immediately the instant it exits, for
+    /// ANY reason — clean shutdown, crash, or a hard kill. That means there is no "the owner is
+    /// gone but the marker still says live" state to detect or expire: a snapshot whose owning
+    /// window/process has died is instantly and correctly reported not-live by
+    /// <see cref="ExcludeLiveOwned"/>, with no staleness window and no extra cleanup pass needed.
+    /// A PID-based check would need recycled-PID protection; a heartbeat/timestamp marker would
+    /// need an arbitrary expiry window (too short: false "gone" for a slow process; too long:
+    /// reintroduces the orphaning bug this remediates). The OS lock has neither failure mode.
+    /// </para>
+    /// <para>
+    /// Best-effort: returns null if the lock cannot be acquired (e.g. a read-only or otherwise
+    /// inaccessible recovery directory). The caller must never let this block startup — a null
+    /// result simply means this session's own snapshot degrades to the pre-fix "no liveness
+    /// filtering" behavior, exactly like every other best-effort guarantee in this store.
+    /// </para>
+    /// </summary>
+    public FileStream? TryAcquireOwnershipLock(string snapshotId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(snapshotId);
+        try
+        {
+            Directory.CreateDirectory(_recoveryDirectory);
+            return new FileStream(
+                GetLockPath(snapshotId), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -207,6 +257,80 @@ public sealed class AutosaveSnapshotStore
         }
 
         return candidates;
+    }
+
+    /// <summary>
+    /// Round134-remediation: filters <paramref name="candidates"/> down to those NOT currently
+    /// owned by a live window/process — see <see cref="TryAcquireOwnershipLock"/>. Recovery-OFFERING
+    /// call sites (FreeW's <c>AutosaveCoordinator.OfferRecovery</c>/<c>RecoverUnsavedDocuments</c>,
+    /// <c>AutosaveAdapter.OfferRecoveryAsync</c>, FreeX's <c>App.xaml.cs</c>/<c>App.cs</c>
+    /// <c>OfferStartupRecovery</c>) must apply this AFTER <see cref="EnumerateCandidates"/> and
+    /// BEFORE ordering/offering candidates to the user — otherwise a still-open sibling window's (or
+    /// sibling process's) live snapshot can be listed for "recovery" in another window and, if
+    /// accepted, <see cref="DeleteCandidate"/>d out from under the window that is still actively
+    /// relying on it for its own future crash recovery.
+    /// <para>
+    /// Deliberately NOT folded into <see cref="EnumerateCandidates"/> itself: that method is also
+    /// relied on for the raw, unfiltered on-disk view (diagnostics-style assertions, and tests that
+    /// intentionally keep a sibling coordinator alive to prove its snapshot file survives another
+    /// window's cleanup) where "everything currently on disk" — live or not — is exactly what is
+    /// wanted. Only the user-facing recovery OFFER needs liveness filtering.
+    /// </para>
+    /// </summary>
+    public IReadOnlyList<AutosaveRecoveryCandidate> ExcludeLiveOwned(
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        if (candidates.Count == 0)
+            return candidates;
+
+        List<AutosaveRecoveryCandidate>? kept = null;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var candidate = candidates[i];
+            var baseName = Path.GetFileNameWithoutExtension(candidate.SnapshotPath);
+            if (IsLockHeld(GetLockPath(baseName)))
+            {
+                kept ??= new List<AutosaveRecoveryCandidate>(candidates.Take(i));
+                continue;
+            }
+
+            kept?.Add(candidate);
+        }
+
+        return kept ?? candidates;
+    }
+
+    /// <summary>
+    /// True if the lock file at <paramref name="lockPath"/> is currently held open
+    /// (<c>FileShare.None</c>) by a live process — this one or another. Probes by attempting to
+    /// open the very same path exclusively: succeeding means nothing else holds it (not live);
+    /// a sharing violation means something does (live). A missing lock file is also "not live" —
+    /// either nothing ever claimed this snapshot slot, or its owner already exited and the OS
+    /// released the lock. See <see cref="TryAcquireOwnershipLock"/> for why this needs no
+    /// staleness/expiry handling: the OS tears the lock down the instant the owning process exits,
+    /// for any reason, so a dead owner's marker can never be observed as "still live."
+    /// </summary>
+    private static bool IsLockHeld(string lockPath)
+    {
+        if (!File.Exists(lockPath))
+            return false;
+
+        try
+        {
+            using var probe = new FileStream(lockPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch
+        {
+            // Any other failure (permissions, etc.) must not block recovery — degrade to "not
+            // live" so the candidate is still offered rather than silently disappearing forever.
+            return false;
+        }
     }
 
     /// <summary>

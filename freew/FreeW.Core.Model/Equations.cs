@@ -163,6 +163,28 @@ public sealed record MathRun
     /// <summary>The closing delimiter glyph (default ")"). Only for <see cref="MathRunKind.Delimiter"/>.</summary>
     public string CloseChar { get; init; } = ")";
 
+    /// <summary>
+    /// Extra delimiter arguments beyond the first (a multi-argument <c>m:d</c> — e.g. a binomial/case/
+    /// matrix-style delimiter group with more than one <c>m:e</c>). Empty for the common single-argument
+    /// delimiter. Each entry is that argument's plain-text fallback;
+    /// <see cref="AdditionalDelimiterContentEquations"/> carries the matching structured equation (or null)
+    /// at the same index when the argument holds nested OMML. Only meaningful for
+    /// <see cref="MathRunKind.Delimiter"/>.
+    /// </summary>
+    public IReadOnlyList<string> AdditionalDelimiterArguments { get; init; } = [];
+
+    /// <summary>
+    /// Structured equations parallel to <see cref="AdditionalDelimiterArguments"/> (null at an index whose
+    /// argument is plain text). Only meaningful for <see cref="MathRunKind.Delimiter"/>.
+    /// </summary>
+    public IReadOnlyList<Equation?> AdditionalDelimiterContentEquations { get; init; } = [];
+
+    /// <summary>
+    /// The separator glyph placed between multi-argument delimiter arguments (<c>m:dPr/m:sepChr</c>).
+    /// Only written/meaningful when <see cref="AdditionalDelimiterArguments"/> is non-empty.
+    /// </summary>
+    public string DelimiterSeparator { get; init; } = ",";
+
     /// <summary>The matrix/equation-array grid (only meaningful for <see cref="MathRunKind.Matrix"/> or <see cref="MathRunKind.EquationArray"/>).</summary>
     public MathMatrix? Matrix { get; init; }
 
@@ -403,6 +425,29 @@ public sealed record MathRun
         };
     }
 
+    /// <summary>
+    /// Creates a multi-argument delimiter fragment (m:d) with more than one m:e child — a binomial/case/
+    /// matrix-style delimiter group — joined by <paramref name="separator"/> (m:dPr/m:sepChr). The first
+    /// argument occupies the ordinary <see cref="Base"/> slot; every argument after it is carried in
+    /// <see cref="AdditionalDelimiterArguments"/> so none are dropped on read or write.
+    /// </summary>
+    public static MathRun Delimiter(IReadOnlyList<string> arguments, string open = "(", string close = ")", string separator = ",")
+    {
+        ArgumentNullException.ThrowIfNull(arguments);
+        if (arguments.Count == 0)
+            return Delimiter(string.Empty, open, close);
+
+        return new()
+        {
+            Kind = MathRunKind.Delimiter,
+            Base = arguments[0],
+            OpenChar = open,
+            CloseChar = close,
+            AdditionalDelimiterArguments = arguments.Skip(1).ToList(),
+            DelimiterSeparator = separator
+        };
+    }
+
     /// <summary>Creates a matrix fragment (m:m) from a grid.</summary>
     public static MathRun MatrixOf(MathMatrix matrix) =>
         new() { Kind = MathRunKind.Matrix, Matrix = matrix };
@@ -472,7 +517,7 @@ public sealed record MathRun
         MathRunKind.NAry => $"{Operator}({SlotLinearText(NAryLowerLimitEquation, Sub, depth)}..{SlotLinearText(NAryUpperLimitEquation, Sup, depth)}) {SlotLinearText(NAryOperandEquation, Base, depth)}".TrimEnd(),
         MathRunKind.Accent => $"{SlotLinearText(DecoratorBaseEquation, Base, depth)}{Accent}",
         MathRunKind.Bar => BarTop ? $"‾{SlotLinearText(DecoratorBaseEquation, Base, depth)}‾" : $"_{SlotLinearText(DecoratorBaseEquation, Base, depth)}_",
-        MathRunKind.Delimiter => $"{OpenChar}{SlotLinearText(DelimiterContentEquation, Base, depth)}{CloseChar}",
+        MathRunKind.Delimiter => DelimiterLinearText(depth),
         MathRunKind.Matrix => Matrix?.LinearTextWithDepth(depth) ?? string.Empty,
         MathRunKind.EquationArray => Matrix?.EquationArrayLinearTextWithDepth(depth) ?? string.Empty,
         MathRunKind.FunctionApply => FunctionLinearText(depth),
@@ -486,6 +531,25 @@ public sealed record MathRun
     {
         var argument = SlotLinearText(FunctionArgumentEquation, Base, depth);
         return string.IsNullOrEmpty(FuncName) ? argument : $"{FuncName}({argument})";
+    }
+
+    /// <summary>
+    /// Linear text for a delimiter: the first argument plus every entry in
+    /// <see cref="AdditionalDelimiterArguments"/> (preferring each entry's structured equation over its
+    /// plain-text fallback), joined by <see cref="DelimiterSeparator"/> and wrapped in the open/close glyphs.
+    /// </summary>
+    private string DelimiterLinearText(int depth)
+    {
+        var first = SlotLinearText(DelimiterContentEquation, Base, depth);
+        if (AdditionalDelimiterArguments.Count == 0)
+            return $"{OpenChar}{first}{CloseChar}";
+
+        var rest = string.Join(DelimiterSeparator, AdditionalDelimiterArguments.Select((text, index) =>
+            SlotLinearText(
+                index < AdditionalDelimiterContentEquations.Count ? AdditionalDelimiterContentEquations[index] : null,
+                text,
+                depth)));
+        return $"{OpenChar}{first}{DelimiterSeparator}{rest}{CloseChar}";
     }
 
     private static string SlotLinearText(Equation? equation, string fallback, int depth)
@@ -614,6 +678,16 @@ public sealed class Equation
     /// <summary>The ordered math fragments making up the equation (left to right).</summary>
     public List<MathRun> Runs { get; } = [];
 
+    /// <summary>
+    /// Whether this equation is Word's paragraph-level "Display"/"Professional" layout — the standard
+    /// equation centred on its own line, wrapped in <c>m:oMathPara</c> — rather than inline within the
+    /// surrounding text flow (a bare <c>m:oMath</c> emitted in place of the host run). Defaults to false
+    /// (inline), matching every equation FreeW authored before this flag existed. <see cref="DocxWriter"/>
+    /// keys off this flag to choose which OMML container to emit; <see cref="DocxReader"/> sets it when it
+    /// recovers an <c>m:oMathPara</c>.
+    /// </summary>
+    public bool IsDisplayMath { get; set; }
+
     public Equation() { }
 
     /// <summary>Creates an equation from an ordered set of fragments.</summary>
@@ -649,7 +723,7 @@ public sealed class Equation
         if (equations.TryGetValue(source, out var existing))
             return existing;
 
-        var clone = new Equation();
+        var clone = new Equation { IsDisplayMath = source.IsDisplayMath };
         equations[source] = clone;
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run, equations, matrices));
@@ -669,6 +743,9 @@ public sealed class Equation
         RadicandEquation = CloneOptional(source.RadicandEquation, equations, matrices),
         DegreeEquation = CloneOptional(source.DegreeEquation, equations, matrices),
         DelimiterContentEquation = CloneOptional(source.DelimiterContentEquation, equations, matrices),
+        AdditionalDelimiterContentEquations = source.AdditionalDelimiterContentEquations.Count == 0
+            ? source.AdditionalDelimiterContentEquations
+            : source.AdditionalDelimiterContentEquations.Select(e => CloneOptional(e, equations, matrices)).ToList(),
         FunctionArgumentEquation = CloneOptional(source.FunctionArgumentEquation, equations, matrices),
         NAryLowerLimitEquation = CloneOptional(source.NAryLowerLimitEquation, equations, matrices),
         NAryUpperLimitEquation = CloneOptional(source.NAryUpperLimitEquation, equations, matrices),

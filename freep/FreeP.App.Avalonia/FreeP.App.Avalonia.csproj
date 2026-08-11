@@ -60,6 +60,12 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeP.App.Avalonia.Tests" />
+    <!-- R134 remediation: FreeP.App.Avalonia.Tests runs under stub (non-Skia) headless drawing, under
+         which the render path never completes, so its own copy of these diagnostics tests could never
+         actually execute their assertions. FreeP.App.Rendering.Avalonia.Tests runs a real Skia headless
+         backend (see SlideHeadlessApp), so the equivalent tests live there instead, driving these same
+         internal static Core methods for real. -->
+    <InternalsVisibleTo Include="FreeP.App.Rendering.Avalonia.Tests" />
   </ItemGroup>
 
   <ItemGroup>

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Avalonia;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -283,6 +284,13 @@ public sealed class DocumentView : Control
     private DocumentCommandBus _bus;
     private DocPosition _caret;
     private DocPosition? _selectionAnchor;
+    // AV-A11Y: the realized UI Automation peer for this control (null until an automation client
+    // — screen reader, UIA/AT-SPI inspector, or a test — first requests one via
+    // OnCreateAutomationPeer). Kept so CaretMoved/DocumentChanged can push live change
+    // notifications without re-creating the peer.
+    private DocumentViewAutomationPeer? _automationPeer;
+    private string? _lastAutomationValue;
+    private string? _lastAutomationSelectionStatus;
     // BZ5: pending character formatting to be applied to the NEXT typed character when the caret
     // is collapsed (no selection). Set by the Font dialog on a collapsed-caret apply; consumed
     // and cleared by the next InsertText call.
@@ -343,6 +351,12 @@ public sealed class DocumentView : Control
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         _bus = new DocumentCommandBus(new ViewContext(this));
         _bus.Changed += OnModelChanged;
+        // AV-A11Y: both events already fire from every caret-move/selection/edit call site in this
+        // file (CaretMoved) and every model mutation (DocumentChanged, raised by OnModelChanged plus
+        // a handful of external-mutation sites) — see DocumentViewAutomationPeer for why these are
+        // the closest Avalonia equivalent to WPF RichTextBox's built-in TextPattern change events.
+        CaretMoved += RaiseAutomationSelectionChanged;
+        DocumentChanged += RaiseAutomationValueChanged;
     }
 
     /// <summary>Raised after any change to the document (edit, undo/redo, load) so the shell can refresh chrome.</summary>
@@ -1020,6 +1034,72 @@ public sealed class DocumentView : Control
 
         _caret = new DocPosition(block, a + replacement.Length);
         _selectionAnchor = _caret;
+    }
+
+    // ---- UI Automation (AV-A11Y) -------------------------------------------------------------
+    // See DocumentViewAutomationPeer for the full rationale and what Avalonia genuinely cannot
+    // express here versus the WPF twin's inherited RichTextBox TextPattern support.
+
+    /// <summary>
+    /// Realizes (or returns the already-realized) UI Automation peer for this control. This is the
+    /// actual extensibility point Avalonia's automation runtime calls for every <see cref="Control"/>;
+    /// without this override, the base <c>Control.OnCreateAutomationPeer()</c> returns a
+    /// <c>NoneAutomationPeer</c> that excludes the control from the accessibility tree entirely
+    /// (verified by inspecting Avalonia.Controls.dll 12.0.4: <c>NoneAutomationPeer</c> overrides
+    /// <c>GetAutomationControlTypeCore</c> → <c>AutomationControlType.None</c> and both
+    /// <c>IsContentElementCore</c>/<c>IsControlElementCore</c> → false).
+    /// </summary>
+    protected override AutomationPeer OnCreateAutomationPeer()
+    {
+        _automationPeer = new DocumentViewAutomationPeer(this);
+        _lastAutomationValue = PlainText;
+        _lastAutomationSelectionStatus = AutomationSelectionStatus();
+        return _automationPeer;
+    }
+
+    /// <summary>Test-only hook: invokes the exact same override the real automation runtime calls.</summary>
+    internal AutomationPeer CreateAutomationPeerForTests() => OnCreateAutomationPeer();
+
+    /// <summary>
+    /// Single source of truth for the automation "ItemStatus" text: both <see cref="RaiseAutomationSelectionChanged"/>
+    /// (dedup + change-event trigger) and <see cref="DocumentViewAutomationPeer.GetItemStatusCore"/> (what an
+    /// automation client reads on demand) call this, so the two can never drift out of sync.
+    /// Reports caret position even when nothing is selected (a plain arrow-key/click move still changes this
+    /// string) plus the selected text when there is a selection, and reports table row/col/paragraph instead
+    /// of a raw glyph offset while the caret is in a table cell — the closest Avalonia can get to WPF
+    /// TextPattern's structural position without a real ICaretProvider/ITextRangeProvider.
+    /// </summary>
+    internal string AutomationSelectionStatus()
+    {
+        var caretDesc = CellCaretInfo is { } cell
+            ? $"Table {cell.TableBlock} row {cell.Row} col {cell.Col} para {cell.ParaIdx} offset {cell.Offset}"
+            : $"Block {_caret.Block} offset {_caret.Offset}";
+        var selected = SelectedText;
+        return selected.Length > 0 ? $"{caretDesc}; Selected: {selected}" : caretDesc;
+    }
+
+    private void RaiseAutomationValueChanged()
+    {
+        if (_automationPeer is null)
+            return;
+        var newValue = PlainText;
+        if (string.Equals(_lastAutomationValue, newValue, StringComparison.Ordinal))
+            return;
+        var oldValue = _lastAutomationValue;
+        _lastAutomationValue = newValue;
+        _automationPeer.NotifyValueChanged(oldValue, newValue);
+    }
+
+    private void RaiseAutomationSelectionChanged()
+    {
+        if (_automationPeer is null)
+            return;
+        var status = AutomationSelectionStatus();
+        if (string.Equals(_lastAutomationSelectionStatus, status, StringComparison.Ordinal))
+            return;
+        var oldStatus = _lastAutomationSelectionStatus;
+        _lastAutomationSelectionStatus = status;
+        _automationPeer.NotifySelectionChanged(oldStatus, status);
     }
 
     // ---- Snapshot for the launch smoke ----------------------------------------------------------
@@ -26090,9 +26170,39 @@ public sealed class DocumentView : Control
     private Size MeasureEquationDelimiter(EquationVisualElement element, RunFormatting baseFormatting)
     {
         var open = MeasureEquationText(element.OpenDelimiter, baseFormatting, EquationDelimiterStyle);
-        var content = MeasureEquationSlot(element.DelimiterContentPlan, element.BaseText, baseFormatting, EquationStructureStyle);
         var close = MeasureEquationText(element.CloseDelimiter, baseFormatting, EquationDelimiterStyle);
-        return new Size(open.Width + content.Width + close.Width + 4, Math.Max(content.Height, Math.Max(open.Height, close.Height)));
+        var slots = DelimiterArgumentSlots(element);
+        var separatorWidth = slots.Count > 1
+            ? MeasureEquationText(element.DelimiterSeparatorText, baseFormatting, EquationDelimiterStyle).Width
+            : 0.0;
+
+        var width = open.Width + close.Width + 4;
+        var height = Math.Max(open.Height, close.Height);
+        for (var index = 0; index < slots.Count; index++)
+        {
+            var content = MeasureEquationSlot(slots[index].Plan, slots[index].Text, baseFormatting, EquationStructureStyle);
+            width += content.Width;
+            height = Math.Max(height, content.Height);
+            if (index < slots.Count - 1)
+                width += separatorWidth;
+        }
+
+        return new Size(width, height);
+    }
+
+    // Argument 0 lives in BaseText/DelimiterContentPlan; arguments 1..n (a multi-argument m:d — binomial/
+    // case/matrix-style delimiter) live in AdditionalDelimiterArgumentTexts/AdditionalDelimiterArgumentPlans.
+    // Flattening both into one ordered list keeps measure/draw single-loop instead of special-casing argument 0.
+    private static IReadOnlyList<(EquationVisualPlan? Plan, string Text)> DelimiterArgumentSlots(EquationVisualElement element)
+    {
+        var slots = new List<(EquationVisualPlan? Plan, string Text)> { (element.DelimiterContentPlan, element.BaseText) };
+        for (var index = 0; index < element.AdditionalDelimiterArgumentTexts.Count; index++)
+        {
+            var plan = index < element.AdditionalDelimiterArgumentPlans.Count ? element.AdditionalDelimiterArgumentPlans[index] : null;
+            slots.Add((plan, element.AdditionalDelimiterArgumentTexts[index]));
+        }
+
+        return slots;
     }
 
     private Size MeasureEquationFunctionApply(EquationVisualElement element, RunFormatting baseFormatting)
@@ -26274,7 +26384,26 @@ public sealed class DocumentView : Control
         var open = MeasureEquationText(element.OpenDelimiter, baseFormatting, EquationDelimiterStyle);
         var close = MeasureEquationText(element.CloseDelimiter, baseFormatting, EquationDelimiterStyle);
         DrawEquationText(context, element.OpenDelimiter, new Rect(bounds.X, bounds.Y, open.Width, bounds.Height), baseFormatting, EquationDelimiterStyle, centered: true);
-        DrawEquationSlot(context, element.DelimiterContentPlan, element.BaseText, new Rect(bounds.X + open.Width + 1, bounds.Y, bounds.Width - open.Width - close.Width - 2, bounds.Height), baseFormatting, EquationStructureStyle, centered: true);
+
+        var slots = DelimiterArgumentSlots(element);
+        var separatorWidth = slots.Count > 1
+            ? MeasureEquationText(element.DelimiterSeparatorText, baseFormatting, EquationDelimiterStyle).Width
+            : 0.0;
+
+        var x = bounds.X + open.Width + 1;
+        for (var index = 0; index < slots.Count; index++)
+        {
+            var slotWidth = MeasureEquationSlot(slots[index].Plan, slots[index].Text, baseFormatting, EquationStructureStyle).Width;
+            DrawEquationSlot(context, slots[index].Plan, slots[index].Text, new Rect(x, bounds.Y, slotWidth, bounds.Height), baseFormatting, EquationStructureStyle, centered: true);
+            x += slotWidth;
+
+            if (index < slots.Count - 1)
+            {
+                DrawEquationText(context, element.DelimiterSeparatorText, new Rect(x, bounds.Y, separatorWidth, bounds.Height), baseFormatting, EquationDelimiterStyle, centered: true);
+                x += separatorWidth;
+            }
+        }
+
         DrawEquationText(context, element.CloseDelimiter, new Rect(bounds.Right - close.Width, bounds.Y, close.Width, bounds.Height), baseFormatting, EquationDelimiterStyle, centered: true);
     }
 

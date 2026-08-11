@@ -31,6 +31,25 @@ public partial class MainWindow
     // never lands in a different (newly opened) workbook (R68-async-ordering-race-sweep-2).
     private bool _isImportingData;
 
+    /// <summary>
+    /// R134-io-getdata-refresh-shrink-wpf: the extent (row/col count) the most recent SUCCESSFUL
+    /// Get Data import wrote at a given (workbook, sheet, destination anchor). The WPF host has no
+    /// dedicated "Refresh" action (unlike the Avalonia shell's Data ▸ Refresh All, which re-runs a
+    /// remembered file source via MainWindow.GetData.cs's <c>RefreshImportedData</c>/
+    /// <c>_lastImportSource</c>) -- here, RefreshAllBtn_Click still only recalculates (see the
+    /// comment on that method below). What DOES exist, and what this fixes, is the plain case of a
+    /// user running Get Data twice into the same destination cell (e.g. always importing into A1):
+    /// without remembering the prior extent, a second import from a SHRUNK source (fewer
+    /// rows/columns than the first) left the first import's leftover cells behind with stale
+    /// values, indistinguishable from freshly imported data. Fed into
+    /// <see cref="ImportSheetCommand"/>'s previousExtent parameter (the same 4-arg overload the
+    /// Avalonia shell already uses) so <c>Apply</c> can clear exactly that leftover rectangle.
+    /// Keyed by workbook id (not just sheet+destination) so a concurrent File > Open mid-import
+    /// (R68-async-ordering-race-sweep-2) can never cause one workbook's remembered extent to bleed
+    /// into another's.
+    /// </summary>
+    private (WorkbookId WorkbookId, SheetId SheetId, CellAddress Destination, uint RowCount, uint ColCount)? _lastImportExtent;
+
     private async void GetDataBtn_Click(object sender, RoutedEventArgs e)
     {
         var plan = ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters);
@@ -107,7 +126,21 @@ public partial class MainWindow
                 return;
             }
 
-            var outcome = _commandBus.Execute(targetWorkbook.Id, new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0]));
+            // R134-io-getdata-refresh-shrink-wpf: reuse the previous import's extent at this exact
+            // anchor (same workbook, sheet and destination cell), if remembered, so ImportSheetCommand
+            // can clear leftover cells when this import's source has shrunk. See _lastImportExtent.
+            (uint RowCount, uint ColCount)? previousExtent = null;
+            if (_lastImportExtent is { } previousImport &&
+                previousImport.WorkbookId == targetWorkbook.Id &&
+                previousImport.SheetId == targetSheetId &&
+                previousImport.Destination == destination)
+            {
+                previousExtent = (previousImport.RowCount, previousImport.ColCount);
+            }
+
+            var outcome = _commandBus.Execute(
+                targetWorkbook.Id,
+                new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0], previousExtent));
             RecordDiagnosticEvent("command_invoked", new Dictionary<string, string?>
             {
                 ["command"] = "Get Data",
@@ -120,6 +153,17 @@ public partial class MainWindow
                 RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, format?.FormatName ?? adapter.FormatName, "command_failed", imported.Sheets.Count));
                 return;
             }
+
+            // Remember this import's actual written extent (the source sheet's used range) for the
+            // next Get Data into this same anchor, regardless of whether this window still shows
+            // targetWorkbook (a concurrent File > Open does not invalidate what was actually written).
+            var importedUsedRange = imported.Sheets[0].GetUsedRange();
+            _lastImportExtent = (
+                targetWorkbook.Id,
+                targetSheetId,
+                destination,
+                importedUsedRange?.RowCount ?? 0,
+                importedUsedRange?.ColCount ?? 0);
 
             // A concurrent File > Open replaced this window's workbook while the import was in
             // flight. The data above still landed correctly in the originally-targeted workbook (via
@@ -186,6 +230,15 @@ public partial class MainWindow
             properties["errorDetail"] = errorDetail;
         return properties;
     }
+    // R134-io-getdata-refresh-shrink-wpf: this is a plain RECALCULATION, not a data re-import --
+    // the WPF host has no "remembered import source" concept (no equivalent of the Avalonia shell's
+    // MainWindow.GetData.cs _lastImportSource/RefreshImportedData), so there is nothing here for
+    // Data ▸ Refresh All to re-run. Building that (remembering the file path/adapter/encoding
+    // options across arbitrary file-format adapters -- not just the delimited-text wizard Avalonia
+    // has -- and re-invoking Load off the UI thread with its own error handling) is a materially
+    // larger feature than this fix's scope. Deliberately left as-is; see _lastImportExtent above
+    // for the narrower shrink-on-reimport fix that IS in scope here (a second Get Data run into the
+    // same destination cell, which does not go through this button).
     private void RefreshAllBtn_Click(object sender, RoutedEventArgs e) => CalcNowBtn_Click(sender, e);
 
     private void TextToColumnsBtn_Click(object sender, RoutedEventArgs e)

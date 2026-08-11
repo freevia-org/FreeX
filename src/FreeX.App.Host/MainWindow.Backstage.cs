@@ -1551,24 +1551,54 @@ public partial class MainWindow
     /// <summary>
     /// A workbook saved with "Read-Only Recommended" (<c>WorkbookFileSharingModel.ReadOnlyRecommended</c>)
     /// or a write-reservation password (<c>ReservationPassword</c>) used to open fully editable with no
-    /// prompt at all -- the metadata round-tripped on Save but was never enforced. Mirrors Excel: prompt
-    /// once on open and, if the user accepts read-only (or -- since a modify-password unlock isn't
-    /// implemented yet -- simply doesn't decline), mark this session's <see cref="_isWorkbookReadOnly"/>
-    /// flag. <see cref="ResolveExistingSaveTarget"/> (MainWindow.WorkbookLifecycle.cs) reads the flag
-    /// on every Save to force Save-over-original through the Save-As dialog instead of a silent
-    /// overwrite (R83-services-doc-recovery-props-5-1). Individual edit commands are not yet blocked --
-    /// that remains out of scope.
+    /// prompt at all -- the metadata round-tripped on Save but was never enforced (SECURITY finding,
+    /// round 134). This is a workbook-integrity/authoring control only, matching Excel's "Password to
+    /// Modify" -- it is not encryption and provides no confidentiality; the file contents remain
+    /// plainly readable regardless of the password.
+    /// <para>
+    /// A write-reservation password now actually gates write access: <see cref="ResolveReservationPasswordPrompt"/>
+    /// prompts for the password (via <see cref="PasswordProtectionDialog"/> in production, or the
+    /// <see cref="_reservationPasswordPromptOverrideForTest"/> seam in tests) and verifies it against the
+    /// stored hash with <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/> -- the same verifier
+    /// used for sheet/workbook structure protection. Matching Excel's actual behaviour, a wrong password
+    /// or Cancel does not refuse to open the file: it falls back to a read-only session, exactly like
+    /// declining a plain "Read-Only Recommended" prompt.
+    /// </para>
+    /// <see cref="ResolveExistingSaveTarget"/> (MainWindow.WorkbookLifecycle.cs) reads the
+    /// <see cref="_isWorkbookReadOnly"/> flag on every Save to force Save-over-original through the
+    /// Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1). Individual
+    /// edit commands are not yet blocked -- that remains out of scope (tracked separately).
     /// </summary>
     private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
     {
         _isWorkbookReadOnly = false;
 
         var sharing = workbook.FileSharing;
-        if (sharing is null ||
-            (sharing.ReadOnlyRecommended != true && string.IsNullOrEmpty(sharing.ReservationPassword)))
+        if (sharing is null)
+            return;
+
+        if (!string.IsNullOrEmpty(sharing.ReservationPassword))
         {
+            var entered = ResolveReservationPasswordPrompt(workbook.Name);
+            var unlocked = ProtectionPasswordHelper.VerifyStoredPassword(sharing.ReservationPassword, entered);
+            _isWorkbookReadOnly = !unlocked;
+
+            if (!unlocked && entered is not null)
+            {
+                // Only the case where the user actually typed something wrong needs an explicit
+                // "opened as read-only" notice -- a plain Cancel already communicated its own intent.
+                ShowOwnedMessage(
+                    UiText.Get("MainWindowMessage_ReservationPasswordIncorrectBody"),
+                    UiText.Get("MainWindowMessage_ReservationPasswordTitle"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+
             return;
         }
+
+        if (sharing.ReadOnlyRecommended != true)
+            return;
 
         var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", workbook.Name);
         var result = ShowOwnedMessage(
@@ -1578,6 +1608,33 @@ public partial class MainWindow
             MessageBoxImage.Question);
 
         _isWorkbookReadOnly = result == MessageBoxResult.Yes;
+    }
+
+    /// <summary>
+    /// Test-only override for <see cref="ResolveReservationPasswordPrompt"/> -- unit tests inject a
+    /// canned password (or <c>null</c> to simulate Cancel) instead of driving the real modal
+    /// <see cref="PasswordProtectionDialog"/> window. Not used by production code paths. Set via
+    /// reflection from tests (mirrors how <see cref="_isWorkbookReadOnly"/> itself is read by
+    /// R69_ReadOnlyRecommendedPromptTests) since this assembly has no test-project InternalsVisibleTo.
+    /// </summary>
+    private Func<string, string?>? _reservationPasswordPromptOverrideForTest = null;
+
+    private string? ResolveReservationPasswordPrompt(string workbookName) =>
+        _reservationPasswordPromptOverrideForTest is not null
+            ? _reservationPasswordPromptOverrideForTest(workbookName)
+            : ShowReservationPasswordPromptDialog(workbookName);
+
+    private string? ShowReservationPasswordPromptDialog(string workbookName)
+    {
+        var prompt = UiText.Format("MainWindowMessage_ReservationPasswordPromptFormat", workbookName);
+        var dialog = new PasswordProtectionDialog(
+            UiText.Get("MainWindowMessage_ReservationPasswordTitle"),
+            prompt)
+        {
+            Owner = this
+        };
+
+        return dialog.ShowDialog() == true ? dialog.Password ?? string.Empty : null;
     }
 
     private void ShowUnsupportedXlsxFeatureOpenWarningIfNeeded()

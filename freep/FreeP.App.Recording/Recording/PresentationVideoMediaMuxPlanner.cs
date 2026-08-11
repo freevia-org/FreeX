@@ -19,7 +19,8 @@ public sealed record PresentationVideoMediaCaptionTrack(
 public sealed record PresentationVideoMediaMuxPlan(
     IReadOnlyList<PresentationVideoMediaMuxTrack> NarrationTracks,
     IReadOnlyList<PresentationVideoMediaMuxTrack> CameraTracks,
-    IReadOnlyList<PresentationVideoMediaCaptionTrack> CaptionTracks)
+    IReadOnlyList<PresentationVideoMediaCaptionTrack> CaptionTracks,
+    TimeSpan VideoDuration = default)
 {
     public int MuxedNarrationTrackCount => NarrationTracks.Count;
 
@@ -45,8 +46,12 @@ public static class PresentationVideoMediaMuxPlanner
         ArgumentNullException.ThrowIfNull(package);
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
 
+        var videoDuration = package.Frames.Count == 0
+            ? TimeSpan.Zero
+            : package.Frames.Max(frame => frame.StartTime + frame.Duration);
+
         if (mediaArtifacts is null || mediaArtifacts.Count == 0)
-            return new([], [], []);
+            return new([], [], [], videoDuration);
 
         var slideStartTimes = package.Frames
             .GroupBy(frame => frame.SlideIndex)
@@ -123,7 +128,7 @@ public static class PresentationVideoMediaMuxPlanner
                 narrationTracks.Add(track);
         }
 
-        return new(narrationTracks, cameraTracks, captionTracks);
+        return new(narrationTracks, cameraTracks, captionTracks, videoDuration);
     }
 
     public static IReadOnlyList<string> BuildFfmpegArguments(
@@ -222,7 +227,20 @@ public static class PresentationVideoMediaMuxPlanner
             {
                 arguments.Add("-map");
                 arguments.Add("[aout]");
-                arguments.Add("-shortest");
+
+                // The slide timeline (video) is authoritative for the exported duration, not
+                // narration. Pin the output length to the video track explicitly with "-t"
+                // instead of "-shortest": "-shortest" truncates to whichever stream is shorter,
+                // which silently chops the video whenever narration runs shorter than the
+                // slides (a common case). Narration shorter than the video simply trails off
+                // into silence for the remainder; narration longer than the video is trimmed at
+                // the video's end rather than extending playback past the last slide.
+                if (mediaPlan.VideoDuration > TimeSpan.Zero)
+                {
+                    arguments.Add("-t");
+                    arguments.Add(Seconds(mediaPlan.VideoDuration));
+                }
+
                 arguments.Add("-c:a");
                 arguments.Add("aac");
                 arguments.Add("-b:a");

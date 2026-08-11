@@ -14777,18 +14777,17 @@ public sealed class DocumentView : RichTextBox
             Tag = EquationVisualElementKind.Delimiter
         };
 
-        panel.Children.Add(BuildEquationStructureTextBlock(
-            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterOpen),
-            WpfTextAlignment.Center,
-            new Thickness(1, 0, 1, 0)));
-        panel.Children.Add(BuildEquationStructureTextBlock(
-            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterContent),
-            WpfTextAlignment.Center,
-            new Thickness(1, 0, 1, 0)));
-        panel.Children.Add(BuildEquationStructureTextBlock(
-            SegmentWithRole(element, EquationVisualSegmentRole.DelimiterClose),
-            WpfTextAlignment.Center,
-            new Thickness(1, 0, 1, 0)));
+        // Walk every segment in planned order (open, content, [separator, content]*, close) instead of
+        // picking just the first DelimiterOpen/DelimiterContent/DelimiterClose: a multi-argument delimiter
+        // (binomial/case/matrix-style m:d) plans more than one DelimiterContent segment, and picking only
+        // the first silently truncated the display to "(n)" even though the model held every argument.
+        foreach (var segment in element.Segments)
+        {
+            panel.Children.Add(BuildEquationStructureTextBlock(
+                segment,
+                WpfTextAlignment.Center,
+                new Thickness(1, 0, 1, 0)));
+        }
 
         return panel;
     }

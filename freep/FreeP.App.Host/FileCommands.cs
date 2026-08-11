@@ -316,19 +316,44 @@ internal sealed class FileCommands
     {
         try
         {
-            PresentationImageExportExecutor.Export(
+            var imageDiagnostics = new List<string>();
+            ExportImagesToFolderCore(
                 _getModel(),
                 new PresentationImageExportRequest(
                     outputDirectory,
                     BaseFileName: Path.GetFileNameWithoutExtension(_workflow.CurrentFileName),
                     SlideRange: range),
-                WpfPresentationSlideImageRenderer.RenderSlideToPng);
+                imageDiagnostics);
+            _workflow.ShowExportImageWarnings("Exported the presentation slides to images", imageDiagnostics);
             return true;
         }
         catch (Exception ex)
         {
             ShowError("Could not export the presentation slides to images", ex);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Renders every requested slide to a PNG exactly as <see cref="ExportImagesToFolder"/> does, and
+    /// appends into <paramref name="imageDiagnostics"/> any picture <see cref="FreeP.App.Rendering.Wpf.SlideCanvas"/>
+    /// drops while compositing a slide -- the same loss point <see cref="ExportPdfRasterBytes"/> surfaces for
+    /// the raster PDF path (see <see cref="SlideImageRenderDiagnostics"/>), but was previously unwired here,
+    /// so an undecodable embedded picture silently disappeared from File &gt; Export &gt; Images with no
+    /// diagnostic at all. Internal (not private) so FreeP.App.Host.Tests can exercise this exact production
+    /// composition.
+    /// </summary>
+    internal static PresentationImageExportResult ExportImagesToFolderCore(
+        Presentation presentation,
+        PresentationImageExportRequest request,
+        List<string> imageDiagnostics)
+    {
+        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
+        {
+            return PresentationImageExportExecutor.Export(
+                presentation,
+                request,
+                WpfPresentationSlideImageRenderer.RenderSlideToPng);
         }
     }
 
@@ -462,22 +487,56 @@ internal sealed class FileCommands
     }
 
     /// <summary>
+    /// Diagnostics collected the last time <see cref="BuildVideoFramePackage"/> rendered slide frames --
+    /// pictures <see cref="FreeP.App.Rendering.Wpf.SlideCanvas"/> dropped while compositing a frame (see
+    /// <see cref="SlideImageRenderDiagnostics"/>). Reset on every call, so it always reflects only the most
+    /// recent build.
+    /// </summary>
+    internal IReadOnlyList<string> LastVideoFrameImageDiagnostics { get; private set; } = [];
+
+    /// <summary>
     /// Builds the shared PowerPoint-style video frame package. WPF supplies the slide raster callback;
     /// native MP4 execution is performed by <see cref="ExportVideoAsync"/> through the detected host adapter.
     /// </summary>
     public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
-        LastVideoFramePackage = PresentationVideoFramePackageExecutor.BuildPackage(
+        var imageDiagnostics = new List<string>();
+        LastVideoFramePackage = BuildVideoFramePackageCore(
             _getModel(),
             request,
-            WpfPresentationSlideImageRenderer.RenderSlideToPng,
-            _videoExportHostCapabilities);
+            _videoExportHostCapabilities,
+            imageDiagnostics);
+        LastVideoFrameImageDiagnostics = imageDiagnostics;
         LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
             LastVideoFramePackage,
             _videoExportHostCapabilities,
             _workflow.CurrentFileName);
         LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
         return LastVideoFramePackage;
+    }
+
+    /// <summary>
+    /// Renders every video frame exactly as <see cref="BuildVideoFramePackage"/> does, and appends into
+    /// <paramref name="imageDiagnostics"/> any picture <see cref="FreeP.App.Rendering.Wpf.SlideCanvas"/> drops
+    /// while compositing a frame -- the same loss point <see cref="ExportPdfRasterBytes"/> surfaces for the
+    /// raster PDF path (see <see cref="SlideImageRenderDiagnostics"/>), but was previously unwired here, so an
+    /// undecodable embedded picture silently disappeared from File &gt; Export &gt; Video with no diagnostic at
+    /// all. Internal (not private) so FreeP.App.Host.Tests can exercise this exact production composition.
+    /// </summary>
+    internal static PresentationVideoFramePackage BuildVideoFramePackageCore(
+        Presentation presentation,
+        PresentationVideoExportRequest? request,
+        PresentationVideoExportHandoffHostCapabilities hostCapabilities,
+        List<string> imageDiagnostics)
+    {
+        using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
+        {
+            return PresentationVideoFramePackageExecutor.BuildPackage(
+                presentation,
+                request,
+                WpfPresentationSlideImageRenderer.RenderSlideToPng,
+                hostCapabilities);
+        }
     }
 
     public PresentationVideoExportHandoffPlan BuildVideoExportHandoffPlan(
@@ -545,6 +604,10 @@ internal sealed class FileCommands
                 ShowError(
                     "Could not export the presentation video",
                     new InvalidOperationException(LastVideoExportResult.FailureReason));
+            }
+            else if (LastVideoExportResult.Succeeded)
+            {
+                _workflow.ShowExportImageWarnings("Exported the presentation video", LastVideoFrameImageDiagnostics);
             }
 
             return LastVideoExportResult.Succeeded;

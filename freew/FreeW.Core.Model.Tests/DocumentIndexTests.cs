@@ -417,6 +417,86 @@ public class DocumentIndexTests
     }
 
     [Fact]
+    public void Build_PageReferencesAreSortedAscendingRegardlessOfMarkDocumentOrder()
+    {
+        // Document order of the marks is: page 12, then the "4-7" ranged mark, then page 9 — the
+        // ranged mark's own literal location in the document does not correlate with the pages its
+        // bookmark resolves to. The generated index must still list the references in ascending page
+        // order, not the document (mark-occurrence) order in which they were encountered.
+        var doc = new TextDocument();
+
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha")) } }); // block 0: page 12
+
+        var rangeStart = new Paragraph("Range start");
+        rangeStart.BookmarkNames.Add("TopicRange");
+        rangeStart.BookmarkBoundaries.Add(new BookmarkBoundary("range", BookmarkBoundaryKind.Start, 0, "TopicRange"));
+        doc.Blocks.Add(rangeStart); // block 1: range start, page 4
+
+        doc.Blocks.Add(new Paragraph("Range middle")); // block 2
+
+        var rangeEnd = new Paragraph
+        {
+            Runs =
+            {
+                new Run("Range end"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "TopicRange"))
+            }
+        };
+        rangeEnd.BookmarkBoundaries.Add(new BookmarkBoundary("range", BookmarkBoundaryKind.End, 0));
+        doc.Blocks.Add(rangeEnd); // block 3: range end, page 7 — carries the \r XE mark itself
+
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha")) } }); // block 4: page 9
+
+        var entry = DocumentIndex.Build(doc, pageReferenceOf: blockIndex => blockIndex switch
+        {
+            0 => new IndexPageReferenceAddress(11, "12"),
+            1 => new IndexPageReferenceAddress(3, "4"),
+            3 => new IndexPageReferenceAddress(6, "7"),
+            4 => new IndexPageReferenceAddress(8, "9"),
+            _ => null
+        }).Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 4–7, 9, 12");
+    }
+
+    [Fact]
+    public void Build_AbuttingRangedAndSinglePageMarkCollapseIntoOneMergedRange()
+    {
+        // The ranged mark resolves to pages 4-7 and a separate single-page mark for the same term
+        // lands on page 8 — immediately abutting the range. Word's index collates these into one
+        // continuous "4-8" range instead of listing the abutting page as a separate entry.
+        var doc = new TextDocument();
+
+        var rangeStart = new Paragraph("Range start");
+        rangeStart.BookmarkNames.Add("TopicRange");
+        rangeStart.BookmarkBoundaries.Add(new BookmarkBoundary("range", BookmarkBoundaryKind.Start, 0, "TopicRange"));
+        doc.Blocks.Add(rangeStart); // block 0: range start, page 4
+
+        var rangeEnd = new Paragraph
+        {
+            Runs =
+            {
+                new Run("Range end"),
+                DocumentIndex.MarkRun(new IndexMark("Alpha", BookmarkName: "TopicRange"))
+            }
+        };
+        rangeEnd.BookmarkBoundaries.Add(new BookmarkBoundary("range", BookmarkBoundaryKind.End, 0));
+        doc.Blocks.Add(rangeEnd); // block 1: range end, page 7
+
+        doc.Blocks.Add(new Paragraph { Runs = { DocumentIndex.MarkRun(new IndexMark("Alpha")) } }); // block 2: page 8, abuts the range
+
+        var entry = DocumentIndex.Build(doc, pageReferenceOf: blockIndex => blockIndex switch
+        {
+            0 => new IndexPageReferenceAddress(3, "4"),
+            1 => new IndexPageReferenceAddress(6, "7"),
+            2 => new IndexPageReferenceAddress(7, "8"),
+            _ => null
+        }).Single(paragraph => paragraph.StyleId == DocumentIndex.EntryStyleId);
+
+        entry.PlainText.Should().Be("Alpha, 4–8");
+    }
+
+    [Fact]
     public void Build_BookmarkRangeResolvesBoundariesInsideTableCells()
     {
         var doc = new TextDocument();

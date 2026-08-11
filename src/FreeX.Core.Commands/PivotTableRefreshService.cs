@@ -271,6 +271,35 @@ public static partial class PivotTableRefreshService
             new CellAddress(sheet.Id, maxRow.Value, maxCol.Value));
     }
 
+    /// <summary>
+    /// R134-commands-pivotchart-stale-datarange: a bound PivotChart's <see cref="ChartModel.DataRange"/>/
+    /// <see cref="ChartModel.PivotCacheId"/> must track the pivot's CURRENT materialized output range
+    /// after every mutation that can move/resize/re-source that output (field add/remove/move, grouping,
+    /// filters/sorts, options, calculated items, Change Data Source, rename, move, clear-view, refresh --
+    /// and, this fix's own target, a slicer/timeline selection change), or the chart keeps rendering
+    /// whatever cells the pivot happened to occupy at some earlier point -- stale and silently
+    /// inconsistent with the pivot right next to it. This is the single shared implementation of the
+    /// per-command "sync bound charts" step that most pivot-mutating commands already each carry their
+    /// own private copy of (see e.g. <c>PivotTableActionCommands.UpdateBoundPivotChartRanges</c>,
+    /// <c>ConfigurePivotTableFieldFiltersCommand.UpdateBoundPivotChartRanges</c>) -- new callers should
+    /// call this shared method rather than adding yet another textually-disjoint copy of the same loop.
+    /// A PivotChart can only ever live on the SAME sheet as its source pivot table (both
+    /// <c>MoveChartCommand</c> and <c>MoveChartToNewSheetCommand</c> reject <c>IsPivotChart</c> charts
+    /// outright), but this still scans every sheet -- matching the majority of the existing per-command
+    /// copies -- so it stays correct even if that invariant is ever relaxed.
+    /// </summary>
+    public static void UpdateBoundPivotCharts(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
+    {
+        var outputRange = GetMaterializedOutputRange(sheet, pivotTable);
+        foreach (var chartSheet in workbook.Sheets)
+        foreach (var chart in chartSheet.Charts.Where(chart =>
+                     chart.IsPivotChart &&
+                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            chart.DataRange = outputRange;
+            chart.PivotCacheId = pivotTable.CacheId;
+        }
+    }
 
     private static int RowFieldOutputColumnCount(PivotTableModel pivotTable) =>
         pivotTable.ReportLayout == PivotReportLayout.Compact && pivotTable.RowFields.Count > 1

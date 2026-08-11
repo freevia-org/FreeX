@@ -264,8 +264,16 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
         }, CancellationToken.None);
     }
 
+    // ── Write-reservation password (round-134 SECURITY fix) ────────────────────
+    //
+    // Before this fix, a write-reservation-password workbook routed through the same plain Yes/No
+    // "open read-only?" prompt as ReadOnlyRecommended -- the password itself was never asked for or
+    // checked, so declining ("No") granted full write access with zero verification. It now prompts
+    // for the actual password via the dedicated ReservationPasswordPromptOverrideForTest seam and
+    // verifies it with ProtectionPasswordHelper.VerifyStoredPassword.
+
     [Fact]
-    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReservationPasswordWorkbook_PromptsAndMarksReadOnlyOnAccept()
+    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReservationPasswordWorkbook_CorrectPassword_UnlocksEditableSession()
     {
         await Session.Dispatch(() =>
         {
@@ -276,16 +284,79 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
                 workbook.FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" };
 
                 var promptCount = 0;
-                window.ReadOnlyRecommendedPromptOverrideForTest = _ =>
+                window.ReservationPasswordPromptOverrideForTest = _ =>
                 {
                     promptCount++;
-                    return UserMessageResult.Yes;
+                    return "secret";
                 };
 
                 window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
 
-                promptCount.Should().Be(1, "a write-reservation-password workbook must also prompt on open");
-                window.IsWorkbookReadOnlyForTest.Should().BeTrue();
+                promptCount.Should().Be(1, "a write-reservation-password workbook must prompt for the password on open");
+                window.IsWorkbookReadOnlyForTest.Should().BeFalse(
+                    "typing the correct write-reservation password must unlock a fully editable session");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReservationPasswordWorkbook_WrongPassword_OpensReadOnly()
+    {
+        // THE security case: before the round-134 fix, declining/answering "No" to a plain Yes/No
+        // question granted full write access with no password ever checked. A wrong password must
+        // now fall back to a genuinely read-only session, matching Excel.
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var workbook = window.Session.Workbook;
+                workbook.FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" };
+                window.ReservationPasswordPromptOverrideForTest = _ => "not-the-password";
+                var noticeCount = 0;
+                window.ReservationPasswordIncorrectNoticeOverrideForTest = () => noticeCount++;
+
+                window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
+
+                window.IsWorkbookReadOnlyForTest.Should().BeTrue(
+                    "a wrong write-reservation password must fall back to a read-only session, not grant write access");
+                noticeCount.Should().Be(1, "a wrong password must surface an 'opened as read-only' notice");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReservationPasswordWorkbook_CancelledPrompt_OpensReadOnly()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var workbook = window.Session.Workbook;
+                workbook.FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" };
+                window.ReservationPasswordPromptOverrideForTest = _ => null;
+                var noticeCount = 0;
+                window.ReservationPasswordIncorrectNoticeOverrideForTest = () => noticeCount++;
+
+                window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
+
+                window.IsWorkbookReadOnlyForTest.Should().BeTrue(
+                    "cancelling the write-reservation password prompt must fall back to a read-only session");
+                noticeCount.Should().Be(0,
+                    "a plain Cancel already communicates its own intent and should not also show an 'incorrect password' notice");
             }
             finally
             {

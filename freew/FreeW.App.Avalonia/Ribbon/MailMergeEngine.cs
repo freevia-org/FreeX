@@ -603,9 +603,12 @@ internal sealed class MailMergeEngine
 
         // Augment every row with the composed «AddressBlock» / «GreetingLine» values so those composite
         // placeholders resolve across every record, then run the rules-aware merge (records flagged by a
-        // «Skip Record If» rule are excluded).
+        // «Skip Record If» rule are excluded). Pass the original absolute recipient-list row numbers
+        // through so MERGEREC reports the record's real position in the full data source rather than its
+        // position within this (possibly narrowed) Current-Record/From…To selection.
         var augmentedData = BuildAugmentedData(data, finishPlan.RowIndexes);
-        var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState);
+        var recordNumbers = finishPlan.RowIndexes.Select(index => index + 1).ToList();
+        var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState, recordNumbers);
         if (mergeState.CancelRequested)
             return null;
 

@@ -670,24 +670,37 @@ public static class MergeRuleEvaluator
     /// <summary>
     /// Evaluate <paramref name="fieldValue"/> against <paramref name="op"/> and
     /// <paramref name="ruleValue"/>. Numeric comparison is attempted when both sides parse as
-    /// <see cref="double"/>; otherwise lexicographic (case-insensitive) string comparison.
+    /// <see cref="double"/>; otherwise lexicographic (case-insensitive) string comparison. Numbers are
+    /// parsed using <paramref name="culture"/> (defaulting to <see cref="CultureInfo.CurrentCulture"/> —
+    /// the data source/document locale — when omitted); this file has no per-field language tag to
+    /// consult at this call site, unlike the native \# picture path.
     /// </summary>
-    public static bool EvaluateCondition(string fieldValue, MergeConditionOperator op, string ruleValue)
+    public static bool EvaluateCondition(
+        string fieldValue,
+        MergeConditionOperator op,
+        string ruleValue,
+        CultureInfo? culture = null)
     {
         return op switch
         {
             MergeConditionOperator.IsBlank       => string.IsNullOrWhiteSpace(fieldValue),
             MergeConditionOperator.IsNotBlank    => !string.IsNullOrWhiteSpace(fieldValue),
             MergeConditionOperator.Contains      => fieldValue.Contains(ruleValue, StringComparison.OrdinalIgnoreCase),
-            _ => CompareValues(fieldValue, ruleValue, op)
+            _ => CompareValues(fieldValue, ruleValue, op, culture ?? CultureInfo.CurrentCulture)
         };
     }
 
-    private static bool CompareValues(string fieldValue, string ruleValue, MergeConditionOperator op)
+    private static bool CompareValues(string fieldValue, string ruleValue, MergeConditionOperator op, CultureInfo culture)
     {
-        // Try numeric comparison first.
-        if (double.TryParse(fieldValue, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var fNum) &&
-            double.TryParse(ruleValue,  System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var rNum))
+        // Try numeric comparison first. Parsing with the caller's culture (rather than a hard-coded
+        // invariant culture) correctly reads comma-decimal data — "1,5" under a culture where comma is
+        // the decimal separator parses as 1.5, not the thousands-grouped 15 that InvariantCulture (or
+        // en-US) would read it as. Data that genuinely uses thousands grouping is unaffected: en-US and
+        // InvariantCulture share the same comma-group/dot-decimal convention, so "1,234" still parses as
+        // one thousand two hundred thirty-four under either — only the separator ROLES shift with the
+        // culture, not whether grouping is honoured.
+        if (double.TryParse(fieldValue, NumberStyles.Any, culture, out var fNum) &&
+            double.TryParse(ruleValue, NumberStyles.Any, culture, out var rNum))
         {
             return op switch
             {
@@ -1843,50 +1856,24 @@ public static class MailMerge
     /// immutable formatting records, with styles, page settings, header/footer and properties carried
     /// over so the merged record looks like the template. Deterministic.
     /// </summary>
+    /// <remarks>
+    /// Routes through <see cref="MergeRecordWithRules"/> (with a throwaway, single-call
+    /// <see cref="MergeState"/>) so conditional/interactive merge fields — If, SkipIf, NextIf, Fill-in,
+    /// Ask, Set, Ref, MergeRec, MergeSeq — resolve exactly as they do for Finish &amp; Merge. Mailings
+    /// &gt; Preview Results and Mailings &gt; Send E-mail Messages both merge one record at a time via
+    /// this method; previously it substituted only plain <c>«Field»</c> placeholders, so every rule
+    /// field silently went blank in the preview and in the messages actually sent — different from what
+    /// Finish &amp; Merge produced for the same template and row. The throwaway state's skip/advance/
+    /// cancel side effects are discarded (meaningless outside a full merge run over many records), and a
+    /// lone record reports itself as record 1 for MergeRec/MergeSeq (there is no larger run to number it
+    /// within).
+    /// </remarks>
     public static TextDocument MergeRecord(TextDocument template, IReadOnlyDictionary<string, string> row)
     {
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(row);
 
-        var doc = new TextDocument
-        {
-            DefaultRun = template.DefaultRun,
-            DefaultParagraph = template.DefaultParagraph,
-            UseWordApplicationDefaultLineSpacing = template.UseWordApplicationDefaultLineSpacing,
-            UseWordApplicationDefaultRunFormatting = template.UseWordApplicationDefaultRunFormatting,
-            Protection = template.Protection,
-            DoNotDisplayPageBoundaries = template.DoNotDisplayPageBoundaries,
-            RemovePersonalInformation = template.RemovePersonalInformation,
-            HideSpellingErrors = template.HideSpellingErrors,
-            HideGrammaticalErrors = template.HideGrammaticalErrors,
-            AutomaticallyUpdateStylesFromTemplate = template.AutomaticallyUpdateStylesFromTemplate,
-            UpdateFieldsOnOpen = template.UpdateFieldsOnOpen,
-            TrackRevisions = template.TrackRevisions,
-            DoNotTrackMoves = template.DoNotTrackMoves,
-            DoNotTrackFormatting = template.DoNotTrackFormatting,
-            DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
-            EmbedSystemFonts = template.EmbedSystemFonts,
-            SaveSubsetFonts = template.SaveSubsetFonts,
-            PageBordersDoNotSurroundHeader = template.PageBordersDoNotSurroundHeader,
-            PageBordersDoNotSurroundFooter = template.PageBordersDoNotSurroundFooter,
-            MarkedAsFinal = template.MarkedAsFinal,
-            Theme = template.Theme,
-            BibliographyStyle = template.BibliographyStyle
-        };
-
-        foreach (var (id, style) in template.Styles)
-            doc.Styles[id] = style;
-
-        CopyDocumentState(template, doc, block => CloneBlock(block, row));
-        doc.Preserved.CopyFrom(template.Preserved);
-        CopyPageSettings(template.Page, doc.Page);
-        CopySectionHeadersFooters(template.FinalSectionHeadersFooters, doc.FinalSectionHeadersFooters,
-            source => CloneHeaderFooter(source, row));
-
-        foreach (var block in template.Blocks)
-            doc.Blocks.Add(CloneBlock(block, row));
-
-        return doc;
+        return MergeRecordWithRules(template, row, new MergeState(), recordIndex: 1);
     }
 
     /// <summary>
@@ -1916,14 +1903,32 @@ public static class MailMerge
     /// The returned list contains only non-skipped records (so its count may be less than
     /// <paramref name="data"/>.<see cref="MergeData.Count"/>).
     /// </summary>
+    /// <param name="recordNumbers">
+    /// Optional 1-based absolute recipient-list row number for each entry in <paramref name="data"/>,
+    /// positionally matched (<c>recordNumbers[i]</c> is the row number for <c>data.Rows[i]</c>). Word's
+    /// MERGEREC field reports the record's position in the full data source, not its position within a
+    /// Current-Record/From…To selection — so when <paramref name="data"/> is already a caller-narrowed
+    /// subset of a larger recipient list (Finish &amp; Merge's record-range selection), the caller must
+    /// supply the original absolute row numbers here for MERGEREC to read correctly. Omit (or pass null)
+    /// when <paramref name="data"/> already spans the complete, unfiltered recipient list — each row then
+    /// falls back to its 1-based position within <paramref name="data"/>, unchanged from prior behavior.
+    /// MERGESEQ (<see cref="MergeState.SequenceNumber"/>) is unaffected: it always counts non-skipped
+    /// records within this run, which is the correct "within-range" semantics for Word's Merge Sequence #.
+    /// </param>
     public static IReadOnlyList<TextDocument> MergeAllWithRules(
         TextDocument template,
         MergeData data,
-        MergeState state)
+        MergeState state,
+        IReadOnlyList<int>? recordNumbers = null)
     {
         ArgumentNullException.ThrowIfNull(template);
         ArgumentNullException.ThrowIfNull(data);
         ArgumentNullException.ThrowIfNull(state);
+        if (recordNumbers is not null && recordNumbers.Count != data.Count)
+            throw new ArgumentException(
+                $"{nameof(recordNumbers)} must have exactly one entry per row in {nameof(data)} " +
+                $"({recordNumbers.Count} given, {data.Count} expected).",
+                nameof(recordNumbers));
 
         var initialSequenceNumber = state.SequenceNumber;
         var initialBookmarks = state.Bookmarks.ToArray();
@@ -1937,9 +1942,13 @@ public static class MailMerge
             // value for this record. If the record is subsequently skipped by a «Skip Record If»
             // rule, we roll the counter back so the sequence remains gapless.
             state.SequenceNumber++;
+            // MERGEREC reports the caller-supplied absolute row number when given one, else falls back
+            // to this row's 1-based position within data (prior behavior). Skip-tracking below keys off
+            // this same value (recordIndex - 1), not the loop index i, so it stays correct either way.
+            var recordIndex = recordNumbers?[i] ?? i + 1;
             // Evaluate the template against this row with full rule support. This also marks
-            // state.SkippedIndices[i] when a «Skip Record If» condition fires.
-            var merged = MergeRecordWithRules(template, row, state, recordIndex: i + 1);
+            // state.SkippedIndices[recordIndex - 1] when a «Skip Record If» condition fires.
+            var merged = MergeRecordWithRules(template, row, state, recordIndex);
             if (state.CancelRequested)
             {
                 result.Clear();
@@ -1953,7 +1962,7 @@ public static class MailMerge
                 state.SkipRecordRequested = false;
                 break;
             }
-            if (state.SkippedIndices.Contains(i))
+            if (state.SkippedIndices.Contains(recordIndex - 1))
             {
                 // Roll back — this record won't appear in the output.
                 state.SequenceNumber--;
@@ -1965,7 +1974,9 @@ public static class MailMerge
 
             // NEXT / NEXTIF consumes one additional source row after the current output record.
             // The record-level evaluator only reports this cursor request; the all-record caller owns
-            // advancing the data-source cursor, just as the label-sheet hosts do between cells.
+            // advancing the data-source cursor, just as the label-sheet hosts do between cells. This
+            // advances the loop position within data (the selection being merged), independent of the
+            // absolute record numbers used for MERGEREC above.
             if (state.AdvanceRecordRequested && i + 1 < data.Count)
                 i++;
         }
@@ -2348,34 +2359,6 @@ public static class MailMerge
                     ScanParagraph(paragraph, scan);
     }
 
-    private static Block CloneBlock(Block block, IReadOnlyDictionary<string, string> row)
-    {
-        var clone = DocumentMerge.CloneBlock(block);
-        TransformBlockText(clone, text => Substitute(text, row), ResolveNativeMergeField);
-        return clone;
-
-        bool ResolveNativeMergeField(Run run)
-        {
-            switch (run.ComplexField?.Keyword)
-            {
-                case "MERGEFIELD" when TryGetMergeFieldName(run.ComplexField, out var fieldName):
-                    run.Text = ResolveMergeFieldResult(run, fieldName, row);
-                    run.ComplexField = null;
-                    return true;
-                case "ADDRESSBLOCK" when IsSupportedCompositeMergeField(run.ComplexField):
-                case "GREETINGLINE" when IsSupportedCompositeMergeField(run.ComplexField):
-                    run.Text = ResolveCompositeMergeFieldResult(run.ComplexField.Keyword, row);
-                    run.ComplexField = null;
-                    return true;
-                case "ADDRESSBLOCK":
-                case "GREETINGLINE":
-                    return true;
-                default:
-                    return false;
-            }
-        }
-    }
-
     private static Block CloneBlockWithRules(
         Block block,
         IReadOnlyDictionary<string, string> row,
@@ -2576,8 +2559,9 @@ public static class MailMerge
         if (value.Length == 0)
             return string.Empty;
 
-        value = ApplyMergeFieldDatePicture(value, field.Instruction, MergeFieldCulture(run));
-        value = ApplyMergeFieldNumericPicture(value, field.Instruction);
+        var culture = MergeFieldCulture(run);
+        value = ApplyMergeFieldDatePicture(value, field.Instruction, culture);
+        value = ApplyMergeFieldNumericPicture(value, field.Instruction, culture);
         var before = ComplexFieldEngine.SwitchValue(field.Instruction, 'b') ?? string.Empty;
         var after = ComplexFieldEngine.SwitchValue(field.Instruction, 'f') ?? string.Empty;
         return ApplyMergeFieldGeneralFormats(value, before, after, field.Instruction);
@@ -2589,8 +2573,9 @@ public static class MailMerge
             return string.Empty;
 
         var instruction = run.ComplexField!.Instruction;
-        value = ApplyMergeFieldDatePicture(value, instruction, MergeFieldCulture(run));
-        value = ApplyMergeFieldNumericPicture(value, instruction);
+        var culture = MergeFieldCulture(run);
+        value = ApplyMergeFieldDatePicture(value, instruction, culture);
+        value = ApplyMergeFieldNumericPicture(value, instruction, culture);
         return ApplyMergeFieldGeneralFormats(value, string.Empty, string.Empty, instruction);
     }
 
@@ -2624,9 +2609,16 @@ public static class MailMerge
             : value;
     }
 
-    private static string ApplyMergeFieldNumericPicture(string value, string instruction)
+    private static string ApplyMergeFieldNumericPicture(string value, string instruction, CultureInfo culture)
     {
         var picture = ComplexFieldEngine.SwitchValue(instruction, '#');
+        // Parse using the field's own declared language (falling back to the current culture, same as
+        // the date picture just above) rather than a hard-coded invariant culture. Comma-decimal locales
+        // (much of continental Europe) write "1,5" for one and a half; under InvariantCulture that comma
+        // reads as a thousands separator, so "1,5" silently became 15. Genuinely thousands-grouped data
+        // is unaffected: en-US (and invariant) both use comma-groups/dot-decimal, so "1,234" still parses
+        // as one thousand two hundred thirty-four under either — only the separator ROLES are
+        // culture-driven, not whether AllowThousands is honoured.
         if (picture is not ("0"
                 or "0.00"
                 or "#,##0"
@@ -2639,7 +2631,7 @@ public static class MailMerge
             || !double.TryParse(
                 value,
                 NumberStyles.Float | NumberStyles.AllowThousands,
-                CultureInfo.InvariantCulture,
+                culture,
                 out var number))
         {
             return value;
@@ -3099,16 +3091,6 @@ public static class MailMerge
         var clone = new HeaderFooter();
         foreach (var p in source.Paragraphs)
             clone.Paragraphs.Add((Paragraph)CloneBlockWithRules(p, row, state, recordIndex));
-        return clone;
-    }
-
-    private static HeaderFooter? CloneHeaderFooter(HeaderFooter? source, IReadOnlyDictionary<string, string> row)
-    {
-        if (source is null)
-            return null;
-        var clone = new HeaderFooter();
-        foreach (var p in source.Paragraphs)
-            clone.Paragraphs.Add((Paragraph)CloneBlock(p, row));
         return clone;
     }
 

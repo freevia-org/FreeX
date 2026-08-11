@@ -284,21 +284,23 @@ internal static class XlsxDataValidationClosedXmlMapper
         };
     }
 
+    // This is a thin wrapper over DataValidationNumericBoundText.TryParse/ToInvariantString -- the
+    // ONE shared parse also used by the dialog-entry gate
+    // (FreeX.App.Presentation.Dialogs.DataValidationDialogModel) and by live enforcement while the
+    // session runs (FreeX.Core.Commands.DataValidationBoundsParser). Before this was unified, this
+    // save-side parse used a hand-picked NumberStyles set that omitted AllowThousands, so a
+    // thousands-grouped bound (e.g. "1,234") failed to parse HERE even though the dialog/live-eval
+    // styles accepted it -- the bound then fell through to the `_ => formula` branch in
+    // NormalizeNumericFormulaForSave and was written to the XLSX verbatim, with its original
+    // locale-specific grouping character still embedded, instead of being canonicalized to
+    // invariant digits. Sharing the exact same parse (and this ToInvariantString formatter) with
+    // the other two call sites guarantees the number enforced in-session and the number persisted
+    // to disk are always the same one.
     private static bool TryParseInvariantOrCurrentCultureNumber(string trimmed, out string invariantText)
     {
-        const NumberStyles styles = NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint |
-                                     NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite;
-
-        if (decimal.TryParse(trimmed, styles, CultureInfo.InvariantCulture, out var invariantValue))
+        if (DataValidationNumericBoundText.TryParse(trimmed, out var value))
         {
-            invariantText = invariantValue.ToString(CultureInfo.InvariantCulture);
-            return true;
-        }
-
-        if (!CultureInfo.CurrentCulture.Equals(CultureInfo.InvariantCulture) &&
-            decimal.TryParse(trimmed, styles, CultureInfo.CurrentCulture, out var currentValue))
-        {
-            invariantText = currentValue.ToString(CultureInfo.InvariantCulture);
+            invariantText = DataValidationNumericBoundText.ToInvariantString(value);
             return true;
         }
 

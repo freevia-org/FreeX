@@ -9057,9 +9057,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// A workbook saved with "Read-Only Recommended" (<c>WorkbookFileSharingModel.ReadOnlyRecommended</c>)
     /// or a write-reservation password (<c>ReservationPassword</c>) used to open fully editable on
     /// this shell with no prompt at all -- the metadata round-tripped on Save but was never
-    /// enforced here (R75-services-protection-security-4-2). Mirrors the WPF host's
-    /// <c>MainWindow.Backstage.ApplyReadOnlyRecommendedPromptIfNeeded</c>: prompt once on open and,
-    /// if the user accepts read-only, mark this session's <see cref="_isWorkbookReadOnly"/> flag.
+    /// enforced here (R75-services-protection-security-4-2; SECURITY finding, round 134, for the
+    /// password case specifically). This is a workbook-integrity/authoring control only, matching
+    /// Excel's "Password to Modify" -- it is not encryption and provides no confidentiality.
+    /// <para>
+    /// A write-reservation password now actually gates write access: <see cref="ResolveReservationPasswordPrompt"/>
+    /// prompts for the password (via <see cref="ShowReservationPasswordPromptDialog"/> in production, or
+    /// <see cref="ReservationPasswordPromptOverrideForTest"/> in tests) and verifies it against the
+    /// stored hash with <c>ProtectionPasswordHelper.VerifyStoredPassword</c> -- the same verifier used
+    /// for sheet/workbook structure protection. Matching Excel's actual behaviour, a wrong password or
+    /// Cancel does not refuse to open the file: it falls back to a read-only session, exactly like
+    /// declining a plain "Read-Only Recommended" prompt.
+    /// </para>
+    /// Mirrors the WPF host's <c>MainWindow.Backstage.ApplyReadOnlyRecommendedPromptIfNeeded</c>.
     /// <see cref="SaveCurrentWorkbookAsync"/> now reads the flag on every Save to force Save-over
     /// through the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
     /// Individual edit commands are not yet blocked -- that remains out of scope.
@@ -9069,14 +9079,218 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _isWorkbookReadOnly = false;
 
         var sharing = workbook.FileSharing;
-        if (sharing is null ||
-            (sharing.ReadOnlyRecommended != true && string.IsNullOrEmpty(sharing.ReservationPassword)))
+        if (sharing is null)
+            return;
+
+        if (!string.IsNullOrEmpty(sharing.ReservationPassword))
         {
+            var entered = ResolveReservationPasswordPrompt(workbook.Name);
+            var unlocked = ProtectionPasswordHelper.VerifyStoredPassword(sharing.ReservationPassword, entered);
+            _isWorkbookReadOnly = !unlocked;
+
+            if (!unlocked && entered is not null)
+            {
+                ResolveReservationPasswordIncorrectNotice();
+            }
+
             return;
         }
 
+        if (sharing.ReadOnlyRecommended != true)
+            return;
+
         var body = UiText.Format("MainWindowMessage_ReadOnlyRecommendedBodyFormat", workbook.Name);
         _isWorkbookReadOnly = ResolveReadOnlyRecommendedPrompt(body) == UserMessageResult.Yes;
+    }
+
+    /// <summary>
+    /// Test-only override for <see cref="ResolveReservationPasswordPrompt"/> -- headless tests inject a
+    /// canned password (or <c>null</c> to simulate Cancel) instead of driving the real
+    /// <see cref="ShowReservationPasswordPromptDialog"/> window. Not used by production code paths.
+    /// </summary>
+    internal Func<string, string?>? ReservationPasswordPromptOverrideForTest;
+
+    /// <summary>
+    /// Resolves the write-reservation password prompt via <see cref="ReservationPasswordPromptOverrideForTest"/>
+    /// when set, otherwise the real dialog. Deliberately checks the delegate itself for null rather than
+    /// its invocation result (unlike the enum-returning overrides elsewhere in this file, e.g.
+    /// <see cref="ResolveReadOnlyRecommendedPrompt"/>) -- the invocation result here is itself a
+    /// meaningful <c>string?</c> (a typed password or <c>null</c> for Cancel), so <c>?.Invoke(...) ?? ...</c>
+    /// would wrongly fall through to the real dialog whenever a test override simulates Cancel by
+    /// returning null.
+    /// </summary>
+    private string? ResolveReservationPasswordPrompt(string workbookName) =>
+        ReservationPasswordPromptOverrideForTest is not null
+            ? ReservationPasswordPromptOverrideForTest(workbookName)
+            : ShowReservationPasswordPromptDialog(workbookName);
+
+    /// <summary>
+    /// Test-only override for the "wrong write-reservation password" notice -- headless tests inject a
+    /// no-op instead of driving the real <see cref="ShowReservationPasswordIncorrectDialog"/> window
+    /// (which needs a shown/visible owner window that headless unit tests don't provide). Not used by
+    /// production code paths.
+    /// </summary>
+    internal Action? ReservationPasswordIncorrectNoticeOverrideForTest;
+
+    private void ResolveReservationPasswordIncorrectNotice()
+    {
+        if (ReservationPasswordIncorrectNoticeOverrideForTest is not null)
+        {
+            ReservationPasswordIncorrectNoticeOverrideForTest();
+            return;
+        }
+
+        ShowReservationPasswordIncorrectDialog();
+    }
+
+    /// <summary>
+    /// Owned modal password prompt for the write-reservation unlock, mirroring
+    /// <see cref="ShowReadOnlyRecommendedPromptDialog"/>'s non-modal-dispatcher-pump technique
+    /// (Avalonia has no synchronous nested-pump equivalent to WPF's blocking <c>Window.ShowDialog</c>
+    /// that this call site -- itself synchronous -- can await).
+    /// </summary>
+    private string? ShowReservationPasswordPromptDialog(string workbookName)
+    {
+        var dialog = new Window
+        {
+            Title = UiText.Get("MainWindowMessage_ReservationPasswordTitle"),
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 170,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var promptText = new TextBlock
+        {
+            Text = UiText.Format("MainWindowMessage_ReservationPasswordPromptFormat", workbookName),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 8),
+        };
+
+        var passwordBox = new TextBox { PasswordChar = '•', MinWidth = 200, Margin = new Thickness(16, 0, 16, 16) };
+        AutomationProperties.SetAutomationId(passwordBox, "ReservationPasswordBox");
+
+        string? entered = null;
+        var done = false;
+        void Finish(string? value)
+        {
+            entered = value;
+            done = true;
+            dialog.Close();
+        }
+
+        Button MakeButton(string content, bool isDefault, bool isCancel, Func<string?> resolve)
+        {
+            var button = new Button
+            {
+                Content = content,
+                MinWidth = 82,
+                IsDefault = isDefault,
+                IsCancel = isCancel,
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+            button.Click += (_, _) => Finish(resolve());
+            return button;
+        }
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 16),
+        };
+
+        var okButton = MakeButton(UiText.Get("Common_Ok"), isDefault: true, isCancel: false, () => passwordBox.Text ?? string.Empty);
+        buttonRow.Children.Add(okButton);
+        buttonRow.Children.Add(MakeButton(UiText.Get("Common_Cancel"), isDefault: false, isCancel: true, () => null));
+
+        dialog.Content = new StackPanel { Children = { promptText, passwordBox, buttonRow } };
+        dialog.Opened += (_, _) => passwordBox.Focus();
+        dialog.Closed += (_, _) => done = true;
+
+        var wasEnabled = IsEnabled;
+        IsEnabled = false;
+        try
+        {
+            dialog.Show(this);
+            while (!done)
+            {
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                if (!done)
+                    System.Threading.Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            IsEnabled = wasEnabled;
+        }
+
+        return entered;
+    }
+
+    /// <summary>
+    /// Owned modal OK-only notice shown after a wrong write-reservation password is typed (not for a
+    /// plain Cancel, which already communicates its own intent) -- uses the same nested-dispatcher-pump
+    /// technique as <see cref="ShowReadOnlyRecommendedPromptDialog"/>.
+    /// </summary>
+    private void ShowReservationPasswordIncorrectDialog()
+    {
+        var dialog = new Window
+        {
+            Title = UiText.Get("MainWindowMessage_ReservationPasswordTitle"),
+            Width = 380,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 130,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var messageText = new TextBlock
+        {
+            Text = UiText.Get("MainWindowMessage_ReservationPasswordIncorrectBody"),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 20),
+        };
+
+        var done = false;
+        var okButton = new Button
+        {
+            Content = UiText.Get("Common_Ok"),
+            MinWidth = 82,
+            IsDefault = true,
+            IsCancel = true,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 16),
+        };
+        okButton.Click += (_, _) =>
+        {
+            done = true;
+            dialog.Close();
+        };
+
+        dialog.Content = new StackPanel { Children = { messageText, okButton } };
+        dialog.Opened += (_, _) => okButton.Focus();
+        dialog.Closed += (_, _) => done = true;
+
+        var wasEnabled = IsEnabled;
+        IsEnabled = false;
+        try
+        {
+            dialog.Show(this);
+            while (!done)
+            {
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                if (!done)
+                    System.Threading.Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            IsEnabled = wasEnabled;
+        }
     }
 
     /// <summary>

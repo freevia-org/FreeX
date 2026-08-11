@@ -163,7 +163,12 @@ public sealed partial class MainWindow
 
             var row = rows[namesList.SelectedIndex];
             var name = row.Name;
-            var scopeSheetId = DefinedNamesShellGlue.ResolveScopeSheetId(_session.Workbook, row.ScopeLabel);
+            // Uses the row's own tracked scope identity directly (not a re-resolution of
+            // row.ScopeLabel's display text) -- a worksheet can legally be named exactly "Workbook",
+            // which would otherwise make Delete indistinguishable from the workbook-global scope and
+            // either fail outright or silently remove an unrelated pre-existing global name of the
+            // same text. Mirrors the WPF host's NamedRangeDialog.DeleteButton_Click.
+            var scopeSheetId = row.ScopeSheetId;
             var command = DefinedNamesShellGlue.BuildDeleteCommand(name, scopeSheetId);
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
@@ -285,7 +290,7 @@ public sealed partial class MainWindow
         var scopeBox = new ComboBox
         {
             ItemsSource = scopeChoices.Select(c => c.Label).ToList(),
-            SelectedIndex = FindScopeIndex(scopeChoices, seed?.ScopeLabel),
+            SelectedIndex = FindScopeIndex(scopeChoices, seed?.ScopeSheetId),
             MinWidth = 200,
         };
         ApplyNamesComboBoxChrome(scopeBox);
@@ -650,9 +655,16 @@ public sealed partial class MainWindow
     /// this scope" instead of silently overwriting the pre-existing entry (mirrors the WPF host's
     /// NamedRangeDialog.DefineOrUpdateName, which computes its isSameEntry gate from BOTH the
     /// original name AND the original scope).
+    ///
+    /// Compares scope by IDENTITY (<see cref="DefinedNameRow.ScopeSheetId"/> vs
+    /// <see cref="DefinedNameScope.Sheet"/>), not by display label: nothing reserves "Workbook" as a
+    /// sheet name, so a worksheet can legally be named exactly "Workbook" -- a seed scoped to that sheet
+    /// carries the display label "Workbook" too, indistinguishable from the true workbook-global scope
+    /// if compared by text. Both sides are null for the workbook-global scope, so that case still
+    /// compares equal.
     /// </summary>
     private static string? OriginalNameForDuplicateCheck(DefinedNameRow? seed, DefinedNameScope candidateScope) =>
-        seed is not null && string.Equals(seed.ScopeLabel, candidateScope.Label, StringComparison.OrdinalIgnoreCase)
+        seed is not null && seed.ScopeSheetId == candidateScope.Sheet
             ? seed.Name
             : null;
 
@@ -660,16 +672,26 @@ public sealed partial class MainWindow
     internal static string? OriginalNameForDuplicateCheckForTest(DefinedNameRow? seed, DefinedNameScope candidateScope) =>
         OriginalNameForDuplicateCheck(seed, candidateScope);
 
+    /// <summary>Test-only forwarder for <see cref="FindScopeIndex"/>.</summary>
+    internal static int FindScopeIndexForTest(
+        IReadOnlyList<DefinedNamesShellGlue.ScopeChoice> choices,
+        SheetId? scopeSheetId) =>
+        FindScopeIndex(choices, scopeSheetId);
+
+    /// <summary>
+    /// Finds the Scope combo index matching <paramref name="scopeSheetId"/> by identity, not by re-deriving
+    /// it from a display label -- a worksheet can legally be named exactly "Workbook", so its scope label
+    /// collides with <see cref="DefinedNamesShellGlue.ScopeChoice"/>'s workbook-global entry ("Workbook",
+    /// index 0) even though the two are different scopes. <paramref name="scopeSheetId"/> is null for the
+    /// workbook scope (or when there is no seed, i.e. New Name), matching index 0's <c>Scope.Sheet</c>.
+    /// </summary>
     private static int FindScopeIndex(
         IReadOnlyList<DefinedNamesShellGlue.ScopeChoice> choices,
-        string? scopeLabel)
+        SheetId? scopeSheetId)
     {
-        if (string.IsNullOrWhiteSpace(scopeLabel) || DefinedNameScope.IsWorkbookLabel(scopeLabel))
-            return 0;
-
         for (var i = 0; i < choices.Count; i++)
         {
-            if (string.Equals(choices[i].Label, scopeLabel, StringComparison.OrdinalIgnoreCase))
+            if (choices[i].Scope.Sheet == scopeSheetId)
                 return i;
         }
 

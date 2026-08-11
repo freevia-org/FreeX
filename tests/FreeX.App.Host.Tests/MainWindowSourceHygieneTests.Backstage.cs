@@ -459,7 +459,13 @@ public sealed partial class MainWindowSourceHygieneTests
         // local targetSheetId BEFORE the async import's await, so a concurrent File > Open swapping
         // _currentSheetId out from under this await can't redirect the import to the wrong sheet.
         dataCommandsSource.Should().Contain("var targetSheetId = _currentSheetId;");
-        dataCommandsSource.Should().Contain("new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0])");
+        // R134: the 4-arg overload. previousExtent is what lets ImportSheetCommand clear the cells a
+        // PRIOR import occupied beyond the new extent -- without it, re-importing a source that lost
+        // rows or columns leaves the old values behind, reading as part of the imported data. The
+        // Avalonia shell had this; the WPF host was still calling the 3-arg form. Keep previousExtent
+        // pinned here: dropping the argument silently restores the stale-cell bug and nothing else in
+        // this suite would notice.
+        dataCommandsSource.Should().Contain("new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0], previousExtent)");
         dataCommandsSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");

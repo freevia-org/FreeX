@@ -75,6 +75,14 @@ internal sealed class AutosaveAdapter : IDisposable
     internal string SnapshotIdForTests => _coordinator.SnapshotId;
     internal void SnapshotNowForTests() => _coordinator.Snapshot(_source);
 
+    /// <summary>Test seam: simulates this window's process having crashed — releases the
+    /// Round134-remediation liveness lock (exactly what the OS does automatically on a real
+    /// process exit) while deliberately leaving the already-written snapshot + sidecar files on
+    /// disk, so a test can build an orphaned-but-real recovery candidate without an actual crash.
+    /// Does NOT call <see cref="StopAsync"/>/DeleteSnapshot — those would delete the very files a
+    /// real crash leaves behind.</summary>
+    internal void SimulateCrashForTests() => _coordinator.Dispose();
+
     /// <summary>
     /// Start the periodic autosave loop. Safe to call from any thread.
     /// The snapshot itself runs off the UI thread (file I/O); document reads are marshalled back.
@@ -102,6 +110,10 @@ internal sealed class AutosaveAdapter : IDisposable
         _cts = null;
 
         try { _coordinator.DeleteSnapshot(); } catch { /* best-effort */ }
+        // Releases this window's liveness lock (Round134-remediation) deterministically on close,
+        // rather than leaving it to whenever the GC finalizes the underlying handle — see
+        // AutosaveSnapshotCoordinator.Dispose / ReleaseOwnershipLock.
+        try { _coordinator.Dispose(); } catch { /* best-effort */ }
     }
 
     /// <summary>
@@ -120,7 +132,11 @@ internal sealed class AutosaveAdapter : IDisposable
 
         try
         {
-            var candidates = AutosaveRecoveryPlanner.SelectAllOrdered(_store.EnumerateCandidates());
+            // Round134-remediation: a snapshot still owned by a currently-open window (this
+            // process or another) must never be listed here — see
+            // AutosaveSnapshotStore.ExcludeLiveOwned.
+            var candidates = AutosaveRecoveryPlanner.SelectAllOrdered(
+                _store.ExcludeLiveOwned(_store.EnumerateCandidates()));
             if (candidates.Count == 0)
                 return;
 

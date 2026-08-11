@@ -1028,6 +1028,32 @@ public sealed class SlideShowHostPlannerTests
         missing.IsHandled.Should().BeTrue();
     }
 
+    [Fact]
+    public void FindHiddenSlideById_FindsHiddenSlideExcludedFromTheRoute()
+    {
+        var pres = MakePresentation(3);
+        pres.Slides[1].IsHidden = true;
+
+        var target = SlideShowHostPlanner.FindHiddenSlideById(pres, pres.Slides[1].Id);
+
+        target.Should().NotBeNull();
+        target!.Slide.Should().BeSameAs(pres.Slides[1]);
+        target.SourceSlideIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void FindHiddenSlideById_IgnoresVisibleSlidesAndUnknownIds()
+    {
+        var pres = MakePresentation(3);
+        pres.Slides[1].IsHidden = true;
+
+        // A visible slide's id must not resolve through the hidden-only fallback —
+        // PlanInternalSlideJump already owns visible-slide navigation.
+        SlideShowHostPlanner.FindHiddenSlideById(pres, pres.Slides[0].Id).Should().BeNull();
+        SlideShowHostPlanner.FindHiddenSlideById(pres, "not-a-real-id").Should().BeNull();
+        SlideShowHostPlanner.FindHiddenSlideById(pres, null).Should().BeNull();
+    }
+
     private static Presentation MakePresentation(int slideCount)
     {
         var pres = Presentation.CreateEmpty();

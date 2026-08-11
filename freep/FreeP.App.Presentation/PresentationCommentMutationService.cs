@@ -43,7 +43,13 @@ public static class PresentationCommentMutationService
         return new PresentationCommentMutationResult(plan, applied, selectedCommentIndex);
     }
 
-    private static PresentationCommentMutationPlan BuildPlan(
+    /// <summary>
+    /// Builds (and validates) the mutation plan for <paramref name="request"/> without applying it.
+    /// Callers that need the mutation to be undoable (e.g. <c>PresentationReviewWorkflowSession</c>)
+    /// use this to get the before/after comment state, then apply it through the presentation's
+    /// undo/redo command bus instead of <see cref="Apply"/>.
+    /// </summary>
+    public static PresentationCommentMutationPlan BuildPlan(
         IReadOnlyList<Slide> slides,
         PresentationCommentMutationRequest request)
     {

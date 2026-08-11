@@ -7335,8 +7335,12 @@ internal static class FreeWRibbonCommands
                     (IReadOnlyList<string>)augmentedHeader.Select(h => r.TryGetValue(h, out var v) ? v : string.Empty).ToList())
                 .ToList());
 
-            // Use the rules-aware merge path. Records flagged by «Skip Record If» are excluded.
-            var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState);
+            // Use the rules-aware merge path. Records flagged by «Skip Record If» are excluded. Pass the
+            // original absolute recipient-list row numbers through so MERGEREC reports the record's real
+            // position in the full data source rather than its position within this (possibly narrowed)
+            // Current-Record/From…To selection.
+            var recordNumbers = finishPlan.RowIndexes.Select(index => index + 1).ToList();
+            var merged = MailMerge.MergeAllWithRules(template, augmentedData, mergeState, recordNumbers);
             if (mergeState.CancelRequested)
             {
                 editor.Focus();

@@ -46,6 +46,7 @@ public sealed class PresenterViewWindow : Window
     private readonly Action<int, string?>? _setNotesText;
     private bool _notesDirty;
     private bool _refreshing;
+    private int? _notesSlideIndex;
 
     public PresenterViewWindow(
         Presentation presentation,
@@ -315,7 +316,10 @@ public sealed class PresenterViewWindow : Window
             _currentLabel.Text = plan.CurrentSlideLabel;
             _nextLabel.Text = plan.NextSlideLabel;
             if (!_notesText.IsKeyboardFocusWithin && !_notesDirty)
+            {
                 _notesText.Text = plan.NotesText;
+                _notesSlideIndex = state.CurrentSlide?.SlideIndex;
+            }
             if (!_slideNumberBox.IsKeyboardFocusWithin && state.HostState.CurrentSlideIndex >= 0)
             {
                 _slideNumberBox.Text = (state.HostState.CurrentSlideIndex + 1)
@@ -385,7 +389,13 @@ public sealed class PresenterViewWindow : Window
         if (!_notesDirty || _setNotesText is null)
             return;
 
-        var slideIndex = _stateProvider().CurrentSlide?.SlideIndex;
+        // Commit against the slide the box was populated FOR, not whatever the live
+        // current slide happens to be now -- auto-advance can move the show forward
+        // while the presenter is still mid-edit, and RefreshFromState intentionally
+        // leaves a dirty box unpainted (see the IsKeyboardFocusWithin/_notesDirty
+        // guards above), so _stateProvider().CurrentSlide can already point at a
+        // different slide than the one on screen.
+        var slideIndex = _notesSlideIndex;
         if (slideIndex is not int index)
             return;
 

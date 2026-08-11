@@ -117,6 +117,16 @@ public sealed class AutosaveCoordinatorWindowIsolationTests : IDisposable
     /// snapshot, a headless "always accept" message box answers every prompt, and the test asserts
     /// every single candidate is recovered — not just the first/latest — matching the finding's
     /// "enumerate and offer ALL pending snapshots, not assume one" requirement.
+    /// <para>
+    /// Round134-remediation: each coordinator now calls <see cref="AutosaveCoordinator.SimulateCrashForTests"/>
+    /// after writing its snapshot. Without it these three would-be "crashed" windows would still
+    /// hold their live-ownership locks (they are just live, never-disposed objects in this same
+    /// test process) and the Round134 liveness filter would correctly exclude them from the offer
+    /// — which would make this test fail for the WRONG reason (excluded-as-live, not
+    /// recovered-as-orphaned). Releasing only the lock (not the snapshot files) is exactly what a
+    /// real crash does: the OS releases the process's handles but leaves the files it already
+    /// wrote on disk.
+    /// </para>
     /// </summary>
     [StaFact]
     public void OfferRecovery_recovers_every_pending_snapshot_not_just_one()
@@ -133,6 +143,11 @@ public sealed class AutosaveCoordinatorWindowIsolationTests : IDisposable
         coordinatorA.SnapshotNowForTests();
         coordinatorB.SnapshotNowForTests();
         coordinatorC.SnapshotNowForTests();
+        // Simulate each window's process having actually crashed (see Round134-remediation note
+        // above): releases the ownership lock without deleting the snapshot/sidecar files.
+        coordinatorA.SimulateCrashForTests();
+        coordinatorB.SimulateCrashForTests();
+        coordinatorC.SimulateCrashForTests();
 
         store.EnumerateCandidates().Should().HaveCount(3, "three crashed windows each left a snapshot");
 
@@ -180,6 +195,84 @@ public sealed class AutosaveCoordinatorWindowIsolationTests : IDisposable
         finally
         {
             HeadlessMessageBox.Handler = null;
+        }
+    }
+
+    /// <summary>
+    /// Round134 fix: <see cref="AutosaveSnapshotStore.EnumerateCandidates"/> lists every readable
+    /// snapshot in the shared Recovery directory with no liveness/ownership filter, so
+    /// "Recover Unsaved Documents" invoked from one open window used to list — and, if accepted,
+    /// <see cref="AutosaveSnapshotStore.DeleteCandidate"/> — a DIFFERENT window's still-live
+    /// snapshot right out from under it. This test builds exactly that two-window scene plus a
+    /// third, genuinely orphaned candidate (its owning process is gone) and asserts recovery:
+    /// (1) never lists/deletes the live sibling's snapshot, and
+    /// (2) still offers and recovers the orphaned one.
+    /// </summary>
+    [StaFact]
+    public void RecoverUnsavedDocuments_NeverListsOrDeletesAnotherLiveWindowsSnapshot_ButStillOffersAnOrphanedOne()
+    {
+        var store = new AutosaveSnapshotStore(_tempDir);
+
+        // Window A: a second window open in THIS SAME process right now, holding its own dirty,
+        // autosaved-but-unrecovered snapshot. It never crashes or closes during this test, so its
+        // ownership lock stays held throughout — recovery triggered from a DIFFERENT window must
+        // never list or delete this snapshot out from under it.
+        var (coordinatorA, fileA) = NewWindowHarness(store);
+        fileA.MarkDirty();
+        coordinatorA.SnapshotNowForTests();
+        var snapshotPathA = store.GetSnapshotPath(coordinatorA.SnapshotIdForTests);
+        var sidecarPathA = store.GetSidecarPath(coordinatorA.SnapshotIdForTests);
+        File.Exists(snapshotPathA).Should().BeTrue();
+
+        // Window C: a genuinely crashed window from an earlier session. It wrote a snapshot and
+        // then its process exited — releasing the OS ownership lock automatically, exactly as a
+        // real crash does (no stale marker survives) — leaving the snapshot+sidecar files behind
+        // with no live owner.
+        var (coordinatorC, fileC) = NewWindowHarness(store);
+        fileC.MarkDirty();
+        coordinatorC.SnapshotNowForTests();
+        var snapshotPathC = store.GetSnapshotPath(coordinatorC.SnapshotIdForTests);
+        coordinatorC.SimulateCrashForTests();
+        File.Exists(snapshotPathC).Should().BeTrue("a crash must leave the snapshot file behind");
+
+        // Raw, unfiltered disk enumeration sees both — this confirms the scene is set up as
+        // intended and that EnumerateCandidates itself is intentionally left unfiltered (see its
+        // ExcludeLiveOwned doc comment).
+        store.EnumerateCandidates().Should().HaveCount(2,
+            "both A's live snapshot and C's orphaned one exist on disk");
+
+        // Window B is the one actually invoking "Recover Unsaved Documents" right now.
+        var owningWindow = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
+        var owningEditor = new DocumentView();
+        owningEditor.LoadModel(TextDocument.CreateEmpty());
+        var owningFile = new FileCommands(
+            owningWindow,
+            owningEditor,
+            onChanged: () => { },
+            loadRecentFilesStore: () => RecentFilesStore.Load(Path.Combine(_tempDir, Guid.NewGuid().ToString("N") + ".json")));
+        var coordinatorB = new AutosaveCoordinator(owningEditor, owningFile, store);
+
+        HeadlessMessageBox.Handler = (_, _) => UserMessageResult.Ok; // always accept (RecoverUnsavedDocuments uses OkCancel)
+        try
+        {
+            var anyRecovered = coordinatorB.RecoverUnsavedDocuments(owningWindow);
+
+            anyRecovered.Should().BeTrue("the orphaned snapshot from the crashed window must still be recoverable");
+            owningFile.IsDirty.Should().BeTrue("the orphaned snapshot should have been recovered into the invoking window");
+
+            // Core assertion: window A's live snapshot was never listed, so it was never touched.
+            File.Exists(snapshotPathA).Should().BeTrue(
+                "a live sibling window's snapshot must never be offered or deleted by another window's recovery");
+            File.Exists(sidecarPathA).Should().BeTrue(
+                "a live sibling window's sidecar must never be deleted by another window's recovery");
+
+            // The orphaned candidate (owner gone) was offered, recovered, and cleaned up.
+            File.Exists(snapshotPathC).Should().BeFalse("the orphaned snapshot should be deleted after successful recovery");
+        }
+        finally
+        {
+            HeadlessMessageBox.Handler = null;
+            coordinatorA.Stop(); // clean up A's still-live snapshot now that the test is done
         }
     }
 }
