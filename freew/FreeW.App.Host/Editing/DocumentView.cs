@@ -3935,34 +3935,15 @@ public sealed class DocumentView : RichTextBox
     {
         CommitToModel();
         var targets = SelectedModelParagraphIndices();
-        DocumentStyle? created = null;
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            _commands.Execute(new StyleCatalogCommand("New Style", doc =>
-            {
-                created = StyleManager.CreateStyle(doc, name, basedOnId, run, paragraph, nextStyleId);
-            }));
-
-            if (created is not null)
-            {
-                foreach (var index in targets)
-                {
-                    if (index >= 0 && index < _model.Blocks.Count && _model.Blocks[index] is ModelParagraph)
-                        _commands.Execute(new SetParagraphStyleCommand(index, created.Id));
-                }
-            }
-
-            _commands.CommitUndoGroup("New Style");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-
-        return created;
+        return StyleCatalogMutationCoordinator.CreateAndApply(
+            _model,
+            _commands,
+            targets,
+            name,
+            basedOnId,
+            run,
+            paragraph,
+            nextStyleId);
     }
 
     /// <summary>Home &gt; Styles &gt; Manage Styles: modify a custom or built-in style definition.</summary>
@@ -3974,35 +3955,21 @@ public sealed class DocumentView : RichTextBox
         string? nextStyleId)
     {
         CommitToModel();
-        if (string.IsNullOrWhiteSpace(styleId) || !_model.Styles.ContainsKey(styleId))
-            return null;
-
-        DocumentStyle? updated = null;
-        _commands.Execute(new StyleCatalogCommand("Modify Style", doc =>
-        {
-            updated = StyleManager.ModifyStyle(doc, styleId,
-                run: run,
-                para: paragraph,
-                basedOnId: basedOnId,
-                clearBasedOn: basedOnId is null,
-                nextStyleId: nextStyleId,
-                clearNext: nextStyleId is null);
-        }));
-        return updated;
+        return StyleCatalogMutationCoordinator.Modify(
+            _model,
+            _commands,
+            styleId,
+            run,
+            paragraph,
+            basedOnId,
+            nextStyleId);
     }
 
     /// <summary>Home &gt; Styles &gt; Manage Styles: delete a custom style through shared catalog rules.</summary>
     public bool DeleteParagraphStyle(string styleId)
     {
         CommitToModel();
-        if (string.IsNullOrWhiteSpace(styleId)
-            || StyleManager.IsBuiltIn(styleId)
-            || !_model.Styles.ContainsKey(styleId))
-            return false;
-
-        var deleted = false;
-        _commands.Execute(new StyleCatalogCommand("Delete Style", doc => deleted = StyleManager.DeleteStyle(doc, styleId)));
-        return deleted;
+        return StyleCatalogMutationCoordinator.Delete(_model, _commands, styleId);
     }
 
     /// <summary>

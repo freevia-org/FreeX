@@ -24451,30 +24451,15 @@ public sealed class DocumentView : Control
             return null;
 
         var targets = SelectedParagraphIndices();
-        DocumentStyle? created = null;
-        _bus.BeginUndoGroup();
-        try
-        {
-            _bus.Execute(new StyleCatalogCommand("New Style", doc =>
-            {
-                created = StyleManager.CreateStyle(doc, name, basedOnId, run, paragraph, nextStyleId);
-            }));
-
-            if (created is not null)
-            {
-                foreach (var index in targets)
-                    _bus.Execute(new SetParagraphStyleCommand(index, created.Id));
-            }
-
-            _bus.CommitUndoGroup("New Style");
-        }
-        catch
-        {
-            _bus.AbortUndoGroup();
-            throw;
-        }
-
-        return created;
+        return StyleCatalogMutationCoordinator.CreateAndApply(
+            _doc,
+            _bus,
+            targets,
+            name,
+            basedOnId,
+            run,
+            paragraph,
+            nextStyleId);
     }
 
     /// <summary>Home &gt; Styles &gt; Manage Styles: modify a style's catalog entry and redraw style-linked text.</summary>
@@ -24485,35 +24470,26 @@ public sealed class DocumentView : Control
         string? basedOnId,
         string? nextStyleId)
     {
-        if (IsEditingLocked || string.IsNullOrWhiteSpace(styleId) || !_doc.Styles.ContainsKey(styleId))
+        if (IsEditingLocked)
             return null;
 
-        DocumentStyle? updated = null;
-        _bus.Execute(new StyleCatalogCommand("Modify Style", doc =>
-        {
-            updated = StyleManager.ModifyStyle(doc, styleId,
-                run: run,
-                para: paragraph,
-                basedOnId: basedOnId,
-                clearBasedOn: basedOnId is null,
-                nextStyleId: nextStyleId,
-                clearNext: nextStyleId is null);
-        }));
-        return updated;
+        return StyleCatalogMutationCoordinator.Modify(
+            _doc,
+            _bus,
+            styleId,
+            run,
+            paragraph,
+            basedOnId,
+            nextStyleId);
     }
 
     /// <summary>Home &gt; Styles &gt; Manage Styles: delete a custom style through the shared catalog rules.</summary>
     public bool DeleteParagraphStyle(string styleId)
     {
-        if (IsEditingLocked
-            || string.IsNullOrWhiteSpace(styleId)
-            || StyleManager.IsBuiltIn(styleId)
-            || !_doc.Styles.ContainsKey(styleId))
+        if (IsEditingLocked)
             return false;
 
-        var deleted = false;
-        _bus.Execute(new StyleCatalogCommand("Delete Style", doc => deleted = StyleManager.DeleteStyle(doc, styleId)));
-        return deleted;
+        return StyleCatalogMutationCoordinator.Delete(_doc, _bus, styleId);
     }
 
     /// <summary>
