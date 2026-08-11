@@ -4771,13 +4771,14 @@ public sealed class DocumentView : RichTextBox
             }
 
             _previous = [.. paragraph.Runs];
-            ApplyRunFormattingToTextRange(
+            RevisionEditPlanner.ApplyFormattingRange(
                 paragraph,
                 startOffset,
                 endOffset,
                 transform,
                 context.Document,
-                context.RevisionAuthor);
+                context.RevisionAuthor,
+                CurrentRevisionDateXml());
             _replacement = [.. paragraph.Runs];
         }
 
@@ -17869,101 +17870,8 @@ public sealed class DocumentView : RichTextBox
         return range.Text.Length;
     }
 
-    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
-    {
-        var ranges = plan.Ranges
-            .Where(range => range.BlockIndex < _model.Blocks.Count
-                && _model.Blocks[range.BlockIndex] is ModelParagraph paragraph
-                && TextRangeCoversParagraphText(paragraph, range.StartOffset, range.EndOffset))
-            .ToList();
-        if (ranges.Count == 0)
-            return;
-
-        if (ranges.Count == 1)
-        {
-            ExecuteProofingLanguageRange(ranges[0], plan.LanguageTag);
-            return;
-        }
-
-        _commands.BeginUndoGroup();
-        foreach (var range in ranges)
-            ExecuteProofingLanguageRange(range, plan.LanguageTag);
-        _commands.CommitUndoGroup("Proofing Language");
-    }
-
-    private void ExecuteProofingLanguageRange(ProofingLanguageTextRange range, string? languageTag) =>
-        _commands.Execute(new ReplaceParagraphRunsCommand(range.BlockIndex, paragraph =>
-            ApplyRunFormattingToTextRange(
-                paragraph,
-                range.StartOffset,
-                range.EndOffset,
-                formatting => formatting with { LanguageTag = languageTag })));
-
-    private static bool TextRangeCoversParagraphText(ModelParagraph paragraph, int startOffset, int endOffset)
-    {
-        var textLength = paragraph.Runs.Sum(run => run.Text.Length);
-        var start = Math.Clamp(startOffset, 0, textLength);
-        var end = Math.Clamp(endOffset, 0, textLength);
-        return end > start;
-    }
-
-    private static void ApplyRunFormattingToTextRange(
-        ModelParagraph paragraph,
-        int startOffset,
-        int endOffset,
-        Func<RunFormatting, RunFormatting> transform,
-        TextDocument? document = null,
-        string? revisionAuthor = null)
-    {
-        var rebuilt = new List<ModelRun>();
-        var position = 0;
-        foreach (var source in paragraph.Runs)
-        {
-            var length = source.Text.Length;
-            var runStart = position;
-            var runEnd = position + length;
-            position = runEnd;
-            if (length == 0)
-            {
-                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
-                continue;
-            }
-
-            var coverStart = Math.Max(runStart, startOffset);
-            var coverEnd = Math.Min(runEnd, endOffset);
-            if (coverStart >= coverEnd)
-            {
-                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
-                continue;
-            }
-
-            var localStart = coverStart - runStart;
-            var localEnd = coverEnd - runStart;
-
-            if (localStart > 0)
-                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[..localStart]));
-
-            var covered = RevisionEditPlanner.CloneRunWithText(source, source.Text[localStart..localEnd]);
-            var formatting = transform(source.Formatting);
-            covered.Formatting = formatting;
-            if (document is { TrackRevisions: true, DoNotTrackFormatting: false }
-                && formatting != source.Formatting
-                && covered.FormatRevision is null)
-            {
-                covered.FormatRevision = new ModelFormatRevision(
-                    source.Formatting,
-                    string.IsNullOrWhiteSpace(revisionAuthor) ? "FreeW User" : revisionAuthor.Trim(),
-                    CurrentRevisionDateXml());
-            }
-            rebuilt.Add(covered);
-
-            if (localEnd < length)
-                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[localEnd..]));
-        }
-
-        paragraph.Runs.Clear();
-        paragraph.Runs.AddRange(rebuilt);
-    }
+    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan) =>
+        ProofingLanguageMutationCoordinator.Apply(_model, _commands, plan);
 
     /// <summary>
     /// Applies an external hyperlink to the current selection. If the selection is non-empty its text

@@ -47,6 +47,63 @@ public sealed class RevisionEditPlannerTests
     }
 
     [Fact]
+    public void ApplyFormattingRange_SplitsExactlyAndPreservesMetadataAndBookmarkOffsets()
+    {
+        var hyperlink = new Run("abcdef", RunFormatting.Default)
+        {
+            HyperlinkUrl = "https://example.com",
+            CommentId = 7,
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(hyperlink);
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "bookmark-1", BookmarkBoundaryKind.Start, 1, "target"));
+
+        var changed = RevisionEditPlanner.ApplyFormattingRange(
+            paragraph,
+            2,
+            4,
+            formatting => formatting with { LanguageTag = "fr-FR" });
+
+        changed.Should().BeTrue();
+        paragraph.Runs.Select(run => run.Text).Should().Equal("ab", "cd", "ef");
+        paragraph.Runs[1].Formatting.LanguageTag.Should().Be("fr-FR");
+        paragraph.Runs[0].Formatting.LanguageTag.Should().BeNull();
+        paragraph.Runs[2].Formatting.LanguageTag.Should().BeNull();
+        paragraph.Runs.Should().OnlyContain(run =>
+            run.HyperlinkUrl == hyperlink.HyperlinkUrl && run.CommentId == hyperlink.CommentId);
+        paragraph.BookmarkBoundaries.Should().ContainSingle().Which.RunIndex.Should().Be(3);
+    }
+
+    [Fact]
+    public void ApplyFormattingRange_RecordsTrackedFormattingRevisionWhenEnabled()
+    {
+        var original = RunFormatting.Default with { Bold = true };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("text", original));
+        var document = new TextDocument
+        {
+            TrackRevisions = true,
+            DoNotTrackFormatting = false,
+        };
+
+        RevisionEditPlanner.ApplyFormattingRange(
+            paragraph,
+            0,
+            4,
+            formatting => formatting with { LanguageTag = "de-DE" },
+            document,
+            "Reviewer",
+            "2026-08-11T12:00:00Z");
+
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].FormatRevision.Should().Be(new FormatRevision(
+            original,
+            "Reviewer",
+            "2026-08-11T12:00:00Z"));
+    }
+
+    [Fact]
     public void InsertRunAtOffset_DoesNotSplitRubyAnnotation()
     {
         var ruby = new RubyAnnotation();

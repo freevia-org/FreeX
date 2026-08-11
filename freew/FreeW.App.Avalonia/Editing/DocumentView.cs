@@ -20229,6 +20229,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetProofingLanguage(string? languageTag)
     {
+        if (IsEditingLocked)
+            return;
+
         var sel = NormalizedSelection();
         int[] selectedBlocks;
         int startOffset;
@@ -20246,7 +20249,7 @@ public sealed class DocumentView : Control
             selectedBlocks = [_caret.Block];
             startOffset = _caret.Offset;
             endOffset = _caret.Offset;
-            if (CurrentParagraph() is { } paragraph && IsEditable(paragraph))
+            if (CurrentParagraph() is { } paragraph)
             {
                 caretContext = new ProofingLanguageCaretContext(
                     _caret.Block,
@@ -20265,54 +20268,8 @@ public sealed class DocumentView : Control
         ApplyProofingLanguagePlan(plan);
     }
 
-    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
-    {
-        var ranges = plan.Ranges
-            .Where(range => range.BlockIndex >= 0
-                && range.BlockIndex < _doc.Blocks.Count
-                && _doc.Blocks[range.BlockIndex] is Paragraph paragraph
-                && IsEditable(paragraph)
-                && TextRangeCoversParagraphText(paragraph, range.StartOffset, range.EndOffset))
-            .ToList();
-        if (ranges.Count == 0)
-            return;
-
-        if (ranges.Count == 1)
-        {
-            ExecuteProofingLanguageRange(ranges[0], plan.LanguageTag);
-            return;
-        }
-
-        _bus.BeginUndoGroup();
-        foreach (var range in ranges)
-            ExecuteProofingLanguageRange(range, plan.LanguageTag);
-        _bus.CommitUndoGroup("Proofing Language");
-    }
-
-    private void ExecuteProofingLanguageRange(ProofingLanguageTextRange range, string? languageTag)
-    {
-        var capturedBlock = range.BlockIndex;
-        var capturedA = range.StartOffset;
-        var capturedB = range.EndOffset;
-
-        _bus.Execute(new ReplaceParagraphRunsCommand(capturedBlock, p =>
-        {
-            var live = ParaCells(p);
-            var lo = Math.Clamp(capturedA, 0, live.Count);
-            var hi = Math.Clamp(capturedB, 0, live.Count);
-            for (var i = lo; i < hi; i++)
-                live[i] = live[i] with { Fmt = live[i].Fmt with { LanguageTag = languageTag } };
-            SetRuns(p, live);
-        }));
-    }
-
-    private static bool TextRangeCoversParagraphText(Paragraph paragraph, int startOffset, int endOffset)
-    {
-        var textLength = paragraph.PlainText.Length;
-        var start = Math.Clamp(startOffset, 0, textLength);
-        var end = Math.Clamp(endOffset, 0, textLength);
-        return end > start;
-    }
+    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan) =>
+        ProofingLanguageMutationCoordinator.Apply(_doc, _bus, plan);
 
     public bool ToggleSpellCheck()
     {
