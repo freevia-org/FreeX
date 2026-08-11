@@ -83,7 +83,7 @@ public sealed partial class ScenarioManagerDialog : Window
         AutomationProperties.SetName(_scenarioList, UiText.Get("ScenarioManager_Scenarios2"));
         AutomationProperties.SetAutomationId(_scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);
         AutomationProperties.SetHelpText(_scenarioList, UiText.Get("ScenarioManager_SelectAScenarioToShowEditOrDelete"));
-        _scenarioList.ItemsSource = BuildScenarioItems(workbook);
+        _scenarioList.ItemsSource = ScenarioManagerDialogPlanner.BuildItems(workbook);
         _scenarioList.DisplayMemberPath = nameof(ScenarioManagerDialogItem.Name);
         _scenarioList.SelectionChanged += (_, _) => UpdateSelectionState();
         _scenarioList.MouseDoubleClick += ScenarioList_MouseDoubleClick;
@@ -276,7 +276,10 @@ public sealed partial class ScenarioManagerDialog : Window
     private void UpdateSelectionState()
     {
         var selected = _scenarioList.SelectedItem as ScenarioManagerDialogItem;
-        if (ProjectSelectionFields(selected, _newNameBox.Text, _defaultScenarioName) is { } fields)
+        if (ScenarioManagerDialogPlanner.ProjectSelectionFields(
+                selected,
+                _newNameBox.Text,
+                _defaultScenarioName) is { } fields)
         {
             ApplySelectionFields(fields);
         }
@@ -312,7 +315,7 @@ public sealed partial class ScenarioManagerDialog : Window
 
     private void Accept(ScenarioManagerAction action)
     {
-        if (ValidateAcceptRequest(
+        if (ScenarioManagerDialogPlanner.ValidateAcceptRequest(
                 action,
                 _newNameBox.Text,
                 _changingCellsBox.Text,
@@ -320,7 +323,7 @@ public sealed partial class ScenarioManagerDialog : Window
                 _currentSheetId,
                 _resolveSheetIdByName) is { } failure)
         {
-            var presentation = FreeX.App.Presentation.ScenarioManager.ScenarioManagerDialogPlanner
+            var presentation = ScenarioManagerDialogPlanner
                 .DescribeValidationFailure(failure);
             ShowInvalidInputWarning(
                 presentation.Message.Resolve(UiText.Get, UiText.Format),
@@ -328,7 +331,7 @@ public sealed partial class ScenarioManagerDialog : Window
             return;
         }
 
-        ApplyAcceptResult(ProjectAcceptResult(
+        ApplyAcceptResult(ScenarioManagerDialogPlanner.ProjectAcceptResult(
             action,
             _scenarioList.SelectedItem as ScenarioManagerDialogItem,
             _newNameBox.Text,
@@ -352,7 +355,7 @@ public sealed partial class ScenarioManagerDialog : Window
 
     private void ApplyAcceptResult(ScenarioManagerDialogAcceptResult result)
     {
-        SelectedAction = ToServiceAction(result.Action);
+        SelectedAction = result.Action;
         SelectedScenarioName = result.SelectedScenarioName;
         NewScenarioName = result.NewScenarioName;
         ChangingCellsText = result.ChangingCellsText;

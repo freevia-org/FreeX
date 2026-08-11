@@ -49,7 +49,7 @@ public sealed partial class ConsolidateDialog : Window
         AutomationProperties.SetName(_referenceBox, UiText.Get("Consolidate_Reference2"));
         AutomationProperties.SetAutomationId(_referenceBox, FreeXAutomationIdCatalog.Consolidate.ReferenceBox);
         AutomationProperties.SetHelpText(_referenceBox, UiText.Get("Consolidate_EnterASourceRangeToAddToTheAllReferencesList"));
-        foreach (var sourceRange in SplitSourceRangeText(defaultSource))
+        foreach (var sourceRange in ConsolidateDialogPlanner.SplitSourceRangeText(defaultSource))
             _referencesList.Items.Add(sourceRange);
         AutomationProperties.SetName(_referencesList, UiText.Get("Consolidate_AllReferences2"));
         AutomationProperties.SetAutomationId(_referencesList, FreeXAutomationIdCatalog.Consolidate.AllReferencesList);
@@ -149,7 +149,7 @@ public sealed partial class ConsolidateDialog : Window
 
     private void RequestRangeSelection(ConsolidateRangeSelectionTarget target, DialogReferencePickerRequest request)
     {
-        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        RangeSelectionRequest = ConsolidateDialogPlanner.CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         FocusRangeSelectionInput(request.Target);
     }
@@ -176,15 +176,22 @@ public sealed partial class ConsolidateDialog : Window
 
     private void AddReferenceButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!TryAddReference(
+        if (!ConsolidateDialogPlanner.TryAddReference(
                 _sheetId,
                 _resolveSheetId,
                 _referencesList.Items.Cast<string>(),
                 _referenceBox.Text,
                 out var references,
-                out var error))
+                out var issue))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("Consolidate_EnterAValidSourceRange"), Title);
+            var error = ConsolidateDialogPlanner
+                .DescribeIssue(
+                    issue,
+                    ConsolidateDialogMessageContext.AddReference,
+                    ConsolidateDialogTextProfile.Wpf)
+                .Message
+                .Resolve(UiText.Get, UiText.Format);
+            DialogMessageHelper.ShowWarning(this, error, Title);
             FocusReferenceInput();
             return;
         }
@@ -216,9 +223,11 @@ public sealed partial class ConsolidateDialog : Window
 
     private void Accept()
     {
-        if (HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text))
+        if (ConsolidateDialogPlanner.HasPendingReferenceText(
+                _referencesList.Items.Cast<string>(),
+                _referenceBox.Text))
         {
-            var pendingReference = FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner
+            var pendingReference = ConsolidateDialogPlanner
                 .DescribePendingReference(ConsolidateDialogTextProfile.Wpf);
             DialogMessageHelper.ShowWarning(
                 this,
@@ -228,8 +237,9 @@ public sealed partial class ConsolidateDialog : Window
             return;
         }
 
-        var sourceRangesText = JoinSourceRanges(_referencesList.Items.Cast<string>());
-        if (!TryParseWithPresentation(
+        var sourceRangesText = ConsolidateDialogPlanner.JoinSourceRanges(
+            _referencesList.Items.Cast<string>());
+        if (!ConsolidateDialogPlanner.TryParse(
                 _sheetId,
                 _resolveSheetId,
                 sourceRangesText,
@@ -239,9 +249,12 @@ public sealed partial class ConsolidateDialog : Window
                 _leftColumnBox.IsChecked == true,
                 _createLinksBox.IsChecked == true,
                 out var result,
-                out var presentation))
+                out var issue))
         {
-            var validation = presentation!;
+            var validation = ConsolidateDialogPlanner.DescribeIssue(
+                issue,
+                ConsolidateDialogMessageContext.FinalValidation,
+                ConsolidateDialogTextProfile.Wpf);
             DialogMessageHelper.ShowWarning(
                 this,
                 validation.Message.Resolve(UiText.Get, UiText.Format),
@@ -303,5 +316,14 @@ public sealed partial class ConsolidateDialog : Window
         _functionBox.SelectedItem is ComboBoxItem { Tag: ConsolidateFunction function }
             ? function
             : ConsolidateFunction.Sum;
+
+    private static string FunctionLabel(ConsolidateFunction function) =>
+        function switch
+        {
+            ConsolidateFunction.CountNumbers => UiText.Get("Consolidate_FunctionCountNumbers"),
+            ConsolidateFunction.StdDev => UiText.Get("Consolidate_FunctionStdDev"),
+            ConsolidateFunction.StdDevp => UiText.Get("Consolidate_FunctionStdDevp"),
+            _ => function.ToString()
+        };
 
 }

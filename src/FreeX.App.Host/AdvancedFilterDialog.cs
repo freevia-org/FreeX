@@ -5,9 +5,6 @@ using System.Windows.Input;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.Shell;
 using FreeX.Core.Model;
-using SharedAdvancedFilterOutputMode = FreeX.App.Presentation.Filtering.AdvancedFilterOutputMode;
-using SharedAdvancedFilterPlanError = FreeX.App.Presentation.Filtering.AdvancedFilterPlanError;
-using SharedAdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;
 
 namespace FreeX.App.Host;
 
@@ -160,7 +157,7 @@ public sealed partial class AdvancedFilterDialog : Window
 
     private void RequestRangeSelection(AdvancedFilterRangeSelectionTarget target, DialogReferencePickerRequest request)
     {
-        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        RangeSelectionRequest = AdvancedFilterPlanner.CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         FocusRangeSelectionInput(request.Target);
     }
@@ -206,9 +203,9 @@ public sealed partial class AdvancedFilterDialog : Window
             : Visibility.Visible;
     }
 
-    private void FocusInvalidRangeInput(SharedAdvancedFilterPlanError error)
+    private void FocusInvalidRangeInput(AdvancedFilterPlanError error)
     {
-        var focusTarget = SharedAdvancedFilterPlanner.FocusTargetForPlanError(error);
+        var focusTarget = AdvancedFilterPlanner.FocusTargetForPlanError(error);
         if (focusTarget == AdvancedFilterErrorFocusTarget.CopyTo)
         {
             _copyToAnotherLocationButton.IsChecked = true;
@@ -228,20 +225,24 @@ public sealed partial class AdvancedFilterDialog : Window
     private void Accept()
     {
         var outputMode = _copyToAnotherLocationButton.IsChecked == true
-            ? SharedAdvancedFilterOutputMode.CopyToAnotherLocation
-            : SharedAdvancedFilterOutputMode.FilterInPlace;
-        var planResult = CreateAdvancedFilterPlan(
-                _sheetId,
-                _listRangeBox.Text,
-                _criteriaRangeBox.Text,
-                _copyToBox.Text,
-                outputMode,
-                _uniqueBox.IsChecked == true,
-                _resolveSheetId);
+            ? AdvancedFilterOutputMode.CopyToAnotherLocation
+            : AdvancedFilterOutputMode.FilterInPlace;
+        var planResult = AdvancedFilterPlanner.CreatePlan(
+            _sheetId,
+            _listRangeBox.Text,
+            _criteriaRangeBox.Text,
+            _copyToBox.Text,
+            outputMode,
+            _uniqueBox.IsChecked == true,
+            _resolveSheetId);
 
-        if (!TryCreateDialogResult(planResult, out var result, out var error))
+        if (!AdvancedFilterPlanner.TryCreateDialogResult(planResult, out var result))
         {
-            DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("AdvancedFilter_EnterValidFilterRanges"), Title);
+            var error = AdvancedFilterPlanner
+                .DescribeError(planResult)
+                .Message
+                .Resolve(UiText.Get, UiText.Format);
+            DialogMessageHelper.ShowWarning(this, error, Title);
             FocusInvalidRangeInput(planResult.Error);
             return;
         }

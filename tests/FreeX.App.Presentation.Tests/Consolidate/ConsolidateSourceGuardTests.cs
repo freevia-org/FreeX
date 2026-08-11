@@ -48,22 +48,22 @@ public sealed class ConsolidateSourceGuardTests
     {
         var repoRoot = RepositoryFileLocator.FindDirectory("src");
         var hostRoot = Path.Combine(repoRoot, "FreeX.App.Host");
-        var planningSource = File.ReadAllText(Path.Combine(hostRoot, "ConsolidateDialog.Planning.cs"));
+        var compatibilityFacadePath = Path.Combine(hostRoot, "ConsolidateDialog.Planning.cs");
+        var dialogSource = File.ReadAllText(Path.Combine(hostRoot, "ConsolidateDialog.cs"));
 
         File.Exists(Path.Combine(hostRoot, "ConsolidateDialogPlanner.cs"))
             .Should()
             .BeFalse("WPF should consume the shared consolidate planner directly instead of keeping a pass-through facade");
-        planningSource.Should().Contain(
-            "SharedConsolidateDialogPlanner = FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner");
-        var dialogSource = File.ReadAllText(Path.Combine(hostRoot, "ConsolidateDialog.cs"));
+        File.Exists(compatibilityFacadePath)
+            .Should()
+            .BeFalse("WPF should not retain a partial-class compatibility facade");
 
         dialogSource.Should().Contain("Width = ConsolidateDialogPlanner.WpfWindowWidth");
         dialogSource.Should().Contain("Height = ConsolidateDialogPlanner.ReferencesListHeight");
-        planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryAddReference(");
-        planningSource.Should().Contain("SharedConsolidateDialogPlanner.TryParse(");
-        planningSource.Should().Contain("ConsolidateDialogIssue");
-        planningSource.Should().Contain("SharedConsolidateDialogPlanner.DescribeIssue(");
-        planningSource.Should().NotContain("UiText.Get(\"Consolidate_EnterValidDestinationCell\")");
+        dialogSource.Should().Contain("ConsolidateDialogPlanner.TryAddReference(");
+        dialogSource.Should().Contain("ConsolidateDialogPlanner.TryParse(");
+        dialogSource.Should().Contain("ConsolidateDialogPlanner.DescribeIssue(");
+        dialogSource.Should().NotContain("UiText.Get(\"Consolidate_EnterValidDestinationCell\")");
 
         var commandSource = File.ReadAllText(Path.Combine(hostRoot, "MainWindow.DataCommands.cs"));
         commandSource.Should().Contain("ConsolidateApplicationWorkflow.Plan(");

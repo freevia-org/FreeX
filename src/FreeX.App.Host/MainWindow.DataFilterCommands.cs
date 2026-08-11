@@ -80,7 +80,7 @@ public partial class MainWindow
     /// SelectedRange straight into SortCommand with no header exclusion, so a header row (e.g. "Name",
     /// "Score") got sorted in among the data rows instead of staying pinned at the top -- unlike
     /// SortCustomButton_Click, which already excludes an (opt-in) header row via
-    /// SortDialog.ExcludeHeaderRow before building its SortCommand. The quick buttons have no dialog to
+    /// SortDialogPlanner.ExcludeHeaderRow before building its SortCommand. The quick buttons have no dialog to
     /// ask the user, so auto-detect a header row with the same heuristic Quick Analysis already uses
     /// (first row all-text, at least one data row numeric/date) and exclude it the same way.
     /// </summary>
@@ -108,12 +108,12 @@ public partial class MainWindow
         var sheet = _workbook.GetSheet(_currentSheetId);
         var hasHeaders = DetectSortDialogHasHeaders(range);
         var dialog = new SortDialog(
-            columnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true),
-            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, range, hasHeaders: false),
-            rowChoices: SortDialog.BuildRowChoices(range),
-            colorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range),
-            cellColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range, SortOn.CellColor),
-            fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range, SortOn.FontColor),
+            columnChoices: SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders: true, SortDialog.PlannerText),
+            genericColumnChoices: SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders: false, SortDialog.PlannerText),
+            rowChoices: SortDialogPlanner.BuildRowChoices(range, SortDialog.PlannerText),
+            colorChoices: SortDialogPlanner.BuildColorChoices(_workbook, sheet, range),
+            cellColorChoices: SortDialogPlanner.BuildColorChoices(_workbook, sheet, range, SortOn.CellColor),
+            fontColorChoices: SortDialogPlanner.BuildColorChoices(_workbook, sheet, range, SortOn.FontColor),
             hasHeaders: hasHeaders,
             iconWorkbook: _workbook,
             iconSheet: sheet,
@@ -124,10 +124,11 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var sortPlan = SortDialog.CreateCommandPlan(
+        var sortPlan = SortDialogPlanner.CreateCommandPlan(
             dialog.Levels,
             dialog.ResultOptions,
-            dialog.ResultHasHeaders);
+            dialog.ResultHasHeaders,
+            SortDialog.PlannerText);
 
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",

@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FluentAssertions;
+using FreeX.App.Presentation.Filtering;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using AdvancedFilterRangeSelectionRequest = FreeX.App.Presentation.Filtering.AdvancedFilterRangeSelectionRequest;
@@ -17,16 +18,15 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: "A1:D20",
             criteriaRangeText: "F1:G2",
-            copyToCellText: "J1",
-            uniqueRecordsOnly: true,
-            out var result,
-            out var error);
+            copyToRangeText: "J1",
+            AdvancedFilterOutputMode.CopyToAnotherLocation,
+            uniqueRecordsOnly: true);
 
-        parsed.Should().BeTrue(error);
+        AdvancedFilterPlanner.TryCreateDialogResult(planResult, out var result).Should().BeTrue();
         result.ListRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 20, 4)));
         result.CriteriaRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 6), new CellAddress(sheetId, 2, 7)));
         result.CopyToCell.Should().Be(new CellAddress(sheetId, 1, 10));
@@ -39,16 +39,15 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: "A1:D20",
             criteriaRangeText: "F1:G2",
-            copyToCellText: "J1:L1",
-            uniqueRecordsOnly: true,
-            out var result,
-            out var error);
+            copyToRangeText: "J1:L1",
+            AdvancedFilterOutputMode.CopyToAnotherLocation,
+            uniqueRecordsOnly: true);
 
-        parsed.Should().BeTrue(error);
+        AdvancedFilterPlanner.TryCreateDialogResult(planResult, out var result).Should().BeTrue();
         result.CopyToCell.Should().Be(new CellAddress(sheetId, 1, 10));
         result.CopyToRange.Should().Be(new GridRange(new CellAddress(sheetId, 1, 10), new CellAddress(sheetId, 1, 12)));
     }
@@ -58,17 +57,15 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: "A1",
             criteriaRangeText: "C3",
-            copyToCellText: "",
-            uniqueRecordsOnly: false,
-            out _,
-            out var error);
+            copyToRangeText: "",
+            AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
 
-        parsed.Should().BeFalse();
-        error.Should().Be("List range must include headers and at least one data row.");
+        planResult.Error.Should().Be(AdvancedFilterPlanError.ListRangeRequiresDataRows);
     }
 
     [Fact]
@@ -76,65 +73,59 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: "A1:C5",
             criteriaRangeText: "F1:G1",
-            copyToCellText: "",
-            uniqueRecordsOnly: false,
-            out _,
-            out var error);
+            copyToRangeText: "",
+            AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
 
-        parsed.Should().BeFalse();
-        error.Should().Be("Criteria range must include headers and at least one criteria row.");
+        planResult.Error.Should().Be(AdvancedFilterPlanError.CriteriaRangeRequiresCriteriaRows);
     }
 
     [Theory]
-    [InlineData("A1:XFD1048576", "F1:G2", "Advanced Filter list range is too large.")]
-    [InlineData("A1:C5", "F1:XFD1048576", "Advanced Filter criteria range is too large.")]
+    [InlineData("A1:XFD1048576", "F1:G2", AdvancedFilterPlanError.ListRangeTooLarge)]
+    [InlineData("A1:C5", "F1:XFD1048576", AdvancedFilterPlanError.CriteriaRangeTooLarge)]
     public void AdvancedFilterDialog_RejectsOversizedListOrCriteriaRanges(
         string listRangeText,
         string criteriaRangeText,
-        string expectedErrorPrefix)
+        AdvancedFilterPlanError expectedError)
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: listRangeText,
             criteriaRangeText: criteriaRangeText,
-            copyToCellText: "",
-            uniqueRecordsOnly: false,
-            out _,
-            out var error);
+            copyToRangeText: "",
+            AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
 
-        parsed.Should().BeFalse();
-        error.Should().StartWith(expectedErrorPrefix);
+        planResult.Error.Should().Be(expectedError);
     }
 
     [Theory]
-    [InlineData("", "F1:G2", "Enter a valid list range.")]
-    [InlineData("   ", "F1:G2", "Enter a valid list range.")]
-    [InlineData("A1:C5", "", "Enter a valid criteria range.")]
-    [InlineData("A1:C5", "   ", "Enter a valid criteria range.")]
+    [InlineData("", "F1:G2", AdvancedFilterPlanError.InvalidListRange)]
+    [InlineData("   ", "F1:G2", AdvancedFilterPlanError.InvalidListRange)]
+    [InlineData("A1:C5", "", AdvancedFilterPlanError.InvalidCriteriaRange)]
+    [InlineData("A1:C5", "   ", AdvancedFilterPlanError.InvalidCriteriaRange)]
     public void AdvancedFilterDialog_RejectsMissingRequiredRanges(
         string listRangeText,
         string criteriaRangeText,
-        string expectedError)
+        AdvancedFilterPlanError expectedError)
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: listRangeText,
             criteriaRangeText: criteriaRangeText,
-            copyToCellText: "",
-            uniqueRecordsOnly: false,
-            out _,
-            out var error);
+            copyToRangeText: "",
+            AdvancedFilterOutputMode.FilterInPlace,
+            uniqueRecordsOnly: false);
 
-        parsed.Should().BeFalse();
-        error.Should().Be(expectedError);
+        planResult.Error.Should().Be(expectedError);
     }
 
     [Fact]
@@ -144,22 +135,21 @@ public sealed partial class DataToolDialogTests
         var dataSheetId = SheetId.New();
         var criteriaSheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             currentSheetId,
             listRangeText: "Data!A1:D20",
             criteriaRangeText: "Criteria!F1:G2",
-            copyToCellText: "",
+            copyToRangeText: "",
+            AdvancedFilterOutputMode.FilterInPlace,
             uniqueRecordsOnly: false,
             resolveSheetId: sheetName => sheetName switch
             {
                 "Data" => dataSheetId,
                 "Criteria" => criteriaSheetId,
                 _ => null
-            },
-            out var result,
-            out var error);
+            });
 
-        parsed.Should().BeTrue(error);
+        AdvancedFilterPlanner.TryCreateDialogResult(planResult, out var result).Should().BeTrue();
         result.ListRange.Should().Be(new GridRange(new CellAddress(dataSheetId, 1, 1), new CellAddress(dataSheetId, 20, 4)));
         result.CriteriaRange.Should().Be(new GridRange(new CellAddress(criteriaSheetId, 1, 6), new CellAddress(criteriaSheetId, 2, 7)));
     }
@@ -169,17 +159,15 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: "A1:D20",
             criteriaRangeText: "F1:G2",
-            copyToCellText: "NotACell",
-            uniqueRecordsOnly: false,
-            out _,
-            out var error);
+            copyToRangeText: "NotACell",
+            AdvancedFilterOutputMode.CopyToAnotherLocation,
+            uniqueRecordsOnly: false);
 
-        parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid copy-to cell or one-row header range.");
+        planResult.Error.Should().Be(AdvancedFilterPlanError.InvalidCopyDestinationRange);
     }
 
     [Fact]
@@ -187,18 +175,16 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: "A1:D20",
             criteriaRangeText: "F1:G2",
-            copyToCellText: "",
-            copyToAnotherLocation: true,
+            copyToRangeText: "",
+            AdvancedFilterOutputMode.CopyToAnotherLocation,
             uniqueRecordsOnly: false,
-            out _,
-            out var error);
+            resolveSheetId: null);
 
-        parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid copy-to cell or one-row header range.");
+        planResult.Error.Should().Be(AdvancedFilterPlanError.CopyDestinationRequired);
     }
 
     [Fact]
@@ -206,17 +192,16 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = AdvancedFilterDialog.TryParse(
+        var planResult = AdvancedFilterPlanner.CreatePlan(
             sheetId,
             listRangeText: "A1:D20",
             criteriaRangeText: "F1:G2",
-            copyToCellText: "NotACell",
-            copyToAnotherLocation: false,
+            copyToRangeText: "NotACell",
+            AdvancedFilterOutputMode.FilterInPlace,
             uniqueRecordsOnly: false,
-            out var result,
-            out var error);
+            resolveSheetId: null);
 
-        parsed.Should().BeTrue(error);
+        AdvancedFilterPlanner.TryCreateDialogResult(planResult, out var result).Should().BeTrue();
         result.CopyToCell.Should().BeNull();
     }
 
@@ -382,16 +367,15 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void AdvancedFilterDialogInvalidRange_RefocusesAndSelectsInvalidRangeInput()
     {
-        var source = DialogSourceTestSupport.ReadHostSources(
-            "AdvancedFilterDialog.cs",
-            "AdvancedFilterDialog.Planning.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
 
         source.Should().Contain("FocusInvalidRangeInput(planResult.Error);");
-        source.Should().Contain("private void FocusInvalidRangeInput(SharedAdvancedFilterPlanError error)");
-        source.Should().Contain("SharedAdvancedFilterPlanner.FocusTargetForPlanError(error)");
+        source.Should().Contain("private void FocusInvalidRangeInput(AdvancedFilterPlanError error)");
+        source.Should().Contain("AdvancedFilterPlanner.FocusTargetForPlanError(error)");
         source.Should().Contain("AdvancedFilterErrorFocusTarget.CriteriaRange");
         source.Should().Contain("AdvancedFilterErrorFocusTarget.CopyTo");
-        source.Should().Contain("UiText.Get(\"AdvancedFilter_CriteriaRangeMustIncludeHeaders\")");
+        source.Should().Contain(".DescribeError(planResult)");
+        source.Should().Contain(".Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("_copyToAnotherLocationButton.IsChecked = true;");
         source.Should().Contain("DialogFocus.FocusAndSelect(target);");
     }
@@ -530,15 +514,15 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void AdvancedFilterRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
-        AdvancedFilterDialog.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
+        AdvancedFilterPlanner.CreateRangeSelectionRequest(AdvancedFilterRangeSelectionTarget.CriteriaRange, " E1:F4 ")
             .Should()
             .Be(new AdvancedFilterRangeSelectionRequest(
                 AdvancedFilterRangeSelectionTarget.CriteriaRange,
                 "E1:F4",
                 CollapseDialog: true));
 
-        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.Planning.cs");
-        source.Should().Contain("SharedAdvancedFilterPlanner.CreateRangeSelectionRequest(target, currentText)");
+        var source = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
+        source.Should().Contain("AdvancedFilterPlanner.CreateRangeSelectionRequest(target, request.CurrentText)");
         source.Should().NotContain("ToServicesRangeSelectionTarget(target)");
     }
 

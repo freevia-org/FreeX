@@ -22291,7 +22291,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 _ => nameBox,
             };
 
-        bool ValidateScenarioManagerFields(ScenarioManagerDialogAction action)
+        bool ValidateScenarioManagerFields(ScenarioManagerAction action)
         {
             var failure = ScenarioManagerDialogPlanner.ValidateAcceptRequest(
                 action,
@@ -22354,7 +22354,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return true;
         }
 
-        void SaveCurrentValues(ScenarioManagerDialogAction action)
+        void SaveCurrentValues(ScenarioManagerAction action)
         {
             if (!ValidateScenarioManagerFields(action))
                 return;
@@ -22391,7 +22391,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var request = new ScenarioManagerSaveRequest(
                 acceptedName,
                 changingCells,
-                ReplaceScenarioName: accepted.Action == ScenarioManagerDialogAction.Edit
+                ReplaceScenarioName: accepted.Action == ScenarioManagerAction.Edit
                     ? accepted.SelectedScenarioName
                     : null,
                 Comment: accepted.CommentText,
@@ -22403,7 +22403,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     result,
                     $"Saved scenario '{acceptedName}' ({changingCells.Count} {FormatCountLabel(changingCells.Count, "cell")})"))
             {
-                var target = action == ScenarioManagerDialogAction.Edit
+                var target = action == ScenarioManagerAction.Edit
                     ? nameBox
                     : changingCellsBox;
                 target.Focus();
@@ -22444,7 +22444,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void CreateSummaryReport()
         {
-            if (!ValidateScenarioManagerFields(ScenarioManagerDialogAction.Report))
+            if (!ValidateScenarioManagerFields(ScenarioManagerAction.Report))
                 return;
 
             IReadOnlyList<CellAddress> resultCells = [];
@@ -22479,8 +22479,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         scenarioList.SelectionChanged += (_, _) => RefreshSelectionDetails();
-        saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Add);
-        editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Edit);
+        saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerAction.Add);
+        editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerAction.Edit);
         showButton.Click += (_, _) => ShowSelectedScenario();
         deleteButton.Click += (_, _) => DeleteSelectedScenario();
         summaryButton.Click += (_, _) => CreateSummaryReport();

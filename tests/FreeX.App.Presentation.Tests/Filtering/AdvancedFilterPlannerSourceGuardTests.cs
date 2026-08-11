@@ -14,7 +14,8 @@ public sealed class AdvancedFilterPlannerSourceGuardTests
         var workbookSessionSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Services", "WorkbookSession.cs"));
         var avaloniaMainWindowSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var hostInputParserPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterInputParser.cs");
-        var hostDialogSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterDialog.Planning.cs"));
+        var compatibilityFacadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterDialog.Planning.cs");
+        var hostDialogSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterDialog.cs"));
         var hostDataCommandsSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.DataCommands.cs"));
 
         File.Exists(advancedFilterPlannerPath)
@@ -26,12 +27,15 @@ public sealed class AdvancedFilterPlannerSourceGuardTests
         File.Exists(servicesPlannerPath)
             .Should()
             .BeFalse("App Services should consume the canonical Presentation types instead of duplicating them");
+        File.Exists(compatibilityFacadePath)
+            .Should()
+            .BeFalse("WPF should consume the Presentation planner without a compatibility facade");
 
         workbookSessionSource.Should().Contain("using FreeX.App.Presentation.Filtering;");
         avaloniaMainWindowSource.Should().Contain("using FreeX.App.Presentation.Filtering;");
-        hostDialogSource.Should().Contain("SharedAdvancedFilterPlanner.CreatePlan(");
-        hostDialogSource.Should().Contain("SharedAdvancedFilterPlanner.CreateRangeSelectionRequest(");
-        hostDialogSource.Should().Contain("SharedAdvancedFilterPlanner.TryCreateDialogResult(");
+        hostDialogSource.Should().Contain("AdvancedFilterPlanner.CreatePlan(");
+        hostDialogSource.Should().Contain("AdvancedFilterPlanner.CreateRangeSelectionRequest(");
+        hostDialogSource.Should().Contain("AdvancedFilterPlanner.TryCreateDialogResult(");
         hostDialogSource.Should().NotContain("WorkbookReferenceNavigator");
         hostDialogSource.Should().NotContain("WorkbookRangeTextCodec.TryParse");
         hostDataCommandsSource.Should().Contain("AdvancedFilterPlanner.TryParseRange(");

@@ -97,7 +97,7 @@ public sealed class R110_SortDialogCellIconWiringTests
                 // Mirrors what the "Icon" combo's TwoWay binding does when a user picks a swatch.
                 level.TargetIcon = greenArrowToken;
 
-                var keys = SortDialog.BuildSortKeys(dialog.Levels);
+                var keys = SortDialogPlanner.BuildSortKeys(dialog.Levels);
                 keys.Should().ContainSingle(key =>
                     key.ColumnOffset == 1 &&
                     key.SortOn == SortOn.CellIcon &&
@@ -127,8 +127,8 @@ public sealed class R110_SortDialogCellIconWiringTests
 
             var dialog = new SortDialog(
                 levels: [new SortDialogLevel(0, true)],
-                cellColorChoices: SortDialog.BuildColorChoices(workbook, sheet, range, SortOn.CellColor),
-                fontColorChoices: SortDialog.BuildColorChoices(workbook, sheet, range, SortOn.FontColor));
+                cellColorChoices: SortDialogPlanner.BuildColorChoices(workbook, sheet, range, SortOn.CellColor),
+                fontColorChoices: SortDialogPlanner.BuildColorChoices(workbook, sheet, range, SortOn.FontColor));
             dialog.Show();
             try
             {
@@ -138,7 +138,7 @@ public sealed class R110_SortDialogCellIconWiringTests
                 level.ColorChoices.Select(choice => choice.Label).Should().Contain("#FF0000");
 
                 level.TargetColor = "#FF0000";
-                var keys = SortDialog.BuildSortKeys(dialog.Levels);
+                var keys = SortDialogPlanner.BuildSortKeys(dialog.Levels);
                 keys.Should().ContainSingle(key =>
                     key.ColumnOffset == 0 &&
                     key.SortOn == SortOn.CellColor &&

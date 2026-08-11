@@ -16,11 +16,11 @@ public sealed class ScenarioManagerDialogBehaviorParitySourceTests
         dialogSource.Should().Contain("WorkbookRangeTextCodec.TryParseMany(");
         dialogSource.Should().Contain("var acceptedName = accepted.NewScenarioName.Trim();");
         dialogSource.Should().Contain("acceptedName,");
-        dialogSource.Should().Contain("ReplaceScenarioName: accepted.Action == ScenarioManagerDialogAction.Edit");
+        dialogSource.Should().Contain("ReplaceScenarioName: accepted.Action == ScenarioManagerAction.Edit");
         dialogSource.Should().Contain("Hidden: accepted.Hidden");
         dialogSource.Should().Contain("Locked: accepted.Locked");
-        dialogSource.Should().Contain("saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Add);");
-        dialogSource.Should().Contain("editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Edit);");
+        dialogSource.Should().Contain("saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerAction.Add);");
+        dialogSource.Should().Contain("editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerAction.Edit);");
         dialogSource.Should().Contain("ranges = [_session.SelectedRange];");
         dialogSource.Should().Contain("new HashSet<CellAddress>()");
         dialogSource.Should().Contain("RefreshDialogPlan(acceptedName);");
@@ -32,7 +32,7 @@ public sealed class ScenarioManagerDialogBehaviorParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var dialogSource = source[SourceStart(source)..SourceEnd(source)];
 
-        dialogSource.Should().Contain("ValidateScenarioManagerFields(ScenarioManagerDialogAction.Report)");
+        dialogSource.Should().Contain("ValidateScenarioManagerFields(ScenarioManagerAction.Report)");
         dialogSource.Should().Contain("ScenarioManager_EnterValidResultCellsReference");
         dialogSource.Should().Contain("CreateSummaryReportPlan(_session.Workbook, resultCells)");
         dialogSource.Should().Contain("resultRanges.SelectMany(range => range.AllCells()).Distinct().ToArray()");

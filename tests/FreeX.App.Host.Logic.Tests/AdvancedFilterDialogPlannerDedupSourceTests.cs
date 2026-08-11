@@ -10,12 +10,11 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
         var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterDialogPlanner.cs");
+        var compatibilityFacadePath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterDialog.Planning.cs");
         var hostDefaultListPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterDefaultListRangePlanner.cs");
         var hostInputParserPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "AdvancedFilterInputParser.cs");
         var mainDataCommandsSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
-        var dialogSource = DialogSourceTestSupport.ReadHostSources(
-            "AdvancedFilterDialog.cs",
-            "AdvancedFilterDialog.Planning.cs");
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
         var presentationSource = DialogSourceTestSupport.ReadPresentationSources("Filtering", "AdvancedFilterPlanner.cs");
         var servicesPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Services", "AdvancedFilterPlanner.cs");
         var workbookSessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
@@ -26,17 +25,17 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
             .Should().BeFalse("default Advanced Filter list range selection should stay in the portable AdvancedFilterPlanner");
         File.Exists(hostInputParserPath)
             .Should().BeFalse("Advanced Filter input parsing should live in the shared presentation planner");
+        File.Exists(compatibilityFacadePath)
+            .Should().BeFalse("the WPF compatibility facade should be removed");
 
         mainDataCommandsSource.Should().Contain("AdvancedFilterPlanner.CreateDefaultListRange(sheet, selected)");
         mainDataCommandsSource.Should().Contain("AdvancedFilterPlanner.TryParseRange(");
         mainDataCommandsSource.Should().NotContain("AdvancedFilterDefaultListRangePlanner.");
         mainDataCommandsSource.Should().NotContain("AdvancedFilterInputParser.");
 
-        dialogSource.Should().Contain(
-            "using SharedAdvancedFilterPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterPlanner;");
-        dialogSource.Should().Contain("SharedAdvancedFilterPlanner.CreatePlan(");
-        dialogSource.Should().Contain("SharedAdvancedFilterPlanner.CreateRangeSelectionRequest(");
-        dialogSource.Should().Contain("SharedAdvancedFilterPlanner.FocusTargetForPlanError(error)");
+        dialogSource.Should().Contain("AdvancedFilterPlanner.CreatePlan(");
+        dialogSource.Should().Contain("AdvancedFilterPlanner.CreateRangeSelectionRequest(");
+        dialogSource.Should().Contain("AdvancedFilterPlanner.FocusTargetForPlanError(error)");
         dialogSource.Should().Contain(".DescribeError(planResult)");
         dialogSource.Should().Contain(".Message");
         dialogSource.Should().Contain(".Resolve(UiText.Get, UiText.Format)");

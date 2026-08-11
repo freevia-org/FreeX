@@ -2313,12 +2313,12 @@ public partial class MainWindow
     {
         var sheet = context.Sheet;
         var dialog = new SortDialog(
-            columnChoices: SortDialog.BuildColumnChoices(sheet, context.SortRange, hasHeaders: true),
-            genericColumnChoices: SortDialog.BuildColumnChoices(sheet, context.SortRange, hasHeaders: false),
-            rowChoices: SortDialog.BuildRowChoices(context.SortRange),
-            colorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange),
-            cellColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.CellColor),
-            fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.FontColor),
+            columnChoices: SortDialogPlanner.BuildColumnChoices(sheet, context.SortRange, hasHeaders: true, SortDialog.PlannerText),
+            genericColumnChoices: SortDialogPlanner.BuildColumnChoices(sheet, context.SortRange, hasHeaders: false, SortDialog.PlannerText),
+            rowChoices: SortDialogPlanner.BuildRowChoices(context.SortRange, SortDialog.PlannerText),
+            colorChoices: SortDialogPlanner.BuildColorChoices(_workbook, sheet, context.SortRange),
+            cellColorChoices: SortDialogPlanner.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.CellColor),
+            fontColorChoices: SortDialogPlanner.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.FontColor),
             iconWorkbook: _workbook,
             iconSheet: sheet,
             iconRange: context.SortRange)
@@ -8142,12 +8142,12 @@ public partial class MainWindow
                     new SortDialogLevel(0, true),
                     new SortDialogLevel(2, false)
                 ],
-                columnChoices: SortDialog.BuildColumnChoices(context.Sheet, context.TableRange, hasHeaders: true),
-                genericColumnChoices: SortDialog.BuildColumnChoices(context.Sheet, context.TableRange, hasHeaders: false),
-                rowChoices: SortDialog.BuildRowChoices(context.TableRange),
-                colorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange),
-                cellColorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.CellColor),
-                fontColorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.FontColor),
+                columnChoices: SortDialogPlanner.BuildColumnChoices(context.Sheet, context.TableRange, hasHeaders: true, SortDialog.PlannerText),
+                genericColumnChoices: SortDialogPlanner.BuildColumnChoices(context.Sheet, context.TableRange, hasHeaders: false, SortDialog.PlannerText),
+                rowChoices: SortDialogPlanner.BuildRowChoices(context.TableRange, SortDialog.PlannerText),
+                colorChoices: SortDialogPlanner.BuildColorChoices(_workbook, context.Sheet, context.TableRange),
+                cellColorChoices: SortDialogPlanner.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.CellColor),
+                fontColorChoices: SortDialogPlanner.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.FontColor),
                 iconWorkbook: _workbook,
                 iconSheet: context.Sheet,
                 iconRange: context.TableRange)

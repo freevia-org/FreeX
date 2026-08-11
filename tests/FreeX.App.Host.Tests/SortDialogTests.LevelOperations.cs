@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
@@ -9,7 +10,7 @@ public sealed partial class SortDialogTests
     {
         var levels = new[] { new SortDialogLevel(1, false) };
 
-        var updated = SortDialog.AddLevel(levels);
+        var updated = SortDialogPlanner.AddLevel(levels);
 
         updated.Should().Equal(
             new SortDialogLevel(1, false),
@@ -25,8 +26,8 @@ public sealed partial class SortDialogTests
             new SortDialogLevel(2, true)
         };
 
-        SortDialog.RemoveLevel(levels, 0).Should().Equal(new SortDialogLevel(2, true));
-        SortDialog.RemoveLevel([new SortDialogLevel(3, false)], 0)
+        SortDialogPlanner.RemoveLevel(levels, 0).Should().Equal(new SortDialogLevel(2, true));
+        SortDialogPlanner.RemoveLevel([new SortDialogLevel(3, false)], 0)
             .Should()
             .Equal(new SortDialogLevel(0, true));
     }
@@ -40,7 +41,7 @@ public sealed partial class SortDialogTests
             new SortDialogLevel(1, false)
         };
 
-        SortDialog.UpdateLevel(levels, 1, columnOffset: 2, ascending: true)
+        SortDialogPlanner.UpdateLevel(levels, 1, columnOffset: 2, ascending: true)
             .Should()
             .Equal(
                 new SortDialogLevel(0, true),
@@ -56,7 +57,7 @@ public sealed partial class SortDialogTests
             new SortDialogLevel(1, false) { SortOn = "Font Color", TargetColor = "#FF0000" }
         };
 
-        SortDialog.UpdateLevel(levels, 1, columnOffset: 2, ascending: true)
+        SortDialogPlanner.UpdateLevel(levels, 1, columnOffset: 2, ascending: true)
             .Should()
             .Equal(
                 new SortDialogLevel(0, true),
@@ -72,7 +73,7 @@ public sealed partial class SortDialogTests
             new SortDialogLevel(2, false)
         };
 
-        SortDialog.CopyLevel(levels, 1)
+        SortDialogPlanner.CopyLevel(levels, 1)
             .Should()
             .Equal(
                 new SortDialogLevel(0, true),
@@ -89,7 +90,7 @@ public sealed partial class SortDialogTests
             new SortDialogLevel(2, false) { SortOn = "Cell Color", TargetColor = "#00FF00" }
         };
 
-        SortDialog.CopyLevel(levels, 1)
+        SortDialogPlanner.CopyLevel(levels, 1)
             .Should()
             .Equal(
                 new SortDialogLevel(0, true),
@@ -107,14 +108,14 @@ public sealed partial class SortDialogTests
             new SortDialogLevel(2, true)
         };
 
-        SortDialog.MoveLevel(levels, 2, -1)
+        SortDialogPlanner.MoveLevel(levels, 2, -1)
             .Should()
             .Equal(
                 new SortDialogLevel(0, true),
                 new SortDialogLevel(2, true),
                 new SortDialogLevel(1, false));
 
-        SortDialog.MoveLevel(levels, 0, -1).Should().Equal(levels);
-        SortDialog.MoveLevel(levels, 2, 1).Should().Equal(levels);
+        SortDialogPlanner.MoveLevel(levels, 0, -1).Should().Equal(levels);
+        SortDialogPlanner.MoveLevel(levels, 2, 1).Should().Equal(levels);
     }
 }

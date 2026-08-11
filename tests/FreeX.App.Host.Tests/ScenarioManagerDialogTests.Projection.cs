@@ -1,6 +1,5 @@
 using FluentAssertions;
 using FreeX.App.Presentation.ScenarioManager;
-using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
@@ -17,7 +16,10 @@ public sealed partial class ScenarioManagerDialogTests
             Hidden: true,
             Locked: true);
 
-        var state = ScenarioManagerDialog.ProjectSelectionFields(item, currentScenarioNameText: "", defaultScenarioName: "Scenario 2");
+        var state = ScenarioManagerDialogPlanner.ProjectSelectionFields(
+            item,
+            currentScenarioNameText: "",
+            defaultScenarioName: "Scenario 2");
 
         state.Should().NotBeNull();
         state!.ScenarioName.Should().Be("Best Case");
@@ -31,7 +33,10 @@ public sealed partial class ScenarioManagerDialogTests
     [Fact]
     public void ProjectSelectionFields_ResetsToDefaultWhenSelectionClearedAndNameBlank()
     {
-        var state = ScenarioManagerDialog.ProjectSelectionFields(selected: null, currentScenarioNameText: " ", defaultScenarioName: "Scenario 1");
+        var state = ScenarioManagerDialogPlanner.ProjectSelectionFields(
+            selected: null,
+            currentScenarioNameText: " ",
+            defaultScenarioName: "Scenario 1");
 
         state.Should().NotBeNull();
         state!.ScenarioName.Should().Be("Scenario 1");
@@ -45,7 +50,10 @@ public sealed partial class ScenarioManagerDialogTests
     [Fact]
     public void ProjectSelectionFields_PreservesTypedFieldsWhenSelectionClearedAndNamePresent()
     {
-        ScenarioManagerDialog.ProjectSelectionFields(selected: null, currentScenarioNameText: "Draft", defaultScenarioName: "Scenario 1")
+        ScenarioManagerDialogPlanner.ProjectSelectionFields(
+                selected: null,
+                currentScenarioNameText: "Draft",
+                defaultScenarioName: "Scenario 1")
             .Should()
             .BeNull();
     }
@@ -55,7 +63,7 @@ public sealed partial class ScenarioManagerDialogTests
     {
         var selected = new ScenarioManagerDialogItem("Best Case", [], null, "B2", Hidden: false, Locked: false);
 
-        var result = ScenarioManagerDialog.ProjectAcceptResult(
+        var result = ScenarioManagerDialogPlanner.ProjectAcceptResult(
             ScenarioManagerAction.Edit,
             selected,
             newScenarioName: "Better Case",
@@ -65,7 +73,7 @@ public sealed partial class ScenarioManagerDialogTests
             locked: true,
             hidden: true);
 
-        result.Action.Should().Be(ScenarioManagerDialogAction.Edit);
+        result.Action.Should().Be(ScenarioManagerAction.Edit);
         result.SelectedScenarioName.Should().Be("Best Case");
         result.NewScenarioName.Should().Be("Better Case");
         result.ChangingCellsText.Should().Be("C3");

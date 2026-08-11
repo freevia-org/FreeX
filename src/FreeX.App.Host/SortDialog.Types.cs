@@ -4,7 +4,7 @@ namespace FreeX.App.Host;
 
 public sealed partial class SortDialog
 {
-    private static SortDialogPlannerText PlannerText => new(
+    internal static SortDialogPlannerText PlannerText => new(
         UiText.Get("Sort_SortOnCellValues"),
         UiText.Get("Sort_SortOnCellColor"),
         UiText.Get("Sort_SortOnFontColor"),

@@ -1,18 +1,7 @@
 using FreeX.Core.Model;
+using FreeX.App.Presentation.ScenarioManager;
 
 namespace FreeX.App.Services;
-
-public enum ScenarioManagerAction
-{
-    Add,
-    Edit,
-    Save,
-    Show,
-    Delete,
-    List,
-    Report,
-    Merge
-}
 
 public enum ScenarioManagerOperation
 {

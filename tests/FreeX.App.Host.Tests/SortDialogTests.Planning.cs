@@ -19,7 +19,7 @@ public sealed partial class SortDialogTests
             new SortDialogLevel(0, false) { SortOn = "Font Color", TargetColor = "#0000FF" }
         };
 
-        var keys = SortDialog.BuildSortKeys(levels);
+        var keys = SortDialogPlanner.BuildSortKeys(levels);
 
         keys.Should().Equal(
             new SortKey(2, true),
@@ -94,47 +94,42 @@ public sealed partial class SortDialogTests
     }
 
     [Fact]
-    public void SortDialogPlanningFacade_ForwardsPureWorkToPlanner()
+    public void SortDialogPlanningFacade_IsRemovedAndHostUsesPlannerDirectly()
     {
-        var planningSource = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("SortDialog.cs");
+        var commandSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataFilterCommands.cs");
 
-        planningSource.Should().Contain("using FreeX.App.Services;");
-        planningSource.Should().NotContain("internal static class SortDialogPlanner");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "SortDialog.Planning.cs"))
+            .Should()
+            .BeFalse("the WPF compatibility facade should be removed");
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "QuickSortRangePlanner.cs"))
             .Should()
             .BeFalse("quick sort range/header detection should live in Services instead of WPF Host");
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Services", "QuickSortRangePlanner.cs"))
             .Should()
             .BeTrue("quick sort range/header detection should be available to all hosts");
-        planningSource.Should().Contain("SortDialogPlanner.BuildSortKeys(levels, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.CreateCommandPlan(levels, options, hasHeaders, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildOrderChoices(sortOn, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.AddLevel(levels, columnOffset, ascending, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.RemoveLevel(levels, index, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.CopyLevel(levels, index, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.MoveLevel(levels, index, direction, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.UpdateLevel(levels, index, columnOffset, ascending, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(range, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildRowChoices(range, PlannerText)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildColorChoices(workbook, sheet, range)");
-        planningSource.Should().Contain("SortDialogPlanner.BuildColorChoices(workbook, sheet, range, sortOn)");
-        planningSource.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
+        dialogSource.Should().Contain("SortDialogPlanner.BuildSortKeys(_levels, PlannerText)");
+        dialogSource.Should().Contain("SortDialogPlanner.AddLevel(_levels, text: PlannerText)");
+        dialogSource.Should().Contain("SortDialogPlanner.RemoveLevel(_levels, selectedIndex, PlannerText)");
+        dialogSource.Should().Contain("SortDialogPlanner.CopyLevel(_levels, selectedIndex, PlannerText)");
+        dialogSource.Should().Contain("SortDialogPlanner.MoveLevel(_levels, selectedIndex, -1, PlannerText)");
+        commandSource.Should().Contain("SortDialogPlanner.CreateCommandPlan(");
+        commandSource.Should().Contain("SortDialog.PlannerText");
     }
 
     [Fact]
     public void BuildOrderChoices_UsesExcelColorSortLabelsForColorSorts()
     {
-        SortDialog.BuildOrderChoices("Cell Values").Should().Equal(
+        SortDialogPlanner.BuildOrderChoices("Cell Values").Should().Equal(
             new SortDirectionChoice("A to Z", true),
             new SortDirectionChoice("Z to A", false));
 
-        SortDialog.BuildOrderChoices("Cell Color").Should().Equal(
+        SortDialogPlanner.BuildOrderChoices("Cell Color").Should().Equal(
             new SortDirectionChoice("On Top", true),
             new SortDirectionChoice("On Bottom", false));
 
-        SortDialog.BuildOrderChoices("Font Color").Should().Equal(
+        SortDialogPlanner.BuildOrderChoices("Font Color").Should().Equal(
             new SortDirectionChoice("On Top", true),
             new SortDirectionChoice("On Bottom", false));
     }
@@ -169,7 +164,7 @@ public sealed partial class SortDialogTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), redCell);
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), blueCell);
 
-        SortDialog.BuildColorChoices(workbook, sheet, new GridRange(
+        SortDialogPlanner.BuildColorChoices(workbook, sheet, new GridRange(
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 2, 1)))
             .Should()
@@ -191,10 +186,10 @@ public sealed partial class SortDialogTests
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), fontCell);
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1));
 
-        SortDialog.BuildColorChoices(workbook, sheet, range, SortOn.CellColor)
+        SortDialogPlanner.BuildColorChoices(workbook, sheet, range, SortOn.CellColor)
             .Should()
             .Equal(new SortColorChoice(""), new SortColorChoice("#FF0000"));
-        SortDialog.BuildColorChoices(workbook, sheet, range, SortOn.FontColor)
+        SortDialogPlanner.BuildColorChoices(workbook, sheet, range, SortOn.FontColor)
             .Should()
             .Equal(new SortColorChoice(""), new SortColorChoice("#000000"), new SortColorChoice("#0000FF"));
     }
@@ -207,7 +202,7 @@ public sealed partial class SortDialogTests
             new CellAddress(sheetId, 2, 3),
             new CellAddress(sheetId, 7, 5));
 
-        SortDialog.BuildColumnChoices(range).Should().Equal(
+        SortDialogPlanner.BuildColumnChoices(range).Should().Equal(
             new SortColumnChoice("Column C", 0),
             new SortColumnChoice("Column D", 1),
             new SortColumnChoice("Column E", 2));
@@ -224,7 +219,7 @@ public sealed partial class SortDialogTests
             new CellAddress(sheetId, 4, 2),
             new CellAddress(sheetId, 12, 4));
 
-        SortDialog.BuildColumnChoices(sheet, range, hasHeaders: true).Should().Equal(
+        SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders: true).Should().Equal(
             new SortColumnChoice("Region", 0),
             new SortColumnChoice("Revenue", 1),
             new SortColumnChoice("Column D", 2));
@@ -238,12 +233,12 @@ public sealed partial class SortDialogTests
             new CellAddress(sheetId, 2, 3),
             new CellAddress(sheetId, 7, 5));
 
-        SortDialog.ExcludeHeaderRow(range, hasHeaders: true).Should().Be(new GridRange(
+        SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders: true).Should().Be(new GridRange(
             new CellAddress(sheetId, 3, 3),
             new CellAddress(sheetId, 7, 5)));
 
-        SortDialog.ExcludeHeaderRow(range, hasHeaders: false).Should().Be(range);
-        SortDialog.ExcludeHeaderRow(new GridRange(range.Start, range.Start), hasHeaders: true)
+        SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders: false).Should().Be(range);
+        SortDialogPlanner.ExcludeHeaderRow(new GridRange(range.Start, range.Start), hasHeaders: true)
             .Should()
             .Be(new GridRange(range.Start, range.Start));
     }
@@ -254,7 +249,7 @@ public sealed partial class SortDialogTests
         var sheetId = new SheetId(Guid.NewGuid());
         var range = new GridRange(new CellAddress(sheetId, 3, 2), new CellAddress(sheetId, 5, 4));
 
-        SortDialog.BuildRowChoices(range).Should().Equal(
+        SortDialogPlanner.BuildRowChoices(range).Should().Equal(
             new SortColumnChoice("Row 3", 0),
             new SortColumnChoice("Row 4", 1),
             new SortColumnChoice("Row 5", 2));

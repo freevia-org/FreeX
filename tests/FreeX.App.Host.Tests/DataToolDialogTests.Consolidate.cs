@@ -19,10 +19,10 @@ public sealed partial class DataToolDialogTests
         var second = new GridRange(new CellAddress(sheetId, 5, 4), new CellAddress(sheetId, 7, 5));
         var different = new GridRange(new CellAddress(sheetId, 10, 1), new CellAddress(sheetId, 12, 3));
 
-        ConsolidateDialog.HaveSameSize([first, second]).Should().BeTrue();
-        ConsolidateDialog.HaveSameSize([first, different]).Should().BeFalse();
+        ConsolidateDialogPlanner.HaveSameSize([first, second]).Should().BeTrue();
+        ConsolidateDialogPlanner.HaveSameSize([first, different]).Should().BeFalse();
 
-        var result = ConsolidateDialog.CreateResult(
+        var result = ConsolidateDialogPlanner.CreateResult(
             [first, second],
             new CellAddress(sheetId, 9, 1),
             ConsolidateFunction.Sum);
@@ -36,14 +36,14 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = ConsolidateDialog.TryParse(
+        var parsed = ConsolidateDialogPlanner.TryParse(
             sheetId,
             sourceRangesText: "A1:B3; D5:E7",
             destinationCellText: "G10",
             out var result,
-            out var error);
+            out var issue);
 
-        parsed.Should().BeTrue(error);
+        parsed.Should().BeTrue(issue.ToString());
         result.SourceRanges.Should().Equal(
             new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
             new GridRange(new CellAddress(sheetId, 5, 4), new CellAddress(sheetId, 7, 5)));
@@ -58,7 +58,7 @@ public sealed partial class DataToolDialogTests
         var dataSheetId = SheetId.New();
         var reportSheetId = SheetId.New();
 
-        var parsed = ConsolidateDialog.TryParse(
+        var parsed = ConsolidateDialogPlanner.TryParse(
             currentSheetId,
             sheetName => sheetName switch
             {
@@ -69,9 +69,9 @@ public sealed partial class DataToolDialogTests
             sourceRangesText: "Data!A1:B3; 'Report'!D5:E7",
             destinationCellText: "Report!G10",
             out var result,
-            out var error);
+            out var issue);
 
-        parsed.Should().BeTrue(error);
+        parsed.Should().BeTrue(issue.ToString());
         result.SourceRanges.Should().Equal(
             new GridRange(new CellAddress(dataSheetId, 1, 1), new CellAddress(dataSheetId, 3, 2)),
             new GridRange(new CellAddress(reportSheetId, 5, 4), new CellAddress(reportSheetId, 7, 5)));
@@ -83,7 +83,7 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = ConsolidateDialog.TryParse(
+        var parsed = ConsolidateDialogPlanner.TryParse(
             sheetId,
             sourceRangesText: "A1:B3; D5:E7",
             destinationCellText: "G10",
@@ -92,9 +92,9 @@ public sealed partial class DataToolDialogTests
             useLeftColumnLabels: true,
             createLinksToSourceData: true,
             out var result,
-            out var error);
+            out var issue);
 
-        parsed.Should().BeTrue(error);
+        parsed.Should().BeTrue(issue.ToString());
         result.Function.Should().Be(ConsolidateFunction.Average);
         result.UseTopRowLabels.Should().BeTrue();
         result.UseLeftColumnLabels.Should().BeTrue();
@@ -104,20 +104,26 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateDialog_JoinsAllReferencesListForExistingParser()
     {
-        ConsolidateDialog.SplitSourceRangeText("A1:B3; D5:E7").Should().Equal("A1:B3", "D5:E7");
-        ConsolidateDialog.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
-        ConsolidateDialog.JoinSourceRanges([" A1:B3 ", "", " D5:E7 "]).Should().Be("A1:B3; D5:E7");
+        ConsolidateDialogPlanner.SplitSourceRangeText("A1:B3; D5:E7").Should().Equal("A1:B3", "D5:E7");
+        ConsolidateDialogPlanner.JoinSourceRanges(["A1:B3", "D5:E7"]).Should().Be("A1:B3; D5:E7");
+        ConsolidateDialogPlanner.JoinSourceRanges([" A1:B3 ", "", " D5:E7 "]).Should().Be("A1:B3; D5:E7");
     }
 
     [Fact]
-    public void ConsolidateDialogPlanning_AdaptsSharedPresentationPlanner()
+    public void ConsolidateDialogPlanning_UsesSharedPresentationPlannerDirectly()
     {
-        var source = ReadConsolidateDialogSources() + DialogSourceTestSupport.ReadHostSources("ConsolidateInputParser.cs");
+        var hostSource = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
+        var presentationSource =
+            DialogSourceTestSupport.ReadPresentationSources("Consolidate", "ConsolidateDialogPlanner.cs") +
+            DialogSourceTestSupport.ReadPresentationSources("Consolidate", "ConsolidateInputParser.cs");
 
-        source.Should().Contain("FreeX.App.Presentation.Consolidate.ConsolidateDialogPlanner");
-        source.Should().Contain("FreeX.App.Presentation.Consolidate.ConsolidateInputParser");
-        source.Should().NotContain("WorkbookRangeTextCodec.TryParse");
-        source.Should().NotContain("private static IEnumerable<string> SplitReferences");
+        hostSource.Should().Contain("using FreeX.App.Presentation.Consolidate;");
+        hostSource.Should().Contain("ConsolidateDialogPlanner.TryParse(");
+        hostSource.Should().NotContain("WorkbookRangeTextCodec.TryParse");
+        hostSource.Should().NotContain("private static IEnumerable<string> SplitReferences");
+        presentationSource.Should().Contain("ConsolidateInputParser.TryParseSourceRanges(");
+        presentationSource.Should().Contain("ConsolidateInputParser.TryParseDestination(");
+        presentationSource.Should().Contain("WorkbookRangeTextCodec.TryParse");
     }
 
     [Theory]
@@ -129,7 +135,7 @@ public sealed partial class DataToolDialogTests
         string referenceText,
         bool expected)
     {
-        ConsolidateDialog.HasPendingReferenceText(["A1:B3", "D5:E7"], referenceText)
+        ConsolidateDialogPlanner.HasPendingReferenceText(["A1:B3", "D5:E7"], referenceText)
             .Should()
             .Be(expected);
     }
@@ -137,7 +143,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateDialog_HasPendingReferenceText_DetectsUnaddedTypedReference()
     {
-        ConsolidateDialog.HasPendingReferenceText(["A1:B3"], "D5:E7")
+        ConsolidateDialogPlanner.HasPendingReferenceText(["A1:B3"], "D5:E7")
             .Should()
             .BeTrue();
     }
@@ -147,29 +153,31 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        ConsolidateDialog.TryAddReference(
+        ConsolidateDialogPlanner.TryAddReference(
                 sheetId,
                 ["A1:B3"],
                 "nope",
                 out var unchanged,
-                out var error)
+                out var issue)
             .Should()
             .BeFalse();
 
         unchanged.Should().Equal("A1:B3");
-        error.Should().Be("Enter a valid source range: nope.");
+        issue.Should().Be(new ConsolidateDialogIssue(
+            ConsolidateDialogIssueKind.InvalidSourceRange,
+            "nope"));
 
-        ConsolidateDialog.TryAddReference(
+        ConsolidateDialogPlanner.TryAddReference(
                 sheetId,
                 ["A1:B3"],
                 "D5:E7",
                 out var updated,
-                out error)
+                out issue)
             .Should()
             .BeTrue();
 
         updated.Should().Equal("A1:B3", "D5:E7");
-        error.Should().BeNull();
+        issue.Should().Be(ConsolidateDialogIssue.None);
     }
 
     [Fact]
@@ -352,8 +360,8 @@ public sealed partial class DataToolDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
 
-        source.Should().Contain("FocusInvalidFinalValidation(error);");
-        source.Should().Contain("private void FocusInvalidFinalValidation(string? error)");
+        source.Should().Contain("FocusInvalidFinalValidation(validation.FocusTarget);");
+        source.Should().Contain("private void FocusInvalidFinalValidation(ConsolidateDialogFocusTarget focusTarget)");
         source.Should().Contain("FocusReferenceInput();");
         source.Should().Contain("FocusDestinationInput();");
         source.Should().Contain("_referencesList.Focus();");
@@ -365,8 +373,8 @@ public sealed partial class DataToolDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
 
-        source.Should().Contain("HasPendingReferenceText(_referencesList.Items.Cast<string>(), _referenceBox.Text)");
-        source.Should().Contain("DialogMessageHelper.ShowWarning(this, UiText.Get(\"Consolidate_AddTheReferenceBeforeClickingOk\")");
+        source.Should().Contain("ConsolidateDialogPlanner.HasPendingReferenceText(");
+        source.Should().Contain(".DescribePendingReference(ConsolidateDialogTextProfile.Wpf)");
         source.Should().Contain("FocusPendingReferenceInput();");
         source.Should().Contain("private void FocusPendingReferenceInput()");
         source.Should().Contain("DialogFocus.FocusAndSelect(_referenceBox);");
@@ -387,7 +395,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void ConsolidateRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
-        ConsolidateDialog.CreateRangeSelectionRequest(ConsolidateRangeSelectionTarget.Reference, " A1:B3 ")
+        ConsolidateDialogPlanner.CreateRangeSelectionRequest(ConsolidateRangeSelectionTarget.Reference, " A1:B3 ")
             .Should()
             .Be(new ConsolidateRangeSelectionRequest(
                 ConsolidateRangeSelectionTarget.Reference,
@@ -552,26 +560,26 @@ public sealed partial class DataToolDialogTests
     }
 
     private static string ReadConsolidateDialogSources() =>
-        DialogSourceTestSupport.ReadHostSourcesWithSeparator(
-            "",
-            "ConsolidateDialog.cs",
-            "ConsolidateDialog.Planning.cs") +
-        DialogSourceTestSupport.ReadPresentationSources("Consolidate", "ConsolidateDialogModels.cs");
+        DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs") +
+        DialogSourceTestSupport.ReadPresentationSources("Consolidate", "ConsolidateDialogModels.cs") +
+        DialogSourceTestSupport.ReadPresentationSources("Consolidate", "ConsolidateDialogPlanner.cs");
 
     [Fact]
     public void ConsolidateDialog_TryParse_RejectsMalformedSourceRange()
     {
         var sheetId = SheetId.New();
 
-        var parsed = ConsolidateDialog.TryParse(
+        var parsed = ConsolidateDialogPlanner.TryParse(
             sheetId,
             sourceRangesText: "A1:B3; nope",
             destinationCellText: "G10",
             out _,
-            out var error);
+            out var issue);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid source range: nope.");
+        issue.Should().Be(new ConsolidateDialogIssue(
+            ConsolidateDialogIssueKind.InvalidSourceRange,
+            "nope"));
     }
 
     [Fact]
@@ -579,15 +587,15 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = ConsolidateDialog.TryParse(
+        var parsed = ConsolidateDialogPlanner.TryParse(
             sheetId,
             sourceRangesText: "A1:B3; D5:F7",
             destinationCellText: "G10",
             out _,
-            out var error);
+            out var issue);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Source ranges must be the same size.");
+        issue.Kind.Should().Be(ConsolidateDialogIssueKind.MismatchedSourceSizes);
     }
 
     [Fact]
@@ -595,14 +603,14 @@ public sealed partial class DataToolDialogTests
     {
         var sheetId = SheetId.New();
 
-        var parsed = ConsolidateDialog.TryParse(
+        var parsed = ConsolidateDialogPlanner.TryParse(
             sheetId,
             sourceRangesText: "A1:B3",
             destinationCellText: "nope",
             out _,
-            out var error);
+            out var issue);
 
         parsed.Should().BeFalse();
-        error.Should().Be("Enter a valid destination cell.");
+        issue.Kind.Should().Be(ConsolidateDialogIssueKind.InvalidDestinationCell);
     }
 }

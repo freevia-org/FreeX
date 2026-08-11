@@ -3,7 +3,7 @@ using FreeX.App.Presentation.Localization;
 
 namespace FreeX.App.Presentation.ScenarioManager;
 
-public enum ScenarioManagerDialogAction
+public enum ScenarioManagerAction
 {
     Add,
     Edit,
@@ -11,7 +11,8 @@ public enum ScenarioManagerDialogAction
     Show,
     Delete,
     List,
-    Report
+    Report,
+    Merge
 }
 
 public enum ScenarioManagerDialogValidationField
@@ -57,7 +58,7 @@ public sealed record ScenarioManagerDialogSelectionFields(
     bool Hidden);
 
 public sealed record ScenarioManagerDialogAcceptResult(
-    ScenarioManagerDialogAction Action,
+    ScenarioManagerAction Action,
     string? SelectedScenarioName,
     string NewScenarioName,
     string ChangingCellsText,
@@ -112,10 +113,10 @@ public static class ScenarioManagerDialogPlanner
             scenario.Locked)).ToList();
     }
 
-    public static bool RequiresScenarioName(ScenarioManagerDialogAction action) =>
-        action is ScenarioManagerDialogAction.Add
-            or ScenarioManagerDialogAction.Edit
-            or ScenarioManagerDialogAction.Save;
+    public static bool RequiresScenarioName(ScenarioManagerAction action) =>
+        action is ScenarioManagerAction.Add
+            or ScenarioManagerAction.Edit
+            or ScenarioManagerAction.Save;
 
     public static ScenarioManagerDialogValidation ValidateScenarioName(string? name) =>
         string.IsNullOrWhiteSpace(name)
@@ -238,7 +239,7 @@ public static class ScenarioManagerDialogPlanner
     }
 
     public static ScenarioManagerDialogValidationFailure? ValidateAcceptRequest(
-        ScenarioManagerDialogAction action,
+        ScenarioManagerAction action,
         string? scenarioName,
         string? changingCellsText,
         string? resultCellsText,
@@ -268,7 +269,7 @@ public static class ScenarioManagerDialogPlanner
             resultCellsText,
             currentSheetId,
             resolveSheetIdByName);
-        if (action is ScenarioManagerDialogAction.Report && !resultCellsValidation.IsValid)
+        if (action is ScenarioManagerAction.Report && !resultCellsValidation.IsValid)
         {
             return new ScenarioManagerDialogValidationFailure(
                 resultCellsValidation.Error,
@@ -279,7 +280,7 @@ public static class ScenarioManagerDialogPlanner
     }
 
     public static ScenarioManagerDialogAcceptResult ProjectAcceptResult(
-        ScenarioManagerDialogAction action,
+        ScenarioManagerAction action,
         ScenarioManagerDialogItem? selected,
         string newScenarioName,
         string changingCellsText,

@@ -5,18 +5,18 @@ namespace FreeX.App.Host.Tests;
 public sealed class DataToolDialogPlannerSourceGuardTests
 {
     [Fact]
-    public void HostDataToolPlanningFacades_DelegatePortableLogicToSharedPlanners()
+    public void HostDataToolDialogs_ConsumePortablePlannersWithoutCompatibilityFacades()
     {
-        var advancedFilter = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.Planning.cs");
-        advancedFilter.Should().Contain("SharedAdvancedFilterPlanner.CreatePlan(");
-        advancedFilter.Should().Contain("SharedAdvancedFilterOutputMode");
-        advancedFilter.Should().NotContain("ServicesAdvancedFilterPlanner");
+        var advancedFilter = DialogSourceTestSupport.ReadHostSources("AdvancedFilterDialog.cs");
+        advancedFilter.Should().Contain("AdvancedFilterPlanner.CreatePlan(");
+        advancedFilter.Should().Contain("AdvancedFilterPlanner.CreateRangeSelectionRequest(");
+        advancedFilter.Should().Contain("AdvancedFilterPlanner.TryCreateDialogResult(");
         advancedFilter.Should().NotContain("WorkbookReferenceNavigator");
 
-        var consolidate = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.Planning.cs");
-        consolidate.Should().Contain("SharedConsolidateDialogPlanner.TryAddReference(");
-        consolidate.Should().Contain("SharedConsolidateDialogPlanner.TryParse(");
-        consolidate.Should().Contain("SharedConsolidateDialogPlanner.CreateRangeSelectionRequest(");
+        var consolidate = DialogSourceTestSupport.ReadHostSources("ConsolidateDialog.cs");
+        consolidate.Should().Contain("ConsolidateDialogPlanner.TryAddReference(");
+        consolidate.Should().Contain("ConsolidateDialogPlanner.TryParse(");
+        consolidate.Should().Contain("ConsolidateDialogPlanner.CreateRangeSelectionRequest(");
         consolidate.Should().NotContain("WorkbookRangeTextCodec.TryParse");
 
         var parityCapture = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
@@ -47,10 +47,13 @@ public sealed class DataToolDialogPlannerSourceGuardTests
         removeDuplicates.Should().NotContain("ScalarValue?");
         removeDuplicates.Should().NotContain("NumberValue or DateTimeValue or BoolValue");
 
-        var sort = DialogSourceTestSupport.ReadHostSources("SortDialog.Planning.cs");
-        sort.Should().Contain("SortDialogPlanner.BuildSortKeys(levels, PlannerText)");
-        sort.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders, PlannerText)");
-        sort.Should().Contain("SortDialogPlanner.ExcludeHeaderRow(range, hasHeaders)");
+        var sort = DialogSourceTestSupport.ReadHostSources(
+            "SortDialog.cs",
+            "SortDialog.Types.cs",
+            "MainWindow.DataFilterCommands.cs");
+        sort.Should().Contain("SortDialogPlanner.BuildSortKeys(_levels, PlannerText)");
+        sort.Should().Contain("SortDialogPlanner.BuildColumnChoices(sheet, range, hasHeaders: true, SortDialog.PlannerText)");
+        sort.Should().Contain("SortDialogPlanner.CreateCommandPlan(");
 
         var subtotal = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
         subtotal.Should().Contain("SharedSubtotalDialogPlanner.BuildColumnChoices(sheet, range, PlannerText)");

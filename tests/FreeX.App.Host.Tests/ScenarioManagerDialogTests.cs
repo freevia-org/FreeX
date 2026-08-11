@@ -18,9 +18,7 @@ public sealed partial class ScenarioManagerDialogTests
     }
 
     private static string ReadScenarioManagerDialogSources() =>
-        DialogSourceTestSupport.ReadHostSources(
-            "ScenarioManagerDialog.cs",
-            "ScenarioManagerDialog.Planning.cs");
+        DialogSourceTestSupport.ReadHostSources("ScenarioManagerDialog.cs");
 
     private static string ReadScenarioManagerDialogSource() =>
         DialogSourceTestSupport.ReadHostSources("ScenarioManagerDialog.cs");
