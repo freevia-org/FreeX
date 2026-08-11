@@ -18,7 +18,7 @@ public sealed partial class OptionsDialogSourceTests
         xaml.Should().Contain("x:Name=\"OptFormulaBarExpanded\"");
         source.Should().Contain("OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar");
         source.Should().Contain("OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded");
-        source.Should().Contain("ShowFormulaBar     = OptShowFormulaBar.IsChecked == true");
+        source.Should().Contain("OptShowFormulaBar.IsChecked == true,");
         source.Should().Contain("formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
         source.Should().Contain("var saveResult = _dialogSession.Commit(");
     }

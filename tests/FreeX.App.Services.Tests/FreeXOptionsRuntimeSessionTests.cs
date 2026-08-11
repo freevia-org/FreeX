@@ -7,6 +7,20 @@ namespace FreeX.App.Services.Tests;
 public sealed class FreeXOptionsRuntimeSessionTests
 {
     [Fact]
+    public void Constructor_DoesNotNormalizeInjectedLiveSnapshot()
+    {
+        var live = new AppOptions
+        {
+            SpellCheckCustomDictionaryWords = [" keep ", "Keep", "also"],
+        };
+
+        var runtime = new FreeXOptionsRuntimeSession(live);
+
+        runtime.LiveOptions.Should().BeSameAs(live);
+        live.SpellCheckCustomDictionaryWords.Should().Equal(" keep ", "Keep", "also");
+    }
+
+    [Fact]
     public void Adopt_PreservesLiveIdentityAndCopiesMutableCollections()
     {
         var live = new AppOptions

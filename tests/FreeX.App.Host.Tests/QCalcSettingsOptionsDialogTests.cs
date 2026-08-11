@@ -235,8 +235,8 @@ public sealed partial class OptionsDialogSourceTests
 
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
         source.Should().Contain("CalculationOptionsInputParser.TryParseBounds(");
-        source.Should().Contain("CalculationOptionsInputError.InvalidMaxIterations");
-        source.Should().Contain("\"Options_InvalidMaxIterationsMessage\"");
-        source.Should().Contain("invalidIterations ? OptMaxIterations : OptMaxChange");
+        source.Should().Contain("OptionsValidationPresentationPlanner.DescribeCalculationInput(calculationInputError)");
+        source.Should().Contain("presentation.FocusTarget == OptionsValidationFocusTarget.MaxIterations");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
     }
 }

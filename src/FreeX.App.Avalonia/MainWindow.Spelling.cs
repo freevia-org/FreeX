@@ -38,7 +38,7 @@ public sealed partial class MainWindow
             {
                 fresh.SpellCheckCustomDictionaryWords =
                     options.SpellCheckCustomDictionaryWords.ToList();
-            }).IsPersisted));
+            })));
         var transition = controller.Start();
 
         if (transition.Status == SpellCheckSessionStatus.Complete)

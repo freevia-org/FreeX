@@ -161,8 +161,7 @@ public sealed partial class OptionsDialogSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
         UiText.Get("Options_DefaultFormatJson").Should().Be("FreeX Workbook (.fxl)");
-        source.Should().Contain("AppOptions.NormalizeDefaultFormat(_opts.DefaultFormat)");
-        source.Should().Contain("AppOptions.FreeXWorkbookDefaultFormat");
+        source.Should().Contain("OptionsDialogPlanner.IndexToDefaultFormat(OptDefaultFormat.SelectedIndex)");
         source.Should().NotContain("DefaultFormat == \".json\"");
         source.Should().NotContain("? \".json\"");
     }
@@ -213,7 +212,7 @@ public sealed partial class OptionsDialogSourceTests
 
         source.Should().Contain("OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages()");
         source.Should().Contain("OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage)");
-        source.Should().Contain("AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
+        source.Should().Contain("appLanguage: AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
         source.Should().Contain("var saveResult = _dialogSession.Commit(");
 
         backstageSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage)");
@@ -231,10 +230,10 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        source.Should().Contain("OptionsDialogPlanner.TryParseDefaultFontSize(OptDefaultFontSize.Text, out var defaultFontSize)");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidDefaultFontSizeMessage\"), OptDefaultFontSize);");
-        source.Should().Contain("OptionsDialogPlanner.TryParseDefaultSheetCount(OptSheetCount.Text, out var defaultSheetCount)");
-        source.Should().Contain("ShowInvalidInputWarning(UiText.Get(\"Options_InvalidSheetCountMessage\"), OptSheetCount);");
+        source.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
+        source.Should().Contain("OptionsDialogPlanner.DescribeInputError(");
+        source.Should().Contain("presentation.FocusTarget == OptionsValidationFocusTarget.DefaultFontSize");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, Control target)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().NotContain("ParseDefaultFontSizeOrFallback");

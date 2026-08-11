@@ -42,7 +42,7 @@ public partial class MainWindow
             {
                 options.SpellCheckCustomDictionaryWords =
                     _options.SpellCheckCustomDictionaryWords.ToList();
-            }).IsPersisted));
+            })));
         var transition = controller.Start();
 
         while (transition.RequiresReview)

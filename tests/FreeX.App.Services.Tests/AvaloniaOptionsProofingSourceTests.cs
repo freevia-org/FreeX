@@ -53,7 +53,7 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("ProofingCustomDictionaryClearWordsButton");
         source.Should().Contain("current.ProofingIgnoreUppercase");
         source.Should().Contain("current.ProofingIgnoreNumbers");
-        source.Should().Contain("QuickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true");
+        source.Should().Contain("quickAccessSession.SetPlacement(quickAccessBelowRibbonBox.IsChecked == true);");
         source.Should().Contain("quickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true");
         source.Should().Contain("optionsDialogSession.Commit(");
         source.Should().Contain("_avaloniaQuickAccessOptions = current;");
@@ -67,7 +67,7 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("Options_QuickAccessAddCommandHelpText");
         source.Should().Contain("Options_QuickAccessImportExportHelpText");
         source.Should().Contain("catch (Exception ex)");
-        source.Should().Contain("new CustomDictionaryEditorSession(current.SpellCheckCustomDictionaryWords)");
+        source.Should().Contain("var customDictionaryEditor = optionsDialogSession.CustomDictionary;");
         source.Should().Contain("customDictionaryEditor.RemoveSelectedWord();");
         var initialRefresh = source.IndexOf("RefreshQuickAccessLists();", StringComparison.Ordinal);
         initialRefresh.Should().BeGreaterThanOrEqualTo(0);

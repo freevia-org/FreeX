@@ -58,9 +58,8 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         source.Should().Contain("isChecked: current.EnableAutoCompleteForCellValues");
         source.Should().Contain("isEnabled: true,");
         source.Should().Contain("AutomationProperties.SetAutomationId(objectsDisplayBox, \"OptionsObjectsDisplayComboBox\")");
-        source.Should().Contain("objectsDisplay: objectsDisplayBox.SelectedIndex switch");
-        source.Should().Contain("AppOptionsObjectDisplay.Placeholders");
-        source.Should().Contain("AppOptionsObjectDisplay.Nothing");
+        source.Should().Contain("objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(objectsDisplayBox.SelectedIndex)");
+        source.Should().Contain("OptionsDialogPlanner.ObjectDisplayToIndex(current.ObjectsDisplay)");
     }
 
     [Fact]
@@ -70,7 +69,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
 
         source.Should().Contain("isChecked: current.EnableFillHandleAndCellDragAndDrop");
         source.Should().Contain("OptionsEnableFillHandleAndCellDragAndDropCheckBox");
-        source.Should().Contain("projected.EnableFillHandleAndCellDragAndDrop = advancedFillHandleBox.IsChecked == true");
+        source.Should().Contain("enableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true");
         source.Should().NotContain("isChecked: true,\n            isEnabled: false");
     }
 
@@ -93,7 +92,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
         source.Should().Contain("Key.End");
         source.Should().Contain("Key.Enter or Key.Space");
         source.Should().Contain("args.Handled = true;");
-        source.Should().Contain("new CustomDictionaryEditorSession(current.SpellCheckCustomDictionaryWords)");
+        source.Should().Contain("var customDictionaryEditor = optionsDialogSession.CustomDictionary;");
         source.Should().Contain("customDictionaryEditor.AddPendingWord();");
         source.Should().Contain("customDictionaryEditor.RemoveSelectedWord();");
         source.Should().Contain("customDictionaryEditor.Clear();");

@@ -25,7 +25,7 @@ public sealed class FreeXOptionsRuntimeSession
     {
         _load = load ?? AppOptionsStore.Load;
         _save = save ?? AppOptionsStore.Save;
-        LiveOptions = Normalize(initialOptions ?? LoadFromStore());
+        LiveOptions = initialOptions ?? Normalize(LoadFromStore());
     }
 
     public AppOptions LiveOptions { get; private set; }

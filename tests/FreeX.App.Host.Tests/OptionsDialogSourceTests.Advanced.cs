@@ -118,8 +118,7 @@ public sealed partial class OptionsDialogSourceTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs");
 
         source.Should().Contain("_options.EnableAutoCompleteForCellValues");
-        source.Should().Contain("CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries");
-        source.Should().Contain("CellValueAutoCompleteSuggester.Suggest(candidates, text)");
+        source.Should().Contain("_formulaRangeEditingSession.PlanCellValueAutocomplete(");
     }
 
     [Fact]
@@ -156,9 +155,9 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("PanelAdvanced.Visibility");
         source.Should().Contain("OptAfterEnterDirection.ItemsSource");
         source.Should().Contain("OptMoveAfterEnter.IsChecked = _opts.MoveSelectionAfterEnter");
-        source.Should().Contain("ShowGridlines = OptShowGridlines.IsChecked == true");
-        source.Should().Contain("ShowHeadings = OptShowHeadings.IsChecked == true");
-        source.Should().Contain("ObjectsDisplay = OptObjectsDisplay.SelectedIndex switch");
+        source.Should().Contain("OptShowGridlines.IsChecked == true,");
+        source.Should().Contain("OptShowHeadings.IsChecked == true,");
+        source.Should().Contain("objectsDisplay: OptionsDialogPlanner.IndexToObjectDisplay(OptObjectsDisplay.SelectedIndex)");
         source.Should().Contain("OptObjectsDisplay.ItemsSource");
         source.Should().Contain("ShowDeferredOptionsMessage");
         source.Should().Contain("DeferredCommandMessagePlanner.AutoCorrectOptions()");
