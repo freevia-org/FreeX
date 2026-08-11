@@ -26,9 +26,11 @@ public sealed class WatermarkDialogTests
         source.Should().Contain("new WatermarkTextDialogInput(");
         source.Should().Contain("WatermarkOptionsDialogPlanner.TryBuildPictureResult(");
         source.Should().Contain("new WatermarkPictureDialogInput(");
-        source.Should().Contain("WatermarkOptionsDialogPlanner.FormatPickedImageLabel(");
+        source.Should().Contain("WatermarkOptionsDialogPlanner.BuildImageImportPlan(");
+        source.Should().Contain("WatermarkOptionsDialogPlanner.FormatImageReadFailure(");
         source.Should().Contain("WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle");
         source.Should().NotContain("new WatermarkOptions(text)");
+        source.Should().NotContain("$\"Could not read image file:");
     }
 
     [Fact]

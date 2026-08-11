@@ -40,6 +40,10 @@ public sealed record WatermarkOptionsDialogValidation(
     WatermarkDialogValidationTarget Target,
     string Message);
 
+public sealed record WatermarkImageImportPlan(
+    byte[] ImageBytes,
+    string DisplayLabel);
+
 public static class WatermarkOptionsDialogPlanner
 {
     public const string Title = "Printed Watermark";
@@ -76,6 +80,7 @@ public static class WatermarkOptionsDialogPlanner
     public const string ColorValidationMessage = "Enter a valid colour hex value (e.g. #808080).";
     public const string ImageValidationMessage = "Select an image file for the picture watermark.";
     public const string ScaleValidationMessage = "Scale must be 0 (Auto) or 1-500.";
+    public const string ImageReadFailurePrefix = "Could not read image file:";
 
     public static WatermarkOptionsDialogInitialState BuildInitialState(
         WatermarkOptions? current,
@@ -190,6 +195,24 @@ public static class WatermarkOptionsDialogPlanner
 
     public static string FormatPickedImageLabel(string fileName, long byteCount) =>
         $"{fileName} ({byteCount / 1024} KB)";
+
+    public static WatermarkImageImportPlan BuildImageImportPlan(string? fileName, byte[] imageBytes)
+    {
+        ArgumentNullException.ThrowIfNull(imageBytes);
+
+        var displayName = Path.GetFileName((fileName ?? string.Empty).Trim());
+        return new WatermarkImageImportPlan(
+            imageBytes,
+            FormatPickedImageLabel(displayName, imageBytes.LongLength));
+    }
+
+    public static string FormatImageReadFailure(string? errorMessage)
+    {
+        var detail = string.IsNullOrWhiteSpace(errorMessage)
+            ? "Unknown error."
+            : errorMessage.Trim();
+        return $"{ImageReadFailurePrefix} {detail}";
+    }
 
     private static WatermarkLayout ToLayout(bool isHorizontal) =>
         isHorizontal ? WatermarkLayout.Horizontal : WatermarkLayout.Diagonal;

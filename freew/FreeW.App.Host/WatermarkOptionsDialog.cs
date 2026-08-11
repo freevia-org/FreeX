@@ -212,14 +212,18 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         try
         {
-            _pendingImageBytes = File.ReadAllBytes(fileName);
-            _pathBox.Text = WatermarkOptionsDialogPlanner.FormatPickedImageLabel(
-                Path.GetFileName(fileName),
-                _pendingImageBytes.Length);
+            var import = WatermarkOptionsDialogPlanner.BuildImageImportPlan(
+                fileName,
+                File.ReadAllBytes(fileName));
+            _pendingImageBytes = import.ImageBytes;
+            _pathBox.Text = import.DisplayLabel;
         }
         catch (Exception ex)
         {
-            DialogMessageHelper.ShowWarning(this, $"Could not read image file: {ex.Message}", Title);
+            DialogMessageHelper.ShowWarning(
+                this,
+                WatermarkOptionsDialogPlanner.FormatImageReadFailure(ex.Message),
+                Title);
         }
     }
 

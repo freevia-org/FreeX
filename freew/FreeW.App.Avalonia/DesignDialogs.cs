@@ -413,14 +413,15 @@ public sealed class WatermarkDialog : FreeWDialogWindow
         }
         catch (Exception ex)
         {
-            ShowValidation($"Could not read image file: {ex.Message}", _pathBox);
+            ShowValidation(WatermarkOptionsDialogPlanner.FormatImageReadFailure(ex.Message), _pathBox);
         }
     }
 
     private void LoadPictureImage(string fileName, byte[] imageBytes)
     {
-        _pendingImageBytes = imageBytes;
-        _pathBox.Text = WatermarkOptionsDialogPlanner.FormatPickedImageLabel(fileName, imageBytes.Length);
+        var import = WatermarkOptionsDialogPlanner.BuildImageImportPlan(fileName, imageBytes);
+        _pendingImageBytes = import.ImageBytes;
+        _pathBox.Text = import.DisplayLabel;
         ClearValidation();
     }
 

@@ -343,7 +343,7 @@ public sealed class DocumentView : Control
 
     internal DocumentView(CustomDictionaryStore? customDictionary)
     {
-        _editingSession = new DocumentEditingSession(() => RevisionAuthor);
+        _editingSession = new DocumentEditingSession(CurrentRevisionAuthor);
         _customDictionary = customDictionary ?? CustomDictionaryStore.Load();
         Focusable = true;
         // Word's exported pages use grayscale antialiasing. Subpixel LCD rendering leaves colour fringes
@@ -18587,11 +18587,12 @@ public sealed class DocumentView : Control
         if (CommentIdAtCaret() is not { } id)
             return false;
 
+        var identity = CurrentCommentIdentity();
         return ReplyToComment(
             id,
             text,
-            RevisionAuthor,
-            CommentInitialsPolicy.Derive(RevisionAuthor, CommentInitialsPolicy.FirstAndLastWords));
+            identity.Author,
+            identity.Initials);
     }
 
     /// <summary>
@@ -18980,18 +18981,28 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// Adds a review comment over the current selection using <see cref="RevisionAuthor"/> as the author
-    /// (initials derived from it). Reuses the AV-COMMENT <see cref="AddComment(string,string,string)"/>
+    /// Adds a review comment over the current selection using the shared current-reviewer identity.
+    /// Reuses the AV-COMMENT <see cref="AddComment(string,string,string)"/>
     /// infra. Returns the new comment id, or null when there was nothing textual to anchor to.
     /// Wired to <c>freew.new-comment</c>.
     /// </summary>
     public int? NewComment(string text = "New comment")
     {
-        var initials = CommentInitialsPolicy.Derive(
-            RevisionAuthor,
-            CommentInitialsPolicy.FirstAndLastWords);
-        return AddComment(text, RevisionAuthor, initials);
+        var identity = CurrentCommentIdentity();
+        return AddComment(text, identity.Author, identity.Initials);
     }
+
+    private string CurrentRevisionAuthor() =>
+        ReviewAuthorIdentityPlanner.ResolveAuthor(
+            RevisionAuthor,
+            _doc.Properties.Author,
+            Environment.UserName);
+
+    private CommentStampIdentity CurrentCommentIdentity() =>
+        ReviewAuthorIdentityPlanner.BuildCommentStamp(
+            RevisionAuthor,
+            _doc.Properties.Author,
+            Environment.UserName);
 
     /// <summary>
     /// Full word/character/paragraph statistics for the document, computed from the model via

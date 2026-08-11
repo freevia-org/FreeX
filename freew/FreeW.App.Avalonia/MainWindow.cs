@@ -1343,7 +1343,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task OpenZoomDialogAsync()
     {
-        var dialog = new ZoomDialog(_zoomScale);
+        var dialog = new ZoomDialog(_zoomScale, ComputeZoomFitFactors());
         await dialog.ShowDialog(this);
         if (dialog.Result is { } scale)
         {

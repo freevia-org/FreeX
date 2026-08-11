@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.DocumentView;
@@ -919,9 +920,9 @@ public sealed class ViewTabDepthTests
         var ran = await OnUiThread(() =>
         {
             // 100% current → the 100% radio is pre-selected → ResolveScale == 1.0.
-            scale100 = new ZoomDialog(1.0).ResolveScale();
+            scale100 = new ZoomDialog(1.0, new ZoomDialogFitFactors(1.1, 1.2, 0.7)).ResolveScale();
             // 200% current → the 200% radio is pre-selected → ResolveScale == 2.0.
-            scale200 = new ZoomDialog(2.0).ResolveScale();
+            scale200 = new ZoomDialog(2.0, new ZoomDialogFitFactors(1.1, 1.2, 0.7)).ResolveScale();
         });
 
         if (!ran) return;
@@ -936,7 +937,7 @@ public sealed class ViewTabDepthTests
         var ran = await OnUiThread(() =>
         {
             // A non-preset current zoom (e.g. 130%) selects the custom radio; ResolveScale reads the box.
-            var dialog = new ZoomDialog(1.3);
+            var dialog = new ZoomDialog(1.3, new ZoomDialogFitFactors(1.1, 1.2, 0.7));
             scale = dialog.ResolveScale();
         });
 
@@ -946,25 +947,21 @@ public sealed class ViewTabDepthTests
     }
 
     [Fact]
-    public async Task Zoom_dialog_page_relative_presets_resolve_to_their_scales()
+    public async Task Zoom_dialog_page_relative_presets_use_host_viewport_factors()
     {
-        // Page-relative fit arithmetic is owned by the shared presentation planner; the Avalonia
-        // dialog only supplies the host's current fit factors.
-        ZoomDialogPlanner
-            .TryCreateResult(
-                new ZoomDialogSelectionRequest(
-                    ZoomDialogFitOption.PageWidth,
-                    PresetPercent: null,
-                    CustomPercentText: "not parsed"),
-                new ZoomDialogFitFactors(1.25, 1.5, 0.6),
-                out var scale,
-                out var error)
-            .Should()
-            .BeTrue();
+        double? scale = null;
+        var ran = await OnUiThread(() =>
+        {
+            var dialog = new ZoomDialog(1.0, new ZoomDialogFitFactors(1.37, 1.54, 0.63));
+            dialog.GetLogicalDescendants()
+                .OfType<RadioButton>()
+                .Single(button => button.Content as string == ZoomDialogPlanner.Text.PageWidthLabel)
+                .IsChecked = true;
+            scale = dialog.ResolveScale();
+        });
 
-        scale.Should().Be(1.25);
-        error.Should().BeNull();
-        await Task.CompletedTask;
+        if (!ran) return;
+        scale.Should().Be(1.37);
     }
 
     private static IRibbonStatefulCommand Stateful(RibbonCommandRegistry registry, string id)

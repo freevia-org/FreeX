@@ -158,4 +158,22 @@ public sealed class WatermarkOptionsDialogPlannerTests
         WatermarkOptionsDialogPlanner.FormatPickedImageLabel("logo.png", 4097)
             .Should().Be("logo.png (4 KB)");
     }
+
+    [Fact]
+    public void BuildImageImportPlan_NormalizesPathAndKeepsImportedBytes()
+    {
+        var bytes = new byte[2049];
+        var path = Path.Combine("art", "logo.png");
+
+        WatermarkOptionsDialogPlanner.BuildImageImportPlan(path, bytes)
+            .Should().Be(new WatermarkImageImportPlan(bytes, "logo.png (2 KB)"));
+    }
+
+    [Theory]
+    [InlineData("Access denied", "Could not read image file: Access denied")]
+    [InlineData(" ", "Could not read image file: Unknown error.")]
+    public void FormatImageReadFailure_OwnsPortableFailureText(string detail, string expected)
+    {
+        WatermarkOptionsDialogPlanner.FormatImageReadFailure(detail).Should().Be(expected);
+    }
 }

@@ -14409,14 +14409,10 @@ public sealed class DocumentView : RichTextBox
     }
 
     private string CurrentRevisionAuthor()
-    {
-        var author = string.IsNullOrWhiteSpace(RevisionAuthor)
-            ? _model.Properties.Author
-            : RevisionAuthor;
-        if (string.IsNullOrWhiteSpace(author))
-            author = Environment.UserName;
-        return string.IsNullOrWhiteSpace(author) ? "FreeW User" : author.Trim();
-    }
+        => ReviewAuthorIdentityPlanner.ResolveAuthor(
+            RevisionAuthor,
+            _model.Properties.Author,
+            Environment.UserName);
 
     private void PlaceCaretAtModelTextOffset(int modelBlockIndex, int offset)
     {

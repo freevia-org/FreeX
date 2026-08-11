@@ -62,13 +62,19 @@ public sealed class RendererNeutralProjectionOwnershipSourceTests
     public void RemainingOwnedCommentAndStyleCallSitesUsePortablePolicies()
     {
         var ribbon = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var wpfView = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
 
-        ribbon.Should().Contain("CommentInitialsPolicy.Derive(");
+        ribbon.Should().Contain("ReviewAuthorIdentityPlanner.BuildCommentStamp(");
+        ribbon.Should().NotContain("private static class CommentAuthor");
+        wpfView.Should().Contain("ReviewAuthorIdentityPlanner.ResolveAuthor(");
+        wpfView.Should().NotContain("return string.IsNullOrWhiteSpace(author) ? \"FreeW User\"");
         ribbon.Should().Contain("StyleDialogPlanner.BuildStyleNamesById(editor.Model)");
         ribbon.Should().NotContain("private static IReadOnlyDictionary<string, string> StyleNamesById");
         avalonia.Should().Contain("CommentInitialsPolicy.ResolveBadge(");
-        avalonia.Should().Contain("CommentInitialsPolicy.FirstAndLastWords");
+        avalonia.Should().Contain("ReviewAuthorIdentityPlanner.BuildCommentStamp(");
+        avalonia.Should().Contain("ReviewAuthorIdentityPlanner.ResolveAuthor(");
+        avalonia.Should().NotContain("CommentInitialsPolicy.FirstAndLastWords");
         avalonia.Should().NotContain("private static string DeriveInitials");
     }
 

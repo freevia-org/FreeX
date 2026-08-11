@@ -101,6 +101,29 @@ public sealed class DocumentViewCommentTests
     }
 
     [Fact]
+    public async Task NewComment_UsesSharedReviewIdentityFallbackAndCanonicalInitials()
+    {
+        string? author = null;
+        string? initials = null;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build("Hello world");
+            view.RevisionAuthor = " ";
+            view.Document.Properties.Author = " Document Author ";
+            view.SetSelectionRangePublic(0, 0, 0, 5);
+
+            var id = view.NewComment("note");
+            var comment = view.Document.Comments[id!.Value];
+            author = comment.Author;
+            initials = comment.Initials;
+        });
+
+        if (!ran) return;
+        author.Should().Be("Document Author");
+        initials.Should().Be("DA");
+    }
+
+    [Fact]
     public async Task AddComment_with_empty_selection_anchors_whole_paragraph()
     {
         var anchoredText = "";

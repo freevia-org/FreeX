@@ -23,13 +23,6 @@ internal sealed class ZoomDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private static readonly ZoomDialogTextSpec Text = ZoomDialogPlanner.Text;
 
-    // Representative fit scales for the page-relative presets. These mirror typical Word values for
-    // a Letter page in a roughly 1000px workspace; exact fit-to-viewport computation is deferred.
-    private static readonly ZoomDialogFitFactors DefaultFitFactors = new(
-        PageWidthFactor: 1.25,
-        TextWidthFactor: 1.5,
-        WholePageFactor: 0.6);
-
     private readonly RadioButton _pageWidthButton = Preset(Text.PageWidthLabel);
     private readonly RadioButton _textWidthButton = Preset(Text.TextWidthLabel);
     private readonly RadioButton _wholePageButton = Preset(Text.WholePageLabel);
@@ -40,14 +33,17 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         VerticalAlignment = VerticalAlignment.Center,
     };
     private readonly TextBlock _status = new();
+    private readonly ZoomDialogFitFactors _fitFactors;
     private readonly ZoomDialogSession _session;
     private static readonly Free.Shared.Shell.DialogFocusPlan<string> FocusPlan = FreeWDialogFocusPlanner.Zoom;
 
     /// <summary>The scale the user accepted (1.0 == 100%), or <c>null</c> if cancelled.</summary>
     public double? Result { get; private set; }
 
-    public ZoomDialog(double currentScale)
+    public ZoomDialog(double currentScale, ZoomDialogFitFactors fitFactors)
     {
+        ArgumentNullException.ThrowIfNull(fitFactors);
+
         Title = Text.Title;
         Width = 280;
         SizeToContent = SizeToContent.Height;
@@ -59,6 +55,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTarget);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
+        _fitFactors = fitFactors;
         _session = new ZoomDialogSession(currentScale);
         var plan = _session.InitialPlan;
         _percentBox.Text = plan.CustomPercentText;
@@ -148,12 +145,12 @@ internal sealed class ZoomDialog : FreeWDialogWindow
     }
 
     internal bool TryResolveScale(out double scale, out ZoomDialogValidationError? error) =>
-        TryResolveScale(_session.PlanAcceptance(DefaultFitFactors), out scale, out error);
+        TryResolveScale(_session.PlanAcceptance(_fitFactors), out scale, out error);
 
     private void Accept()
     {
         _status.IsVisible = false;
-        var acceptance = _session.PlanAcceptance(DefaultFitFactors);
+        var acceptance = _session.PlanAcceptance(_fitFactors);
         if (!acceptance.IsAccepted)
         {
             _status.Text = acceptance.Validation!.Message;

@@ -4152,8 +4152,7 @@ internal static class FreeWRibbonCommands
     }
 
     // Review > Comments > New Comment: prompt for the comment text, then attach it over the current
-    // selection. The author comes from the document's Author property (falling back to the OS user),
-    // with initials derived from it; the view marks the selected runs and stores the comment.
+    // selection. Shared policy resolves the current review identity used for both comments and replies.
     private sealed class NewCommentCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -4167,26 +4166,15 @@ internal static class FreeWRibbonCommands
             if (string.IsNullOrWhiteSpace(text))
                 return; // cancelled or empty — nothing to attach
 
-            var author = CommentAuthor.Resolve(editor);
+            var identity = ReviewAuthorIdentityPlanner.BuildCommentStamp(
+                editor.RevisionAuthor,
+                editor.Model.Properties.Author,
+                Environment.UserName);
             editor.Focus();
             editor.InsertComment(
                 text.Trim(),
-                author,
-                CommentInitialsPolicy.Derive(author, CommentInitialsPolicy.FirstThreeWords));
-        }
-    }
-
-    // The author/initials a new comment or reply is stamped with: the document's Author property, falling
-    // back to the OS user, with initials derived from it. Shared by New Comment + Reply so the two stamp
-    // the same identity. Kept tiny + static so it carries no editor state.
-    private static class CommentAuthor
-    {
-        public static string Resolve(DocumentView editor)
-        {
-            var author = editor.Model.Properties.Author;
-            if (string.IsNullOrWhiteSpace(author))
-                author = Environment.UserName;
-            return author?.Trim() ?? string.Empty;
+                identity.Author,
+                identity.Initials);
         }
     }
 
@@ -4207,12 +4195,15 @@ internal static class FreeWRibbonCommands
             if (!acceptance.IsAccepted)
                 return; // cancelled or empty
 
-            var author = CommentAuthor.Resolve(editor);
+            var identity = ReviewAuthorIdentityPlanner.BuildCommentStamp(
+                editor.RevisionAuthor,
+                editor.Model.Properties.Author,
+                Environment.UserName);
             editor.Focus();
             if (!editor.ReplyToCommentAtCaret(
                     acceptance.Text,
-                    author,
-                    CommentInitialsPolicy.Derive(author, CommentInitialsPolicy.FirstThreeWords)))
+                    identity.Author,
+                    identity.Initials))
                 DialogMessageHelper.ShowWarning(Window.GetWindow(editor)!,
                     CommentDialogPresentationPlanner.Text.MissingReplyTargetMessage,
                     CommentDialogPresentationPlanner.Text.ReplyTitle);
