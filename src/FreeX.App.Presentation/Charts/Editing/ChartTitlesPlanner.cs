@@ -23,6 +23,13 @@ public static class ChartTitlesPlanner
     public static ChartTitlesInput Read(ChartModel chart) =>
         new(chart.Title ?? string.Empty, chart.XAxisTitle ?? string.Empty, chart.YAxisTitle ?? string.Empty);
 
+    /// <summary>Trims edited title text and converts null or whitespace-only values to empty strings.</summary>
+    public static ChartTitlesInput Normalize(ChartTitlesInput input) =>
+        new(
+            NormalizeText(input.ChartTitle),
+            NormalizeText(input.XAxisTitle),
+            NormalizeText(input.YAxisTitle));
+
     /// <summary>True when axis titles apply to <paramref name="type"/> (false for pie/doughnut).</summary>
     public static bool SupportsAxisTitles(ChartType type) => ChartTypeSupport.SupportsAxes(type);
 
@@ -34,18 +41,16 @@ public static class ChartTitlesPlanner
     /// </summary>
     public static ChartLayoutOptions Plan(ChartType type, ChartTitlesInput input)
     {
-        var chartTitle = Normalize(input.ChartTitle);
+        var normalized = Normalize(input);
         var supportsAxes = SupportsAxisTitles(type);
-        var xAxisTitle = supportsAxes ? Normalize(input.XAxisTitle) : string.Empty;
-        var yAxisTitle = supportsAxes ? Normalize(input.YAxisTitle) : string.Empty;
 
         return new ChartLayoutOptions(
-            Title: chartTitle,
-            XAxisTitle: xAxisTitle,
-            YAxisTitle: yAxisTitle);
+            Title: normalized.ChartTitle,
+            XAxisTitle: supportsAxes ? normalized.XAxisTitle : string.Empty,
+            YAxisTitle: supportsAxes ? normalized.YAxisTitle : string.Empty);
     }
 
-    private static string Normalize(string? text)
+    private static string NormalizeText(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
             return string.Empty;

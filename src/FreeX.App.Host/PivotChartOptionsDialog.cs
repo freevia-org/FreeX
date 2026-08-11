@@ -11,80 +11,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed class PivotChartOptionsDialogResult : IEquatable<PivotChartOptionsDialogResult>
-{
-    public PivotChartOptionsDialogResult(int? chartStyleId, bool showFieldButtons)
-        : this(chartStyleId, showFieldButtons, true, true, true)
-    {
-    }
-
-    public PivotChartOptionsDialogResult(
-        int? chartStyleId,
-        bool showFieldButtons,
-        bool showReportFilterButtons,
-        bool showAxisFieldButtons,
-        bool showValueFieldButtons,
-        bool showDataTable = false,
-        bool showDataTableLegendKeys = false,
-        bool roundedCorners = false,
-        bool showHiddenData = false,
-        ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap)
-    {
-        ChartStyleId = chartStyleId;
-        ShowFieldButtons = showFieldButtons;
-        ShowReportFilterButtons = showReportFilterButtons;
-        ShowAxisFieldButtons = showAxisFieldButtons;
-        ShowValueFieldButtons = showValueFieldButtons;
-        ShowDataTable = showDataTable;
-        ShowDataTableLegendKeys = showDataTableLegendKeys;
-        RoundedCorners = roundedCorners;
-        ShowHiddenData = showHiddenData;
-        BlankDisplayMode = blankDisplayMode;
-    }
-
-    public int? ChartStyleId { get; }
-    public bool ShowFieldButtons { get; }
-    public bool ShowReportFilterButtons { get; }
-    public bool ShowAxisFieldButtons { get; }
-    public bool ShowValueFieldButtons { get; }
-    public bool ShowDataTable { get; }
-    public bool ShowDataTableLegendKeys { get; }
-    public bool RoundedCorners { get; }
-    public bool ShowHiddenData { get; }
-    public ChartBlankDisplayMode BlankDisplayMode { get; }
-
-    public bool Equals(PivotChartOptionsDialogResult? other) =>
-        other is not null &&
-        ChartStyleId == other.ChartStyleId &&
-        ShowFieldButtons == other.ShowFieldButtons &&
-        ShowReportFilterButtons == other.ShowReportFilterButtons &&
-        ShowAxisFieldButtons == other.ShowAxisFieldButtons &&
-        ShowValueFieldButtons == other.ShowValueFieldButtons &&
-        ShowDataTable == other.ShowDataTable &&
-        ShowDataTableLegendKeys == other.ShowDataTableLegendKeys &&
-        RoundedCorners == other.RoundedCorners &&
-        ShowHiddenData == other.ShowHiddenData &&
-        BlankDisplayMode == other.BlankDisplayMode;
-
-    public override bool Equals(object? obj) => Equals(obj as PivotChartOptionsDialogResult);
-
-    public override int GetHashCode()
-    {
-        var hash = new HashCode();
-        hash.Add(ChartStyleId);
-        hash.Add(ShowFieldButtons);
-        hash.Add(ShowReportFilterButtons);
-        hash.Add(ShowAxisFieldButtons);
-        hash.Add(ShowValueFieldButtons);
-        hash.Add(ShowDataTable);
-        hash.Add(ShowDataTableLegendKeys);
-        hash.Add(RoundedCorners);
-        hash.Add(ShowHiddenData);
-        hash.Add(BlankDisplayMode);
-        return hash.ToHashCode();
-    }
-}
-
 public sealed class PivotChartOptionsDialog : Window
 {
     private readonly ListBox _styleGallery = new();
@@ -98,11 +24,11 @@ public sealed class PivotChartOptionsDialog : Window
     private readonly CheckBox _showHiddenDataBox = new() { Content = FieldLabel(PivotChartOptionsDialogFieldId.ShowHiddenData) };
     private readonly ComboBox _blankDisplayBox = new();
 
-    public PivotChartOptionsDialogResult Result { get; private set; }
+    public PivotChartOptionsInput Result { get; private set; }
 
     public PivotChartOptionsDialog(ChartModel chart)
     {
-        Result = FromChart(chart);
+        Result = PivotChartOptionsPlanner.Read(chart);
         Title = UiText.Get(PivotChartOptionsPlanner.DialogTitleResourceKey);
         Width = 420;
         Height = 430;
@@ -178,61 +104,12 @@ public sealed class PivotChartOptionsDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static PivotChartOptionsDialogResult FromChart(ChartModel chart) =>
-        FromInput(PivotChartOptionsPlanner.Read(chart));
-
-    public static PivotChartOptionsDialogResult CreateResult(
-        string? chartStyleIdText,
-        bool showFieldButtons,
-        bool showReportFilterButtons = true,
-        bool showAxisFieldButtons = true,
-        bool showValueFieldButtons = true,
-        bool showDataTable = false,
-        bool showDataTableLegendKeys = false,
-        bool roundedCorners = false,
-        bool showHiddenData = false,
-        ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap) =>
-        FromInput(PivotChartOptionsPlanner.CreateResult(
-            chartStyleIdText,
-            showFieldButtons,
-            showReportFilterButtons,
-            showAxisFieldButtons,
-            showValueFieldButtons,
-            showDataTable,
-            showDataTableLegendKeys,
-            roundedCorners,
-            showHiddenData,
-            blankDisplayMode));
-
-    public static PivotChartOptionsDialogResult CreateResult(
-        int? chartStyleId,
-        bool showFieldButtons,
-        bool showReportFilterButtons = true,
-        bool showAxisFieldButtons = true,
-        bool showValueFieldButtons = true,
-        bool showDataTable = false,
-        bool showDataTableLegendKeys = false,
-        bool roundedCorners = false,
-        bool showHiddenData = false,
-        ChartBlankDisplayMode blankDisplayMode = ChartBlankDisplayMode.Gap) =>
-        FromInput(PivotChartOptionsPlanner.CreateResult(
-            chartStyleId,
-            showFieldButtons,
-            showReportFilterButtons,
-            showAxisFieldButtons,
-            showValueFieldButtons,
-            showDataTable,
-            showDataTableLegendKeys,
-            roundedCorners,
-            showHiddenData,
-            blankDisplayMode));
-
     private void Accept()
     {
         var selectedStyleId = _styleGallery.SelectedItem is ChartStyleOption option
             ? option.StyleId
             : null;
-        Result = CreateResult(
+        Result = PivotChartOptionsPlanner.CreateResult(
             selectedStyleId,
             _showFieldButtonsBox.IsChecked == true,
             _showReportFilterButtonsBox.IsChecked == true,
@@ -253,19 +130,6 @@ public sealed class PivotChartOptionsDialog : Window
     }
 
     private sealed record BlankDisplayChoice(string Label, ChartBlankDisplayMode Mode);
-
-    private static PivotChartOptionsDialogResult FromInput(PivotChartOptionsInput input) =>
-        new(
-            input.ChartStyleId,
-            input.ShowFieldButtons,
-            input.ShowReportFilterButtons,
-            input.ShowAxisFieldButtons,
-            input.ShowValueFieldButtons,
-            input.ShowDataTable,
-            input.ShowDataTableLegendKeys,
-            input.RoundedCorners,
-            input.ShowHiddenData,
-            input.BlankDisplayMode);
 
     private static string FieldLabel(PivotChartOptionsDialogFieldId fieldId) =>
         UiText.Get(PivotChartOptionsPlanner.GetDialogField(fieldId).LabelResourceKey);

@@ -439,10 +439,11 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("var command = ChartWorkflowCommandCatalog.FormatDataSeries;");
         source.Should().Contain("ChartWorkflowCommandCatalog.CanOpenDialog(chart, command)");
         source.Should().Contain("ShowUnsupportedChartWorkflow(command)");
-        source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions())");
+        source.Should().Contain("ChartDataLabelsPlanner.Plan(dialog.Result)");
+        source.Should().Contain("ChartAxisPlanner.Plan(dialog.Result)");
         source.Should().Contain("UiText.Get(\"ChartAxisFormat_XAxisTitle\")");
         source.Should().Contain("UiText.Get(\"ChartAxisFormat_YAxisTitle\")");
-        source.Should().Contain("ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions(chart))");
+        source.Should().Contain("ChartSeriesFormatPlanner.Plan(chart, dialog.Result)");
     }
 
     [Fact]

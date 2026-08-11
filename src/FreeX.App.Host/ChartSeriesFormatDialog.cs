@@ -3,27 +3,11 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using FreeX.App.Presentation.Charts.Editing;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using static FreeX.App.Host.ChartDialogHelpers;
 
 namespace FreeX.App.Host;
-
-public sealed record ChartSeriesFormatDialogResult(
-    int SeriesIndex,
-    CellColor? FillColor,
-    CellColor? StrokeColor,
-    double? StrokeThickness,
-    ChartLineDashStyle? DashStyle,
-    ChartMarkerStyle? MarkerStyle,
-    double? MarkerSize)
-{
-    public ChartSeriesFormatInput ToInput() =>
-        new(SeriesIndex, FillColor, StrokeColor, StrokeThickness, MarkerStyle, MarkerSize, DashStyle);
-
-    public ChartLayoutOptions ToOptions(ChartModel chart) => ChartSeriesFormatPlanner.Plan(chart, ToInput());
-}
 
 public sealed class ChartSeriesFormatDialog : Window
 {
@@ -35,11 +19,11 @@ public sealed class ChartSeriesFormatDialog : Window
     private readonly TextBox _strokeThicknessBox = new();
     private readonly TextBox _markerSizeBox = new();
 
-    public ChartSeriesFormatDialogResult Result { get; private set; }
+    public ChartSeriesFormatInput Result { get; private set; }
 
     public ChartSeriesFormatDialog(ChartModel chart, int seriesCount)
     {
-        Result = FromChart(chart);
+        Result = ChartSeriesFormatPlanner.ReadDefault(chart);
         Title = UiText.Get("ChartSeriesFormat_Title");
         Width = 380;
         Height = 390;
@@ -50,39 +34,6 @@ public sealed class ChartSeriesFormatDialog : Window
         Content = CreateContent(seriesCount);
         Load(Result);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
-    }
-
-    public static ChartSeriesFormatDialogResult FromChart(ChartModel chart)
-    {
-        var input = ChartSeriesFormatPlanner.ReadDefault(chart);
-        return CreateResult(input.SeriesIndex, input.FillColor, input.StrokeColor, input.StrokeThickness, input.DashStyle, input.MarkerStyle, input.MarkerSize);
-    }
-
-    public static ChartSeriesFormatDialogResult CreateResult(
-        int seriesIndex,
-        CellColor? fillColor,
-        CellColor? strokeColor,
-        double? strokeThickness,
-        ChartLineDashStyle? dashStyle,
-        ChartMarkerStyle? markerStyle,
-        double? markerSize)
-    {
-        var input = ChartSeriesFormatPlanner.Normalize(new ChartSeriesFormatInput(
-            seriesIndex,
-            fillColor,
-            strokeColor,
-            strokeThickness,
-            markerStyle,
-            markerSize,
-            dashStyle));
-        return new(
-            input.SeriesIndex,
-            input.FillColor,
-            input.StrokeColor,
-            input.StrokeThickness,
-            input.DashStyle,
-            input.MarkerStyle,
-            input.MarkerSize);
     }
 
     private StackPanel CreateContent(int seriesCount)
@@ -111,7 +62,7 @@ public sealed class ChartSeriesFormatDialog : Window
         return root;
     }
 
-    private void Load(ChartSeriesFormatDialogResult result)
+    private void Load(ChartSeriesFormatInput result)
     {
         _seriesBox.SelectedIndex = Math.Min(result.SeriesIndex, Math.Max(0, _seriesBox.Items.Count - 1));
         _fillBox.Text = ChartDialogHelpers.FormatColor(result.FillColor);
@@ -145,14 +96,7 @@ public sealed class ChartSeriesFormatDialog : Window
             return;
         }
 
-        Result = CreateResult(
-            input.SeriesIndex,
-            input.FillColor,
-            input.StrokeColor,
-            input.StrokeThickness,
-            input.DashStyle,
-            input.MarkerStyle,
-            input.MarkerSize);
+        Result = input;
         DialogResult = true;
     }
 

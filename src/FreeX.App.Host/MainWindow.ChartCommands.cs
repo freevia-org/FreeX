@@ -228,16 +228,11 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var input = new ChartMoveInput(
-            dialog.Result.TargetKind == MoveChartTargetKind.NewChartSheet
-                ? ChartMoveTargetKind.NewSheet
-                : ChartMoveTargetKind.ObjectInSheet,
-            dialog.Result.TargetName);
         var movePlan = ChartCommandWorkflowPlanner.PlanMoveCommand(
             _workbook,
             _currentSheetId,
             chart,
-            input);
+            dialog.Result);
         if (!movePlan.CanExecute)
         {
             ShowCommandError(new CommandOutcome(false, movePlan.Error), command.Label);
@@ -273,7 +268,7 @@ public partial class MainWindow
                 ChartCommandWorkflowPlanner.BuildStyleCommand(
                     _currentSheetId,
                     chart,
-                    dialog.Result.ChartStyleId),
+                    dialog.Result.StyleId),
                 "Chart Styles"))
             return;
 
@@ -315,7 +310,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult(ChartWorkflowCaption(command), chart, dialog.Result.ToOptions()))
+        if (!ApplyChartLayoutDialogResult(ChartWorkflowCaption(command), chart, ChartAreaFormatPlanner.Plan(dialog.Result)))
             return;
 
         UpdateViewport();
@@ -443,7 +438,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartBarFormatPlanner.Plan(dialog.Result));
     }
 
     private void ChartBubbleFormatBtn_Click(object sender, RoutedEventArgs e)
@@ -463,7 +458,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartBubbleFormatPlanner.Plan(dialog.Result));
     }
 
     private void ChartPieFormatBtn_Click(object sender, RoutedEventArgs e)
@@ -483,7 +478,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartPieFormatPlanner.Plan(dialog.Result));
     }
 
     private void ChartStockFormatBtn_Click(object sender, RoutedEventArgs e)
@@ -503,7 +498,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartStockFormatPlanner.Plan(dialog.Result));
     }
 
     private void ChartDataLabelsBtn_Click(object sender, RoutedEventArgs e)
@@ -522,7 +517,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartDataLabelsPlanner.Plan(dialog.Result));
     }
 
     private void ChartDataLabelPositionBtn_Click(object sender, RoutedEventArgs e)
@@ -611,7 +606,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartTitlesPlanner.Plan(chart.Type, dialog.Result));
     }
 
     private void ChartTitleSizeBtn_Click(object sender, RoutedEventArgs e)
@@ -805,7 +800,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions(chart));
+        ApplyChartLayoutDialogResult(caption, chart, ChartSeriesFormatPlanner.Plan(chart, dialog.Result));
     }
 
     private void ChartSeriesMarkerSizeBtn_Click(object sender, RoutedEventArgs e)

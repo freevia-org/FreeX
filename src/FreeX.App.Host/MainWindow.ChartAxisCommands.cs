@@ -134,7 +134,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartAxisPlanner.Plan(dialog.Result));
     }
 
     private void ToggleChartAxisTicks(bool useXAxis)

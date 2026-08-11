@@ -98,19 +98,8 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        var input = PivotChartOptionsPlanner.CreateResult(
-            dialog.Result.ChartStyleId,
-            dialog.Result.ShowFieldButtons,
-            dialog.Result.ShowReportFilterButtons,
-            dialog.Result.ShowAxisFieldButtons,
-            dialog.Result.ShowValueFieldButtons,
-            dialog.Result.ShowDataTable,
-            dialog.Result.ShowDataTableLegendKeys,
-            dialog.Result.RoundedCorners,
-            dialog.Result.ShowHiddenData,
-            dialog.Result.BlankDisplayMode);
         if (!TryExecuteCommand(
-                ChartCommandWorkflowPlanner.BuildPivotChartOptionsCommand(_currentSheetId, chart, input),
+                ChartCommandWorkflowPlanner.BuildPivotChartOptionsCommand(_currentSheetId, chart, dialog.Result),
                 "PivotChart Options"))
             return;
 

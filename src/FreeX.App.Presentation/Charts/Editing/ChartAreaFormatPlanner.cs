@@ -368,7 +368,7 @@ public static class ChartAreaFormatPlanner
     /// Builds the <see cref="ChartLayoutOptions"/> delta for the edited chart-area / plot-area format and
     /// legend. Fill colors are passed through (null leaves the existing fill untouched in Core); the
     /// plot-area border color and width are always set so a cleared/changed border round-trips. The legend
-    /// fields mirror the WPF <c>ChartAreaLegendDialogResult.ToOptions()</c>.
+    /// fields map directly from the shared <see cref="ChartAreaFormatInput"/> returned by each renderer.
     /// </summary>
     public static ChartLayoutOptions Plan(ChartAreaFormatInput input)
     {
