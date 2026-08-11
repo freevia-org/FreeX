@@ -17,6 +17,13 @@ public readonly record struct DocumentReferenceRegionEditResult(
     int DeletedCount,
     int InsertedCount);
 
+public readonly record struct DocumentGeneratedReferenceEditResult(
+    DocumentReferenceRegionEditResult Region,
+    DocumentTextPosition Caret)
+{
+    public bool Applied => Region.Applied;
+}
+
 public readonly record struct DocumentReferenceTextEditResult(
     bool Applied,
     int HostBlockIndex,
@@ -51,6 +58,15 @@ public readonly record struct DocumentComplexFieldEditResult(
 /// </summary>
 public sealed class DocumentReferenceEditingCoordinator
 {
+    private const string InsertBibliographyUndoLabel = "Insert Bibliography";
+    private const string UpdateBibliographyUndoLabel = "Update Bibliography";
+    private const string InsertIndexUndoLabel = "Insert Index";
+    private const string UpdateIndexUndoLabel = "Update Index";
+    private const string InsertTableOfFiguresUndoLabel = "Insert Table of Figures";
+    private const string UpdateTableOfFiguresUndoLabel = "Update Table of Figures";
+    private const string InsertTableOfAuthoritiesUndoLabel = "Insert Table of Authorities";
+    private const string UpdateTableOfAuthoritiesUndoLabel = "Update Table of Authorities";
+
     private readonly DocumentEditingSession _session;
 
     internal DocumentReferenceEditingCoordinator(DocumentEditingSession session) => _session = session;
@@ -331,6 +347,156 @@ public sealed class DocumentReferenceEditingCoordinator
         return new DocumentReferenceEditResult(true, hostBlockIndex, -1);
     }
 
+    public DocumentGeneratedReferenceEditResult InsertBibliography(DocumentTextPosition caret)
+    {
+        var plan = BibliographyRegionPlanner.BuildInsertPlan(
+            _session.Document,
+            ResolveGeneratedReferenceInsertionIndex(caret.BlockIndex),
+            _session.Document.BibliographyStyle);
+        return ApplyGeneratedReferenceRegion(
+            caret,
+            plan.DeleteIndicesDescending,
+            plan.InsertIndex,
+            plan.Paragraphs,
+            InsertBibliographyUndoLabel);
+    }
+
+    public DocumentGeneratedReferenceEditResult RefreshBibliography(DocumentTextPosition caret)
+    {
+        var plan = BibliographyRegionPlanner.BuildRefreshPlan(
+            _session.Document,
+            _session.Document.BibliographyStyle);
+        return ApplyGeneratedReferenceRegion(
+            caret,
+            plan.DeleteIndicesDescending,
+            plan.InsertIndex,
+            plan.Paragraphs,
+            UpdateBibliographyUndoLabel);
+    }
+
+    public DocumentGeneratedReferenceEditResult InsertIndex(
+        DocumentTextPosition caret,
+        string? identifier,
+        Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
+    {
+        DocumentIndex.EnsureStyles(_session.Document, identifier);
+        var paragraphs = DocumentIndex.Build(
+            _session.Document,
+            identifier: identifier,
+            pageReferenceOf: pageReferenceOf);
+        return ApplyGeneratedReferenceRegion(
+            caret,
+            Array.Empty<int>(),
+            ResolveGeneratedReferenceInsertionIndex(caret.BlockIndex),
+            paragraphs,
+            InsertIndexUndoLabel);
+    }
+
+    public DocumentGeneratedReferenceEditResult RefreshIndex(
+        DocumentTextPosition caret,
+        string? identifier,
+        Func<int, IndexPageReferenceAddress?>? pageReferenceOf)
+    {
+        DocumentIndex.EnsureStyles(_session.Document, identifier);
+        var deleteIndices = GeneratedRegionIndices(
+            block => DocumentIndex.IsIndexParagraph(block, identifier));
+        var insertIndex = deleteIndices.Count > 0
+            ? deleteIndices[0]
+            : _session.Document.Blocks.Count;
+        var paragraphs = DocumentIndex.Build(
+            _session.Document,
+            identifier: identifier,
+            pageReferenceOf: pageReferenceOf);
+        return ApplyGeneratedReferenceRegion(
+            caret,
+            deleteIndices,
+            insertIndex,
+            paragraphs,
+            UpdateIndexUndoLabel);
+    }
+
+    public DocumentGeneratedReferenceEditResult InsertTableOfFigures(
+        DocumentTextPosition caret,
+        string labelText,
+        Func<int, TableParagraphAddress?, string?>? pageTextResolver)
+    {
+        var normalizedLabel = Captions.NormalizeLabelText(labelText);
+        TableOfFigures.EnsureStyles(_session.Document);
+        var paragraphs = TableOfFigures.BuildWithTableAddresses(
+            _session.Document,
+            normalizedLabel,
+            pageTextResolver);
+        return ApplyGeneratedReferenceRegion(
+            caret,
+            Array.Empty<int>(),
+            ResolveGeneratedReferenceInsertionIndex(caret.BlockIndex),
+            paragraphs,
+            InsertTableOfFiguresUndoLabel);
+    }
+
+    public DocumentGeneratedReferenceEditResult RefreshTableOfFigures(
+        DocumentTextPosition caret,
+        string labelText,
+        Func<int, TableParagraphAddress?, string?>? pageTextResolver)
+    {
+        var normalizedLabel = Captions.NormalizeLabelText(labelText);
+        TableOfFigures.EnsureStyles(_session.Document);
+        var deleteIndices = GeneratedRegionIndices(TableOfFigures.IsTableOfFiguresParagraph);
+        var insertIndex = deleteIndices.Count > 0
+            ? deleteIndices[0]
+            : _session.Document.Blocks.Count;
+        var paragraphs = TableOfFigures.BuildWithTableAddresses(
+            _session.Document,
+            normalizedLabel,
+            pageTextResolver);
+        return ApplyGeneratedReferenceRegion(
+            caret,
+            deleteIndices,
+            insertIndex,
+            paragraphs,
+            UpdateTableOfFiguresUndoLabel);
+    }
+
+    public DocumentGeneratedReferenceEditResult InsertTableOfAuthorities(
+        DocumentTextPosition caret,
+        ToaOptions options,
+        Func<ToaCitationPageAddressResolver?> pageResolverFactory,
+        Action? refreshLayout = null)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(pageResolverFactory);
+        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlanWithTableAddresses(
+            _session.Document,
+            ResolveGeneratedReferenceInsertionIndex(caret.BlockIndex),
+            options,
+            pageResolverFactory());
+        return ApplyStabilizedTableOfAuthoritiesRegion(
+            caret,
+            plan,
+            pageResolverFactory,
+            InsertTableOfAuthoritiesUndoLabel,
+            refreshLayout);
+    }
+
+    public DocumentGeneratedReferenceEditResult RefreshTableOfAuthorities(
+        DocumentTextPosition caret,
+        ToaOptions? options,
+        Func<ToaCitationPageAddressResolver?> pageResolverFactory,
+        Action? refreshLayout = null)
+    {
+        ArgumentNullException.ThrowIfNull(pageResolverFactory);
+        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
+            _session.Document,
+            options,
+            pageResolverFactory());
+        return ApplyStabilizedTableOfAuthoritiesRegion(
+            caret,
+            plan,
+            pageResolverFactory,
+            UpdateTableOfAuthoritiesUndoLabel,
+            refreshLayout);
+    }
+
     public DocumentReferenceRegionEditResult InsertGeneratedRegion(
         int insertIndex,
         IReadOnlyList<Paragraph> paragraphs,
@@ -566,6 +732,7 @@ public sealed class DocumentReferenceEditingCoordinator
         try
         {
             ExecuteCommands(initialEdit.Commands);
+            var finalInsertedCount = initialEdit.Result.InsertedCount;
             var isStable = false;
             for (var pass = 0; pass < maxStabilizationPasses; pass++)
             {
@@ -581,10 +748,12 @@ public sealed class DocumentReferenceEditingCoordinator
                     break;
                 }
 
-                ExecuteCommands(BuildGeneratedRegionEdit(
+                var stabilizedEdit = BuildGeneratedRegionEdit(
                     stabilized.DeleteIndicesDescending,
                     stabilized.InsertIndex,
-                    stabilized.Paragraphs).Commands);
+                    stabilized.Paragraphs);
+                ExecuteCommands(stabilizedEdit.Commands);
+                finalInsertedCount = stabilizedEdit.Result.InsertedCount;
             }
 
             if (!isStable)
@@ -602,7 +771,7 @@ public sealed class DocumentReferenceEditingCoordinator
             }
 
             _session.Commands.CommitUndoGroup(undoLabel);
-            return initialEdit.Result;
+            return initialEdit.Result with { InsertedCount = finalInsertedCount };
         }
         catch
         {
@@ -611,6 +780,99 @@ public sealed class DocumentReferenceEditingCoordinator
             throw;
         }
     }
+
+    private DocumentGeneratedReferenceEditResult ApplyGeneratedReferenceRegion(
+        DocumentTextPosition caret,
+        IReadOnlyList<int> deleteIndices,
+        int insertIndex,
+        IReadOnlyList<Paragraph> paragraphs,
+        string undoLabel)
+    {
+        var originalBlockCount = _session.Document.Blocks.Count;
+        var region = ApplyGeneratedRegion(deleteIndices, insertIndex, paragraphs, undoLabel);
+        return CompleteGeneratedReferenceEdit(caret, originalBlockCount, deleteIndices, region);
+    }
+
+    private DocumentGeneratedReferenceEditResult ApplyStabilizedTableOfAuthoritiesRegion(
+        DocumentTextPosition caret,
+        TableOfAuthoritiesRegionPlan plan,
+        Func<ToaCitationPageAddressResolver?> pageResolverFactory,
+        string undoLabel,
+        Action? refreshLayout)
+    {
+        var originalBlockCount = _session.Document.Blocks.Count;
+        var region = ApplyStabilizedTableOfAuthoritiesRegion(
+            plan,
+            pageResolverFactory,
+            undoLabel,
+            refreshLayout);
+        return CompleteGeneratedReferenceEdit(
+            caret,
+            originalBlockCount,
+            plan.DeleteIndicesDescending,
+            region);
+    }
+
+    private DocumentGeneratedReferenceEditResult CompleteGeneratedReferenceEdit(
+        DocumentTextPosition caret,
+        int originalBlockCount,
+        IReadOnlyList<int> deleteIndices,
+        DocumentReferenceRegionEditResult region)
+    {
+        if (!region.Applied)
+            return new DocumentGeneratedReferenceEditResult(region, caret);
+
+        var deletes = deleteIndices
+            .Where(index => index >= 0 && index < originalBlockCount)
+            .Distinct()
+            .Order()
+            .ToArray();
+        var finalBlockCount = originalBlockCount - deletes.Length + region.InsertedCount;
+        if (finalBlockCount == 0)
+        {
+            return new DocumentGeneratedReferenceEditResult(
+                region,
+                new DocumentTextPosition(-1, 0));
+        }
+
+        if (originalBlockCount == 0 || caret.BlockIndex < 0)
+        {
+            return new DocumentGeneratedReferenceEditResult(
+                region,
+                new DocumentTextPosition(Math.Clamp(region.InsertIndex, 0, finalBlockCount - 1), 0));
+        }
+
+        var originalCaretBlock = Math.Clamp(caret.BlockIndex, 0, originalBlockCount - 1);
+        if (deletes.Contains(originalCaretBlock))
+        {
+            return new DocumentGeneratedReferenceEditResult(
+                region,
+                new DocumentTextPosition(Math.Clamp(region.InsertIndex, 0, finalBlockCount - 1), 0));
+        }
+
+        var targetBlock = originalCaretBlock - deletes.Count(index => index < originalCaretBlock);
+        if (region.InsertedCount > 0 && region.InsertIndex <= targetBlock)
+            targetBlock += region.InsertedCount;
+        targetBlock = Math.Clamp(targetBlock, 0, finalBlockCount - 1);
+        return new DocumentGeneratedReferenceEditResult(
+            region,
+            new DocumentTextPosition(targetBlock, Math.Max(0, caret.Offset)));
+    }
+
+    private IReadOnlyList<int> GeneratedRegionIndices(Func<Block, bool> isGeneratedBlock)
+    {
+        ArgumentNullException.ThrowIfNull(isGeneratedBlock);
+        return _session.Document.Blocks
+            .Select((block, index) => (block, index))
+            .Where(item => isGeneratedBlock(item.block))
+            .Select(item => item.index)
+            .ToArray();
+    }
+
+    private int ResolveGeneratedReferenceInsertionIndex(int caretBlockIndex) =>
+        caretBlockIndex < 0 || caretBlockIndex > _session.Document.Blocks.Count
+            ? _session.Document.Blocks.Count
+            : caretBlockIndex;
 
     private GeneratedRegionEdit BuildGeneratedRegionEdit(
         IReadOnlyList<int> deleteIndicesDescending,

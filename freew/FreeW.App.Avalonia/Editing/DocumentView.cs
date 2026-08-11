@@ -20642,17 +20642,12 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertBibliography()
     {
-        var plan = BibliographyRegionPlanner.BuildInsertPlan(
-            _doc,
-            Math.Clamp(_caret.Block, 0, _doc.Blocks.Count),
-            _doc.BibliographyStyle);
-        ApplyGeneratedReferencePlan(plan, "Insert Bibliography", adjustCaretForInsert: true);
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertBibliography(GeneratedReferenceCaret()));
     }
 
     public void RefreshBibliography()
     {
-        var plan = BibliographyRegionPlanner.BuildRefreshPlan(_doc, _doc.BibliographyStyle);
-        ApplyGeneratedReferencePlan(plan, "Update Bibliography", adjustCaretForInsert: false);
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshBibliography(GeneratedReferenceCaret()));
     }
 
     public void ApplyCitationStyle(CitationStyle style)
@@ -20714,28 +20709,20 @@ public sealed class DocumentView : Control
 
     public void InsertIndex(string? identifier)
     {
-        DocumentIndex.EnsureStyles(_doc, identifier);
-        InsertGeneratedReferenceBlocks(
-            DocumentIndex.Build(
-                _doc,
-                identifier: identifier,
-                pageReferenceOf: BuildGeneratedIndexPageReferenceResolver()),
-            "Insert Index",
-            Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertIndex(
+            GeneratedReferenceCaret(),
+            identifier,
+            BuildGeneratedIndexPageReferenceResolver()));
     }
 
     public void RefreshIndex() => RefreshIndex(identifier: null);
 
     public void RefreshIndex(string? identifier)
     {
-        DocumentIndex.EnsureStyles(_doc, identifier);
-        RefreshGeneratedReferenceBlocks(
-            block => DocumentIndex.IsIndexParagraph(block, identifier),
-            () => DocumentIndex.Build(
-                _doc,
-                identifier: identifier,
-                pageReferenceOf: BuildGeneratedIndexPageReferenceResolver()),
-            "Update Index");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshIndex(
+            GeneratedReferenceCaret(),
+            identifier,
+            BuildGeneratedIndexPageReferenceResolver()));
     }
 
     public void InsertTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
@@ -20745,9 +20732,10 @@ public sealed class DocumentView : Control
 
     public void InsertTableOfFigures(string labelText)
     {
-        labelText = Captions.NormalizeLabelText(labelText);
-        TableOfFigures.EnsureStyles(_doc);
-        InsertGeneratedReferenceBlocks(BuildTableOfFigures(labelText), "Insert Table of Figures", Math.Clamp(_caret.Block, 0, _doc.Blocks.Count));
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfFigures(
+            GeneratedReferenceCaret(),
+            labelText,
+            BuildTableOfFiguresPageTextResolver()));
     }
 
     public void RefreshTableOfFigures(CaptionLabel label = CaptionLabel.Figure)
@@ -20757,13 +20745,11 @@ public sealed class DocumentView : Control
 
     public void RefreshTableOfFigures(string labelText)
     {
-        labelText = Captions.NormalizeLabelText(labelText);
-        TableOfFigures.EnsureStyles(_doc);
-        RefreshGeneratedReferenceBlocks(TableOfFigures.IsTableOfFiguresParagraph, () => BuildTableOfFigures(labelText), "Update Table of Figures");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfFigures(
+            GeneratedReferenceCaret(),
+            labelText,
+            BuildTableOfFiguresPageTextResolver()));
     }
-
-    private IReadOnlyList<Paragraph> BuildTableOfFigures(string labelText) =>
-        TableOfFigures.BuildWithTableAddresses(_doc, labelText, BuildTableOfFiguresPageTextResolver());
 
     private Func<int, string?>? BuildGeneratedPageTextResolver()
     {
@@ -20830,12 +20816,10 @@ public sealed class DocumentView : Control
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var plan = TableOfAuthoritiesRegionPlanner.BuildInsertPlanWithTableAddresses(
-            _doc,
-            Math.Clamp(_caret.Block, 0, _doc.Blocks.Count),
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfAuthorities(
+            GeneratedReferenceCaret(),
             options,
-            BuildTableOfAuthoritiesPageResolver());
-        ApplyGeneratedReferencePlan(plan, "Insert Table of Authorities", adjustCaretForInsert: true);
+            BuildTableOfAuthoritiesPageResolver));
     }
 
     public void RefreshTableOfAuthorities() => RefreshTableOfAuthoritiesCore(options: null);
@@ -20848,11 +20832,10 @@ public sealed class DocumentView : Control
 
     private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
     {
-        var plan = TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-            _doc,
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfAuthorities(
+            GeneratedReferenceCaret(),
             options,
-            BuildTableOfAuthoritiesPageResolver());
-        ApplyGeneratedReferencePlan(plan, "Update Table of Authorities", adjustCaretForInsert: false);
+            BuildTableOfAuthoritiesPageResolver));
     }
 
     private ToaCitationPageAddressResolver? BuildTableOfAuthoritiesPageResolver()
@@ -20980,64 +20963,28 @@ public sealed class DocumentView : Control
         return true;
     }
 
-    private void InsertGeneratedReferenceBlocks(IReadOnlyList<Paragraph> paragraphs, string label, int insertAt)
+    private DocumentTextPosition GeneratedReferenceCaret() =>
+        new(_cellCaret?.TableBlock ?? _caret.Block, _caret.Offset);
+
+    private void RealizeGeneratedReferenceEdit(DocumentGeneratedReferenceEditResult result)
     {
-        ArgumentNullException.ThrowIfNull(paragraphs);
+        if (!result.Applied || result.Caret.BlockIndex < 0)
+            return;
 
-        var originalCaret = _caret;
-        var result = ReferenceEdits.InsertGeneratedRegion(insertAt, paragraphs, label);
-
-        if (result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
+        if (_cellCaret is { } cellCaret)
         {
-            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
-            _selectionAnchor = _caret;
+            _cellCaret = (
+                result.Caret.BlockIndex,
+                cellCaret.Row,
+                cellCaret.Col,
+                cellCaret.ParaIdx,
+                cellCaret.Offset);
+            _cellAnchor = _cellCaret;
         }
-    }
 
-    private void ApplyGeneratedReferencePlan(
-        TableOfAuthoritiesRegionPlan plan,
-        string label,
-        bool adjustCaretForInsert)
-    {
-        var originalCaret = _caret;
-        var result = ReferenceEdits.ApplyStabilizedTableOfAuthoritiesRegion(
-            plan,
-            BuildTableOfAuthoritiesPageResolver,
-            label);
-
-        if (adjustCaretForInsert && result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
-        {
-            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
-            _selectionAnchor = _caret;
-        }
-    }
-
-    private void ApplyGeneratedReferencePlan(
-        BibliographyRegionPlan plan,
-        string label,
-        bool adjustCaretForInsert)
-    {
-        var originalCaret = _caret;
-        var result = ReferenceEdits.ApplyGeneratedRegion(
-            plan.DeleteIndicesDescending,
-            plan.InsertIndex,
-            plan.Paragraphs,
-            label);
-
-        if (adjustCaretForInsert && result.InsertedCount > 0 && result.InsertIndex <= originalCaret.Block)
-        {
-            _caret = originalCaret with { Block = originalCaret.Block + result.InsertedCount };
-            _selectionAnchor = _caret;
-        }
-    }
-
-    private void RefreshGeneratedReferenceBlocks(Func<Block, bool> isGeneratedBlock, Func<IReadOnlyList<Paragraph>> build, string label)
-    {
-        ReferenceEdits.RefreshGeneratedRegion(
-            isGeneratedBlock,
-            fallbackInsertIndex: 0,
-            build(),
-            label);
+        _caret = new DocPosition(result.Caret.BlockIndex, result.Caret.Offset);
+        _selectionAnchor = _caret;
+        Focus();
     }
 
     // ── AV-INSERT2: Insert depth 2 (cover page / drop cap / document-property field / equation / quick part) ──

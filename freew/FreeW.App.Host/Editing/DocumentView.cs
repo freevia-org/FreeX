@@ -15498,17 +15498,8 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertBibliography()
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-
-        // Insert at the caret's block (a bibliography reads as back-matter); fall back to the document end.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        ApplyBibliographyPlan(
-            BibliographyRegionPlanner.BuildInsertPlan(_model, index, ActiveCitationStyle),
-            "Insert Bibliography");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertBibliography(GeneratedReferenceCaret()));
     }
 
     /// <summary>
@@ -15518,21 +15509,8 @@ public sealed class DocumentView : RichTextBox
     public void RefreshBibliography()
     {
         CommitToModel();
-        RefreshBibliographyFromModel();
-        Render();
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshBibliography(GeneratedReferenceCaret()));
     }
-
-    private void RefreshBibliographyFromModel() =>
-        ApplyBibliographyPlan(
-            BibliographyRegionPlanner.BuildRefreshPlan(_model, ActiveCitationStyle),
-            "Update Bibliography");
-
-    private void ApplyBibliographyPlan(BibliographyRegionPlan plan, string label)
-        => ReferenceEdits.ApplyGeneratedRegion(
-            plan.DeleteIndicesDescending,
-            plan.InsertIndex,
-            plan.Paragraphs,
-            label);
 
     /// <summary>
     /// Marks <paramref name="term"/> for the document index by inserting Word's hidden <c>XE</c> field at
@@ -15578,20 +15556,11 @@ public sealed class DocumentView : RichTextBox
 
     public void InsertIndex(string? identifier)
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        DocumentIndex.EnsureStyles(_model, identifier);
-
-        // Insert at the caret's block (an index reads as back-matter); fall back to the document end.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        var entries = DocumentIndex.Build(
-            _model,
-            identifier: identifier,
-            pageReferenceOf: BuildGeneratedIndexPageReferenceResolver());
-        InsertGeneratedReferenceBlocks(index, entries, "Insert Index");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertIndex(
+            GeneratedReferenceCaret(),
+            identifier,
+            BuildGeneratedIndexPageReferenceResolver()));
     }
 
     /// <summary>
@@ -15604,28 +15573,10 @@ public sealed class DocumentView : RichTextBox
     public void RefreshIndex(string? identifier)
     {
         CommitToModel();
-        DocumentIndex.EnsureStyles(_model, identifier);
-
-        var firstIndex = -1;
-        var indexParagraphs = new List<int>();
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (!DocumentIndex.IsIndexParagraph(_model.Blocks[i], identifier))
-                continue;
-            firstIndex = firstIndex < 0 ? i : firstIndex;
-            indexParagraphs.Add(i);
-        }
-
-        var insertAt = firstIndex >= 0 ? firstIndex : _model.Blocks.Count;
-        var entries = DocumentIndex.Build(
-            _model,
-            identifier: identifier,
-            pageReferenceOf: BuildGeneratedIndexPageReferenceResolver());
-        ReferenceEdits.ApplyGeneratedRegion(
-            indexParagraphs,
-            insertAt,
-            entries,
-            "Update Index");
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshIndex(
+            GeneratedReferenceCaret(),
+            identifier,
+            BuildGeneratedIndexPageReferenceResolver()));
     }
 
     /// <summary>
@@ -15687,20 +15638,12 @@ public sealed class DocumentView : RichTextBox
     public void InsertTableOfAuthorities(ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-
-        // Insert at the caret's block (the table reads as front-/back-matter); fall back to the document end.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        ApplyTableOfAuthoritiesPlan(
-            TableOfAuthoritiesRegionPlanner.BuildInsertPlanWithTableAddresses(
-                _model,
-                index,
-                options,
-                BuildTableOfAuthoritiesPageResolver()));
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfAuthorities(
+            GeneratedReferenceCaret(),
+            options,
+            BuildTableOfAuthoritiesPageResolver,
+            refreshLayout: Render));
     }
 
     /// <summary>
@@ -15724,11 +15667,11 @@ public sealed class DocumentView : RichTextBox
     private void RefreshTableOfAuthoritiesCore(ToaOptions? options)
     {
         CommitToModel();
-        ApplyTableOfAuthoritiesPlan(
-            TableOfAuthoritiesRegionPlanner.BuildRefreshPlanWithTableAddresses(
-                _model,
-                options,
-                BuildTableOfAuthoritiesPageResolver()));
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfAuthorities(
+            GeneratedReferenceCaret(),
+            options,
+            BuildTableOfAuthoritiesPageResolver,
+            refreshLayout: Render));
     }
 
     private ToaCitationPageAddressResolver? BuildTableOfAuthoritiesPageResolver()
@@ -15832,15 +15775,6 @@ public sealed class DocumentView : RichTextBox
         && runIndex < paragraph.Runs.Count
         && paragraph.Runs[runIndex].Citation is not null;
 
-    private void ApplyTableOfAuthoritiesPlan(TableOfAuthoritiesRegionPlan plan)
-        => ReferenceEdits.ApplyStabilizedTableOfAuthoritiesRegion(
-            plan,
-            BuildTableOfAuthoritiesPageResolver,
-            plan.DeleteIndicesDescending.Count > 0
-                ? "Update Table of Authorities"
-                : "Insert Table of Authorities",
-            refreshLayout: Render);
-
     /// <summary>
     /// Insert a Table of Figures (or Table of Tables) generated from the document's <see cref="CaptionLabel"/>
     /// captions at the caret's block (else at the document end), routed one-by-one through the undo/redo bus
@@ -15855,17 +15789,11 @@ public sealed class DocumentView : RichTextBox
 
     public void InsertTableOfFigures(string labelText)
     {
-        // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        labelText = Captions.NormalizeLabelText(labelText);
-        TableOfFigures.EnsureStyles(_model);
-
-        // Insert at the caret's block (a table of figures reads as front-/back-matter); fall back to the end.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        InsertTableOfFiguresAt(index, labelText);
+        RealizeGeneratedReferenceEdit(ReferenceEdits.InsertTableOfFigures(
+            GeneratedReferenceCaret(),
+            labelText,
+            BuildTableOfFiguresPageTextResolver()));
     }
 
     /// <summary>
@@ -15883,62 +15811,35 @@ public sealed class DocumentView : RichTextBox
     public void RefreshTableOfFigures(string labelText)
     {
         CommitToModel();
-        labelText = Captions.NormalizeLabelText(labelText);
-        TableOfFigures.EnsureStyles(_model);
-
-        // Find the first existing table-of-figures paragraph (the marker region anchor).
-        var first = -1;
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfFigures.IsTableOfFiguresParagraph(_model.Blocks[i]))
-            {
-                first = i;
-                break;
-            }
-        }
-
-        var insertAt = first >= 0 ? first : _model.Blocks.Count;
-
-        // Remove every existing table-of-figures paragraph (reversible). Collect first to avoid mutating
-        // while scanning, then delete from the end so earlier indices stay valid.
-        var indices = new List<int>();
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfFigures.IsTableOfFiguresParagraph(_model.Blocks[i]))
-                indices.Add(i);
-        }
-        var entries = TableOfFigures.BuildWithTableAddresses(
-            _model,
+        RealizeGeneratedReferenceEdit(ReferenceEdits.RefreshTableOfFigures(
+            GeneratedReferenceCaret(),
             labelText,
-            BuildTableOfFiguresPageTextResolver());
-        ReferenceEdits.ApplyGeneratedRegion(
-            indices,
-            insertAt,
-            entries,
-            "Update Table of Figures");
+            BuildTableOfFiguresPageTextResolver()));
     }
 
-    // Insert the freshly built table-of-figures paragraphs starting at block index `at`, one reversible
-    // InsertParagraphCommand each (kept in order). The bus's Changed event redraws.
-    private void InsertTableOfFiguresAt(int at, string labelText)
+    private DocumentTextPosition GeneratedReferenceCaret()
     {
-        var entries = TableOfFigures.BuildWithTableAddresses(
-            _model,
-            labelText,
-            BuildTableOfFiguresPageTextResolver());
-        InsertGeneratedReferenceBlocks(at, entries, "Insert Table of Figures");
+        var blockIndex = CaretBlockIndex();
+        return TryGetCurrentBodyCaretTarget(out var bodyBlockIndex, out var textOffset)
+            && bodyBlockIndex == blockIndex
+                ? new DocumentTextPosition(blockIndex, textOffset)
+                : new DocumentTextPosition(blockIndex, 0);
     }
 
-    private void InsertGeneratedReferenceBlocks(
-        int insertAt,
-        IReadOnlyList<ModelParagraph> paragraphs,
-        string label)
+    private void RealizeGeneratedReferenceEdit(DocumentGeneratedReferenceEditResult result)
     {
-        var originalCaretBlock = CaretBlockIndex();
-        var result = ReferenceEdits.InsertGeneratedRegion(insertAt, paragraphs, label);
+        if (!result.Applied || result.Caret.BlockIndex < 0)
+            return;
 
-        if (result.InsertedCount > 0 && result.InsertIndex <= originalCaretBlock)
-            BringBlockIntoView(originalCaretBlock + result.InsertedCount);
+        if (TextPointerAtModelTextOffset(result.Caret.BlockIndex, result.Caret.Offset) is { } pointer)
+        {
+            CaretPosition = pointer;
+            pointer.Paragraph?.BringIntoView();
+            Focus();
+            return;
+        }
+
+        BringBlockIntoView(result.Caret.BlockIndex);
     }
 
     private Func<int, string?>? BuildGeneratedPageTextResolver()

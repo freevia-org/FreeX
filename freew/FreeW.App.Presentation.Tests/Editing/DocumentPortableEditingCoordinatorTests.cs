@@ -715,6 +715,290 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void BibliographyInsertAndRefreshOwnInsertionCaretAndAtomicUndo()
+    {
+        var lead = new Paragraph("Lead");
+        var caretParagraph = new Paragraph("Caret");
+        var document = new TextDocument { Blocks = { lead, caretParagraph } };
+        document.Sources.Add(new Source
+        {
+            Tag = "Ada2026",
+            Author = "Ada",
+            Title = "First source",
+            Year = "2026"
+        });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var inserted = session.References.InsertBibliography(new DocumentTextPosition(1, 3));
+
+        inserted.Region.InsertIndex.Should().Be(1);
+        inserted.Region.DeletedCount.Should().Be(0);
+        inserted.Region.InsertedCount.Should().BeGreaterThan(0);
+        inserted.Caret.Should().Be(new DocumentTextPosition(1 + inserted.Region.InsertedCount, 3));
+        document.Blocks[inserted.Caret.BlockIndex].Should().BeSameAs(caretParagraph);
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Should().Equal(lead, caretParagraph);
+
+        inserted = session.References.InsertBibliography(new DocumentTextPosition(1, 3));
+        var oldRegionText = document.Blocks
+            .Where(Citations.IsBibliographyParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .ToArray();
+        document.Sources.Add(new Source
+        {
+            Tag = "Grace2026",
+            Author = "Grace",
+            Title = "Second source",
+            Year = "2026"
+        });
+
+        var refreshed = session.References.RefreshBibliography(inserted.Caret);
+
+        refreshed.Region.InsertIndex.Should().Be(1);
+        refreshed.Region.DeletedCount.Should().Be(oldRegionText.Length);
+        document.Blocks[refreshed.Caret.BlockIndex].Should().BeSameAs(caretParagraph);
+        document.Blocks.Where(Citations.IsBibliographyParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain(text => text.Contains("Second source", StringComparison.Ordinal));
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Where(Citations.IsBibliographyParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Equal(oldRegionText);
+    }
+
+    [Fact]
+    public void IndexInsertAndRefreshOwnSelectiveRegionLookupAndCaretTransition()
+    {
+        var marked = new Paragraph
+        {
+            Runs = { new Run("People"), DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")) }
+        };
+        var caretParagraph = new Paragraph("Caret");
+        var document = new TextDocument { Blocks = { marked, caretParagraph } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var inserted = session.References.InsertIndex(
+            new DocumentTextPosition(1, 2),
+            "People",
+            pageReferenceOf: null);
+
+        inserted.Region.InsertIndex.Should().Be(1);
+        inserted.Caret.Should().Be(new DocumentTextPosition(1 + inserted.Region.InsertedCount, 2));
+        document.Blocks[inserted.Caret.BlockIndex].Should().BeSameAs(caretParagraph);
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Should().Equal(marked, caretParagraph);
+
+        inserted = session.References.InsertIndex(
+            new DocumentTextPosition(1, 2),
+            "People",
+            pageReferenceOf: null);
+        marked.Runs.Add(DocumentIndex.MarkRun(new IndexMark("Grace", Identifier: "People")));
+
+        var refreshed = session.References.RefreshIndex(
+            inserted.Caret,
+            "People",
+            pageReferenceOf: null);
+
+        refreshed.Region.InsertIndex.Should().Be(1);
+        document.Blocks[refreshed.Caret.BlockIndex].Should().BeSameAs(caretParagraph);
+        document.Blocks.Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Grace, 1");
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Where(block => DocumentIndex.IsIndexParagraph(block, "People"))
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().NotContain("Grace, 1");
+    }
+
+    [Fact]
+    public void IndexRefreshRemapsCaretsAcrossSparseGeneratedRegion()
+    {
+        static (DocumentEditingSession Session, TextDocument Document, Paragraph Before, Paragraph After)
+            CreateScenario()
+        {
+            var before = new Paragraph("Before");
+            var marked = new Paragraph
+            {
+                Runs = { DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")) }
+            };
+            var after = new Paragraph("After");
+            var document = new TextDocument
+            {
+                Blocks =
+                {
+                    before,
+                    new Paragraph(DocumentIndex.HeadingText)
+                    {
+                        StyleId = DocumentIndex.HeadingStyleIdFor("People")
+                    },
+                    marked,
+                    new Paragraph("Old Person, 9")
+                    {
+                        StyleId = DocumentIndex.EntryStyleIdFor("People")
+                    },
+                    after
+                }
+            };
+            var session = new DocumentEditingSession();
+            session.LoadDocument(document);
+            return (session, document, before, after);
+        }
+
+        var beforeScenario = CreateScenario();
+        var before = beforeScenario.Session.References.RefreshIndex(
+            new DocumentTextPosition(0, 2),
+            "People",
+            pageReferenceOf: null);
+        before.Caret.Should().Be(new DocumentTextPosition(0, 2));
+        beforeScenario.Document.Blocks[before.Caret.BlockIndex]
+            .Should().BeSameAs(beforeScenario.Before);
+
+        var insideScenario = CreateScenario();
+        var inside = insideScenario.Session.References.RefreshIndex(
+            new DocumentTextPosition(3, 7),
+            "People",
+            pageReferenceOf: null);
+        inside.Caret.Should().Be(new DocumentTextPosition(1, 0));
+        insideScenario.Document.Blocks[inside.Caret.BlockIndex]
+            .Should().Match<Block>(block => DocumentIndex.IsIndexParagraph(block, "People"));
+
+        var afterScenario = CreateScenario();
+        var after = afterScenario.Session.References.RefreshIndex(
+            new DocumentTextPosition(4, 3),
+            "People",
+            pageReferenceOf: null);
+        after.Caret.Should().Be(new DocumentTextPosition(2 + after.Region.InsertedCount, 3));
+        afterScenario.Document.Blocks[after.Caret.BlockIndex]
+            .Should().BeSameAs(afterScenario.After);
+    }
+
+    [Fact]
+    public void IndexRefreshWithoutExistingRegionAppendsAndPreservesCaret()
+    {
+        var marked = new Paragraph
+        {
+            Runs = { DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People")) }
+        };
+        var document = new TextDocument { Blocks = { marked } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var refreshed = session.References.RefreshIndex(
+            new DocumentTextPosition(0, 0),
+            "People",
+            pageReferenceOf: null);
+
+        refreshed.Region.InsertIndex.Should().Be(1);
+        refreshed.Caret.Should().Be(new DocumentTextPosition(0, 0));
+        document.Blocks[0].Should().BeSameAs(marked);
+        document.Blocks.Skip(1)
+            .Should().OnlyContain(block => DocumentIndex.IsIndexParagraph(block, "People"));
+    }
+
+    [Fact]
+    public void TableOfFiguresInsertAndRefreshOwnNormalizationRegionLookupAndCaretTransition()
+    {
+        var caption = Captions.BuildCaption(CaptionLabel.Figure, 1, "First");
+        var caretParagraph = new Paragraph("Caret");
+        var document = new TextDocument { Blocks = { caption, caretParagraph } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var inserted = session.References.InsertTableOfFigures(
+            new DocumentTextPosition(1, 4),
+            " Figure ",
+            (_, _) => "2");
+
+        inserted.Region.InsertIndex.Should().Be(1);
+        inserted.Caret.Should().Be(new DocumentTextPosition(1 + inserted.Region.InsertedCount, 4));
+        document.Blocks[inserted.Caret.BlockIndex].Should().BeSameAs(caretParagraph);
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Should().Equal(caption, caretParagraph);
+
+        inserted = session.References.InsertTableOfFigures(
+            new DocumentTextPosition(1, 4),
+            Captions.FigureLabelText,
+            (_, _) => "2");
+        caption.Runs[^1].Text = ": Updated";
+
+        var refreshed = session.References.RefreshTableOfFigures(
+            inserted.Caret,
+            Captions.FigureLabelText,
+            (_, _) => "3");
+
+        refreshed.Region.InsertIndex.Should().Be(1);
+        document.Blocks[refreshed.Caret.BlockIndex].Should().BeSameAs(caretParagraph);
+        document.Blocks.Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Figure 1: Updated\t3");
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Where(TableOfFigures.IsTableOfFiguresParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Figure 1: First\t2");
+    }
+
+    [Fact]
+    public void TableOfAuthoritiesInsertAndRefreshOwnPlansCaretAndStabilization()
+    {
+        var citation = new Citation("Fresh Case", CitationCategory.Cases);
+        var marked = new Paragraph { Runs = { Run.CitationMark(citation) } };
+        var caretParagraph = new Paragraph("Caret");
+        var document = new TextDocument { Blocks = { marked, caretParagraph } };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        var inserted = session.References.InsertTableOfAuthorities(
+            new DocumentTextPosition(1, 2),
+            ToaOptions.Default,
+            () => (_, _, _, _, _) => TableOfAuthorities.CreatePageReference(1));
+
+        inserted.Region.InsertIndex.Should().Be(1);
+        inserted.Caret.Should().Be(new DocumentTextPosition(1 + inserted.Region.InsertedCount, 2));
+        document.Blocks[inserted.Caret.BlockIndex].Should().BeSameAs(caretParagraph);
+
+        var physicalPage = 1;
+        var layoutRefreshes = 0;
+        var refreshed = session.References.RefreshTableOfAuthorities(
+            inserted.Caret,
+            options: null,
+            pageResolverFactory: () => (_, _, _, _, _) =>
+                TableOfAuthorities.CreatePageReference(physicalPage),
+            refreshLayout: () =>
+            {
+                layoutRefreshes++;
+                physicalPage = 3;
+            });
+
+        refreshed.Region.InsertIndex.Should().Be(1);
+        refreshed.Region.DeletedCount.Should().Be(inserted.Region.InsertedCount);
+        refreshed.Caret.BlockIndex.Should().Be(
+            inserted.Caret.BlockIndex - refreshed.Region.DeletedCount + refreshed.Region.InsertedCount);
+        document.Blocks[refreshed.Caret.BlockIndex].Should().BeSameAs(caretParagraph);
+        layoutRefreshes.Should().Be(2);
+        document.Blocks.Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Fresh Case\t3");
+
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Where(TableOfAuthorities.IsTableOfAuthoritiesParagraph)
+            .Cast<Paragraph>()
+            .Select(paragraph => paragraph.PlainText)
+            .Should().Contain("Fresh Case\t1");
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Should().Equal(marked, caretParagraph);
+    }
+
+    [Fact]
     public void TableOfAuthoritiesStabilizationIsOnePortableUndoTransaction()
     {
         var citation = new Citation("Fresh Case", CitationCategory.Cases);
@@ -942,20 +1226,69 @@ public sealed class DocumentPortableEditingOwnershipTests
     }
 
     [Fact]
-    public void GeneratedReferencePaginationAndStabilizationStayRendererNeutral()
+    public void GeneratedReferenceOrchestrationAndPaginationStayRendererNeutral()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var coordinator = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Editing",
+            "DocumentReferenceEditingCoordinator.cs");
+        var operations = new[]
+        {
+            "InsertBibliography",
+            "RefreshBibliography",
+            "InsertIndex",
+            "RefreshIndex",
+            "InsertTableOfFigures",
+            "RefreshTableOfFigures",
+            "InsertTableOfAuthorities",
+            "RefreshTableOfAuthorities",
+        };
+        var rendererForbidden = new[]
+        {
+            "BibliographyRegionPlanner.Build",
+            "DocumentIndex.EnsureStyles(",
+            "DocumentIndex.Build(",
+            "DocumentIndex.IsIndexParagraph(",
+            "TableOfFigures.EnsureStyles(",
+            "TableOfFigures.BuildWithTableAddresses(",
+            "TableOfFigures.IsTableOfFiguresParagraph(",
+            "TableOfAuthoritiesRegionPlanner.Build",
+            "ReferenceEdits.InsertGeneratedRegion(",
+            "ReferenceEdits.RefreshGeneratedRegion(",
+            "ReferenceEdits.ApplyGeneratedRegion(",
+            "ReferenceEdits.ApplyStabilizedTableOfAuthoritiesRegion(",
+            "\"Insert Bibliography\"",
+            "\"Update Bibliography\"",
+            "\"Insert Index\"",
+            "\"Update Index\"",
+            "\"Insert Table of Figures\"",
+            "\"Update Table of Figures\"",
+            "\"Insert Table of Authorities\"",
+            "\"Update Table of Authorities\"",
+        };
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("GeneratedReferencePaginationContext.Create(");
-            source.Should().Contain("ReferenceEdits.ApplyStabilizedTableOfAuthoritiesRegion(");
             source.Should().NotContain("ResolveTableParagraphPageOffset(");
             source.Should().NotContain("private static ToaCitationPageReference CreateTableOfAuthoritiesPageReference(");
             source.Should().NotContain("ApplyTableOfAuthoritiesPlanCommands(");
             source.Should().NotContain("maxStabilizationPasses");
+            foreach (var operation in operations)
+                source.Should().Contain($"ReferenceEdits.{operation}(");
+            foreach (var forbidden in rendererForbidden)
+                source.Should().NotContain(forbidden);
         }
+
+        foreach (var label in rendererForbidden.Where(value => value.StartsWith("\"", StringComparison.Ordinal)))
+            coordinator.Should().Contain(label);
+        coordinator.Should().Contain("BibliographyRegionPlanner.BuildInsertPlan(");
+        coordinator.Should().Contain("GeneratedRegionIndices(");
+        coordinator.Should().Contain("CompleteGeneratedReferenceEdit(");
+        coordinator.Should().Contain("ApplyStabilizedTableOfAuthoritiesRegion(");
     }
 
     [Fact]
