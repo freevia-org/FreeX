@@ -62,21 +62,18 @@ public static class DocumentFieldUpdateCoordinator
                     var canRecompute = DocumentFieldStories.CanRecomputeComplexField(
                         storyParagraph.StoryKind,
                         complexField);
-                    resolved = canRecompute
-                        ? ComplexFieldEngine.Recompute(
-                            evaluationDocument,
-                            blockIndex,
-                            run,
-                            crossReferencePageResolver,
-                            crossReferencePageTextResolver)
-                        : ComplexFieldDisplayPlanner.ResolveComplexFieldValue(
-                            run,
-                            evaluationDocument,
-                            fileName,
-                            now,
-                            culture,
-                            pageNumberText,
-                            pageCount);
+                    resolved = ResolveComplexField(
+                        storyParagraph,
+                        run,
+                        evaluationDocument,
+                        fileName,
+                        now,
+                        culture,
+                        pageNumberText,
+                        pageCount,
+                        crossReferencePageResolver,
+                        crossReferencePageTextResolver,
+                        canRecompute);
                     applyEmptyResult = canRecompute;
                 }
                 else if (run.FieldKind != RunFieldKind.None)
@@ -102,5 +99,219 @@ public static class DocumentFieldUpdateCoordinator
         }
 
         return updated;
+    }
+
+    /// <summary>
+    /// Updates only the complex-field runs selected by a model-native renderer. Run identity, rather than
+    /// value equality, keeps duplicate fields independent.
+    /// </summary>
+    public static int UpdateComplexFields(
+        TextDocument targetDocument,
+        TextDocument evaluationDocument,
+        IReadOnlyCollection<Run> selectedRuns,
+        string? fileName,
+        DateTime now,
+        CultureInfo culture,
+        string? pageNumberText,
+        int? pageCount,
+        Func<int, int?>? crossReferencePageResolver = null,
+        Func<int, string?>? crossReferencePageTextResolver = null)
+    {
+        ArgumentNullException.ThrowIfNull(selectedRuns);
+        var selected = new HashSet<Run>(selectedRuns, ReferenceEqualityComparer.Instance);
+        return UpdateComplexFieldsCore(
+            targetDocument,
+            evaluationDocument,
+            run => selected.Contains(run),
+            fileName,
+            now,
+            culture,
+            pageNumberText,
+            pageCount,
+            crossReferencePageResolver,
+            crossReferencePageTextResolver);
+    }
+
+    /// <summary>
+    /// Updates only the complex fields selected by a projected renderer. Field identity survives the
+    /// renderer-to-model commit and lets the shared coordinator recover the owning model runs.
+    /// </summary>
+    public static int UpdateComplexFields(
+        TextDocument targetDocument,
+        TextDocument evaluationDocument,
+        IReadOnlyCollection<ComplexField> selectedFields,
+        string? fileName,
+        DateTime now,
+        CultureInfo culture,
+        string? pageNumberText,
+        int? pageCount,
+        Func<int, int?>? crossReferencePageResolver = null,
+        Func<int, string?>? crossReferencePageTextResolver = null)
+    {
+        ArgumentNullException.ThrowIfNull(selectedFields);
+        var selected = new HashSet<ComplexField>(selectedFields, ReferenceEqualityComparer.Instance);
+        return UpdateComplexFieldsCore(
+            targetDocument,
+            evaluationDocument,
+            run => run.ComplexField is { } field && selected.Contains(field),
+            fileName,
+            now,
+            culture,
+            pageNumberText,
+            pageCount,
+            crossReferencePageResolver,
+            crossReferencePageTextResolver);
+    }
+
+    /// <summary>Changes field-code visibility for the selected model runs.</summary>
+    public static int ToggleCode(IReadOnlyCollection<Run> selectedRuns)
+    {
+        ArgumentNullException.ThrowIfNull(selectedRuns);
+        return MutateSelectedRuns(
+            selectedRuns,
+            field => field with { ShowCode = !field.ShowCode });
+    }
+
+    /// <summary>Changes field-code visibility for fields selected through a projected renderer.</summary>
+    public static int ToggleCode(TextDocument document, IReadOnlyCollection<ComplexField> selectedFields)
+        => MutateSelectedFields(
+            document,
+            selectedFields,
+            field => field with { ShowCode = !field.ShowCode });
+
+    /// <summary>Changes the update lock for the selected model runs.</summary>
+    public static int SetLock(IReadOnlyCollection<Run> selectedRuns, bool isLocked)
+    {
+        ArgumentNullException.ThrowIfNull(selectedRuns);
+        return MutateSelectedRuns(selectedRuns, field => field.WithLock(isLocked));
+    }
+
+    /// <summary>Changes the update lock for fields selected through a projected renderer.</summary>
+    public static int SetLock(
+        TextDocument document,
+        IReadOnlyCollection<ComplexField> selectedFields,
+        bool isLocked)
+        => MutateSelectedFields(document, selectedFields, field => field.WithLock(isLocked));
+
+    private static int UpdateComplexFieldsCore(
+        TextDocument targetDocument,
+        TextDocument evaluationDocument,
+        Func<Run, bool> isSelected,
+        string? fileName,
+        DateTime now,
+        CultureInfo culture,
+        string? pageNumberText,
+        int? pageCount,
+        Func<int, int?>? crossReferencePageResolver,
+        Func<int, string?>? crossReferencePageTextResolver)
+    {
+        ArgumentNullException.ThrowIfNull(targetDocument);
+        ArgumentNullException.ThrowIfNull(evaluationDocument);
+        ArgumentNullException.ThrowIfNull(isSelected);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        var updated = 0;
+        foreach (var storyParagraph in DocumentFieldStories.Enumerate(targetDocument))
+        {
+            foreach (var run in storyParagraph.Paragraph.Runs)
+            {
+                if (!isSelected(run) || run.ComplexField is not { IsLocked: false } field)
+                    continue;
+
+                var canRecompute = DocumentFieldStories.CanRecomputeComplexField(
+                    storyParagraph.StoryKind,
+                    field);
+                var resolved = ResolveComplexField(
+                    storyParagraph,
+                    run,
+                    evaluationDocument,
+                    fileName,
+                    now,
+                    culture,
+                    pageNumberText,
+                    pageCount,
+                    crossReferencePageResolver,
+                    crossReferencePageTextResolver,
+                    canRecompute);
+                if ((!canRecompute && resolved.Length == 0)
+                    || string.Equals(run.Text, resolved, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                run.Text = resolved;
+                updated++;
+            }
+        }
+
+        return updated;
+    }
+
+    private static string ResolveComplexField(
+        DocumentFieldStoryParagraph storyParagraph,
+        Run run,
+        TextDocument evaluationDocument,
+        string? fileName,
+        DateTime now,
+        CultureInfo culture,
+        string? pageNumberText,
+        int? pageCount,
+        Func<int, int?>? crossReferencePageResolver,
+        Func<int, string?>? crossReferencePageTextResolver,
+        bool canRecompute)
+        => canRecompute
+            ? ComplexFieldEngine.Recompute(
+                evaluationDocument,
+                storyParagraph.BodyBlockIndex,
+                run,
+                crossReferencePageResolver,
+                crossReferencePageTextResolver)
+            : ComplexFieldDisplayPlanner.ResolveComplexFieldValue(
+                run,
+                evaluationDocument,
+                fileName,
+                now,
+                culture,
+                pageNumberText,
+                pageCount);
+
+    private static int MutateSelectedRuns(
+        IReadOnlyCollection<Run> selectedRuns,
+        Func<ComplexField, ComplexField> mutate)
+    {
+        var selected = new HashSet<Run>(selectedRuns, ReferenceEqualityComparer.Instance);
+        var mutated = 0;
+        foreach (var run in selected)
+        {
+            if (run.ComplexField is not { } field)
+                continue;
+            run.ComplexField = mutate(field);
+            mutated++;
+        }
+
+        return mutated;
+    }
+
+    private static int MutateSelectedFields(
+        TextDocument document,
+        IReadOnlyCollection<ComplexField> selectedFields,
+        Func<ComplexField, ComplexField> mutate)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(selectedFields);
+        var selected = new HashSet<ComplexField>(selectedFields, ReferenceEqualityComparer.Instance);
+        var mutated = 0;
+        foreach (var storyParagraph in DocumentFieldStories.Enumerate(document))
+        {
+            foreach (var run in storyParagraph.Paragraph.Runs)
+            {
+                if (run.ComplexField is not { } field || !selected.Contains(field))
+                    continue;
+                run.ComplexField = mutate(field);
+                mutated++;
+            }
+        }
+
+        return mutated;
     }
 }

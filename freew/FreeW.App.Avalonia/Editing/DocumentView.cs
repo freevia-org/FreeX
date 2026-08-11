@@ -23282,11 +23282,7 @@ public sealed class DocumentView : Control
         if (fields.Count == 0)
             return;
 
-        foreach (var fieldRun in fields)
-            fieldRun.ComplexField = fieldRun.ComplexField! with
-            {
-                ShowCode = !fieldRun.ComplexField.ShowCode
-            };
+        DocumentFieldUpdateCoordinator.ToggleCode(fields);
         InvalidateLayoutAndVisual();
         Focus();
     }
@@ -23301,8 +23297,7 @@ public sealed class DocumentView : Control
         if (fields.Count == 0)
             return;
 
-        foreach (var fieldRun in fields)
-            fieldRun.ComplexField = fieldRun.ComplexField!.WithLock(isLocked);
+        DocumentFieldUpdateCoordinator.SetLock(fields, isLocked);
         InvalidateLayoutAndVisual();
         Focus();
     }
@@ -23530,38 +23525,23 @@ public sealed class DocumentView : Control
 
     private void UpdateComplexFields(IReadOnlyCollection<Run> fields)
     {
-        var selected = new HashSet<Run>(fields, ReferenceEqualityComparer.Instance);
-        var targets = DocumentFieldStories.Enumerate(_doc)
-            .SelectMany(story => story.Paragraph.Runs
-                .Where(run => run.ComplexField is not null && selected.Contains(run))
-                .Select(run => (Story: story, Run: run)))
-            .ToList();
-        if (targets.Count == 0)
-            return;
-
-        var pageResolver = targets.Any(target => target.Run.ComplexField?.ContainsKeyword("PAGEREF") == true)
+        var pageResolver = fields.Any(run => run.ComplexField?.ContainsKeyword("PAGEREF") == true)
             ? BuildCrossReferencePageResolver()
             : null;
         var pageTextResolver = pageResolver is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_doc, pageResolver);
-        foreach (var target in targets)
-        {
-            if (target.Run.ComplexField is not { } field || field.IsLocked)
-                continue;
-
-            var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
-            var resolved = canRecompute
-                ? ComplexFieldEngine.Recompute(
-                    _doc,
-                    target.Story.BodyBlockIndex,
-                    target.Run,
-                    pageResolver,
-                    pageTextResolver)
-                : ResolveComplexField(target.Run, target.Run.Text);
-            if (canRecompute || !string.IsNullOrEmpty(resolved))
-                target.Run.Text = resolved;
-        }
+        DocumentFieldUpdateCoordinator.UpdateComplexFields(
+            _doc,
+            _doc,
+            fields,
+            CurrentFileName,
+            DateTime.Now,
+            CultureInfo.CurrentCulture,
+            ResolvePageNumberFieldText(),
+            pageCount: 1,
+            crossReferencePageResolver: pageResolver,
+            crossReferencePageTextResolver: pageTextResolver);
 
         InvalidateLayoutAndVisual();
         Focus();

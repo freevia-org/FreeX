@@ -13078,25 +13078,9 @@ public sealed class DocumentView : RichTextBox
             fields = [marker.Field];
         }
 
-        MutateComplexFields(fields, field => field with { ShowCode = !field.ShowCode });
-    }
-
-    private void MutateComplexFields(
-        IReadOnlyCollection<ComplexField> fields,
-        Func<ComplexField, ComplexField> mutate)
-    {
         CommitToModel();
-        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
-        var targets = DocumentFieldStories.Enumerate(_model)
-            .SelectMany(story => story.Paragraph.Runs)
-            .Where(run => run.ComplexField is not null && selected.Contains(run.ComplexField))
-            .ToList();
-        if (targets.Count == 0)
+        if (DocumentFieldUpdateCoordinator.ToggleCode(_model, fields) == 0)
             return;
-
-        foreach (var target in targets)
-            target.ComplexField = mutate(target.ComplexField!);
-
         Render();
     }
 
@@ -13117,7 +13101,10 @@ public sealed class DocumentView : RichTextBox
             fields = [marker.Field];
         }
 
-        MutateComplexFields(fields, field => field.WithLock(isLocked));
+        CommitToModel();
+        if (DocumentFieldUpdateCoordinator.SetLock(_model, fields, isLocked) == 0)
+            return;
+        Render();
     }
 
     /// <summary>
@@ -13184,40 +13171,25 @@ public sealed class DocumentView : RichTextBox
     private void UpdateComplexFields(IReadOnlyCollection<ComplexField> fields)
     {
         CommitToModel();
-        var selected = new HashSet<ComplexField>(fields, ReferenceEqualityComparer.Instance);
-        var targets = DocumentFieldStories.Enumerate(_model)
-            .SelectMany(story => story.Paragraph.Runs
-                .Where(run => run.ComplexField is not null && selected.Contains(run.ComplexField))
-                .Select(run => (Story: story, Run: run)))
-            .ToList();
-        if (targets.Count == 0)
-            return;
-
         var fieldDocument = FieldEvaluationDocument ?? _model;
         var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
-        var pageResolver = targets.Any(target => target.Run.ComplexField?.ContainsKeyword("PAGEREF") == true)
+        var pageResolver = fields.Any(field => field.ContainsKeyword("PAGEREF"))
             ? BuildCrossReferencePageResolver()
             : null;
         var pageTextResolver = pageResolver is null
             ? null
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(_model, pageResolver);
-        foreach (var target in targets)
-        {
-            if (target.Run.ComplexField is not { } field || field.IsLocked)
-                continue;
-
-            var canRecompute = DocumentFieldStories.CanRecomputeComplexField(target.Story.StoryKind, field);
-            var resolved = canRecompute
-                ? ComplexFieldEngine.Recompute(
-                    fieldDocument,
-                    target.Story.BodyBlockIndex,
-                    target.Run,
-                    pageResolver,
-                    pageTextResolver)
-                : ResolveComplexFieldText(target.Run, fieldDocument, fieldFileName);
-            if (canRecompute || resolved.Length > 0)
-                target.Run.Text = resolved;
-        }
+        DocumentFieldUpdateCoordinator.UpdateComplexFields(
+            _model,
+            fieldDocument,
+            fields,
+            fieldFileName,
+            DateTime.Now,
+            System.Globalization.CultureInfo.CurrentCulture,
+            ResolvePageNumberFieldText(fieldDocument),
+            pageCount: null,
+            crossReferencePageResolver: pageResolver,
+            crossReferencePageTextResolver: pageTextResolver);
 
         Render();
     }
