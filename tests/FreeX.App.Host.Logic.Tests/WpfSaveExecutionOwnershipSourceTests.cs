@@ -21,7 +21,8 @@ public sealed class WpfSaveExecutionOwnershipSourceTests
 
         source.Should().Contain("AdjustSaveGate(acquire: true)");
         source.Should().Contain("BroadcastSaveInProgress(this, inProgress: true)");
-        source.Should().Contain("new SaveWorkbookWriter().SaveAsync(");
+        source.Should().Contain("var saveService = new WorkbookSaveService();");
+        source.Should().Contain("SaveAsync: invocation => saveService.SaveAsync(");
         source.Should().Contain("ConfirmExternallyModifiedFileOverwrite");
     }
 }

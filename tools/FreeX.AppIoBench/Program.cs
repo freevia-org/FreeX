@@ -1,7 +1,8 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using FreeX.App.Host;
+using Free.Shared.AppServices;
+using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.IO;
@@ -87,15 +88,15 @@ internal static class Program
     private static async Task RunIterationAsync(AppIoBenchOptions options, int iteration)
     {
         var adapter = new XlsxFileAdapter();
-        var loader = new OpenWorkbookLoader(CreateRecalculationAction(options));
+        var loader = new WorkbookOpenService(CreateRecalculationAction(options));
         var fileInfo = new FileInfo(options.Path!);
         var inputExtension = Path.GetExtension(options.Path!);
         var inputFormat = ResolveOpenFormat(adapter, inputExtension);
-        var openProgress = new ThrottledProgress<OpenProgressUpdate>(
+        var openProgress = new ThrottledProgress<WorkbookOpenProgressUpdate>(
             options,
             iteration,
             "open",
-            update => (update.Detail, update.Percent));
+            update => (update.Phase.ToString(), update.Percent));
 
         WritePerf(
             options,
@@ -164,11 +165,11 @@ internal static class Program
 
         using var temporaryOutput = options.OutputPath is null ? TemporaryOutputFile.Create(".xlsx") : null;
         var savePath = options.OutputPath ?? temporaryOutput!.Path;
-        var saveProgress = new ThrottledProgress<SaveProgressUpdate>(
+        var saveProgress = new ThrottledProgress<WorkbookSaveProgressUpdate>(
             options,
             iteration,
             "save",
-            update => (update.Detail, update.Percent));
+            update => (update.Phase.ToString(), update.Percent));
 
         WritePerf(
             options,
@@ -177,7 +178,7 @@ internal static class Program
         ForceFullCollection();
         var saveAllocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
         var saveStopwatch = Stopwatch.StartNew();
-        await new SaveWorkbookWriter().SaveAsync(
+        await new WorkbookSaveService().SaveAsync(
             savePath,
             adapter,
             workbook,
