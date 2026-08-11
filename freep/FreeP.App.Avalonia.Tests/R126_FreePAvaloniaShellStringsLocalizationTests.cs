@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
+using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -58,6 +59,9 @@ public sealed class R126_FreePAvaloniaShellStringsLocalizationTests : IDisposabl
         AvaloniaAppLocalizationBootstrap.InstallSharedSeams(UiText.Get, UiText.Format, UiText.CreateAutomationName);
 
         BackstageStrings.Current.Get("Backstage_GreetingMorning").Should().Be("Bonjour");
+        BackstageStrings.Current.Get(FreePBackstagePaneResourceKeys.OptionsEditText)
+            .Should()
+            .Be("Modifier les options…");
     }
 
     /// <summary>

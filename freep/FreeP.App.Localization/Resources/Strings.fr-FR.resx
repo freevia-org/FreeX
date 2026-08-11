@@ -85,4 +85,7 @@
   <data name="Pane_SlideSection_NamePromptCancel" xml:space="preserve">
     <value>Annuler</value>
   </data>
+  <data name="FreeP_Backstage_Options_EditText" xml:space="preserve">
+    <value>Modifier les options…</value>
+  </data>
 </root>

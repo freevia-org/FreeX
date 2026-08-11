@@ -10,6 +10,7 @@ public static class FreePBackstagePaneResourceKeys
     public const string TemplateTileCaption = "FreeP_Backstage_New_BlankPresentation";
     public const string TemplateFooterText = "FreeP_Backstage_New_FooterText";
     public const string OptionsDescription = "FreeP_Backstage_Options_Description";
+    public const string OptionsEditText = "FreeP_Backstage_Options_EditText";
     public const string ExportHeading = "FreeP_Backstage_Export_Heading";
     public const string ExportDescription = "FreeP_Backstage_Export_Description";
     public const string ExportFixedLayoutGroupHeading = "FreeP_Backstage_Export_FixedLayoutGroupHeading";
@@ -31,7 +32,8 @@ public static class FreePBackstagePaneTextCatalog
             Text(FreePBackstagePaneResourceKeys.ExportDescription, "Create a PDF copy of this presentation - one page per slide, with selectable text."),
             Text(FreePBackstagePaneResourceKeys.ExportFixedLayoutGroupHeading, "Create PDF Copy"),
             Text(FreePBackstagePaneResourceKeys.ExportPdfActionLabel, "Export to PDF..."),
-            Text(FreePBackstagePaneResourceKeys.ExportPdfActionDescription, "Publish a fixed-layout copy for sharing or presenting.")));
+            Text(FreePBackstagePaneResourceKeys.ExportPdfActionDescription, "Publish a fixed-layout copy for sharing or presenting.")),
+        Text(FreePBackstagePaneResourceKeys.OptionsEditText, "Edit options…"));
 
     public static IReadOnlyList<string> RequiredResourceKeys => Descriptor.ResourceKeys;
 

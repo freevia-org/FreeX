@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using System.IO;
 using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 
@@ -37,8 +38,20 @@ public sealed class OptionsDialogTests
             content.Should().NotBeNull();
 
             var buttons = content!.GetLogicalDescendants().OfType<Button>().ToArray();
-            buttons.Should().Contain(button => Equals(button.Content, "Edit options…"));
+            buttons.Should().Contain(button => Equals(
+                button.Content,
+                FreePBackstagePaneTextCatalog.Descriptor.OptionsEditText!.FallbackText));
         }, CancellationToken.None);
+    }
+
+    [Fact]
+    public void BackstageOptionsPane_UsesCatalogLabelWithoutHostFallback()
+    {
+        var source = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Avalonia", "Backstage", "BackstageView.cs"));
+
+        source.Should().Contain("Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(");
+        source.Should().NotContain("Edit options");
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using Free.Shared.Shell;
+using FreeP.App.Compositor;
 using FreeP.App.Localization;
 
 namespace FreeP.App.Host.Tests;
@@ -49,6 +50,9 @@ public sealed class FreePLocalizationStartupTests : IDisposable
         BackstageStrings.Current.Get("Backstage_Recent_RemoveAutomationHelpText")
             .Should()
             .Contain("presentation");
+        BackstageStrings.Current.Get(FreePBackstagePaneResourceKeys.OptionsEditText)
+            .Should()
+            .Be("Modifier les options…");
     }
 
     [Fact]

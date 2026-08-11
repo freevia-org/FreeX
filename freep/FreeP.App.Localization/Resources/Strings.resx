@@ -3673,4 +3673,7 @@
   <data name="Print_Status_PrinterSelected" xml:space="preserve">
     <value>Printer selected: {0}</value>
   </data>
+  <data name="FreeP_Backstage_Options_EditText" xml:space="preserve">
+    <value>Edit options…</value>
+  </data>
 </root>

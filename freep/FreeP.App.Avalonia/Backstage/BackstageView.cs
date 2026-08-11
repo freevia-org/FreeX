@@ -247,14 +247,10 @@ internal sealed class BackstageView : UserControl
 
     private Control BuildOptionsPane()
     {
-        var plan = PanePlans.BuildOptionsPane(
+        return Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(
             _callbacks.GetCurrentOptions(),
             _callbacks.GetDataFolder(),
-            _dismissBeforeDispatch.Bind(_callbacks.OpenOptions));
-
-        // The extracted FreeP text catalog currently has no edit label. Preserve the
-        // reachable Options command while still letting a future localized label win.
-        return Panes.BuildOptionsPane(plan with { EditText = plan.EditText ?? "Edit options\u2026" });
+            _dismissBeforeDispatch.Bind(_callbacks.OpenOptions)));
     }
 
     private Control BuildAccountPane()

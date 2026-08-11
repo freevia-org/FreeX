@@ -27,7 +27,19 @@ public sealed class OptionsDialogTests
         content.Should().NotBeNull();
 
         var buttons = FindButtons((DependencyObject)content!);
-        buttons.Should().Contain(button => Equals(button.Content, "Edit options…"));
+        buttons.Should().Contain(button => Equals(
+            button.Content,
+            FreePBackstagePaneTextCatalog.Descriptor.OptionsEditText!.FallbackText));
+    }
+
+    [Fact]
+    public void BackstageOptionsPane_UsesCatalogLabelWithoutHostFallback()
+    {
+        var source = File.ReadAllText(TestWorkspaceFileLocator.Find(
+            "freep", "FreeP.App.Host", "Backstage", "BackstageView.cs"));
+
+        source.Should().Contain("Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(");
+        source.Should().NotContain("Edit options");
     }
 
     [StaFact]

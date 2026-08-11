@@ -14,9 +14,25 @@ public sealed class PresentationBackstagePanePlannerTests
         descriptor.RecentEmptyText.ResourceKey.Should().Be(FreePBackstagePaneResourceKeys.RecentEmptyText);
         descriptor.RecentEmptyText.FallbackText.Should().Be("No recent presentations.");
         descriptor.TemplateTileCaption.FallbackText.Should().Be("Blank presentation");
+        descriptor.OptionsEditText.Should().Be(new ResourceTextDescriptor(
+            FreePBackstagePaneResourceKeys.OptionsEditText,
+            "Edit options…"));
         descriptor.Export.PdfActionLabel.FallbackText.Should().Be("Export to PDF...");
         descriptor.Export.XpsActionLabel.Should().BeNull();
-        FreePBackstagePaneTextCatalog.RequiredResourceKeys.Should().OnlyHaveUniqueItems();
+        FreePBackstagePaneTextCatalog.RequiredResourceKeys
+            .Should().OnlyHaveUniqueItems()
+            .And.Contain(FreePBackstagePaneResourceKeys.OptionsEditText);
+    }
+
+    [Fact]
+    public void FreePBackstagePaneTextCatalog_ResolvesLocalizedOptionsEditText()
+    {
+        var text = FreePBackstagePaneTextCatalog.BuildTextSpec(key =>
+            key == FreePBackstagePaneResourceKeys.OptionsEditText
+                ? "Modifier les options…"
+                : null);
+
+        text.OptionsEditText.Should().Be("Modifier les options…");
     }
 
     [Fact]

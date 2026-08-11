@@ -40,6 +40,16 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void BackstageOptionsEditText_IsOwnedByNeutralAndFrenchResources()
+    {
+        const string key = "FreeP_Backstage_Options_EditText";
+
+        Loc.GetNeutralResourceKeys().Should().Contain(key);
+        WithUiCulture("en-US", () => Loc.Get(key)).Should().Be("Edit options…");
+        WithUiCulture("fr-FR", () => Loc.Get(key)).Should().Be("Modifier les options…");
+    }
+
+    [Fact]
     public void Get_PseudoCulture_ExpandsNeutralText()
     {
         var pseudo = WithUiCulture(Loc.PseudoLocalizationCultureName, () => Loc.Get("Common_Cancel"));
