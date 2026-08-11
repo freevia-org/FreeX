@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
@@ -282,6 +283,30 @@ public sealed record SourceManagementAuthorEditorState(
     IReadOnlyList<SourceManagementAuthorPersonRow> PersonalRows,
     string CorporateAuthor);
 
+public sealed record SourceManagementDialogText(
+    string SourcePickerTitle,
+    string SourcePickerLabel,
+    string AddNewSourceButtonLabel,
+    string InsertButtonLabel,
+    string CancelButtonLabel,
+    string SelectSourceValidationMessage,
+    string ManageSourcesTitle,
+    string AddButtonLabel,
+    string EditButtonLabel,
+    string DeleteButtonLabel,
+    string CopyToCurrentButtonLabel,
+    string CopyToMasterButtonLabel,
+    string OkButtonLabel,
+    string SourceConflictDialogTitle,
+    string SourceConflictKeepCurrentLabel,
+    string SourceConflictReplaceCurrentLabel,
+    string SourceConflictKeepMasterLabel,
+    string SourceConflictReplaceMasterLabel,
+    string SourceConflictMessageFormat,
+    string SourceConflictYesFormat,
+    string SourceConflictNoFormat,
+    string SourceConflictCancelDescription);
+
 public static class SourceManagementDialogPlanner
 {
     public const string SourcePickerTitle = "Insert Citation";
@@ -311,6 +336,44 @@ public static class SourceManagementDialogPlanner
     public const string SourceConflictReplaceCurrentLabel = "Replace Current Document";
     public const string SourceConflictKeepMasterLabel = "Keep Master List";
     public const string SourceConflictReplaceMasterLabel = "Replace Master List";
+
+    private static readonly ResourceTextDescriptor[] SurfaceTexts =
+    [
+        Text("SourceManagement_Picker_Title", SourcePickerTitle),
+        Text("SourceManagement_Picker_Source_Label", SourcePickerLabel),
+        Text("SourceManagement_Picker_AddNew_Label", AddNewSourceButtonLabel),
+        Text("SourceManagement_Picker_Insert_Label", "Insert"),
+        Text("SourceManagement_Cancel_Label", "Cancel"),
+        Text("SourceManagement_Picker_SelectSource_Validation", "Select a source or add a new one."),
+        Text("SourceManagement_Manage_Title", "Manage Sources"),
+        Text("SourceManagement_Add_Label", "Add..."),
+        Text("SourceManagement_Edit_Label", "Edit..."),
+        Text("SourceManagement_Delete_Label", "Delete"),
+        Text("SourceManagement_CopyToCurrent_Label", "Copy \u2192"),
+        Text("SourceManagement_CopyToMaster_Label", "Copy \u2190"),
+        Text("SourceManagement_Ok_Label", "OK"),
+        Text("SourceManagement_Conflict_Title", SourceConflictDialogTitle),
+        Text("SourceManagement_Conflict_KeepCurrent_Label", SourceConflictKeepCurrentLabel),
+        Text("SourceManagement_Conflict_ReplaceCurrent_Label", SourceConflictReplaceCurrentLabel),
+        Text("SourceManagement_Conflict_KeepMaster_Label", SourceConflictKeepMasterLabel),
+        Text("SourceManagement_Conflict_ReplaceMaster_Label", SourceConflictReplaceMasterLabel),
+        Text("SourceManagement_Conflict_Message_Format", "The Master List and Current Document both contain the source tag \"{0}\", but their source details are different. Choose which version to keep."),
+        Text("SourceManagement_Conflict_Yes_Format", "Yes: {0}"),
+        Text("SourceManagement_Conflict_No_Format", "No: {0}"),
+        Text("SourceManagement_Conflict_Cancel_Description", "Cancel: Do nothing"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        SurfaceTexts.Select(text => text.ResourceKey).ToArray();
+
+    public static SourceManagementDialogText ResolveText(Func<string, string?>? getText = null)
+    {
+        var values = SurfaceTexts.Select(text => text.Resolve(getText)).ToArray();
+        return new SourceManagementDialogText(
+            values[0], values[1], values[2], values[3], values[4], values[5], values[6], values[7],
+            values[8], values[9], values[10], values[11], values[12], values[13], values[14], values[15],
+            values[16], values[17], values[18], values[19], values[20], values[21]);
+    }
 
     private static readonly IReadOnlyList<SourceManagementSourceTypeChoice> SourceTypeChoices =
     [
@@ -1248,22 +1311,28 @@ public static class SourceManagementDialogPlanner
         };
     }
 
-    public static string BuildSourceConflictMessage(SourceManagementSourceConflict conflict)
+    public static string BuildSourceConflictMessage(
+        SourceManagementSourceConflict conflict,
+        SourceManagementDialogText? text = null)
     {
         ArgumentNullException.ThrowIfNull(conflict);
 
-        return $"The Master List and Current Document both contain the source tag \"{conflict.Tag}\", but their source details are different. Choose which version to keep.";
+        return string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            (text ?? ResolveText()).SourceConflictMessageFormat,
+            conflict.Tag);
     }
 
     public static IReadOnlyList<SourceManagementSourceConflictResolutionChoice> BuildSourceConflictResolutionChoices(
-        SourceManagementSourceConflict conflict)
+        SourceManagementSourceConflict conflict,
+        SourceManagementDialogText? text = null)
     {
         ArgumentNullException.ThrowIfNull(conflict);
 
         return
         [
-            new(conflict.KeepAction, SourceConflictResolutionLabel(conflict.KeepAction)),
-            new(conflict.ReplaceAction, SourceConflictResolutionLabel(conflict.ReplaceAction))
+            new(conflict.KeepAction, SourceConflictResolutionLabel(conflict.KeepAction, text ?? ResolveText())),
+            new(conflict.ReplaceAction, SourceConflictResolutionLabel(conflict.ReplaceAction, text ?? ResolveText()))
         ];
     }
 
@@ -1393,15 +1462,20 @@ public static class SourceManagementDialogPlanner
             replaceAction);
     }
 
-    private static string SourceConflictResolutionLabel(SourceManagementSourceConflictResolutionAction action) =>
+    private static string SourceConflictResolutionLabel(
+        SourceManagementSourceConflictResolutionAction action,
+        SourceManagementDialogText text) =>
         action switch
         {
-            SourceManagementSourceConflictResolutionAction.KeepCurrent => SourceConflictKeepCurrentLabel,
-            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster => SourceConflictReplaceCurrentLabel,
-            SourceManagementSourceConflictResolutionAction.KeepMaster => SourceConflictKeepMasterLabel,
-            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent => SourceConflictReplaceMasterLabel,
+            SourceManagementSourceConflictResolutionAction.KeepCurrent => text.SourceConflictKeepCurrentLabel,
+            SourceManagementSourceConflictResolutionAction.ReplaceCurrentFromMaster => text.SourceConflictReplaceCurrentLabel,
+            SourceManagementSourceConflictResolutionAction.KeepMaster => text.SourceConflictKeepMasterLabel,
+            SourceManagementSourceConflictResolutionAction.ReplaceMasterFromCurrent => text.SourceConflictReplaceMasterLabel,
             _ => throw new ArgumentOutOfRangeException(nameof(action), action, null)
         };
+
+    private static ResourceTextDescriptor Text(string resourceKey, string fallbackText) =>
+        new(resourceKey, fallbackText);
 
     private static bool SourcePayloadEquals(Source left, Source right) =>
         SourceTagIdentity.Equals(left.Tag, right.Tag)

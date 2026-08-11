@@ -394,4 +394,122 @@
   <data name="File_PagePlural" xml:space="preserve">
     <value>pages</value>
   </data>
+  <data name="MailMerge_Rule_If_Title" xml:space="preserve"><value>If...Then...Else</value></data>
+  <data name="MailMerge_Rule_SkipRecordIf_Title" xml:space="preserve"><value>Skip Record If</value></data>
+  <data name="MailMerge_Rule_NextRecordIf_Title" xml:space="preserve"><value>Next Record If</value></data>
+  <data name="MailMerge_Rule_FillIn_Title" xml:space="preserve"><value>Fill-in</value></data>
+  <data name="MailMerge_Rule_Ask_Title" xml:space="preserve"><value>Ask</value></data>
+  <data name="MailMerge_Rule_Set_Title" xml:space="preserve"><value>Set Bookmark</value></data>
+  <data name="MailMerge_Rule_Ref_Title" xml:space="preserve"><value>Ref Bookmark</value></data>
+  <data name="MailMerge_Rule_FieldName_Label" xml:space="preserve"><value>Field name:</value></data>
+  <data name="MailMerge_Rule_Comparison_Label" xml:space="preserve"><value>Comparison:</value></data>
+  <data name="MailMerge_Rule_CompareTo_Label" xml:space="preserve"><value>Compare to:</value></data>
+  <data name="MailMerge_Rule_TrueText_Label" xml:space="preserve"><value>Insert this text (true):</value></data>
+  <data name="MailMerge_Rule_FalseText_Label" xml:space="preserve"><value>Otherwise insert (false):</value></data>
+  <data name="MailMerge_Rule_BookmarkName_Label" xml:space="preserve"><value>Bookmark name:</value></data>
+  <data name="MailMerge_Rule_FillIn_Prompt" xml:space="preserve"><value>Enter the prompt text for this Fill-in field:</value></data>
+  <data name="MailMerge_Rule_Ask_Prompt" xml:space="preserve"><value>Prompt text:</value></data>
+  <data name="MailMerge_Rule_Set_ValueLabel" xml:space="preserve"><value>Value:</value></data>
+  <data name="MailMerge_Rule_Ref_Prompt" xml:space="preserve"><value>Enter the bookmark name to reference:</value></data>
+  <data name="Navigation_Title" xml:space="preserve"><value>Navigation</value></data>
+  <data name="Navigation_SearchDocument" xml:space="preserve"><value>Search document</value></data>
+  <data name="Navigation_PreviousMatch" xml:space="preserve"><value>Previous match</value></data>
+  <data name="Navigation_NextMatch" xml:space="preserve"><value>Next match</value></data>
+  <data name="Navigation_NoMatches" xml:space="preserve"><value>No matches</value></data>
+  <data name="Navigation_MatchCountFormat" xml:space="preserve"><value>{0} of {1}</value></data>
+  <data name="SmartArt_Dialog_Insert_Title" xml:space="preserve"><value>Insert SmartArt</value></data>
+  <data name="SmartArt_Dialog_Edit_Title" xml:space="preserve"><value>Edit SmartArt Text</value></data>
+  <data name="SmartArt_Dialog_Layout_Label" xml:space="preserve"><value>Layout:</value></data>
+  <data name="SmartArt_Dialog_NodeText_Label" xml:space="preserve"><value>Diagram text (one item per node - use Add/Remove to manage):</value></data>
+  <data name="SmartArt_Dialog_EditNodeText_Label" xml:space="preserve"><value>One shape per line:</value></data>
+  <data name="SmartArt_Dialog_AddShape_Label" xml:space="preserve"><value>Add Shape</value></data>
+  <data name="SmartArt_Dialog_RemoveShape_Label" xml:space="preserve"><value>Remove Shape</value></data>
+  <data name="SmartArt_Dialog_NewItem_Label" xml:space="preserve"><value>New Item</value></data>
+  <data name="SmartArt_Dialog_EmptyNodes_Validation" xml:space="preserve"><value>Enter at least one node text.</value></data>
+  <data name="TableConversion_TextToTable_Title" xml:space="preserve"><value>Convert Text to Table</value></data>
+  <data name="TableConversion_TableToText_Title" xml:space="preserve"><value>Convert Table to Text</value></data>
+  <data name="TableConversion_Prompt_Label" xml:space="preserve"><value>Separate cells at:</value></data>
+  <data name="TableConversion_Tab_Label" xml:space="preserve"><value>Tab</value></data>
+  <data name="TableConversion_Comma_Label" xml:space="preserve"><value>Comma  ,</value></data>
+  <data name="TableConversion_Semicolon_Label" xml:space="preserve"><value>Semicolon  ;</value></data>
+  <data name="TableFormula_CursorOutsideTable_Message" xml:space="preserve"><value>The cursor must be inside a table cell to insert a formula.</value></data>
+  <data name="TableProperties_CursorOutsideTable_Message" xml:space="preserve"><value>The cursor must be inside a table to edit its properties.</value></data>
+  <data name="FreeW_Backstage_Recent_EmptyText" xml:space="preserve"><value>No recent documents.</value></data>
+  <data name="FreeW_Backstage_New_Heading" xml:space="preserve"><value>New</value></data>
+  <data name="FreeW_Backstage_New_BlankDocument" xml:space="preserve"><value>Blank document</value></data>
+  <data name="FreeW_Backstage_New_FooterText" xml:space="preserve"><value>More templates are not available in this build.</value></data>
+  <data name="FreeW_Backstage_Options_Description" xml:space="preserve"><value>FreeW application settings. These persist between sessions and apply immediately.</value></data>
+  <data name="FreeW_Backstage_Options_EditText" xml:space="preserve"><value>Edit options&#x2026;</value></data>
+  <data name="FreeW_Backstage_Export_Heading" xml:space="preserve"><value>Export</value></data>
+  <data name="FreeW_Backstage_Export_Description" xml:space="preserve"><value>Create a fixed-layout copy or choose an editable document format.</value></data>
+  <data name="FreeW_Backstage_Export_FixedLayoutGroupHeading" xml:space="preserve"><value>Create PDF/XPS Document</value></data>
+  <data name="FreeW_Backstage_Export_PdfActionLabel" xml:space="preserve"><value>Create PDF or XPS</value></data>
+  <data name="FreeW_Backstage_Export_PdfActionDescription" xml:space="preserve"><value>Publish a fixed-layout copy for sharing or printing.</value></data>
+  <data name="FreeW_Backstage_Export_XpsActionLabel" xml:space="preserve"><value>Export to XPS</value></data>
+  <data name="FreeW_Backstage_Export_XpsActionDescription" xml:space="preserve"><value>Publish an XPS document with selectable, searchable vector text.</value></data>
+  <data name="SourceManagement_Picker_Title" xml:space="preserve"><value>Insert Citation</value></data>
+  <data name="SourceManagement_Picker_Source_Label" xml:space="preserve"><value>Source:</value></data>
+  <data name="SourceManagement_Picker_AddNew_Label" xml:space="preserve"><value>Add New Source...</value></data>
+  <data name="SourceManagement_Picker_Insert_Label" xml:space="preserve"><value>Insert</value></data>
+  <data name="SourceManagement_Cancel_Label" xml:space="preserve"><value>Cancel</value></data>
+  <data name="SourceManagement_Picker_SelectSource_Validation" xml:space="preserve"><value>Select a source or add a new one.</value></data>
+  <data name="SourceManagement_Manage_Title" xml:space="preserve"><value>Manage Sources</value></data>
+  <data name="SourceManagement_Add_Label" xml:space="preserve"><value>Add...</value></data>
+  <data name="SourceManagement_Edit_Label" xml:space="preserve"><value>Edit...</value></data>
+  <data name="SourceManagement_Delete_Label" xml:space="preserve"><value>Delete</value></data>
+  <data name="SourceManagement_CopyToCurrent_Label" xml:space="preserve"><value>Copy &#x2192;</value></data>
+  <data name="SourceManagement_CopyToMaster_Label" xml:space="preserve"><value>Copy &#x2190;</value></data>
+  <data name="SourceManagement_Ok_Label" xml:space="preserve"><value>OK</value></data>
+  <data name="SourceManagement_Conflict_Title" xml:space="preserve"><value>Source Conflict</value></data>
+  <data name="SourceManagement_Conflict_KeepCurrent_Label" xml:space="preserve"><value>Keep Current Document</value></data>
+  <data name="SourceManagement_Conflict_ReplaceCurrent_Label" xml:space="preserve"><value>Replace Current Document</value></data>
+  <data name="SourceManagement_Conflict_KeepMaster_Label" xml:space="preserve"><value>Keep Master List</value></data>
+  <data name="SourceManagement_Conflict_ReplaceMaster_Label" xml:space="preserve"><value>Replace Master List</value></data>
+  <data name="SourceManagement_Conflict_Message_Format" xml:space="preserve"><value>The Master List and Current Document both contain the source tag &quot;{0}&quot;, but their source details are different. Choose which version to keep.</value></data>
+  <data name="SourceManagement_Conflict_Yes_Format" xml:space="preserve"><value>Yes: {0}</value></data>
+  <data name="SourceManagement_Conflict_No_Format" xml:space="preserve"><value>No: {0}</value></data>
+  <data name="SourceManagement_Conflict_Cancel_Description" xml:space="preserve"><value>Cancel: Do nothing</value></data>
+  <data name="Backstage_Safety_ProtectDocument_Heading" xml:space="preserve"><value>Protect Document</value></data>
+  <data name="Backstage_Safety_EditAnyway_Label" xml:space="preserve"><value>Edit Anyway</value></data>
+  <data name="Backstage_Safety_MarkAsFinal_Label" xml:space="preserve"><value>Mark as Final</value></data>
+  <data name="Backstage_Safety_ClearFinal_Description" xml:space="preserve"><value>Clear the final marker so the document can be edited again.</value></data>
+  <data name="Backstage_Safety_MarkAsFinal_Description" xml:space="preserve"><value>Make the document read-only and tell readers this version is final.</value></data>
+  <data name="Backstage_Safety_RestrictEditing_Label" xml:space="preserve"><value>Restrict Editing</value></data>
+  <data name="Backstage_Safety_Protection_Default_Description" xml:space="preserve"><value>Limit editing to comments, tracked changes, forms, or read-only mode.</value></data>
+  <data name="Backstage_Safety_Protection_Inactive_Description" xml:space="preserve"><value>No editing restrictions are active. Limit editing to comments, tracked changes, forms, or read-only mode.</value></data>
+  <data name="Backstage_Safety_Protection_PasswordConfigured" xml:space="preserve"><value> Password protection is configured.</value></data>
+  <data name="Backstage_Safety_Protection_Active_Format" xml:space="preserve"><value>Current restriction: {0}.{1} Change or stop editing restrictions.</value></data>
+  <data name="Backstage_Safety_InspectDocument_Heading" xml:space="preserve"><value>Inspect Document</value></data>
+  <data name="Backstage_Safety_InspectDocument_Label" xml:space="preserve"><value>Inspect Document</value></data>
+  <data name="Backstage_Safety_Inspection_Default_Description" xml:space="preserve"><value>Find and remove comments, revisions, document properties, and bookmarks.</value></data>
+  <data name="Backstage_Safety_Inspection_Empty_Description" xml:space="preserve"><value>No comments, revisions, document properties, or bookmarks are currently detected.</value></data>
+  <data name="Backstage_Safety_Inspection_Items_Format" xml:space="preserve"><value>Find and remove {0} across comments, revisions, document properties, and bookmarks.</value></data>
+  <data name="Backstage_Safety_CheckAccessibility_Label" xml:space="preserve"><value>Check Accessibility</value></data>
+  <data name="Backstage_Safety_Accessibility_Default_Description" xml:space="preserve"><value>Find accessibility issues before sharing the document.</value></data>
+  <data name="Backstage_Safety_Accessibility_Empty_Description" xml:space="preserve"><value>No accessibility issues are currently detected.</value></data>
+  <data name="Backstage_Safety_Accessibility_Issues_Format" xml:space="preserve"><value>Find accessibility issues before sharing the document. Current scan: {0} ({1} errors, {2} warnings, {3} tips).</value></data>
+  <data name="Backstage_Safety_ProtectionMode_ReadOnly" xml:space="preserve"><value>Read only</value></data>
+  <data name="Backstage_Safety_ProtectionMode_CommentsOnly" xml:space="preserve"><value>Comments only</value></data>
+  <data name="Backstage_Safety_ProtectionMode_TrackChangesOnly" xml:space="preserve"><value>Tracked changes only</value></data>
+  <data name="Backstage_Safety_ProtectionMode_FillingForms" xml:space="preserve"><value>Filling in forms</value></data>
+  <data name="Backstage_Safety_Count_Singular_Format" xml:space="preserve"><value>1 {0}</value></data>
+  <data name="Backstage_Safety_Count_Plural_Format" xml:space="preserve"><value>{0} {1}s</value></data>
+  <data name="Backstage_Safety_MetadataItem_Noun" xml:space="preserve"><value>metadata item</value></data>
+  <data name="Backstage_Safety_Issue_Noun" xml:space="preserve"><value>issue</value></data>
+  <data name="Backstage_Safety_MarkedAsFinal_Status" xml:space="preserve"><value>Document marked as final.</value></data>
+  <data name="Backstage_Safety_NotMarkedAsFinal_Status" xml:space="preserve"><value>Document is no longer marked as final.</value></data>
+  <data name="Backstage_Safety_RestrictionsRemoved_Status" xml:space="preserve"><value>Editing restrictions removed.</value></data>
+  <data name="Backstage_Safety_RestrictionsApplied_Status_Format" xml:space="preserve"><value>Editing restricted: {0}.</value></data>
+  <data name="Backstage_Safety_SelectedDataRemoved_Status" xml:space="preserve"><value>Selected document data removed.</value></data>
+  <data name="Backstage_Safety_InspectorCompleted_Status" xml:space="preserve"><value>Document Inspector completed.</value></data>
+  <data name="Backstage_Safety_NoAccessibilityIssues_Status" xml:space="preserve"><value>No accessibility issues found.</value></data>
+  <data name="Backstage_Safety_AccessibilityIssueCount_Status_Format" xml:space="preserve"><value>{0} accessibility issue(s) found.</value></data>
+  <data name="Backstage_Safety_MarkedAsFinal_Banner" xml:space="preserve"><value>Marked as Final  An author has marked this document as final to discourage editing.</value></data>
+  <data name="Design_ThemeColors_Invalid_Message" xml:space="preserve"><value>Enter valid theme colors.</value></data>
+  <data name="Design_PageColor_Color_Label" xml:space="preserve"><value>Color:</value></data>
+  <data name="Design_PageColor_MoreColors_Label" xml:space="preserve"><value>More Colors:</value></data>
+  <data name="Design_Effects_Title" xml:space="preserve"><value>Effects</value></data>
+  <data name="Design_Effects_Set_Label" xml:space="preserve"><value>Effect set:</value></data>
+  <data name="Design_StyleSets_Title" xml:space="preserve"><value>Style Sets</value></data>
+  <data name="Design_StyleSets_Set_Label" xml:space="preserve"><value>Style set:</value></data>
 </root>

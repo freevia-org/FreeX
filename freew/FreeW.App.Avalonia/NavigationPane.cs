@@ -46,8 +46,9 @@ public sealed class NavigationPane : SidePaneBase
     // ── Construction ──────────────────────────────────────────────────────────
 
     public NavigationPane(DocumentView editor)
-        : base(editor, "Navigation", width: 240, chromeBorderThickness: new Thickness(0, 0, 1, 0), includeSeparator: false)
+        : base(editor, NavigationPaneTextCatalog.Resolve(UiText.Get).Title, width: 240, chromeBorderThickness: new Thickness(0, 0, 1, 0), includeSeparator: false)
     {
+        var text = NavigationPaneTextCatalog.Resolve(UiText.Get);
         _session = new NavigationPaneSession(
             () => editor.Document,
             new NavigationPaneMutationActions(
@@ -56,7 +57,8 @@ public sealed class NavigationPane : SidePaneBase
                 editor.DemoteHeading,
                 editor.CollapseHeading,
                 editor.ExpandHeading,
-                editor.IsHeadingCollapsed));
+                editor.IsHeadingCollapsed),
+            text);
 
         // --- Heading list ---------------------------------------------------
         _headingList = new ListBox
@@ -71,7 +73,7 @@ public sealed class NavigationPane : SidePaneBase
         // --- Search box -----------------------------------------------------
         _searchBox = new TextBox
         {
-            PlaceholderText = "Search document",
+            PlaceholderText = text.SearchDocument,
             Margin = new Thickness(8, 4, 8, 2),
             Padding = new Thickness(4, 2),
         };
@@ -94,7 +96,7 @@ public sealed class NavigationPane : SidePaneBase
             Padding = new Thickness(0),
             IsEnabled = false,
         };
-        ToolTip.SetTip(_prevButton, "Previous match");
+        ToolTip.SetTip(_prevButton, text.PreviousMatch);
         _prevButton.Click += (_, _) => StepSearch(forward: false);
 
         _nextButton = new Button
@@ -105,7 +107,7 @@ public sealed class NavigationPane : SidePaneBase
             Margin = new Thickness(2, 0, 0, 0),
             IsEnabled = false,
         };
-        ToolTip.SetTip(_nextButton, "Next match");
+        ToolTip.SetTip(_nextButton, text.NextMatch);
         _nextButton.Click += (_, _) => StepSearch(forward: true);
 
         // --- Match count status text ----------------------------------------

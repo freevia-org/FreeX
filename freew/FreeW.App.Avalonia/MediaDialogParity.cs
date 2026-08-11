@@ -335,7 +335,8 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 
     private InsertSmartArtDialog(SmartArt? seed)
     {
-        Title = seed is null ? "Insert SmartArt" : "Edit SmartArt Text";
+        var dialogText = SmartArtDialogPlanner.ResolveText(UiText.Get);
+        Title = seed is null ? dialogText.InsertTitle : dialogText.EditTitle;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -364,8 +365,8 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
         };
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
-        var add = Chrome.Button("Add Shape", AddNode);
-        var remove = Chrome.Button("Remove Shape", RemoveNode);
+        var add = Chrome.Button(dialogText.AddShapeLabel, AddNode);
+        var remove = Chrome.Button(dialogText.RemoveShapeLabel, RemoveNode);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
         actions.Children.Add(add);
         actions.Children.Add(remove);
@@ -374,9 +375,9 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
             Margin = new Thickness(14),
             Children =
             {
-                new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, 4) },
+                new TextBlock { Text = dialogText.LayoutLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _kind,
-                new TextBlock { Text = SmartArtDialogPlanner.NodeTextLabel, Margin = new Thickness(0, 10, 0, 4) },
+                new TextBlock { Text = dialogText.NodeTextLabel, Margin = new Thickness(0, 10, 0, 4) },
                 _nodes,
                 _edit,
                 actions,
@@ -393,7 +394,7 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 
     private void AddNode()
     {
-        _nodes.Items.Add("New Item");
+        _nodes.Items.Add(SmartArtDialogPlanner.ResolveText(UiText.Get).NewItemLabel);
         _nodes.SelectedIndex = _nodes.Items.Count - 1;
         Chrome.FocusAndSelect(_edit);
     }
@@ -411,12 +412,12 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
     {
         var kind = _kind.SelectedItem is SmartArtKind selected ? selected : SmartArtKind.Process;
         if (SmartArtDialogPlanner.TryBuildResult(
-                kind, _nodes.Items.Cast<string>(), out var result, out var errorMessage))
+                kind, _nodes.Items.Cast<string>(), out var result, out var errorMessage, UiText.Get))
         {
             Close(result);
             return;
         }
-        _status.Text = errorMessage ?? SmartArtDialogPlanner.EmptyNodesValidationMessage;
+        _status.Text = errorMessage ?? SmartArtDialogPlanner.ResolveText(UiText.Get).EmptyNodesValidationMessage;
     }
 }
 

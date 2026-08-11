@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
@@ -22,7 +23,8 @@ public sealed record NavigationPaneViewState(
     IReadOnlyList<NavigationHeadingProjection> Headings,
     IReadOnlyList<int> SearchHits,
     int SearchHitIndex,
-    int? SelectedHeadingBlockIndex)
+    int? SelectedHeadingBlockIndex,
+    string SearchStatusText)
 {
     public bool HasSearchQuery => Query.Length > 0;
     public bool CanStepSearch => SearchHits.Count > 0;
@@ -30,11 +32,39 @@ public sealed record NavigationPaneViewState(
         SearchHitIndex >= 0 && SearchHitIndex < SearchHits.Count
             ? SearchHits[SearchHitIndex]
             : null;
-    public string SearchStatusText => !HasSearchQuery
-        ? string.Empty
-        : CanStepSearch
-            ? $"{SearchHitIndex + 1} of {SearchHits.Count}"
-            : "No matches";
+}
+
+public sealed record NavigationPaneText(
+    string Title,
+    string SearchDocument,
+    string PreviousMatch,
+    string NextMatch,
+    string NoMatches,
+    string MatchCountFormat);
+
+public static class NavigationPaneTextCatalog
+{
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("Navigation_Title", "Navigation"),
+        new("Navigation_SearchDocument", "Search document"),
+        new("Navigation_PreviousMatch", "Previous match"),
+        new("Navigation_NextMatch", "Next match"),
+        new("Navigation_NoMatches", "No matches"),
+        new("Navigation_MatchCountFormat", "{0} of {1}"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static NavigationPaneText Resolve(Func<string, string?>? getText = null) =>
+        new(
+            Texts[0].Resolve(getText),
+            Texts[1].Resolve(getText),
+            Texts[2].Resolve(getText),
+            Texts[3].Resolve(getText),
+            Texts[4].Resolve(getText),
+            Texts[5].Resolve(getText));
 }
 
 public sealed record NavigationPaneOutcome(
@@ -50,13 +80,16 @@ public sealed class NavigationPaneSession
 {
     private readonly Func<TextDocument> _document;
     private readonly NavigationPaneMutationActions _mutations;
+    private readonly NavigationPaneText _text;
 
     public NavigationPaneSession(
         Func<TextDocument> document,
-        NavigationPaneMutationActions mutations)
+        NavigationPaneMutationActions mutations,
+        NavigationPaneText? text = null)
     {
         _document = document ?? throw new ArgumentNullException(nameof(document));
         _mutations = mutations ?? throw new ArgumentNullException(nameof(mutations));
+        _text = text ?? NavigationPaneTextCatalog.Resolve();
         State = EmptyState();
     }
 
@@ -167,10 +200,10 @@ public sealed class NavigationPaneSession
         return BuildHeadings(document, query ?? string.Empty);
     }
 
-    private static NavigationPaneViewState EmptyState() =>
-        new(string.Empty, [], [], -1, null);
+    private NavigationPaneViewState EmptyState() =>
+        new(string.Empty, [], [], -1, null, string.Empty);
 
-    private static NavigationPaneViewState BuildState(
+    private NavigationPaneViewState BuildState(
         TextDocument document,
         string query,
         int searchHitIndex,
@@ -187,7 +220,16 @@ public sealed class NavigationPaneSession
             && headings.Any(heading => heading.BlockIndex == blockIndex)
                 ? blockIndex
                 : (int?)null;
-        return new NavigationPaneViewState(normalizedQuery, headings, hits, nextHitIndex, selected);
+        var status = normalizedQuery.Length == 0
+            ? string.Empty
+            : hits.Count == 0
+                ? _text.NoMatches
+                : string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    _text.MatchCountFormat,
+                    nextHitIndex + 1,
+                    hits.Count);
+        return new NavigationPaneViewState(normalizedQuery, headings, hits, nextHitIndex, selected, status);
     }
 
     private static IReadOnlyList<int> FindSearchHits(TextDocument document, string query)

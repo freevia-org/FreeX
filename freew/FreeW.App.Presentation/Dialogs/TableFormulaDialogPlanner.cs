@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -61,6 +62,14 @@ public static class TableFormulaDialogPlanner
     public const string ValidationAutomationId = "TableFormulaValidationText";
     public const string AcceptButtonAutomationId = "TableFormulaOkButton";
     public const string CancelButtonAutomationId = "TableFormulaCancelButton";
+    private static readonly ResourceTextDescriptor CursorOutsideTableMessage = new(
+        "TableFormula_CursorOutsideTable_Message",
+        "The cursor must be inside a table cell to insert a formula.");
+
+    public static string ResolveCursorOutsideTableMessage(Func<string, string?>? getText = null) =>
+        CursorOutsideTableMessage.Resolve(getText);
+
+    public static string CursorOutsideTableResourceKey => CursorOutsideTableMessage.ResourceKey;
 
     public static readonly IReadOnlyList<string> Functions =
         ["SUM", "AVERAGE", "COUNT", "PRODUCT", "MIN", "MAX"];

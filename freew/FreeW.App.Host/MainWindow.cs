@@ -366,7 +366,8 @@ public sealed class MainWindow : Window
                 editor.DemoteHeading,
                 editor.CollapseHeading,
                 editor.ExpandHeading,
-                editor.IsHeadingCollapsed));
+                editor.IsHeadingCollapsed),
+            NavigationPaneTextCatalog.Resolve(UiText.Get));
         _reviewingPaneSession = new ReviewingPaneSession(
             editor.ListRevisions,
             new ReviewingPaneMutationActions(
@@ -1095,9 +1096,10 @@ public sealed class MainWindow : Window
     // until the document is marked final; see RefreshMarkedAsFinalBanner.
     private Border BuildMarkedAsFinalBanner()
     {
+        var safetyText = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         var text = new TextBlock
         {
-            Text = "Marked as Final  An author has marked this document as final to discourage editing.",
+            Text = safetyText.MarkedAsFinalBanner,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x4D, 0x00)),
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -1106,7 +1108,7 @@ public sealed class MainWindow : Window
 
         var editAnyway = new Button
         {
-            Content = "Edit Anyway",
+            Content = safetyText.EditAnywayLabel,
             MinWidth = 96,
             Padding = new Thickness(8, 2, 8, 2),
             VerticalAlignment = VerticalAlignment.Center
@@ -1287,7 +1289,7 @@ public sealed class MainWindow : Window
 
         var header = new TextBlock
         {
-            Text = "Navigation",
+            Text = NavigationPaneTextCatalog.Resolve(UiText.Get).Title,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };
@@ -1321,7 +1323,7 @@ public sealed class MainWindow : Window
         {
             Margin = new Thickness(10, 0, 10, 4),
             Padding = new Thickness(2, 1, 2, 1),
-            ToolTip = "Search document"
+            ToolTip = NavigationPaneTextCatalog.Resolve(UiText.Get).SearchDocument
         };
         _navSearch.TextChanged += (_, _) => RunNavSearch();
         _navSearch.KeyDown += (_, e) =>
@@ -1334,8 +1336,9 @@ public sealed class MainWindow : Window
             }
         };
 
-        _navSearchPrev = new Button { Content = "‹", Width = 22, Padding = new Thickness(0), ToolTip = "Previous match" };
-        _navSearchNext = new Button { Content = "›", Width = 22, Padding = new Thickness(0), ToolTip = "Next match" };
+        var text = NavigationPaneTextCatalog.Resolve(UiText.Get);
+        _navSearchPrev = new Button { Content = "‹", Width = 22, Padding = new Thickness(0), ToolTip = text.PreviousMatch };
+        _navSearchNext = new Button { Content = "›", Width = 22, Padding = new Thickness(0), ToolTip = text.NextMatch };
         _navSearchPrev.Click += (_, _) => StepNavSearch(forward: false);
         _navSearchNext.Click += (_, _) => StepNavSearch(forward: true);
 

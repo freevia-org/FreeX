@@ -95,7 +95,10 @@ internal sealed class CustomizeThemeColorsDialog : Free.Shared.Ribbon.Wpf.Dialog
                 out _result,
                 out var validation))
         {
-            DialogMessageHelper.ShowWarning(this, validation?.Message ?? "Enter valid theme colors.", Title);
+            DialogMessageHelper.ShowWarning(
+                this,
+                validation?.Message ?? DesignDialogTextCatalog.Resolve(UiText.Get).InvalidThemeColorsMessage,
+                Title);
             _hexBoxes.ElementAtOrDefault(validation?.SlotIndex ?? 0)?.Focus();
             return;
         }

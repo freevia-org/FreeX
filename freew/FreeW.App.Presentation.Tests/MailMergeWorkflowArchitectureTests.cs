@@ -48,6 +48,11 @@ public sealed class MailMergeWorkflowArchitectureTests
             "freew",
             "FreeW.App.Avalonia",
             "MainWindow.cs");
+        var ruleWorkflow = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "MailMergeRuleDialogPlanner.cs");
 
         wpf.Should().Contain("MailMergeSessionWorkflow");
         avalonia.Should().Contain("private readonly MailMergeSessionWorkflow _workflow = new();");
@@ -55,13 +60,20 @@ public sealed class MailMergeWorkflowArchitectureTests
         avalonia.Should().Contain("_workflow.NavigatePreview(_editor.Document, action)");
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("MailMergeRuleAuthoringPlanner.CreateIfPlan(");
-            source.Should().Contain("MailMergeRuleAuthoringPlanner.CreateConditionPlan(");
-            source.Should().Contain("MailMergeRuleAuthoringPlanner.CreateFillInPlan(");
-            source.Should().Contain("MailMergeRuleAuthoringPlanner.CreateAskPlan(");
-            source.Should().Contain("MailMergeRuleAuthoringPlanner.CreateSetPlan(");
-            source.Should().Contain("MailMergeRuleAuthoringPlanner.CreateRefPlan(");
+            source.Should().Contain("MailMergeRuleAuthoringWorkflow.RunAsync(");
+            source.Should().NotContain("MailMergeRuleAuthoringPlanner.CreateIfPlan(");
+            source.Should().NotContain("MailMergeRuleAuthoringPlanner.CreateConditionPlan(");
+            source.Should().NotContain("MailMergeRuleAuthoringPlanner.CreateFillInPlan(");
+            source.Should().NotContain("MailMergeRuleAuthoringPlanner.CreateAskPlan(");
+            source.Should().NotContain("MailMergeRuleAuthoringPlanner.CreateSetPlan(");
+            source.Should().NotContain("MailMergeRuleAuthoringPlanner.CreateRefPlan(");
         }
+        ruleWorkflow.Should().Contain("MailMergeRuleAuthoringPlanner.CreateIfPlan(");
+        ruleWorkflow.Should().Contain("MailMergeRuleAuthoringPlanner.CreateConditionPlan(");
+        ruleWorkflow.Should().Contain("MailMergeRuleAuthoringPlanner.CreateFillInPlan(");
+        ruleWorkflow.Should().Contain("MailMergeRuleAuthoringPlanner.CreateAskPlan(");
+        ruleWorkflow.Should().Contain("MailMergeRuleAuthoringPlanner.CreateSetPlan(");
+        ruleWorkflow.Should().Contain("MailMergeRuleAuthoringPlanner.CreateRefPlan(");
         wpf.Should().Contain("MailMergeInteractivePromptPlanner.Plan(template)");
         avaloniaHost.Should().Contain("MailMergeInteractivePromptPlanner.ApplyResponse(state, prompt, answer)");
         wpf.Should().Contain("workflow.RouteFinish(");

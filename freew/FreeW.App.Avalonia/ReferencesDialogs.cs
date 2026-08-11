@@ -203,9 +203,10 @@ internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
 
     private SourceConflictResolutionDialog(SourceManagementSourceConflict conflict)
     {
-        var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict);
+        var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
+        var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict, text);
 
-        Title = SourceManagementDialogPlanner.SourceConflictDialogTitle;
+        Title = text.SourceConflictDialogTitle;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -214,7 +215,7 @@ internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
 
         var message = new TextBlock
         {
-            Text = SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict),
+            Text = SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict, text),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(16, 14, 16, 0),
         };
@@ -225,7 +226,7 @@ internal sealed class SourceConflictResolutionDialog : FreeWDialogWindow
                 _result = choice.Action;
                 Close();
             }))
-            .Append(Button("Cancel", () => Close(), isCancel: true))
+            .Append(Button(text.CancelButtonLabel, () => Close(), isCancel: true))
             .ToArray();
 
         var body = new StackPanel();
@@ -260,7 +261,6 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
     private readonly ListBox _sourceList = new() { MinWidth = 340, Height = 160 };
     private readonly TextBlock _status = new()
     {
-        Text = "Select a source or add a new one.",
         Foreground = Brushes.DarkRed,
         Margin = new Thickness(16, 6, 16, 0),
         IsVisible = false,
@@ -272,8 +272,10 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
     {
         ArgumentNullException.ThrowIfNull(sources);
         _sources = sources;
+        var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
+        _status.Text = text.SelectSourceValidationMessage;
 
-        Title = SourceManagementDialogPlanner.SourcePickerTitle;
+        Title = text.SourcePickerTitle;
         Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -286,18 +288,18 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
 
         var label = new TextBlock
         {
-            Text = SourceManagementDialogPlanner.SourcePickerLabel,
+            Text = text.SourcePickerLabel,
             Margin = new Thickness(16, 12, 16, 4),
         };
         var listHost = new Border { Margin = new Thickness(16, 0, 16, 0), Child = _sourceList };
 
-        var addNew = Button(SourceManagementDialogPlanner.AddNewSourceButtonLabel, () =>
+        var addNew = Button(text.AddNewSourceButtonLabel, () =>
         {
             Pick = SourceManagementDialogPlanner.CreateAddNewPick();
             Close();
         });
-        var insert = Button("Insert", Accept, isDefault: true);
-        var cancel = Button("Cancel", () => Close(), isCancel: true);
+        var insert = Button(text.InsertButtonLabel, Accept, isDefault: true);
+        var cancel = Button(text.CancelButtonLabel, () => Close(), isCancel: true);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([addNew, insert, cancel], new Thickness(16, 12, 16, 14));
 
         var body = new StackPanel();
@@ -1096,8 +1098,9 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         IReadOnlyList<Source> masterSources)
     {
         _state = SourceManagementDialogPlanner.BuildInitialState(currentSources, masterSources);
+        var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
 
-        Title = "Manage Sources";
+        Title = text.ManageSourcesTitle;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -1114,13 +1117,13 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             SourceManagementDialogPlanner.MasterListLabel,
             _masterList,
             [
-                Button("Add...", () => _ = AddMasterAsync()),
-                Button("Edit...", () => _ = EditMasterAsync()),
-                Button("Delete", DeleteMaster)
+                Button(text.AddButtonLabel, () => _ = AddMasterAsync()),
+                Button(text.EditButtonLabel, () => _ = EditMasterAsync()),
+                Button(text.DeleteButtonLabel, DeleteMaster)
             ]);
 
-        var copy = Button("Copy →", () => _ = CopyMasterToCurrentAsync());
-        var copyBack = Button("Copy <-", () => _ = CopyCurrentToMasterAsync());
+        var copy = Button(text.CopyToCurrentButtonLabel, () => _ = CopyMasterToCurrentAsync());
+        var copyBack = Button(text.CopyToMasterButtonLabel, () => _ = CopyCurrentToMasterAsync());
         var centerPane = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,
@@ -1133,9 +1136,9 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
             SourceManagementDialogPlanner.CurrentDocumentListLabel,
             _currentList,
             [
-                Button("Add...", () => _ = AddCurrentAsync()),
-                Button("Edit...", () => _ = EditCurrentAsync()),
-                Button("Delete", DeleteCurrent)
+                Button(text.AddButtonLabel, () => _ = AddCurrentAsync()),
+                Button(text.EditButtonLabel, () => _ = EditCurrentAsync()),
+                Button(text.DeleteButtonLabel, DeleteCurrent)
             ]);
 
         var lists = new StackPanel
@@ -1147,8 +1150,8 @@ internal sealed class ManageSourcesDialog : FreeWDialogWindow
         lists.Children.Add(centerPane);
         lists.Children.Add(currentPane);
 
-        var ok = Button("OK", Accept, isDefault: true);
-        var cancel = Button("Cancel", () => Close(), isCancel: true);
+        var ok = Button(text.OkButtonLabel, Accept, isDefault: true);
+        var cancel = Button(text.CancelButtonLabel, () => Close(), isCancel: true);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
 
         var body = new StackPanel();

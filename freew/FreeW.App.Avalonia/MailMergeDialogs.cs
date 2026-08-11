@@ -518,17 +518,41 @@ internal static class MailMergeDialogs
         return result;
     }
 
+    public static async ValueTask<MailMergeRuleDialogResponse?> AskMergeRuleAsync(
+        Window owner,
+        MailMergeRuleDialogRequest request) =>
+        request switch
+        {
+            MailMergeRuleIfDialogRequest typed =>
+                await AskMergeRuleIfAsync(owner, typed) is { } result
+                    ? new MailMergeRuleIfDialogResponse(result)
+                    : null,
+            MailMergeRuleConditionDialogRequest typed =>
+                await AskMergeRuleConditionAsync(owner, typed) is { } result
+                    ? new MailMergeRuleConditionDialogResponse(result)
+                    : null,
+            MailMergeRulePromptDialogRequest typed =>
+                await AskMergeRulePromptAsync(owner, typed) is { } result
+                    ? new MailMergeRulePromptDialogResponse(result)
+                    : null,
+            MailMergeRuleNameValueDialogRequest typed =>
+                await AskMergeRuleNameValueAsync(owner, typed) is { } result
+                    ? new MailMergeRuleNameValueDialogResponse(result)
+                    : null,
+            _ => throw new ArgumentOutOfRangeException(nameof(request), request, null),
+        };
+
     public static async Task<MailMergeRuleIfDialogResult?> AskMergeRuleIfAsync(
         Window owner,
-        IReadOnlyList<string> fieldNames)
+        MailMergeRuleIfDialogRequest request)
     {
-        var session = new MailMergeRuleConditionDialogSession(fieldNames);
-        var dialog = CreateDialog(MailMergeDialogMetadata.IfThenElseTitle, 380, 300);
-        var fieldBox = CreateTextBox(session.InitialFieldName, "Field name");
+        var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
+        var dialog = CreateDialog(request.Title, 380, 300);
+        var fieldBox = CreateTextBox(session.InitialFieldName, request.FieldNameLabel);
         var opCombo = CreateOperatorCombo(session.ConditionOperators);
-        var valueBox = CreateTextBox(string.Empty, "Comparison value");
-        var trueBox = CreateTextBox(string.Empty, "Text if true");
-        var falseBox = CreateTextBox(string.Empty, "Text if false");
+        var valueBox = CreateTextBox(string.Empty, request.CompareToLabel);
+        var trueBox = CreateTextBox(string.Empty, request.TrueTextLabel);
+        var falseBox = CreateTextBox(string.Empty, request.FalseTextLabel);
 
         void RefreshValueEnabled()
         {
@@ -541,11 +565,11 @@ internal static class MailMergeDialogs
 
         MailMergeRuleIfDialogResult? result = null;
         var content = CreateForm(
-            (MailMergeDialogMetadata.FieldNameLabel, (Control)fieldBox),
-            (MailMergeDialogMetadata.ComparisonLabel, opCombo),
-            (MailMergeDialogMetadata.CompareToLabel, valueBox),
-            (MailMergeDialogMetadata.ThenInsertLabel, trueBox),
-            (MailMergeDialogMetadata.OtherwiseInsertLabel, falseBox));
+            (request.FieldNameLabel, (Control)fieldBox),
+            (request.ComparisonLabel, opCombo),
+            (request.CompareToLabel, valueBox),
+            (request.TrueTextLabel, trueBox),
+            (request.FalseTextLabel, falseBox));
         AddActions(dialog, content, () =>
         {
             result = session.AcceptIf(
@@ -561,14 +585,13 @@ internal static class MailMergeDialogs
 
     public static async Task<MailMergeRuleConditionDialogResult?> AskMergeRuleConditionAsync(
         Window owner,
-        IReadOnlyList<string> fieldNames,
-        string title)
+        MailMergeRuleConditionDialogRequest request)
     {
-        var session = new MailMergeRuleConditionDialogSession(fieldNames);
-        var dialog = CreateDialog(title, 360, 230);
-        var fieldBox = CreateTextBox(session.InitialFieldName, "Field name");
+        var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
+        var dialog = CreateDialog(request.Title, 360, 230);
+        var fieldBox = CreateTextBox(session.InitialFieldName, request.FieldNameLabel);
         var opCombo = CreateOperatorCombo(session.ConditionOperators);
-        var valueBox = CreateTextBox(string.Empty, "Comparison value");
+        var valueBox = CreateTextBox(string.Empty, request.CompareToLabel);
 
         void RefreshValueEnabled()
         {
@@ -581,9 +604,9 @@ internal static class MailMergeDialogs
 
         MailMergeRuleConditionDialogResult? result = null;
         var content = CreateForm(
-            (MailMergeDialogMetadata.FieldNameLabel, (Control)fieldBox),
-            (MailMergeDialogMetadata.ComparisonLabel, opCombo),
-            (MailMergeDialogMetadata.CompareToLabel, valueBox));
+            (request.FieldNameLabel, (Control)fieldBox),
+            (request.ComparisonLabel, opCombo),
+            (request.CompareToLabel, valueBox));
         AddActions(dialog, content, () =>
         {
             result = session.AcceptCondition(
@@ -594,6 +617,11 @@ internal static class MailMergeDialogs
         await dialog.ShowDialog(owner);
         return result;
     }
+
+    public static async Task<string?> AskMergeRulePromptAsync(
+        Window owner,
+        MailMergeRulePromptDialogRequest request) =>
+        await AskMergeRulePromptAsync(owner, request.Title, request.Prompt);
 
     public static async Task<string?> AskMergeRulePromptAsync(
         Window owner,
@@ -616,17 +644,16 @@ internal static class MailMergeDialogs
 
     public static async Task<MailMergeRuleNameValueDialogResult?> AskMergeRuleNameValueAsync(
         Window owner,
-        string title,
-        string valueLabel)
+        MailMergeRuleNameValueDialogRequest request)
     {
         var session = new MailMergeRuleNameValueDialogSession();
-        var dialog = CreateDialog(title, 360, 210);
-        var nameBox = CreateTextBox(string.Empty, "Bookmark name");
-        var valueBox = CreateTextBox(string.Empty, valueLabel);
+        var dialog = CreateDialog(request.Title, 360, 210);
+        var nameBox = CreateTextBox(string.Empty, request.NameLabel);
+        var valueBox = CreateTextBox(string.Empty, request.ValueLabel);
         MailMergeRuleNameValueDialogResult? result = null;
         var content = CreateForm(
-            (MailMergeDialogMetadata.BookmarkNameLabel, (Control)nameBox),
-            (valueLabel, (Control)valueBox));
+            (request.NameLabel, (Control)nameBox),
+            (request.ValueLabel, (Control)valueBox));
         AddActions(dialog, content, () =>
         {
             result = session.Accept(nameBox.Text, valueBox.Text);

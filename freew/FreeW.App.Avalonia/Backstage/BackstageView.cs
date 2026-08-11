@@ -54,7 +54,7 @@ internal sealed class BackstageView : Window
         DetailLabelVerticalAlignment = VerticalAlignment.Top,
     };
     private static readonly SisterBackstagePaneSpecPlanner PaneSpecs = new(
-        FreeWBackstagePaneTextCatalog.BuildTextSpec());
+        FreeWBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get));
     private static readonly AvaloniaBackstagePaneComposer Panes = new(
         BackstageChromeStyle,
         BackstagePaneSurfacePlanner.ComposerProfile);
@@ -94,7 +94,8 @@ internal sealed class BackstageView : Window
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         _session = new FreeWBackstageSession(
             callbacks,
-            BackstageActionBinder.DismissBefore(Dismiss));
+            BackstageActionBinder.DismissBefore(Dismiss),
+            BackstageStrings.Current.Get);
 
         Title = BackstageViewTextResources.WindowTitle;
         Width = 840;
@@ -419,7 +420,10 @@ internal sealed class BackstageView : Window
 
     private Control BuildExportPane()
     {
-        var surface = _session.BuildExportPane();
+        var exportText = BackstageExportPaneSurfaceText.FromDescriptor(
+            FreeWBackstagePaneTextCatalog.Descriptor.Export,
+            BackstageStrings.Current.Get);
+        var surface = _session.BuildExportPane(exportText);
 
         return Panes.BuildExportActionPane(surface.ToPaneSpec(), "BackstageAction");
 

@@ -816,7 +816,9 @@ public sealed partial class MainWindow : Window
         if (!_editor.CanConvertTableToText)
             return;
 
-        var delimiter = await TableTextConversionDialog.ShowAsync(this, "Convert Table to Text");
+        var delimiter = await TableTextConversionDialog.ShowAsync(
+            this,
+            TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle);
         if (delimiter is { } value)
             _editor.ConvertTableToText(value);
         _editor.Focus();
@@ -824,7 +826,9 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenTextToTableDialogAsync()
     {
-        var delimiter = await TableTextConversionDialog.ShowAsync(this, "Convert Text to Table");
+        var delimiter = await TableTextConversionDialog.ShowAsync(
+            this,
+            TableTextConversionDialogPlanner.ResolveText(UiText.Get).TextToTableTitle);
         if (delimiter is { } value)
             _editor.ConvertSelectedParagraphsToTable(value);
         _editor.Focus();
@@ -2075,23 +2079,22 @@ public sealed partial class MainWindow : Window
         registry.Register(new RibbonCommandId("freew.merge-email"),
             new ActionRibbonCommand(() => _ = PlanEmailMergeAsync()));
         registry.Register(new RibbonCommandId("freew.merge-rule-if"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleIfAsync()));
+            RuleCommand(MailMergeRuleKind.IfThenElse));
         registry.Register(new RibbonCommandId("freew.merge-rule-skip-record-if"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleConditionAsync(skipRecord: true)));
+            RuleCommand(MailMergeRuleKind.SkipRecordIf));
         registry.Register(new RibbonCommandId("freew.merge-rule-next-record-if"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleConditionAsync(skipRecord: false)));
+            RuleCommand(MailMergeRuleKind.NextRecordIf));
         registry.Register(new RibbonCommandId("freew.merge-rule-fill-in"),
-            new ActionRibbonCommand(() => _ = InsertMergeRulePromptAsync("Fill-in", "Enter the prompt text for this Fill-in field:",
-                prompt => _mailMerge?.InsertFillInRule(prompt))));
+            RuleCommand(MailMergeRuleKind.FillIn));
         registry.Register(new RibbonCommandId("freew.merge-rule-ask"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleNameValueAsync("Ask", "Prompt text:",
-                result => _mailMerge?.InsertAskRule(result.Name, result.Value))));
+            RuleCommand(MailMergeRuleKind.Ask));
         registry.Register(new RibbonCommandId("freew.merge-rule-set"),
-            new ActionRibbonCommand(() => _ = InsertMergeRuleNameValueAsync("Set Bookmark", "Value:",
-                result => _mailMerge?.InsertSetRule(result.Name, result.Value))));
+            RuleCommand(MailMergeRuleKind.Set));
         registry.Register(new RibbonCommandId("freew.merge-rule-ref"),
-            new ActionRibbonCommand(() => _ = InsertMergeRulePromptAsync("Ref Bookmark", "Enter the bookmark name to reference:",
-                prompt => _mailMerge?.InsertRefRule(prompt))));
+            RuleCommand(MailMergeRuleKind.Ref));
+
+        IRibbonCommand RuleCommand(MailMergeRuleKind kind) =>
+            new ActionRibbonCommand(() => _ = InsertMergeRuleAsync(kind));
         // AV-PICTAB: merge the Table (caret-in-cell) and Floating (picture/drawing selected)
         // contextual triggers so both sets of contextual tabs can surface from one source.
         var contextSource = new CompositeRibbonContextSource(
@@ -2438,56 +2441,14 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task InsertMergeRuleIfAsync()
+    private async Task InsertMergeRuleAsync(MailMergeRuleKind kind)
     {
         if (_mailMerge is null)
             return;
 
-        var result = await MailMergeDialogs.AskMergeRuleIfAsync(this, _mailMerge.AvailableFieldNames);
-        if (result is null)
-            return;
-
-        _mailMerge.InsertIfRule(result);
-        _editor.Focus();
-    }
-
-    private async Task InsertMergeRuleConditionAsync(bool skipRecord)
-    {
-        if (_mailMerge is null)
-            return;
-
-        var title = skipRecord ? "Skip Record If" : "Next Record If";
-        var result = await MailMergeDialogs.AskMergeRuleConditionAsync(this, _mailMerge.AvailableFieldNames, title);
-        if (result is null)
-            return;
-
-        if (skipRecord)
-            _mailMerge.InsertSkipRecordIfRule(result);
-        else
-            _mailMerge.InsertNextRecordIfRule(result);
-        _editor.Focus();
-    }
-
-    private async Task InsertMergeRulePromptAsync(string title, string prompt, Action<string> apply)
-    {
-        var result = await MailMergeDialogs.AskMergeRulePromptAsync(this, title, prompt);
-        if (result is null)
-            return;
-
-        apply(result);
-        _editor.Focus();
-    }
-
-    private async Task InsertMergeRuleNameValueAsync(
-        string title,
-        string valueLabel,
-        Action<MailMergeRuleNameValueDialogResult> apply)
-    {
-        var result = await MailMergeDialogs.AskMergeRuleNameValueAsync(this, title, valueLabel);
-        if (result is null)
-            return;
-
-        apply(result.Value);
+        await _mailMerge.AuthorRuleAsync(
+            kind,
+            (request, _) => MailMergeDialogs.AskMergeRuleAsync(this, request));
         _editor.Focus();
     }
 
@@ -4180,10 +4141,11 @@ public sealed partial class MainWindow : Window
 
     private void ToggleMarkAsFinal()
     {
+        var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         _editor.SetMarkedAsFinal(!_editor.IsMarkedAsFinal);
         _status.Text = _editor.IsMarkedAsFinal
-            ? "Document marked as final."
-            : "Document is no longer marked as final.";
+            ? text.MarkedAsFinalStatus
+            : text.NotMarkedAsFinalStatus;
         _editor.Focus();
     }
 
@@ -4195,9 +4157,13 @@ public sealed partial class MainWindow : Window
             return;
 
         _editor.SetProtection(settings);
+        var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         _status.Text = settings.Mode == ProtectionMode.None
-            ? "Editing restrictions removed."
-            : $"Editing restricted: {settings.Mode}.";
+            ? text.RestrictionsRemovedStatus
+            : string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                text.RestrictionsAppliedFormat,
+                settings.Mode);
         _editor.Focus();
     }
 
@@ -4212,9 +4178,10 @@ public sealed partial class MainWindow : Window
         if (choice.Any)
             _editor.ApplyInspectorRemovals(choice);
 
+        var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         _status.Text = choice.Any
-            ? "Selected document data removed."
-            : "Document Inspector completed.";
+            ? text.SelectedDataRemovedStatus
+            : text.InspectorCompletedStatus;
         _editor.Focus();
     }
 
@@ -4223,9 +4190,13 @@ public sealed partial class MainWindow : Window
         var report = AccessibilityChecker.Check(_editor.Document);
         var dialog = new AccessibilityReportDialog(report);
         await dialog.ShowDialog(this);
+        var text = BackstageInfoSafetyPanePlanner.ResolveText(UiText.Get);
         _status.Text = report.IsClean
-            ? "No accessibility issues found."
-            : $"{report.Issues.Count} accessibility issue(s) found.";
+            ? text.NoAccessibilityIssuesStatus
+            : string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                text.AccessibilityIssueCountStatusFormat,
+                report.Issues.Count);
         _editor.Focus();
     }
 

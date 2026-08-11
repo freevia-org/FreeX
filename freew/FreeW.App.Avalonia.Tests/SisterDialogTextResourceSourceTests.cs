@@ -116,7 +116,9 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("Height = BackstageTheme.TileHeight");
         source.Should().NotContain("SisterBackstagePalette.FreeW");
         source.Should().NotContain("ToColor(BackstageRgb");
-        source.Should().Contain("FreeWBackstagePaneTextCatalog.BuildTextSpec()");
+        source.Should().Contain("FreeWBackstagePaneTextCatalog.BuildTextSpec(BackstageStrings.Current.Get)");
+        source.Should().Contain("BackstageActionBinder.DismissBefore(Dismiss),");
+        source.Should().Contain("BackstageStrings.Current.Get);");
         source.Should().Contain("new FreeWBackstageSession(");
         source.Should().Contain("_session.BuildHomePane(");
         source.Should().Contain("_session.BuildOpenPane(");

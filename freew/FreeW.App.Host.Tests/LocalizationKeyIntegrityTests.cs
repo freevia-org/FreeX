@@ -1,3 +1,8 @@
+using FreeW.App.Presentation.Backstage;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Panes;
+using FreeW.App.Presentation.Ribbon;
+
 namespace FreeW.App.Host.Tests;
 
 /// <summary>
@@ -29,4 +34,23 @@ public sealed class LocalizationKeyIntegrityTests
             UiText.GetNeutral,
             "Common_Ok",
             "Common_Cancel");
+
+    [Fact]
+    public void SharedFreeWSurfaceCatalogKeys_AllExistInNeutralResources()
+    {
+        var available = UiText.GetNeutralResourceKeys();
+        var required = MailMergeRuleDialogPlanner.RequiredResourceKeys
+            .Concat(NavigationPaneTextCatalog.RequiredResourceKeys)
+            .Concat(SmartArtDialogPlanner.RequiredResourceKeys)
+            .Concat(TableTextConversionDialogPlanner.RequiredResourceKeys)
+            .Append(TableFormulaDialogPlanner.CursorOutsideTableResourceKey)
+            .Append(TablePropertiesDialogPlanner.CursorOutsideTableResourceKey)
+            .Concat(FreeWBackstagePaneTextCatalog.RequiredResourceKeys)
+            .Concat(SourceManagementDialogPlanner.RequiredResourceKeys)
+            .Concat(BackstageInfoSafetyPanePlanner.RequiredResourceKeys)
+            .Concat(DesignDialogTextCatalog.RequiredResourceKeys)
+            .Distinct(StringComparer.Ordinal);
+
+        required.Should().OnlyContain(key => available.Contains(key));
+    }
 }

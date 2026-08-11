@@ -209,6 +209,14 @@ public sealed class TablePropertiesDialogSession
 public static class TablePropertiesDialogPlanner
 {
     public const string Title = "Table Properties";
+    private static readonly ResourceTextDescriptor CursorOutsideTableMessage = new(
+        "TableProperties_CursorOutsideTable_Message",
+        "The cursor must be inside a table to edit its properties.");
+
+    public static string ResolveCursorOutsideTableMessage(Func<string, string?>? getText = null) =>
+        CursorOutsideTableMessage.Resolve(getText);
+
+    public static string CursorOutsideTableResourceKey => CursorOutsideTableMessage.ResourceKey;
     public const string TableTabLabel = "Table";
     public const string RowTabLabel = "Row";
     public const string ColumnTabLabel = "Column";

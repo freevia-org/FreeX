@@ -85,8 +85,8 @@ public sealed class SourceManagementDialogPolicySourceGuardTests
         var source = ReadHostRibbonSource();
 
         source.Should().Contain("SizeToContent = SizeToContent.WidthAndHeight,");
-        source.Should().Contain("Content = \"Copy →\",  MinWidth = 72");
-        source.Should().Contain("Content = \"Copy <-\", MinWidth = 72");
+        source.Should().Contain("Content = text.CopyToCurrentButtonLabel, MinWidth = 72");
+        source.Should().Contain("Content = text.CopyToMasterButtonLabel, MinWidth = 72");
         source.Should().Contain("MinWidth = 220,");
         source.Should().Contain("MinHeight = 180,");
     }

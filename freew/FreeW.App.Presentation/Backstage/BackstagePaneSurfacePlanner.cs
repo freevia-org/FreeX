@@ -139,7 +139,8 @@ public static class BackstagePaneSurfacePlanner
         Action? restrictEditing,
         Action? inspectDocument,
         Action? checkAccessibility,
-        TextDocument? document = null)
+        TextDocument? document = null,
+        Func<string, string?>? getText = null)
     {
         ArgumentNullException.ThrowIfNull(documentFields);
 
@@ -147,7 +148,7 @@ public static class BackstagePaneSurfacePlanner
             BackstageViewTextResources.Info.Title,
             BackstageViewTextResources.Info.Description,
             documentFields.ToArray(),
-            BackstageInfoSafetyPanePlanner.Build(document)
+            BackstageInfoSafetyPanePlanner.Build(document, getText)
                 .Select(group => new BackstageSurfaceActionGroup(
                     group.Heading,
                     group.Actions.Select(action => new BackstageSurfaceActionRow(

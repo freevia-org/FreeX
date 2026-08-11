@@ -52,7 +52,8 @@ internal sealed class BackstageView : UserControl
             BackstagePaneSurfacePlanner.WindowAutomationId);
         _session = new FreeWBackstageSession(
             callbacks,
-            BackstageActionBinder.DismissBefore(Hide));
+            BackstageActionBinder.DismissBefore(Hide),
+            BackstageStrings.Current.Get);
 
         _backstage = new SisterBackstageHostController(
             this,

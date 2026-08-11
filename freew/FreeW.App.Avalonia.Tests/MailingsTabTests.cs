@@ -41,10 +41,18 @@ public sealed class MailingsTabTests
             AskRecipientCsv: _ => recipientCsv,
             AskMergeFieldName: _ => mergeFieldName,
             ShowMailMergeInfo: m => infoSink?.Add(m),
-            AskMergeRuleIf: _ => ruleIf,
-            AskMergeRuleCondition: (_, _) => ruleCondition,
-            AskMergeRulePrompt: (_, _) => rulePrompt,
-            AskMergeRuleNameValue: (_, _) => ruleNameValue,
+            AskMergeRule: request => request switch
+            {
+                MailMergeRuleIfDialogRequest when ruleIf is not null =>
+                    new MailMergeRuleIfDialogResponse(ruleIf),
+                MailMergeRuleConditionDialogRequest when ruleCondition is not null =>
+                    new MailMergeRuleConditionDialogResponse(ruleCondition),
+                MailMergeRulePromptDialogRequest when rulePrompt is not null =>
+                    new MailMergeRulePromptDialogResponse(rulePrompt),
+                MailMergeRuleNameValueDialogRequest when ruleNameValue is not null =>
+                    new MailMergeRuleNameValueDialogResponse(ruleNameValue.Value),
+                _ => null,
+            },
             OpenMailDraft: target =>
             {
                 mailDraftSink?.Add(target);

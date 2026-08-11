@@ -33,12 +33,17 @@ internal sealed class MailMergeEngine
 {
     private readonly DocumentView _editor;
     private readonly RibbonHostCallbacks _callbacks;
+    private readonly Func<string, string?>? _getText;
     private readonly MailMergeSessionWorkflow _workflow = new();
 
-    public MailMergeEngine(DocumentView editor, RibbonHostCallbacks callbacks)
+    public MailMergeEngine(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks,
+        Func<string, string?>? getText = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
+        _getText = getText;
     }
 
     /// <summary>The shared session (recipient data + mapping + preview state). Exposed for tests.</summary>
@@ -185,51 +190,35 @@ internal sealed class MailMergeEngine
 
     // ── Rules ──────────────────────────────────────────────────────────────────────
 
-    // Rules commands are inserted through the same shared field-instruction builders as WPF.
-    public void InsertIfRule()
+    public MailMergeRuleDialogRequest CreateRuleRequest(MailMergeRuleKind kind) =>
+        MailMergeRuleDialogPlanner.CreateRequest(kind, AvailableFieldNames, _getText);
+
+    public void InsertRule(MailMergeRuleKind kind)
     {
-        if (_callbacks.AskMergeRuleIf is not { } ask)
+        if (_callbacks.AskMergeRule is not { } ask)
             return;
-        var result = ask(AvailableFieldNames);
-        if (result is null)
-            return;
-        InsertIfRule(result);
+
+        AuthorRuleAsync(
+                kind,
+                (request, _) => ValueTask.FromResult(ask(request)))
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
     }
 
-    public void InsertIfRule(MailMergeRuleIfDialogResult result)
-    {
-        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateIfPlan(result));
-    }
-
-    public void InsertSkipRecordIfRule()
-    {
-        if (_callbacks.AskMergeRuleCondition is not { } ask)
-            return;
-        var result = ask(AvailableFieldNames, "Skip Record If");
-        if (result is null)
-            return;
-        InsertSkipRecordIfRule(result);
-    }
-
-    public void InsertSkipRecordIfRule(MailMergeRuleConditionDialogResult result)
-    {
-        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateConditionPlan(result, skipRecord: true));
-    }
-
-    public void InsertNextRecordIfRule()
-    {
-        if (_callbacks.AskMergeRuleCondition is not { } ask)
-            return;
-        var result = ask(AvailableFieldNames, "Next Record If");
-        if (result is null)
-            return;
-        InsertNextRecordIfRule(result);
-    }
-
-    public void InsertNextRecordIfRule(MailMergeRuleConditionDialogResult result)
-    {
-        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateConditionPlan(result, skipRecord: false));
-    }
+    public ValueTask<MailMergeRuleAuthoringExecution> AuthorRuleAsync(
+        MailMergeRuleKind kind,
+        MailMergeRuleDialogPresenter showDialog,
+        CancellationToken cancellationToken = default) =>
+        MailMergeRuleAuthoringWorkflow.RunAsync(
+            CreateRuleRequest(kind),
+            showDialog,
+            (plan, _) =>
+            {
+                RealizeMailMergeFieldPlan(plan);
+                return ValueTask.CompletedTask;
+            },
+            cancellationToken);
 
     public void InsertNextRecordField() =>
         InsertNativeSpecialField(MailMerge.NextRecordField);
@@ -239,66 +228,6 @@ internal sealed class MailMergeEngine
 
     public void InsertMergeSequenceNumberField() =>
         InsertNativeSpecialField(MailMerge.MergeSequenceNumberField);
-
-    public void InsertFillInRule()
-    {
-        if (_callbacks.AskMergeRulePrompt is not { } ask)
-            return;
-        var prompt = ask("Fill-in", "Enter the prompt text for this Fill-in field:");
-        if (prompt is null)
-            return;
-        InsertFillInRule(prompt);
-    }
-
-    public void InsertFillInRule(string prompt)
-    {
-        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateFillInPlan(prompt));
-    }
-
-    public void InsertAskRule()
-    {
-        if (_callbacks.AskMergeRuleNameValue is not { } ask)
-            return;
-        var result = ask("Ask", "Prompt text:");
-        if (result is null)
-            return;
-        InsertAskRule(result.Value.Name, result.Value.Value);
-    }
-
-    public void InsertAskRule(string bookmarkName, string prompt)
-    {
-        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateAskPlan(bookmarkName, prompt));
-    }
-
-    public void InsertSetRule()
-    {
-        if (_callbacks.AskMergeRuleNameValue is not { } ask)
-            return;
-        var result = ask("Set Bookmark", "Value:");
-        if (result is null)
-            return;
-        InsertSetRule(result.Value.Name, result.Value.Value);
-    }
-
-    public void InsertSetRule(string bookmarkName, string value)
-    {
-        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateSetPlan(bookmarkName, value));
-    }
-
-    public void InsertRefRule()
-    {
-        if (_callbacks.AskMergeRulePrompt is not { } ask)
-            return;
-        var name = ask("Ref Bookmark", "Enter the bookmark name to reference:");
-        if (name is null)
-            return;
-        InsertRefRule(name);
-    }
-
-    public void InsertRefRule(string bookmarkName)
-    {
-        RealizeMailMergeFieldPlan(MailMergeRuleAuthoringPlanner.CreateRefPlan(bookmarkName));
-    }
 
     private void RealizeMailMergeFieldPlan(MailMergeFieldInsertionPlan? plan)
     {

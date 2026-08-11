@@ -26,6 +26,7 @@ public sealed class MailMergeDialogSurfaceTests
             "AskFinishMergeAsync",
             "AskCheckForErrorsAsync",
             "AskEmailMergeDeliveryAsync",
+            "AskMergeRuleAsync",
             "AskMergeRuleIfAsync",
             "AskMergeRuleConditionAsync",
             "AskMergeRulePromptAsync",
@@ -40,8 +41,10 @@ public sealed class MailMergeDialogSurfaceTests
         methods.Where(method => method.Name.StartsWith("Ask", StringComparison.Ordinal))
             .Should()
             .OnlyContain(method => method.ReturnType == typeof(Task) ||
+                                   method.ReturnType == typeof(ValueTask) ||
                                    (method.ReturnType.IsGenericType &&
-                                   method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>)));
+                                   (method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>) ||
+                                    method.ReturnType.GetGenericTypeDefinition() == typeof(ValueTask<>))));
     }
 
     [Fact]
@@ -112,6 +115,22 @@ public sealed class MailMergeDialogSurfaceTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("_mailMerge?.ApplyLabels(labels);");
+    }
+
+    [Fact]
+    public void MailingsCommandHost_UsesOneTypedRuleAuthoringRoute()
+    {
+        var mainWindow = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+        var engine = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Ribbon", "MailMergeEngine.cs"));
+
+        mainWindow.Should().Contain("InsertMergeRuleAsync(MailMergeRuleKind kind)");
+        mainWindow.Should().Contain("_mailMerge.AuthorRuleAsync(");
+        mainWindow.Should().Contain("MailMergeDialogs.AskMergeRuleAsync(this, request)");
+        mainWindow.Should().NotContain("InsertMergeRuleIfAsync()");
+        mainWindow.Should().NotContain("InsertMergeRuleConditionAsync(");
+        engine.Should().Contain("MailMergeRuleAuthoringWorkflow.RunAsync(");
+        engine.Should().NotContain("CreateIfPlan(");
+        engine.Should().NotContain("CreateConditionPlan(");
     }
 
     private static string RepositoryFile(params string[] relativeParts) =>

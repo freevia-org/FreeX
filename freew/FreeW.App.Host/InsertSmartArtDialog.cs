@@ -23,8 +23,9 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── Constructor ──────────────────────────────────────────────────────────────────────────────
     private InsertSmartArtDialog(Window? owner, SmartArt? seed)
     {
+        var dialogText = SmartArtDialogPlanner.ResolveText(UiText.Get);
         Owner = owner;
-        Title = seed is null ? "Insert SmartArt" : "Edit SmartArt Text";
+        Title = seed is null ? dialogText.InsertTitle : dialogText.EditTitle;
         Width = 440;
         MinHeight = 360;
         SizeToContent = SizeToContent.Height;
@@ -37,7 +38,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var panel = new StackPanel { Margin = new Thickness(14) };
 
         // ── Layout picker ────────────────────────────────────────────────────────────────────────
-        panel.Children.Add(new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, 4) });
+        panel.Children.Add(new TextBlock { Text = dialogText.LayoutLabel, Margin = new Thickness(0, 0, 0, 4) });
         _kindBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
         foreach (SmartArtKind kind in Enum.GetValues<SmartArtKind>())
             _kindBox.Items.Add(KindLabel(kind));
@@ -47,7 +48,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // ── Node list + editing ──────────────────────────────────────────────────────────────────
         panel.Children.Add(new TextBlock
         {
-            Text = SmartArtDialogPlanner.NodeTextLabel,
+            Text = dialogText.NodeTextLabel,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 4)
         });
@@ -106,11 +107,11 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(0, 0, 0, 10),
             HorizontalAlignment = HorizontalAlignment.Left
         };
-        var addBtn = new Button { Content = "Add Shape", Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 6, 0) };
-        var removeBtn = new Button { Content = "Remove Shape", Padding = new Thickness(8, 3, 8, 3) };
+        var addBtn = new Button { Content = dialogText.AddShapeLabel, Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 6, 0) };
+        var removeBtn = new Button { Content = dialogText.RemoveShapeLabel, Padding = new Thickness(8, 3, 8, 3) };
         addBtn.Click += (_, _) =>
         {
-            var idx = _nodeList.Items.Add("New Item");
+            var idx = _nodeList.Items.Add(dialogText.NewItemLabel);
             _nodeList.SelectedIndex = idx;
             DialogFocus.FocusAndSelect(_nodeTextBox);
         };
@@ -149,9 +150,10 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 kind,
                 _nodeList.Items.Cast<string>(),
                 out var result,
-                out var errorMessage))
+                out var errorMessage,
+                UiText.Get))
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? SmartArtDialogPlanner.EmptyNodesValidationMessage);
+            DialogMessageHelper.ShowWarning(this, errorMessage ?? SmartArtDialogPlanner.ResolveText(UiText.Get).EmptyNodesValidationMessage);
             return;
         }
 

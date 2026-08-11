@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
@@ -210,11 +211,50 @@ public sealed record SmartArtDialogInitialState(
     SmartArtKind Kind,
     IReadOnlyList<string> NodeTexts);
 
+public sealed record SmartArtDialogText(
+    string InsertTitle,
+    string EditTitle,
+    string LayoutLabel,
+    string NodeTextLabel,
+    string EditNodeTextLabel,
+    string AddShapeLabel,
+    string RemoveShapeLabel,
+    string NewItemLabel,
+    string EmptyNodesValidationMessage);
+
 public static class SmartArtDialogPlanner
 {
     public const string EmptyNodesValidationMessage = "Enter at least one node text.";
     public const string NodeTextLabel = "Diagram text (one item per node - use Add/Remove to manage):";
     public static readonly IReadOnlyList<string> DefaultNodeTexts = ["First", "Second", "Third"];
+
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("SmartArt_Dialog_Insert_Title", "Insert SmartArt"),
+        new("SmartArt_Dialog_Edit_Title", "Edit SmartArt Text"),
+        new("SmartArt_Dialog_Layout_Label", "Layout:"),
+        new("SmartArt_Dialog_NodeText_Label", NodeTextLabel),
+        new("SmartArt_Dialog_EditNodeText_Label", "One shape per line:"),
+        new("SmartArt_Dialog_AddShape_Label", "Add Shape"),
+        new("SmartArt_Dialog_RemoveShape_Label", "Remove Shape"),
+        new("SmartArt_Dialog_NewItem_Label", "New Item"),
+        new("SmartArt_Dialog_EmptyNodes_Validation", EmptyNodesValidationMessage),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static SmartArtDialogText ResolveText(Func<string, string?>? getText = null) =>
+        new(
+            Texts[0].Resolve(getText),
+            Texts[1].Resolve(getText),
+            Texts[2].Resolve(getText),
+            Texts[3].Resolve(getText),
+            Texts[4].Resolve(getText),
+            Texts[5].Resolve(getText),
+            Texts[6].Resolve(getText),
+            Texts[7].Resolve(getText),
+            Texts[8].Resolve(getText));
 
     public static SmartArtDialogInitialState BuildInitialState(SmartArt? seed) =>
         new(seed?.Kind ?? SmartArtKind.Process, FlattenNodeTexts(seed).ToArray());
@@ -223,7 +263,8 @@ public static class SmartArtDialogPlanner
         SmartArtKind kind,
         IEnumerable<string> nodeTexts,
         out SmartArt? result,
-        out string? errorMessage)
+        out string? errorMessage,
+        Func<string, string?>? getText = null)
     {
         ArgumentNullException.ThrowIfNull(nodeTexts);
 
@@ -234,7 +275,7 @@ public static class SmartArtDialogPlanner
         if (texts.Length == 0)
         {
             result = null;
-            errorMessage = EmptyNodesValidationMessage;
+            errorMessage = ResolveText(getText).EmptyNodesValidationMessage;
             return false;
         }
 

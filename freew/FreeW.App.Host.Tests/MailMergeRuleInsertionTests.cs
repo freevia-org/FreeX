@@ -17,18 +17,17 @@ public sealed class MailMergeRuleInsertionTests
             "Ribbon",
             "FreeWRibbonCommands.cs"));
 
-        source.Should().Contain("new InsertMergeRuleFillInCommand(resolveFieldTarget)");
-        source.Should().Contain("new InsertMergeRuleAskCommand(resolveFieldTarget)");
-        source.Should().Contain("new InsertMergeRuleSetCommand(resolveFieldTarget)");
-        source.Should().Contain("new InsertMergeRuleRefCommand(resolveFieldTarget)");
-        source.Should().Contain("new InsertMergeRuleIfCommand(resolveFieldTarget, mergeSession)");
-        source.Should().Contain("new InsertMergeRuleCondCommand(resolveFieldTarget, mergeSession");
-        source.Should().NotContain("new InsertMergeRuleFillInCommand(editor)");
-        source.Should().NotContain("new InsertMergeRuleAskCommand(editor)");
-        source.Should().NotContain("new InsertMergeRuleSetCommand(editor)");
-        source.Should().NotContain("new InsertMergeRuleRefCommand(editor)");
-        source.Should().NotContain("new InsertMergeRuleIfCommand(editor, mergeSession)");
-        source.Should().NotContain("new InsertMergeRuleCondCommand(editor, mergeSession");
+        source.Should().Contain("new InsertMergeRuleCommand(resolveFieldTarget, mergeSession, kind)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.IfThenElse)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.SkipRecordIf)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.NextRecordIf)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.FillIn)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.Ask)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.Set)");
+        source.Should().Contain("RuleCommand(MailMergeRuleKind.Ref)");
+        source.Should().NotContain("class InsertMergeRuleFillInCommand");
+        source.Should().NotContain("class InsertMergeRuleAskCommand");
+        source.Should().NotContain("class InsertMergeRuleCondCommand");
     }
 
     [StaFact]

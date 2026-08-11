@@ -1336,13 +1336,16 @@ internal static class FreeWRibbonCommands
         registry.Bind(FreeWRibbonCommandAction.MergeSequenceNumber, new InsertSpecialMergeFieldCommand(resolveFieldTarget, MailMerge.MergeSequenceNumberField));
         // Rules dropdown — each sub-command inserts the appropriate rule instruction via a dialog.
         registry.Bind(FreeWRibbonCommandAction.MergeRules, EmptyRibbonCommand.Instance); // dropdown host: no action of its own
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleIf, new InsertMergeRuleIfCommand(resolveFieldTarget, mergeSession));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleSkipRecordIf, new InsertMergeRuleCondCommand(resolveFieldTarget, mergeSession, RuleCondKind.SkipRecordIf));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleNextRecordIf, new InsertMergeRuleCondCommand(resolveFieldTarget, mergeSession, RuleCondKind.NextRecordIf));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleFillIn, new InsertMergeRuleFillInCommand(resolveFieldTarget));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleAsk, new InsertMergeRuleAskCommand(resolveFieldTarget));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleSet, new InsertMergeRuleSetCommand(resolveFieldTarget));
-        registry.Bind(FreeWRibbonCommandAction.MergeRuleRef, new InsertMergeRuleRefCommand(resolveFieldTarget));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleIf, RuleCommand(MailMergeRuleKind.IfThenElse));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleSkipRecordIf, RuleCommand(MailMergeRuleKind.SkipRecordIf));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleNextRecordIf, RuleCommand(MailMergeRuleKind.NextRecordIf));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleFillIn, RuleCommand(MailMergeRuleKind.FillIn));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleAsk, RuleCommand(MailMergeRuleKind.Ask));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleSet, RuleCommand(MailMergeRuleKind.Set));
+        registry.Bind(FreeWRibbonCommandAction.MergeRuleRef, RuleCommand(MailMergeRuleKind.Ref));
+
+        IRibbonCommand RuleCommand(MailMergeRuleKind kind) =>
+            new InsertMergeRuleCommand(resolveFieldTarget, mergeSession, kind);
         registry.Bind(FreeWRibbonCommandAction.MergePreview, new PreviewMergeRecordCommand(editor, mergeSession));
         registry.Bind(FreeWRibbonCommandAction.MergePreviewFirst, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.First));
         registry.Bind(FreeWRibbonCommandAction.MergePreviewPrevious, new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Previous));
@@ -2556,7 +2559,10 @@ internal static class FreeWRibbonCommands
             var location = editor.CaretTableCell();
             if (location is null)
             {
-                DialogMessageHelper.ShowWarning(owner!, "The cursor must be inside a table cell to insert a formula.", "Formula");
+                DialogMessageHelper.ShowWarning(
+                    owner!,
+                    TableFormulaDialogPlanner.ResolveCursorOutsideTableMessage(UiText.Get),
+                    TableFormulaDialogPlanner.Title);
                 return;
             }
 
@@ -2585,7 +2591,10 @@ internal static class FreeWRibbonCommands
             var tableContext = editor.CaretTableContext();
             if (tableContext is null)
             {
-                DialogMessageHelper.ShowWarning(owner!, "The cursor must be inside a table to edit its properties.", "Table Properties");
+                DialogMessageHelper.ShowWarning(
+                    owner!,
+                    TablePropertiesDialogPlanner.ResolveCursorOutsideTableMessage(UiText.Get),
+                    TablePropertiesDialogPlanner.Title);
                 return;
             }
 
@@ -4928,6 +4937,7 @@ internal static class FreeWRibbonCommands
     {
         public static SourceManagementPick? Ask(Window? owner, IReadOnlyList<Source> sources)
         {
+            var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
             var list = new System.Windows.Controls.ListBox
             {
                 MinWidth = 320,
@@ -4941,7 +4951,7 @@ internal static class FreeWRibbonCommands
             SourceManagementPick? result = null;
             var dialog = new Window
             {
-                Title = SourceManagementDialogPlanner.SourcePickerTitle,
+                Title = text.SourcePickerTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -4949,9 +4959,9 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
-            var addNew = new System.Windows.Controls.Button { Content = SourceManagementDialogPlanner.AddNewSourceButtonLabel, MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = text.InsertButtonLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var addNew = new System.Windows.Controls.Button { Content = text.AddNewSourceButtonLabel, MinWidth = 120, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = text.CancelButtonLabel, IsCancel = true, MinWidth = 72 };
 
             void Choose()
             {
@@ -4976,7 +4986,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = SourceManagementDialogPlanner.SourcePickerLabel, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text.SourcePickerLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;
@@ -5328,6 +5338,7 @@ internal static class FreeWRibbonCommands
         {
             // The planner owns the working copies; mutations stay in dialog state until OK.
             var state = SourceManagementDialogPlanner.BuildInitialState(sources, masterSources);
+            var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
 
             // ── left pane: Master List ────────────────────────────────────────────────────────
             var masterList = new System.Windows.Controls.ListBox
@@ -5348,7 +5359,7 @@ internal static class FreeWRibbonCommands
             ManageSourcesResult? result = null;
             var dialog = new Window
             {
-                Title = "Manage Sources",
+                Title = text.ManageSourcesTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -5399,18 +5410,18 @@ internal static class FreeWRibbonCommands
             SourceManagementSourceConflictResolutionAction? AskConflictResolution(
                 SourceManagementSourceConflict conflict)
             {
-                var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict);
+                var choices = SourceManagementDialogPlanner.BuildSourceConflictResolutionChoices(conflict, text);
                 var message = string.Join(
                     Environment.NewLine,
-                    SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict),
+                    SourceManagementDialogPlanner.BuildSourceConflictMessage(conflict, text),
                     string.Empty,
-                    $"Yes: {choices[0].Label}",
-                    $"No: {choices[1].Label}",
-                    "Cancel: Do nothing");
+                    string.Format(System.Globalization.CultureInfo.CurrentCulture, text.SourceConflictYesFormat, choices[0].Label),
+                    string.Format(System.Globalization.CultureInfo.CurrentCulture, text.SourceConflictNoFormat, choices[1].Label),
+                    text.SourceConflictCancelDescription);
                 var answer = DialogMessageHelper.ShowMessage(
                     dialog,
                     message,
-                    SourceManagementDialogPlanner.SourceConflictDialogTitle,
+                    text.SourceConflictDialogTitle,
                     UserMessageButtons.YesNoCancel,
                     UserMessageIcon.Warning);
 
@@ -5537,16 +5548,16 @@ internal static class FreeWRibbonCommands
             }
 
             // ── buttons ───────────────────────────────────────────────────────────────────────
-            var masterAdd    = new System.Windows.Controls.Button { Content = "Add...", MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
-            var masterEdit   = new System.Windows.Controls.Button { Content = "Edit...", MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
-            var masterDelete = new System.Windows.Controls.Button { Content = "Delete",  MinWidth = 72 };
-            var copyBtn      = new System.Windows.Controls.Button { Content = "Copy →",  MinWidth = 72 };
-            var copyBackBtn  = new System.Windows.Controls.Button { Content = "Copy <-", MinWidth = 72, Margin = new Thickness(0, 6, 0, 0) };
-            var docAdd       = new System.Windows.Controls.Button { Content = "Add...", MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
-            var docEdit      = new System.Windows.Controls.Button { Content = "Edit...", MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
-            var docDelete    = new System.Windows.Controls.Button { Content = "Delete",  MinWidth = 72 };
-            var ok           = new System.Windows.Controls.Button { Content = "OK",      IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel       = new System.Windows.Controls.Button { Content = "Cancel",  IsCancel = true,  MinWidth = 72 };
+            var masterAdd    = new System.Windows.Controls.Button { Content = text.AddButtonLabel, MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
+            var masterEdit   = new System.Windows.Controls.Button { Content = text.EditButtonLabel, MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
+            var masterDelete = new System.Windows.Controls.Button { Content = text.DeleteButtonLabel, MinWidth = 72 };
+            var copyBtn      = new System.Windows.Controls.Button { Content = text.CopyToCurrentButtonLabel, MinWidth = 72 };
+            var copyBackBtn  = new System.Windows.Controls.Button { Content = text.CopyToMasterButtonLabel, MinWidth = 72, Margin = new Thickness(0, 6, 0, 0) };
+            var docAdd       = new System.Windows.Controls.Button { Content = text.AddButtonLabel, MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
+            var docEdit      = new System.Windows.Controls.Button { Content = text.EditButtonLabel, MinWidth = 72, Margin = new Thickness(0, 0, 6, 0) };
+            var docDelete    = new System.Windows.Controls.Button { Content = text.DeleteButtonLabel, MinWidth = 72 };
+            var ok           = new System.Windows.Controls.Button { Content = text.OkButtonLabel, IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel       = new System.Windows.Controls.Button { Content = text.CancelButtonLabel, IsCancel = true, MinWidth = 72 };
 
             masterAdd.Click    += (_, _) => AddToMaster();
             masterEdit.Click   += (_, _) => EditMasterSource();
@@ -5806,44 +5817,31 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Merge Rules: command kind tag for Skip/Next Record If.
-    private enum RuleCondKind { SkipRecordIf, NextRecordIf }
-
-    // Mailings > Rules > If...Then...Else: insert a native IF field with a nested MERGEFIELD operand.
-    private sealed class InsertMergeRuleIfCommand(
-        Func<DocumentView> resolveEditor,
-        MailMergeSession session) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var editor = resolveEditor();
-            var header = session.Data?.Header ?? [];
-            var result = MergeRuleIfDialog.Ask(Window.GetWindow(editor), header);
-            if (result is null) return;
-            RealizeMailMergeFieldPlan(
-                editor,
-                MailMergeRuleAuthoringPlanner.CreateIfPlan(result));
-        }
-    }
-
-    // Mailings > Rules > Skip/Next Record If: insert native SKIPIF/NEXTIF with nested MERGEFIELD.
-    private sealed class InsertMergeRuleCondCommand(
+    private sealed class InsertMergeRuleCommand(
         Func<DocumentView> resolveEditor,
         MailMergeSession session,
-        RuleCondKind kind) : IRibbonCommand
+        MailMergeRuleKind kind) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             var editor = resolveEditor();
-            var header = session.Data?.Header ?? [];
-            var label = kind == RuleCondKind.SkipRecordIf ? "Skip Record If" : "Next Record If";
-            var result = MergeRuleCondDialog.Ask(Window.GetWindow(editor), header, label);
-            if (result is null) return;
-            RealizeMailMergeFieldPlan(
-                editor,
-                MailMergeRuleAuthoringPlanner.CreateConditionPlan(
-                    result,
-                    skipRecord: kind == RuleCondKind.SkipRecordIf));
+            var request = MailMergeRuleDialogPlanner.CreateRequest(
+                kind,
+                session.Data?.Header,
+                UiText.Get);
+
+            MailMergeRuleAuthoringWorkflow.RunAsync(
+                    request,
+                    (dialogRequest, _) => ValueTask.FromResult(
+                        ShowMergeRuleDialog(Window.GetWindow(editor), dialogRequest)),
+                    (plan, _) =>
+                    {
+                        RealizeMailMergeFieldPlan(editor, plan);
+                        return ValueTask.CompletedTask;
+                    })
+                .AsTask()
+                .GetAwaiter()
+                .GetResult();
         }
     }
 
@@ -5856,82 +5854,44 @@ internal static class FreeWRibbonCommands
         editor.InsertComplexField(plan.Field, plan.CachedLabel);
     }
 
-    // Mailings > Rules > Fill-in: insert a native FILLIN field with the familiar label as cached text.
-    // At merge time MergeRuleEvaluator looks up the answer in MergeState.FillInAnswers (pre-populated
-    // by FinishMergeCommand which shows the Fill-in dialogs before iterating records).
-    private sealed class InsertMergeRuleFillInCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
+    private static MailMergeRuleDialogResponse? ShowMergeRuleDialog(
+        Window? owner,
+        MailMergeRuleDialogRequest request) =>
+        request switch
         {
-            var editor = resolveEditor();
-            var prompt = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Fill-in", "Enter the prompt text for this Fill-in field:");
-            if (prompt is null) return;
-            RealizeMailMergeFieldPlan(
-                editor,
-                MailMergeRuleAuthoringPlanner.CreateFillInPlan(prompt));
-        }
-    }
-
-    // Mailings > Rules > Ask: insert a native ASK field with the familiar label as cached text.
-    private sealed class InsertMergeRuleAskCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var editor = resolveEditor();
-            var result = MergeRuleAskSetDialog.AskAsk(Window.GetWindow(editor));
-            if (result is null) return;
-            if (MailMergeRuleAuthoringPlanner.CreateAskPlan(
-                    result.Value.Name,
-                    result.Value.Value) is { } plan)
-            {
-                RealizeMailMergeFieldPlan(editor, plan);
-            }
-        }
-    }
-
-    // Mailings > Rules > Set Bookmark: insert a native SET field with the familiar label as cached text.
-    private sealed class InsertMergeRuleSetCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var editor = resolveEditor();
-            var result = MergeRuleAskSetDialog.AskSet(Window.GetWindow(editor));
-            if (result is null) return;
-            if (MailMergeRuleAuthoringPlanner.CreateSetPlan(
-                    result.Value.Name,
-                    result.Value.Value) is { } plan)
-            {
-                RealizeMailMergeFieldPlan(editor, plan);
-            }
-        }
-    }
-
-    // Mailings > Rules > Ref Bookmark: insert a native REF field with the familiar label as cached text.
-    private sealed class InsertMergeRuleRefCommand(Func<DocumentView> resolveEditor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var editor = resolveEditor();
-            var name = MergeRulePromptDialog.AskPrompt(Window.GetWindow(editor), "Ref Bookmark",
-                "Enter the bookmark name to reference:");
-            if (name is null) return;
-            if (MailMergeRuleAuthoringPlanner.CreateRefPlan(name) is { } plan)
-                RealizeMailMergeFieldPlan(editor, plan);
-        }
-    }
+            MailMergeRuleIfDialogRequest typed =>
+                MergeRuleIfDialog.Ask(owner, typed) is { } result
+                    ? new MailMergeRuleIfDialogResponse(result)
+                    : null,
+            MailMergeRuleConditionDialogRequest typed =>
+                MergeRuleCondDialog.Ask(owner, typed) is { } result
+                    ? new MailMergeRuleConditionDialogResponse(result)
+                    : null,
+            MailMergeRulePromptDialogRequest typed =>
+                MergeRulePromptDialog.AskPrompt(owner, typed.Title, typed.Prompt) is { } result
+                    ? new MailMergeRulePromptDialogResponse(result)
+                    : null,
+            MailMergeRuleNameValueDialogRequest typed =>
+                MergeRuleAskSetDialog.Ask(owner, typed) is { } result
+                    ? new MailMergeRuleNameValueDialogResponse(result)
+                    : null,
+            _ => throw new ArgumentOutOfRangeException(nameof(request), request, null),
+        };
 
     // ── Merge Rule dialogs ───────────────────────────────────────────────────────────────────────
 
     // If…Then…Else dialog: builds the complete rule definition.
     private static class MergeRuleIfDialog
     {
-        public static MailMergeRuleIfDialogResult? Ask(Window? owner, IReadOnlyList<string> header)
+        public static MailMergeRuleIfDialogResult? Ask(
+            Window? owner,
+            MailMergeRuleIfDialogRequest request)
         {
-            var session = new MailMergeRuleConditionDialogSession(header);
+            var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
             MailMergeRuleIfDialogResult? result = null;
             var dialog = new Window
             {
-                Title = "If…Then…Else",
+                Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -5984,11 +5944,11 @@ internal static class FreeWRibbonCommands
                 grid.Children.Add(control);
             }
 
-            AddRow(0, "Field name:", fieldCombo);
-            AddRow(1, "Comparison:", opCombo);
-            AddRow(2, "Compare to:", valueBox);
-            AddRow(3, "Insert this text (true):", trueBox);
-            AddRow(4, "Otherwise insert (false):", falseBox);
+            AddRow(0, request.FieldNameLabel, fieldCombo);
+            AddRow(1, request.ComparisonLabel, opCombo);
+            AddRow(2, request.CompareToLabel, valueBox);
+            AddRow(3, request.TrueTextLabel, trueBox);
+            AddRow(4, request.FalseTextLabel, falseBox);
 
             var buttons = new System.Windows.Controls.StackPanel
             {
@@ -6009,13 +5969,15 @@ internal static class FreeWRibbonCommands
     // Skip Record If / Next Record If dialog.
     private static class MergeRuleCondDialog
     {
-        public static MailMergeRuleConditionDialogResult? Ask(Window? owner, IReadOnlyList<string> header, string title)
+        public static MailMergeRuleConditionDialogResult? Ask(
+            Window? owner,
+            MailMergeRuleConditionDialogRequest request)
         {
-            var session = new MailMergeRuleConditionDialogSession(header);
+            var session = new MailMergeRuleConditionDialogSession(request.FieldNames);
             MailMergeRuleConditionDialogResult? result = null;
             var dialog = new Window
             {
-                Title = title,
+                Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -6062,9 +6024,9 @@ internal static class FreeWRibbonCommands
                 grid.Children.Add(control);
             }
 
-            AddRow(0, "Field name:", fieldCombo);
-            AddRow(1, "Comparison:", opCombo);
-            AddRow(2, "Compare to:", valueBox);
+            AddRow(0, request.FieldNameLabel, fieldCombo);
+            AddRow(1, request.ComparisonLabel, opCombo);
+            AddRow(2, request.CompareToLabel, valueBox);
 
             var buttons = new System.Windows.Controls.StackPanel
             {
@@ -6129,23 +6091,15 @@ internal static class FreeWRibbonCommands
     // Two-field dialog for Ask (bookmark name + prompt) and Set (bookmark name + value).
     private static class MergeRuleAskSetDialog
     {
-        public static MailMergeRuleNameValueDialogResult? AskAsk(Window? owner) =>
-            AskTwo(owner, "Ask", "Bookmark name:", "Prompt text:");
-
-        public static MailMergeRuleNameValueDialogResult? AskSet(Window? owner) =>
-            AskTwo(owner, "Set Bookmark", "Bookmark name:", "Value:");
-
-        private static MailMergeRuleNameValueDialogResult? AskTwo(
+        public static MailMergeRuleNameValueDialogResult? Ask(
             Window? owner,
-            string title,
-            string label1,
-            string label2)
+            MailMergeRuleNameValueDialogRequest request)
         {
             var session = new MailMergeRuleNameValueDialogSession();
             MailMergeRuleNameValueDialogResult? result = null;
             var dialog = new Window
             {
-                Title = title,
+                Title = request.Title,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -6172,9 +6126,9 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(14), MinWidth = 320 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label1, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = request.NameLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(nameBox);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = label2, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = request.ValueLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(valueBox);
             panel.Children.Add(buttons);
             dialog.Content = panel;
@@ -8309,7 +8263,9 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            if (DelimiterDialog.Ask(Window.GetWindow(editor), "Convert Text to Table") is not { } delimiter)
+            if (DelimiterDialog.Ask(
+                    Window.GetWindow(editor),
+                    TableTextConversionDialogPlanner.ResolveText(UiText.Get).TextToTableTitle) is not { } delimiter)
                 return; // cancelled
             editor.Focus();
             editor.ConvertSelectionToTable(delimiter);
@@ -8323,7 +8279,9 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            if (DelimiterDialog.Ask(Window.GetWindow(editor), "Convert Table to Text") is not { } delimiter)
+            if (DelimiterDialog.Ask(
+                    Window.GetWindow(editor),
+                    TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle) is not { } delimiter)
                 return; // cancelled
             editor.Focus();
             editor.ConvertTableToText(delimiter);
@@ -8336,7 +8294,8 @@ internal static class FreeWRibbonCommands
     {
         public static char? Ask(Window? owner, string title)
         {
-            var choices = TableTextConversionDialogPlanner.Choices;
+            var text = TableTextConversionDialogPlanner.ResolveText(UiText.Get);
+            var choices = text.Choices;
 
             var list = new System.Windows.Controls.ListBox
             {
@@ -8382,7 +8341,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = TableTextConversionDialogPlanner.PromptLabel, Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text.PromptLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;

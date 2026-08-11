@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Dialogs;
@@ -14,6 +15,38 @@ public sealed record CustomizeThemeColorsDialogInput(
 public sealed record CustomizeThemeColorsValidation(
     int SlotIndex,
     string Message);
+
+public sealed record DesignDialogText(
+    string InvalidThemeColorsMessage,
+    string PageColorLabel,
+    string MoreColorsLabel,
+    string EffectsTitle,
+    string EffectSetLabel,
+    string StyleSetsTitle,
+    string StyleSetLabel);
+
+public static class DesignDialogTextCatalog
+{
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("Design_ThemeColors_Invalid_Message", "Enter valid theme colors."),
+        new("Design_PageColor_Color_Label", "Color:"),
+        new("Design_PageColor_MoreColors_Label", "More Colors:"),
+        new("Design_Effects_Title", "Effects"),
+        new("Design_Effects_Set_Label", "Effect set:"),
+        new("Design_StyleSets_Title", "Style Sets"),
+        new("Design_StyleSets_Set_Label", "Style set:"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static DesignDialogText Resolve(Func<string, string?>? getText = null)
+    {
+        var values = Texts.Select(text => text.Resolve(getText)).ToArray();
+        return new DesignDialogText(values[0], values[1], values[2], values[3], values[4], values[5], values[6]);
+    }
+}
 
 public static class CustomizeThemeColorsDialogPlanner
 {

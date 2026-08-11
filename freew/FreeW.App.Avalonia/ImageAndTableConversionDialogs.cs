@@ -168,6 +168,7 @@ internal sealed class TableTextConversionDialog : FreeWDialogWindow
 
     private TableTextConversionDialog(string title)
     {
+        var text = TableTextConversionDialogPlanner.ResolveText(UiText.Get);
         Title = title;
         SizeToContent = SizeToContent.WidthAndHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -178,7 +179,7 @@ internal sealed class TableTextConversionDialog : FreeWDialogWindow
         {
             MinWidth = 240,
             MinHeight = 90,
-            ItemsSource = TableTextConversionDialogPlanner.Choices.Select(choice => choice.Label).ToArray(),
+            ItemsSource = text.Choices.Select(choice => choice.Label).ToArray(),
             SelectedIndex = TableTextConversionDialogPlanner.DefaultChoiceIndex,
             Margin = new Thickness(0, 0, 0, 12),
         };
@@ -199,7 +200,7 @@ internal sealed class TableTextConversionDialog : FreeWDialogWindow
             {
                 new TextBlock
                 {
-                    Text = TableTextConversionDialogPlanner.PromptLabel,
+                    Text = text.PromptLabel,
                     Margin = new Thickness(0, 0, 0, 4),
                 },
                 _choices,

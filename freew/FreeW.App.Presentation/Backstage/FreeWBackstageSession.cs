@@ -57,13 +57,16 @@ public sealed class FreeWBackstageSession
 {
     private readonly BackstageCallbacks _callbacks;
     private readonly BackstageActionBinder _binder;
+    private readonly Func<string, string?>? _getText;
 
     public FreeWBackstageSession(
         BackstageCallbacks callbacks,
-        BackstageActionBinder? binder = null)
+        BackstageActionBinder? binder = null,
+        Func<string, string?>? getText = null)
     {
         _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
         _binder = binder ?? BackstageActionBinder.Identity;
+        _getText = getText;
     }
 
     public string DisplayName =>
@@ -149,7 +152,8 @@ public sealed class FreeWBackstageSession
             Bind(_callbacks.RestrictEditing),
             Bind(_callbacks.InspectDocument),
             Bind(_callbacks.CheckAccessibility),
-            document);
+            document,
+            _getText);
 
         return SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
             DocumentKindLabel: BackstageViewTextResources.DocumentLabel,
