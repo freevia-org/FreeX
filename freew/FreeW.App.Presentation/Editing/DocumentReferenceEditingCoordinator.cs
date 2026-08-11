@@ -71,6 +71,41 @@ public sealed class DocumentReferenceEditingCoordinator
 
     internal DocumentReferenceEditingCoordinator(DocumentEditingSession session) => _session = session;
 
+    public Run BuildComplexFieldInsertionRun(
+        string instruction,
+        string? cachedResult,
+        Func<Run, string> liveDisplayResolver,
+        TextDocument? evaluationDocument = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(instruction);
+        return BuildComplexFieldInsertionRun(
+            new ComplexField($" {instruction.Trim()} "),
+            cachedResult,
+            liveDisplayResolver,
+            evaluationDocument);
+    }
+
+    public Run BuildComplexFieldInsertionRun(
+        ComplexField field,
+        string? cachedResult,
+        Func<Run, string> liveDisplayResolver,
+        TextDocument? evaluationDocument = null)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        ArgumentNullException.ThrowIfNull(liveDisplayResolver);
+
+        var run = new Run(cachedResult ?? string.Empty) { ComplexField = field };
+        if (cachedResult is not null)
+            return run;
+
+        run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
+            ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
+            : ComplexFieldEngine.CanRecompute(field)
+                ? ComplexFieldEngine.Recompute(evaluationDocument ?? _session.Document, 0, run)
+                : liveDisplayResolver(run);
+        return run;
+    }
+
     public DocumentFieldCodeToggleResult ToggleFieldCodes()
     {
         var fields = DocumentFieldStories.Enumerate(_session.Document)

@@ -12146,25 +12146,29 @@ public sealed class DocumentView : RichTextBox
     {
         if (string.IsNullOrWhiteSpace(instruction))
             return;
-        // Word stores instructions with a single leading/trailing space; normalise so " PAGE " is produced
-        // from a bare "PAGE".
-        var normalized = " " + instruction.Trim() + " ";
-        InsertComplexField(new ComplexField(normalized), cachedResult);
+
+        Focus();
+        var fieldDocument = FieldEvaluationDocument ?? _model;
+        var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
+        var run = ReferenceEdits.BuildComplexFieldInsertionRun(
+            instruction,
+            cachedResult,
+            fieldRun => ResolveComplexFieldText(fieldRun, fieldDocument, fieldFileName),
+            fieldDocument);
+        InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 
     internal void InsertComplexField(ComplexField field, string? cachedResult)
     {
         Focus();
         ArgumentNullException.ThrowIfNull(field);
-        var run = new ModelRun(cachedResult ?? string.Empty) { ComplexField = field };
         var fieldDocument = FieldEvaluationDocument ?? _model;
         var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
-        if (cachedResult is null)
-            run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
-                ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
-                : ComplexFieldEngine.CanRecompute(field)
-                    ? ComplexFieldEngine.Recompute(fieldDocument, 0, run)
-                    : ResolveComplexFieldText(run, fieldDocument, fieldFileName);
+        var run = ReferenceEdits.BuildComplexFieldInsertionRun(
+            field,
+            cachedResult,
+            fieldRun => ResolveComplexFieldText(fieldRun, fieldDocument, fieldFileName),
+            fieldDocument);
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model, fieldDocument, fieldFileName));
     }
 

@@ -21076,7 +21076,12 @@ public sealed class DocumentView : Control
         if (IsEditingLocked || string.IsNullOrWhiteSpace(instruction))
             return;
 
-        InsertComplexField(new ComplexField(instruction), cachedResult);
+        var run = ReferenceEdits.BuildComplexFieldInsertionRun(
+            instruction,
+            cachedResult,
+            fieldRun => ResolveComplexField(fieldRun, string.Empty),
+            _doc);
+        InsertFieldRunAtActiveCaret(run);
     }
 
     internal void InsertComplexField(ComplexField field, string? cachedResult)
@@ -21085,17 +21090,11 @@ public sealed class DocumentView : Control
             return;
 
         ArgumentNullException.ThrowIfNull(field);
-        var run = new Run(cachedResult ?? string.Empty, RunFormatting.Default)
-        {
-            ComplexField = field
-        };
-        if (cachedResult is null)
-            run.Text = ComplexFieldDisplayPlanner.IsPageSectionField(field.Keyword)
-                ? ComplexFieldDisplayPlanner.ResolvePageSectionField(field, string.Empty, 1, 1)
-                : ComplexFieldEngine.CanRecompute(field)
-                    ? ComplexFieldEngine.Recompute(_doc, 0, run)
-                    : ResolveComplexField(run, string.Empty);
-
+        var run = ReferenceEdits.BuildComplexFieldInsertionRun(
+            field,
+            cachedResult,
+            fieldRun => ResolveComplexField(fieldRun, string.Empty),
+            _doc);
         InsertFieldRunAtActiveCaret(run);
     }
 

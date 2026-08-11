@@ -446,6 +446,58 @@ public sealed class DocumentReferenceEditingCoordinatorTests
     }
 
     [Fact]
+    public void ComplexFieldInsertionBuildsCanonicalPortableRuns()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Target") { BookmarkName = "destination" });
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        var liveResolutionCount = 0;
+
+        var formula = session.References.BuildComplexFieldInsertionRun(
+            "=2*(3+4)",
+            cachedResult: null,
+            _ =>
+            {
+                liveResolutionCount++;
+                return "live";
+            });
+        formula.ComplexField!.Instruction.Should().Be(" =2*(3+4) ");
+        formula.Text.Should().Be("14");
+
+        var reference = session.References.BuildComplexFieldInsertionRun(
+            new ComplexField(" REF destination "),
+            cachedResult: null,
+            _ =>
+            {
+                liveResolutionCount++;
+                return "live";
+            });
+        reference.Text.Should().Be("Target");
+
+        var cached = session.References.BuildComplexFieldInsertionRun(
+            new ComplexField(" AUTHOR "),
+            "Cached author",
+            _ =>
+            {
+                liveResolutionCount++;
+                return "live";
+            });
+        cached.Text.Should().Be("Cached author");
+
+        var live = session.References.BuildComplexFieldInsertionRun(
+            new ComplexField(" AUTHOR "),
+            cachedResult: null,
+            _ =>
+            {
+                liveResolutionCount++;
+                return "Live author";
+            });
+        live.Text.Should().Be("Live author");
+        liveResolutionCount.Should().Be(1);
+    }
+
+    [Fact]
     public void FieldUpdateOwnsLiveReferenceLockAndPageResultPolicy()
     {
         var evaluatedAt = new DateTime(2026, 8, 6, 14, 5, 0, DateTimeKind.Local);
