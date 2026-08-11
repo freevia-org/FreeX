@@ -56,6 +56,14 @@ public sealed class OsClipboardService
     internal bool OwnCopyIsCurrentOnOs =>
         _ownership.HasCurrentPlatformIdentity(CurrentSequenceIdentity());
 
+    /// <summary>
+    /// The message from the most recent failed OS-clipboard write (<see
+    /// cref="TryPlaceSelectionOnOsClipboard"/>), or null if the most recent write succeeded (or none
+    /// has run yet). Copy/Cut callers read this after a false result so the failure reaches the user
+    /// instead of vanishing silently.
+    /// </summary>
+    public string? LastWriteFailureMessage { get; private set; }
+
     public int RenderWidthPx { get; set; } = 1280;
     public int RenderHeightPx { get; set; } = 720;
 
@@ -89,7 +97,10 @@ public sealed class OsClipboardService
     {
         ArgumentNullException.ThrowIfNull(request);
         if (request.Content is null)
+        {
+            LastWriteFailureMessage = null;
             return false;
+        }
 
         var result = _clipboard.WriteAsync(
                 PresentationClipboardPlatformMapper.ToPlatformContent(request.Content))
@@ -99,10 +110,12 @@ public sealed class OsClipboardService
         if (result.IsSuccess)
         {
             _ownership.RecordSuccessfulWrite(request.Content, CurrentSequenceIdentity());
+            LastWriteFailureMessage = null;
             return true;
         }
 
         _ownership.Invalidate();
+        LastWriteFailureMessage = result.ErrorMessage;
         return false;
     }
 

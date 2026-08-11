@@ -1,6 +1,7 @@
 using Avalonia.Platform.Storage;
 using Free.Shared.AppServices;
 using Free.Shared.IO;
+using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
@@ -140,6 +141,16 @@ public sealed partial class MainWindow
             SlideRenderer.RenderToBytesWithPrintMarkup;
         public PresentationRasterPdfWriter WriteRasterPdf => SkiaRasterPdfWriter.WriteToBytes;
         public PresentationPdfContentWriter WriteVectorPdf => SkiaPdfWriter.WriteToBytesWithPortableFallback;
+
+        public byte[] WriteRasterPdfWithDiagnostics(
+            PdfRasterDocument document,
+            ICollection<string> imageDiagnostics) =>
+            SkiaRasterPdfWriter.WriteToBytes(document, imageDiagnostics);
+
+        public byte[] WriteVectorPdfWithDiagnostics(
+            PdfContentDocument document,
+            ICollection<string> imageDiagnostics) =>
+            SkiaPdfWriter.WriteToBytesWithPortableFallback(document, imageDiagnostics);
     }
 
     private sealed class AvaloniaPresentationPrintPort : IPresentationPrintPort
@@ -228,6 +239,16 @@ public sealed partial class MainWindow
             if (plan.ShowAvaloniaFileErrorDialog && plan.Error is { } error)
             {
                 await _owner._fileWorkflow.ShowFileCommandErrorAsync(error.Summary, error.Exception);
+            }
+            else if (result.Succeeded &&
+                     UserMessageServiceFileCommandExtensions.BuildExportImageWarningMessage(
+                         result.Message ?? "Export completed",
+                         result.ImageDiagnostics) is { } warningMessage)
+            {
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    _owner,
+                    warningMessage,
+                    FreePApplicationFrameDescriptor.Title.ApplicationName);
             }
         }
     }

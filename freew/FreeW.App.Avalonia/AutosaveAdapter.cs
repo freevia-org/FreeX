@@ -25,16 +25,21 @@ internal sealed class AutosaveAdapter : IDisposable
     private readonly DocumentView _editor;
     private readonly FileCommandWorkflow _workflow;
     private readonly FreeWAutosaveSession _session;
+    private readonly Func<AutosaveRecoveryCandidate, Task<bool>>? _recoverInNewWindowAsync;
     private CancellationTokenSource? _cts;
 
-    public AutosaveAdapter(DocumentView editor, FileCommandWorkflow workflow)
+    public AutosaveAdapter(
+        DocumentView editor,
+        FileCommandWorkflow workflow,
+        AutosaveSnapshotStore? store = null,
+        Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(workflow);
 
         _editor = editor;
         _workflow = workflow;
-        _session = new FreeWAutosaveSession(new FreeWAutosavePorts(
+        var ports = new FreeWAutosavePorts(
             GetOriginalFilePath: () => workflow.CurrentPath,
             GetDisplayName: () => workflow.DisplayName,
             GetIsDirty: () => workflow.IsDirty,
@@ -42,8 +47,15 @@ internal sealed class AutosaveAdapter : IDisposable
             ExecuteWithDocument: writeDocument => Dispatcher.UIThread.InvokeAsync(() =>
                 writeDocument(editor.Document))
                 .GetAwaiter()
-                .GetResult()));
+                .GetResult());
+        _session = store is null
+            ? new FreeWAutosaveSession(ports)
+            : new FreeWAutosaveSession(ports, store);
+        _recoverInNewWindowAsync = recoverInNewWindowAsync;
     }
+
+    internal string SnapshotIdForTests => _session.SnapshotId;
+    internal void SnapshotNowForTests() => _session.Snapshot();
 
     /// <summary>
     /// Start the periodic autosave loop. Safe to call from any thread.
@@ -75,7 +87,7 @@ internal sealed class AutosaveAdapter : IDisposable
     }
 
     /// <summary>
-    /// Check for a recovery candidate from a previous session and offer to restore it.
+    /// Check for recovery candidates from a previous session and offer each one in order.
     /// Must be called from the UI thread (it may show an Avalonia dialog).
     /// Errors are swallowed — recovery is best-effort and never blocks startup.
     /// </summary>
@@ -85,19 +97,34 @@ internal sealed class AutosaveAdapter : IDisposable
 
         try
         {
-            var recovery = _session.PlanLatestRecovery();
-            if (recovery is null)
-                return;
-
-            var recover = await RecoveryPromptDialog.ShowAsync(
-                owner,
-                $"FreeW found unsaved changes to \"{recovery.DisplayName}\" from a previous session. Recover them?");
-
-            _session.CompleteDocumentRecovery(recovery, recover, (document, originalPath) =>
+            var recoveries = _session.PlanRecoveries();
+            var anyAccepted = false;
+            for (var index = 0; index < recoveries.Count; index++)
             {
-                _editor.LoadDocument(document);
-                _workflow.MarkDirtyWithPath(originalPath);
-            }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
+                var recovery = recoveries[index];
+                var remaining = recoveries.Count - index;
+                var prompt = remaining > 1
+                    ? $"FreeW found unsaved changes to \"{recovery.DisplayName}\" from a previous session ({remaining} unsaved documents found). Recover this one?"
+                    : $"FreeW found unsaved changes to \"{recovery.DisplayName}\" from a previous session. Recover them?";
+                if (!await RecoveryPromptDialog.ShowAsync(owner, prompt))
+                    continue;
+
+                var firstAccepted = !anyAccepted;
+                anyAccepted = true;
+                if (firstAccepted)
+                {
+                    _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
+                    {
+                        _editor.LoadDocument(document);
+                        _workflow.MarkDirtyWithPath(originalPath);
+                    }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
+                    continue;
+                }
+
+                var recovered = _recoverInNewWindowAsync is not null &&
+                    await _recoverInNewWindowAsync(recovery.Candidate);
+                _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
+            }
         }
         catch
         {
@@ -168,6 +195,10 @@ internal sealed class RecoveryPromptDialog : FreeWDialogWindow
     }
 
     /// <summary>Show the prompt and return true if the user chose to recover.</summary>
+    public static Func<string, bool>? TestResponder { get; set; }
+
     public static Task<bool> ShowAsync(Window owner, string message) =>
-        new RecoveryPromptDialog(message).ShowDialog<bool>(owner);
+        TestResponder is { } responder
+            ? Task.FromResult(responder(message))
+            : new RecoveryPromptDialog(message).ShowDialog<bool>(owner);
 }

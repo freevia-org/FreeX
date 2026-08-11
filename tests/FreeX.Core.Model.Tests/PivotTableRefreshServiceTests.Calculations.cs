@@ -313,4 +313,56 @@ public sealed partial class PivotTableRefreshServiceTests
         Number(sheet, "G9").Should().Be(140);
     }
 
+    // A calculated field's formula is unbounded text — typed by the user, or read from the pivot
+    // definition in an opened .xlsx. The expression parser descends one stack frame per nesting
+    // level, so without a depth cap a deeply nested formula overflowed the stack, and
+    // StackOverflowException is uncatchable: it kills the process instead of surfacing as a bad
+    // formula. Verified to abort the test host when the cap is removed.
+    [Fact]
+    public void Refresh_CalculatedFieldWithDeeplyNestedParentheses_DoesNotOverflowTheStack()
+    {
+        var workbook = new Workbook("PivotDepthTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesWithUnitsData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D5"),
+            TargetRange = Range(sheet, "F2", "I8"),
+            ReportLayout = PivotReportLayout.Tabular
+        };
+        var formula = new string('(', 50_000) + "Amount" + new string(')', 50_000);
+        pivot.CalculatedFields.Add(new PivotCalculatedFieldModel("Deep", formula));
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(-1, "Sum of Deep", "sum", CalculatedFieldName: "Deep"));
+
+        var refresh = () => PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        refresh.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Refresh_CalculatedFieldWithOrdinaryParentheses_StillEvaluates()
+    {
+        // The cap must not reject formulas a real workbook would contain.
+        var workbook = new Workbook("PivotDepthTest");
+        var sheet = workbook.AddSheet("Data");
+        SeedSalesWithUnitsData(sheet);
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = Range(sheet, "A1", "D5"),
+            TargetRange = Range(sheet, "F2", "I8"),
+            ReportLayout = PivotReportLayout.Tabular
+        };
+        pivot.CalculatedFields.Add(new PivotCalculatedFieldModel("Revenue", "((Amount)*(Units))"));
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(-1, "Sum of Revenue", "sum", CalculatedFieldName: "Revenue"));
+
+        PivotTableRefreshService.Refresh(workbook, sheet, pivot);
+
+        Number(sheet, "G3").Should().Be(125);
+    }
 }

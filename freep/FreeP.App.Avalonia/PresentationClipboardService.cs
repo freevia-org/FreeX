@@ -69,14 +69,12 @@ internal sealed class AvaloniaPresentationSystemClipboard(Func<global::Avalonia.
         PresentationClipboardContent content,
         out Bitmap? bitmap)
     {
-        var scope = OperatingSystem.IsWindows()
-            ? PlatformClipboardFormatScope.Platform
-            : PlatformClipboardFormatScope.Application;
-        var xamlFormat = OperatingSystem.IsWindows()
-            ? PresentationClipboardFormats.WindowsXamlPackage
-            : PresentationClipboardFormats.LinuxXamlPackage;
         return AvaloniaPlatformClipboard.BuildDataTransfer(
-            PresentationClipboardPlatformMapper.ToPlatformContent(content, scope, xamlFormat),
+            PresentationClipboardPlatformMapper.ToPlatformContent(
+                content,
+                PresentationClipboardPlatformMapper.ResolveNativeScope(),
+                PresentationClipboardPlatformMapper.ResolveNativeXamlPackageFormat(),
+                PresentationClipboardPlatformMapper.ResolveNativeRtfFormat()),
             out bitmap);
     }
 
@@ -159,6 +157,13 @@ internal sealed class AvaloniaPresentationClipboardService(
 {
     private readonly PresentationClipboardOwnershipTracker _ownership = new();
 
+    /// <summary>
+    /// The message from the most recent failed OS-clipboard write (<see cref="TryWriteAsync"/>), or
+    /// null if the most recent write succeeded (or none has run yet). Copy/Cut callers read this
+    /// after a false result so the failure reaches the status bar instead of vanishing silently.
+    /// </summary>
+    public string? LastWriteFailureMessage { get; private set; }
+
     public Task<bool> CopyAsync(EditingSession editor) =>
         ExecuteCopyAsync(PrepareWrite(editor));
 
@@ -184,18 +189,24 @@ internal sealed class AvaloniaPresentationClipboardService(
     {
         ArgumentNullException.ThrowIfNull(request);
         PresentationClipboardWorkflow.CommitCopy(request);
-        return request.Content is not null && await TryWriteAsync(request.Content);
+        if (request.Content is null)
+        {
+            LastWriteFailureMessage = null;
+            return false;
+        }
+
+        return await TryWriteAsync(request.Content);
     }
 
     internal async Task<bool> ExecuteCutAsync(PresentationClipboardWriteRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var writeTask = request.Content is not null
-            ? TryWriteAsync(request.Content)
-            : Task.FromResult(false);
+        var written = request.Content is not null && await TryWriteAsync(request.Content);
+        if (request.Content is null)
+            LastWriteFailureMessage = null;
 
         PresentationClipboardWorkflow.CommitCut(request);
-        return await writeTask;
+        return written;
     }
 
     internal async Task<PresentationClipboardPasteSource> ExecutePasteAsync(
@@ -214,23 +225,23 @@ internal sealed class AvaloniaPresentationClipboardService(
 
     private async Task<bool> TryWriteAsync(PresentationClipboardContent content)
     {
-        var scope = OperatingSystem.IsWindows()
-            ? PlatformClipboardFormatScope.Platform
-            : PlatformClipboardFormatScope.Application;
-        var xamlFormat = OperatingSystem.IsWindows()
-            ? PresentationClipboardFormats.WindowsXamlPackage
-            : PresentationClipboardFormats.LinuxXamlPackage;
         var result = await systemClipboard.WriteAsync(
-            PresentationClipboardPlatformMapper.ToPlatformContent(content, scope, xamlFormat));
+            PresentationClipboardPlatformMapper.ToPlatformContent(
+                content,
+                PresentationClipboardPlatformMapper.ResolveNativeScope(),
+                PresentationClipboardPlatformMapper.ResolveNativeXamlPackageFormat(),
+                PresentationClipboardPlatformMapper.ResolveNativeRtfFormat()));
         if (result.IsSuccess)
         {
             _ownership.RecordSuccessfulWrite(
                 content,
                 PresentationClipboardContentIdentity.Compute(content, NormalizePng));
+            LastWriteFailureMessage = null;
             return true;
         }
 
         _ownership.Invalidate();
+        LastWriteFailureMessage = result.ErrorMessage;
         return false;
     }
 

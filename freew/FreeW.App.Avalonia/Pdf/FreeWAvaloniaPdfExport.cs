@@ -6,7 +6,10 @@ using Free.Shared.Pdf.Skia;
 namespace FreeW.App.Avalonia.Pdf;
 
 /// <summary>Result of an Avalonia FreeW PDF export: the page count plus the backend used.</summary>
-public sealed record FreeWAvaloniaPdfExportResult(int PageCount, PdfExportBackend Backend);
+public sealed record FreeWAvaloniaPdfExportResult(
+    int PageCount,
+    PdfExportBackend Backend,
+    IReadOnlyList<string> ImageDiagnostics);
 
 /// <summary>
 /// FreeW's Avalonia (Linux/macOS) PDF export. It mirrors FreeX's Avalonia routing: build the shared
@@ -75,19 +78,28 @@ public static class FreeWAvaloniaPdfExport
 
     private static FreeWAvaloniaPdfExportResult Write(PdfContentDocument document, Stream stream)
     {
+        // Populated by the shared writer when an embedded picture's bytes cannot be decoded (corrupt
+        // or an unrecognized format): that image is silently omitted from the page unless this sink
+        // catches the diagnostic, so callers can surface the loss instead of the export looking clean.
+        var imageDiagnostics = new List<string>();
+
         // Skia shapes (HarfBuzz) and automatically embeds/subsets the fonts it draws, so non-WinAnsi
         // text exports correctly without bundling a font. When the Skia native asset is missing it
         // throws on first use; we then fall back to the dependency-free WinAnsi writer.
         var result = PdfBackendFallbackExecutor.Execute(
             stream,
-            target => SkiaPdfWriter.Write(document, target),
+            target => SkiaPdfWriter.Write(document, target, imageDiagnostics),
             target =>
             {
-                var bytes = PortablePdfWriter.WriteToBytes(document, "FreeW portable PDF");
+                imageDiagnostics.Clear();
+                var bytes = PortablePdfWriter.WriteToBytes(
+                    document,
+                    "FreeW portable PDF",
+                    imageDiagnostics);
                 target.Write(bytes);
                 return document.Pages.Count;
             });
 
-        return new FreeWAvaloniaPdfExportResult(result.Result, result.Backend);
+        return new FreeWAvaloniaPdfExportResult(result.Result, result.Backend, imageDiagnostics);
     }
 }

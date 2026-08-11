@@ -3159,6 +3159,19 @@ public sealed class HeaderFooter
 {
     public List<Paragraph> Paragraphs { get; } = [];
 
+    /// <summary>
+    /// Optional side-by-side layout table (e.g. Word's classic single-row, three-cell Left/Center/Right
+    /// header/footer layout, <c>w:hdr</c>/<c>w:ftr</c> whose entire body is one <c>w:tbl</c>). When set, the
+    /// SAME <see cref="Paragraph"/> instances that live inside the table's cells are also flattened (in
+    /// row/cell order) into <see cref="Paragraphs"/> above, so every existing paragraph-based consumer
+    /// (field resolution, spell check, mail merge, plain-text extraction, the docx writer's image/hyperlink
+    /// collection) keeps working unchanged. Renderers that want the authored side-by-side layout back should
+    /// use this property instead of <see cref="Paragraphs"/>; renderers that have not been updated still see
+    /// correct (if visually flattened) text via <see cref="Paragraphs"/>. Null for the overwhelming majority
+    /// of headers/footers (plain paragraph content), so existing headers/footers are unaffected.
+    /// </summary>
+    public Table? Table { get; set; }
+
     public HeaderFooter() { }
 
     public HeaderFooter(string text) => Paragraphs.Add(new Paragraph(text));

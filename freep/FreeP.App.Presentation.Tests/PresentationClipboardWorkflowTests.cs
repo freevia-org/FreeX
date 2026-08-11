@@ -48,7 +48,10 @@ public sealed class PresentationClipboardWorkflowTests
 
         PresentationClipboardWorkflow.CommitCut(
             request,
-            () => shapeCountDuringWrite = slide.Shapes.Count);
+            () =>
+            {
+                shapeCountDuringWrite = slide.Shapes.Count;
+            });
 
         shapeCountDuringWrite.Should().Be(2);
         slide.Shapes.Select(shape => shape.Id).Should().Equal(2u);

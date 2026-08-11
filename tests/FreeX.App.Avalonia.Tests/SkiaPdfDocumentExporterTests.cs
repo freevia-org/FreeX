@@ -89,6 +89,53 @@ public sealed class SkiaPdfDocumentExporterTests
     }
 
     [Fact]
+    public void AvaloniaExportRoute_SurfacesImageDiagnostics_WhenHeaderPictureBytesAreUndecodable()
+    {
+        // R133-imageDiagnostics-wiring: an embedded header/footer picture with bytes the PDF writer
+        // cannot decode (corrupt/unrecognized format) used to be silently omitted from the page with
+        // no trace anywhere -- the shared writer's imageDiagnostics sink existed since r132 but no
+        // production caller ever passed a collection in. This exercises the exact seam MainWindow's
+        // File -> Export to PDF uses (AvaloniaPdfDocumentExporter.Save, options: null) and asserts the
+        // loss reaches the one user-visible surface FreeX already uses for export status.
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Hello"));
+        sheet.PageHeader = new WorksheetHeaderFooter("", "&G", "");
+        sheet.PageHeaderPictures = new WorksheetHeaderFooterPictureSet(
+            Left: null,
+            Center: new WorksheetHeaderFooterPicture([0x00, 0x01, 0x02, 0x03, 0x04], "image/png"),
+            Right: null);
+
+        var exportPlan = CreateExportPlanFromPageSetup(workbook, sheetIndex: 0);
+
+        using var stream = new MemoryStream();
+        var outcome = AvaloniaPdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        outcome.Result.ImageDiagnostics.Should().NotBeEmpty(
+            "the header picture's undecodable bytes must be surfaced, not silently dropped");
+        outcome.Result.StatusText.Should().Contain("image warning",
+            "the export status text is the only user-visible surface FreeX has for this kind of loss");
+    }
+
+    [Fact]
+    public void AvaloniaExportRoute_NoImageDiagnostics_WhenNoPicturesAreEmbedded()
+    {
+        // Sibling no-regression: an export with no embedded pictures at all must not spuriously report
+        // image warnings -- the diagnostics collection stays empty and the status text is unchanged.
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("Hello"));
+
+        var exportPlan = CreateExportPlanFromPageSetup(workbook, sheetIndex: 0);
+
+        using var stream = new MemoryStream();
+        var outcome = AvaloniaPdfDocumentExporter.Save(workbook, exportPlan, stream);
+
+        outcome.Result.ImageDiagnostics.Should().BeEmpty();
+        outcome.Result.StatusText.Should().NotContain("image warning");
+    }
+
+    [Fact]
     public void Save_RejectsNonWritableStream()
     {
         var workbook = new Workbook("Book");

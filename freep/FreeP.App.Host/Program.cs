@@ -30,7 +30,8 @@ public static class Program
 
         WpfApplicationStartupRunner.Run(new WpfApplicationStartupSpec<FreePOptions>(
             FreePApplicationStartupDescriptor.ProductIdentity,
-            (options, optionsStore) => new MainWindow(options, optionsStore))
+            (options, optionsStore, startupFilePaths) =>
+                new MainWindow(options, optionsStore, startupFilePaths: startupFilePaths))
         {
             InstallSharedSeams = AppComposition.InstallSharedSeams,
             Theme = new WpfApplicationThemeStartupSpec<Theme>(
@@ -43,7 +44,7 @@ public static class Program
                 SelectUiLanguage: FreePOptionsPolicy.SelectUiLanguage,
                 ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage,
                 ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf)
-        });
+        }, args);
         return 0;
     }
 }

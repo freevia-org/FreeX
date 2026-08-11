@@ -28,6 +28,10 @@ public sealed record WorkbookPrintFallbackResult(
         new(WorkbookPrintExecutionOutcome.Failed, statusText, Exception: exception);
 }
 
+public sealed record WorkbookPrintRenderResult(
+    byte[] DocumentBytes,
+    IReadOnlyList<string> ImageDiagnostics);
+
 public sealed record WorkbookPrintWorkflowPlan(
     PrintExportHostReadinessPlan Readiness,
     PortablePdfExportPlan? PortablePdfPlan)
@@ -41,6 +45,7 @@ public sealed record WorkbookPrintExecutionResult(
     string StatusText,
     PrintSubmissionResult? Submission = null,
     WorkbookPrintFallbackResult? Fallback = null,
+    WorkbookPrintRenderResult? RenderedDocument = null,
     Exception? Exception = null)
 {
     public bool Succeeded => Outcome == WorkbookPrintExecutionOutcome.Succeeded;
@@ -70,7 +75,7 @@ public static class WorkbookPrintWorkflow
         WorkbookPrintWorkflowPlan plan,
         string? printerId,
         string jobTitle,
-        Func<PortablePdfExportPlan, CancellationToken, Task<byte[]>> renderPdfAsync,
+        Func<PortablePdfExportPlan, CancellationToken, Task<WorkbookPrintRenderResult>> renderPdfAsync,
         Func<PrintJobSubmission, CancellationToken, Task<PrintSubmissionResult>> submitAsync,
         Func<byte[], CancellationToken, Task<WorkbookPrintFallbackResult>> saveFallbackAsync,
         CancellationToken cancellationToken = default)
@@ -99,7 +104,7 @@ public static class WorkbookPrintWorkflow
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var documentBytes = await renderPdfAsync(portablePlan, cancellationToken).ConfigureAwait(true);
+            var renderedDocument = await renderPdfAsync(portablePlan, cancellationToken).ConfigureAwait(true);
             cancellationToken.ThrowIfCancellationRequested();
 
             if (plan.Readiness.NativePrintPlan.RouteKind == PrintExportNativePrintRouteKind.PlatformPrinter)
@@ -107,7 +112,7 @@ public static class WorkbookPrintWorkflow
                 var job = plan.Readiness.NativePrintPlan.JobPlan;
                 var submission = await submitAsync(new PrintJobSubmission(
                     printerId ?? "",
-                    documentBytes,
+                    renderedDocument.DocumentBytes,
                     job.Copies,
                     job.Collate,
                     job.FirstPage,
@@ -117,15 +122,17 @@ public static class WorkbookPrintWorkflow
                     submission.Succeeded ? WorkbookPrintExecutionOutcome.Succeeded : WorkbookPrintExecutionOutcome.Failed,
                     plan,
                     submission.StatusText,
-                    Submission: submission);
+                    Submission: submission,
+                    RenderedDocument: renderedDocument);
             }
 
-            var fallback = await saveFallbackAsync(documentBytes, cancellationToken).ConfigureAwait(true);
+            var fallback = await saveFallbackAsync(renderedDocument.DocumentBytes, cancellationToken).ConfigureAwait(true);
             return new WorkbookPrintExecutionResult(
                 fallback.Outcome,
                 plan,
                 fallback.StatusText,
                 Fallback: fallback,
+                RenderedDocument: renderedDocument,
                 Exception: fallback.Exception);
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)

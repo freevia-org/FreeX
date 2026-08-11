@@ -3795,6 +3795,108 @@ public sealed class SlideCanvasAvaloniaTests
             "Wave 22A: combo chart with OverrideChartType=Line (no markers) must render without throwing");
     }
 
+    // ── Round 133 remediation: in-place Copy/Cut surfaces OS-clipboard write failures ─────
+    //
+    // AvaloniaInCanvasTextEditor.CopySelectionAsync/CutSelectionAsync is the exact API
+    // MainWindow.TryQueueActiveRichClipboard calls for the "select text inside a shape, then
+    // Copy/Cut" path. Before this fix, a failed OS-clipboard write there was swallowed silently
+    // (the underlying AvaloniaRichTextEditor.WriteRichClipboardAsync had no
+    // LastWriteFailureMessage at all), so the user believed the in-place copy succeeded and later
+    // pasted stale content. The overlay/canvas built here are never attached to a Window/TopLevel
+    // (matching every other InCanvasTextEditor test in this file), so
+    // TopLevel.GetTopLevel(InputBox) is null and the write fails deterministically -- the same
+    // "no system clipboard" failure AvaloniaPresentationClipboardService reports for the
+    // whole-shape sibling path -- without touching the real OS clipboard on this shared machine.
+
+    [Fact]
+    public async Task InCanvasTextEditor_CopyWithoutSystemClipboard_ReportsWriteFailure()
+    {
+        SlideShape? shape = null;
+        bool copyResult = true;
+        string? failureMessage = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 1,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeTextBody("Copy me"),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            var editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+            textEditor.TrySelectTextRange(0, "Copy me".Length).Should().BeTrue();
+
+            copyResult = textEditor.CopySelectionAsync().GetAwaiter().GetResult();
+            failureMessage = textEditor.LastWriteFailureMessage;
+        });
+
+        copyResult.Should().BeFalse();
+        failureMessage.Should().NotBeNullOrEmpty(
+            "in-place shape-text Copy must surface the OS-clipboard write failure instead of swallowing it silently");
+    }
+
+    [Fact]
+    public async Task InCanvasTextEditor_CutWithoutSystemClipboard_ReportsWriteFailureAndPreservesText()
+    {
+        SlideShape? shape = null;
+        bool cutResult = true;
+        string? failureMessage = null;
+        string? textAfterFailedCut = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = new SlideShape
+                {
+                    Id = 1,
+                    OffsetXEmu = 0,
+                    OffsetYEmu = 0,
+                    ExtentCxEmu = 2743200L,
+                    ExtentCyEmu = 1371600L,
+                    TextBody = MakeTextBody("Cut me"),
+                };
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            var editor = new EditingSession(presentation, bus);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            var overlay = new global::Avalonia.Controls.Canvas();
+            var textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.Activate(shape!.Id);
+            textEditor.TrySelectTextRange(0, "Cut me".Length).Should().BeTrue();
+
+            cutResult = textEditor.CutSelectionAsync().GetAwaiter().GetResult();
+            failureMessage = textEditor.LastWriteFailureMessage;
+            textAfterFailedCut = RichInput(overlay).Text;
+        });
+
+        cutResult.Should().BeFalse();
+        failureMessage.Should().NotBeNullOrEmpty(
+            "in-place shape-text Cut must surface the OS-clipboard write failure instead of swallowing it silently");
+        textAfterFailedCut.Should().Be(
+            "Cut me",
+            "a failed cut must not delete the selection -- the user would lose the text with no copy to paste back");
+    }
+
     // ── Round 131 (a): imported outer-shadow signature parity with WPF ────────────────────
 
     /// <summary>

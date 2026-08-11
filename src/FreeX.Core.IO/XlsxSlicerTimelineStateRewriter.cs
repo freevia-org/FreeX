@@ -767,7 +767,7 @@ internal static class XlsxSlicerTimelineStateRewriter
 
             var changed = RewriteSlicerCacheSelection(root, model);
             changed |= RewriteNativeCacheItemSelection(archive, root, model, workbook);
-            changed |= RewriteCachePivotTableBinding(root, model.SourcePivotTableName);
+            changed |= RewriteCachePivotTableBinding(root, model.ConnectedPivotTableNames, model.SourcePivotTableName);
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, cacheXml);
         }
@@ -848,26 +848,73 @@ internal static class XlsxSlicerTimelineStateRewriter
     /// No-op when the model carries no pivot binding (e.g. a table slicer's cache has no
     /// <c>&lt;pivotTables&gt;</c> element at all) or when the preserved name already matches the model
     /// (idempotent re-save of an un-renamed pivot table stays byte-stable).
+    /// <para>
+    /// R133-io-slicer-timeline-multipivot: a slicer/timeline can be connected to SEVERAL pivot tables at
+    /// once, so the preserved <c>&lt;pivotTables&gt;</c> list can carry more than one
+    /// <c>&lt;pivotTable name=".."/&gt;</c> entry. The old implementation stamped EVERY entry with the
+    /// single <paramref name="currentPivotTableName"/> (the model's primary connection only), which
+    /// silently collapsed every other connection onto that one name on save -- the other pivot tables then
+    /// stop being driven by the control on reopen. When <paramref name="connectedPivotTableNames"/> (read
+    /// at load from every <c>&lt;pivotTable&gt;</c> entry this same cache carries, see
+    /// <see cref="XlsxSlicerTimelineMetadataReader"/>) accounts for every preserved entry, each entry is
+    /// reconciled POSITIONALLY against its own list slot instead -- a rename
+    /// (<see cref="FreeX.Core.Commands.RenamePivotTableCommand"/> updates matching entries in that list
+    /// too, see its Apply/Revert) only touches the ONE renamed entry, leaving every other connection
+    /// exactly as preserved. Falls back to the legacy single-name behaviour when the list is empty (a
+    /// freshly-authored, never-loaded control) or its count no longer matches the preserved entries (an
+    /// unexpected structural change underneath us) -- both keep the common single-pivot case working
+    /// exactly as before.
+    /// </para>
     /// </summary>
-    private static bool RewriteCachePivotTableBinding(XElement cacheRoot, string? currentPivotTableName)
+    private static bool RewriteCachePivotTableBinding(
+        XElement cacheRoot, IReadOnlyList<string> connectedPivotTableNames, string? currentPivotTableName)
     {
-        if (string.IsNullOrWhiteSpace(currentPivotTableName))
-            return false;
-
         var pivotTablesElement = cacheRoot
             .Elements()
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "pivotTables", StringComparison.OrdinalIgnoreCase));
         if (pivotTablesElement is null)
             return false;
 
-        var changed = false;
-        foreach (var pivotTableElement in pivotTablesElement.Elements()
-                     .Where(element => string.Equals(element.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase)))
+        var pivotTableElements = pivotTablesElement.Elements()
+            .Where(element => string.Equals(element.Name.LocalName, "pivotTable", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (pivotTableElements.Count == 0)
+            return false;
+
+        if (connectedPivotTableNames.Count == pivotTableElements.Count)
         {
-            changed |= SetOptionalAttribute(pivotTableElement, "name", currentPivotTableName);
+            var changed = false;
+            for (var i = 0; i < pivotTableElements.Count; i++)
+            {
+                // R133-io-slicer-timeline-multipivot-2: entry 0 is always driven by currentPivotTableName
+                // (SourcePivotTableName) rather than connectedPivotTableNames[0]. SourcePivotTableName is
+                // the single authoritative "primary connection" field -- every rename path
+                // (RenamePivotTableCommand) updates it AND keeps connectedPivotTableNames[0] in lockstep,
+                // but nothing enforces that invariant against a caller that mutates SourcePivotTableName
+                // directly (e.g. FreeXR69SlicerTimelinePivotRenameTests exercises exactly that shape).
+                // Trusting a possibly-stale connectedPivotTableNames[0] there would silently re-save the
+                // OLD pivot name for the primary connection -- the exact bug this rewriter exists to
+                // prevent. Entries beyond index 0 have no such single-field mirror, so they still come
+                // positionally from the list.
+                var desiredName = i == 0 && !string.IsNullOrWhiteSpace(currentPivotTableName)
+                    ? currentPivotTableName
+                    : connectedPivotTableNames[i];
+                if (string.IsNullOrWhiteSpace(desiredName))
+                    continue;
+                changed |= SetOptionalAttribute(pivotTableElements[i], "name", desiredName);
+            }
+
+            return changed;
         }
 
-        return changed;
+        if (string.IsNullOrWhiteSpace(currentPivotTableName))
+            return false;
+
+        var legacyChanged = false;
+        foreach (var pivotTableElement in pivotTableElements)
+            legacyChanged |= SetOptionalAttribute(pivotTableElement, "name", currentPivotTableName);
+
+        return legacyChanged;
     }
 
     /// <summary>
@@ -1328,7 +1375,7 @@ internal static class XlsxSlicerTimelineStateRewriter
                 continue;
 
             var changed = RewriteTimelineCacheSelection(root, model);
-            changed |= RewriteCachePivotTableBinding(root, model.SourcePivotTableName);
+            changed |= RewriteCachePivotTableBinding(root, model.ConnectedPivotTableNames, model.SourcePivotTableName);
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, cacheXml);
         }

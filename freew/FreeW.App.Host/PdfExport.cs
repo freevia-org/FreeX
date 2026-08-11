@@ -55,10 +55,15 @@ internal static class PdfExport
     /// </summary>
     /// <param name="paginator">A laid-out paginator, e.g. from <see cref="PrintLayout.BuildPaginator"/>.</param>
     /// <param name="title">Optional document title written into the PDF metadata.</param>
-    public static byte[] RenderToBytes(DocumentPaginator paginator, string? title = null)
+    /// <param name="imageDiagnostics">
+    /// Optional sink for non-fatal image warnings: populated by <see cref="WpfRasterPdfWriter"/> if a
+    /// rendered page's bytes cannot be decoded when the PDF is written, so the caller can surface the
+    /// loss instead of the export silently dropping a page's content.
+    /// </param>
+    public static byte[] RenderToBytes(DocumentPaginator paginator, string? title = null, ICollection<string>? imageDiagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(paginator);
-        return WpfRasterPdfWriter.WriteToBytes(BuildDocument(paginator, title));
+        return WpfRasterPdfWriter.WriteToBytes(BuildDocument(paginator, title), imageDiagnostics);
     }
 
     private static PdfRasterDocument BuildDocument(DocumentPaginator paginator, string? title)

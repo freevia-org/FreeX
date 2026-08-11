@@ -1,5 +1,8 @@
+using System.Collections.Generic;
+
 using FluentAssertions;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.PageLayout;
@@ -81,6 +84,62 @@ public sealed class PageSetupDialogPlannerTests
         plan.PrintAreaText.Should().Be("$B$2:$D$8");
         plan.RepeatRowsText.Should().Be("$2:$4");
         plan.RepeatColumnsText.Should().Be("$B:$D");
+    }
+
+    [Fact]
+    public void PlanSurface_RoundTripsAllRegionsOfAMultiAreaPrintArea()
+    {
+        // Regression: opening Page Setup on a sheet with a non-contiguous print area used to
+        // format only sheet.PrintArea (the first region) into the surface's PrintAreaText,
+        // silently discarding the rest. Applying the dialog without changes then wrote that
+        // truncated text back, collapsing the print area to a single region.
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var area1 = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 3));
+        var area2 = new GridRange(new CellAddress(sheet.Id, 1, 5), new CellAddress(sheet.Id, 5, 7));
+        sheet.SetPrintAreas([area1, area2]);
+
+        var plan = PageSetupDialogPlanner.PlanSurface(sheet);
+
+        plan.PrintAreaText.Should().Be("$A$1:$C$5,$E$1:$G$5");
+
+        // Simulate "apply without changes": the textbox holds surface.PrintAreaText, which the
+        // shell writes back into Fields before building the command plan.
+        var fieldsAfterOpen = plan.Fields with { PrintAreaText = plan.PrintAreaText };
+        var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, fieldsAfterOpen);
+        build.Success.Should().BeTrue();
+
+        var ctx = new PlannerTestCommandContext(workbook);
+        build.Plan!.ToComposite().Apply(ctx).Success.Should().BeTrue();
+
+        sheet.PrintAreas.Should().HaveCount(2);
+        sheet.PrintAreas.Should().ContainInOrder(area1, area2);
+    }
+
+    [Fact]
+    public void PlanSurface_SingleAreaPrintAreaStaysSingleAfterRoundTrip()
+    {
+        // Sibling coverage: a single-region print area must not gain a spurious second region
+        // or otherwise regress once the multi-area formatting path is used.
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        var area = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 8, 4));
+        sheet.PrintArea = area;
+
+        var plan = PageSetupDialogPlanner.PlanSurface(sheet);
+
+        plan.PrintAreaText.Should().Be("$B$2:$D$8");
+        plan.PrintAreaText.Should().NotContain(",");
+
+        var fieldsAfterOpen = plan.Fields with { PrintAreaText = plan.PrintAreaText };
+        var build = PageSetupDialogModel.TryBuildCommandPlan(sheet, fieldsAfterOpen);
+        build.Success.Should().BeTrue();
+
+        var ctx = new PlannerTestCommandContext(workbook);
+        build.Plan!.ToComposite().Apply(ctx).Success.Should().BeTrue();
+
+        sheet.PrintAreas.Should().HaveCount(1);
+        sheet.PrintAreas.Should().ContainInOrder(area);
     }
 
     [Fact]
@@ -230,5 +289,13 @@ public sealed class PageSetupDialogPlannerTests
 
         plan.InitialFocusTarget.Should().Be(expectedFocus);
         plan.InitialRoute.Should().Be(new PageSetupValidationRoute(expectedTab, expectedField));
+    }
+
+    private sealed class PlannerTestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
     }
 }

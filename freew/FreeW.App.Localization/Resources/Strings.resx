@@ -73,9 +73,6 @@
   <data name="Ribbon_Command_PasteSpecial_Label" xml:space="preserve">
     <value>Paste Special&#x2026;</value>
   </data>
-  <data name="Ribbon_Command_Strikethrough_Label" xml:space="preserve">
-    <value>Strikethrough</value>
-  </data>
   <data name="Ribbon_Command_GrowFont_Label" xml:space="preserve">
     <value>Grow Font</value>
   </data>
@@ -387,6 +384,9 @@
   </data>
   <data name="File_PdfExportedStatusFormat" xml:space="preserve">
     <value>Exported PDF ({0} {1}, {2}): {3}</value>
+  </data>
+  <data name="File_PdfExportedImageWarningSuffixFormat" xml:space="preserve">
+    <value> ({0} image warning(s))</value>
   </data>
   <data name="File_PageSingular" xml:space="preserve">
     <value>page</value>

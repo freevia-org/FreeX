@@ -99,4 +99,11 @@ public sealed class SisterWpfFileCommandWorkflow
 
     public void ShowError(string summary, Exception exception) =>
         _messageService.ShowFileCommandError(summary, exception, _applicationName);
+
+    /// <summary>
+    /// Surfaces non-fatal image-decode losses collected during an export. No-op when empty.
+    /// See <see cref="UserMessageServiceFileCommandExtensions.ShowExportImageWarnings"/>.
+    /// </summary>
+    public void ShowExportImageWarnings(string exportedSummary, IReadOnlyCollection<string> imageDiagnostics) =>
+        _messageService.ShowExportImageWarnings(exportedSummary, imageDiagnostics, _applicationName);
 }

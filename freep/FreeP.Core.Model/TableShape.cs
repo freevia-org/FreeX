@@ -264,10 +264,15 @@ public sealed class TableShape
     /// </summary>
     public ShapeFill? ComputeEffectiveFill(int rowIndex, int colIndex, TableCell cell)
     {
-        // Start from wholeTbl base.
-        ShapeFill? fill = StyleData?.WholeTbl?.Fill;
+        // Resolve the referenced built-in style (e.g. the one InsertTable/paste assign) when no
+        // parsed StyleData is present, so freshly created/pasted/round-tripped tables still render
+        // fill/border/banding instead of silently falling through to "no style".
+        TableStyleData? styleData = StyleData ?? BuiltInTableStyleCatalog.TryResolve(TableStyleId);
 
-        if (StyleData != null)
+        // Start from wholeTbl base.
+        ShapeFill? fill = styleData?.WholeTbl?.Fill;
+
+        if (styleData != null)
         {
             int rowCount = Rows.Count;
             int colCount = ColumnWidthsEmu.Count;
@@ -284,7 +289,7 @@ public sealed class TableShape
                 {
                     int adjustedRow = rowIndex - bandBase;
                     bool isBand1 = adjustedRow % 2 == 0;
-                    fill = (isBand1 ? StyleData.Band1H?.Fill : StyleData.Band2H?.Fill) ?? fill;
+                    fill = (isBand1 ? styleData.Band1H?.Fill : styleData.Band2H?.Fill) ?? fill;
                 }
             }
             else if (Flags.BandCol)
@@ -296,19 +301,19 @@ public sealed class TableShape
                 {
                     int adjustedCol = colIndex - bandBase;
                     bool isBand1 = adjustedCol % 2 == 0;
-                    fill = (isBand1 ? StyleData.Band1V?.Fill : StyleData.Band2V?.Fill) ?? fill;
+                    fill = (isBand1 ? styleData.Band1V?.Fill : styleData.Band2V?.Fill) ?? fill;
                 }
             }
 
             // Row/col position overrides (higher priority than bands).
             if (Flags.FirstRow && rowIndex == 0)
-                fill = StyleData.FirstRow?.Fill ?? fill;
+                fill = styleData.FirstRow?.Fill ?? fill;
             if (Flags.LastRow && rowIndex == rowCount - 1)
-                fill = StyleData.LastRow?.Fill ?? fill;
+                fill = styleData.LastRow?.Fill ?? fill;
             if (Flags.FirstCol && colIndex == 0)
-                fill = StyleData.FirstCol?.Fill ?? fill;
+                fill = styleData.FirstCol?.Fill ?? fill;
             if (Flags.LastCol && colIndex == colCount - 1)
-                fill = StyleData.LastCol?.Fill ?? fill;
+                fill = styleData.LastCol?.Fill ?? fill;
         }
 
         // Explicit tcPr fill always wins.
@@ -324,10 +329,12 @@ public sealed class TableShape
     /// </summary>
     public ShapeOutline? ComputeEffectiveBorderOutline(int rowIndex, int colIndex, TableCell cell)
     {
-        // Start from wholeTbl border.
-        ShapeOutline? border = StyleData?.WholeTbl?.BorderOutline;
+        TableStyleData? styleData = StyleData ?? BuiltInTableStyleCatalog.TryResolve(TableStyleId);
 
-        if (StyleData != null)
+        // Start from wholeTbl border.
+        ShapeOutline? border = styleData?.WholeTbl?.BorderOutline;
+
+        if (styleData != null)
         {
             int rowCount = Rows.Count;
             int colCount = ColumnWidthsEmu.Count;
@@ -340,18 +347,18 @@ public sealed class TableShape
                 {
                     int adjustedRow = rowIndex - bandBase;
                     bool isBand1 = adjustedRow % 2 == 0;
-                    border = (isBand1 ? StyleData.Band1H?.BorderOutline : StyleData.Band2H?.BorderOutline) ?? border;
+                    border = (isBand1 ? styleData.Band1H?.BorderOutline : styleData.Band2H?.BorderOutline) ?? border;
                 }
             }
 
             if (Flags.FirstRow && rowIndex == 0)
-                border = StyleData.FirstRow?.BorderOutline ?? border;
+                border = styleData.FirstRow?.BorderOutline ?? border;
             if (Flags.LastRow && rowIndex == rowCount - 1)
-                border = StyleData.LastRow?.BorderOutline ?? border;
+                border = styleData.LastRow?.BorderOutline ?? border;
             if (Flags.FirstCol && colIndex == 0)
-                border = StyleData.FirstCol?.BorderOutline ?? border;
+                border = styleData.FirstCol?.BorderOutline ?? border;
             if (Flags.LastCol && colIndex == colCount - 1)
-                border = StyleData.LastCol?.BorderOutline ?? border;
+                border = styleData.LastCol?.BorderOutline ?? border;
         }
 
         return border;
@@ -363,9 +370,11 @@ public sealed class TableShape
     /// </summary>
     public ThemeAwareColor? ComputeEffectiveTextColor(int rowIndex, int colIndex)
     {
-        ThemeAwareColor? color = StyleData?.WholeTbl?.TextColor;
+        TableStyleData? styleData = StyleData ?? BuiltInTableStyleCatalog.TryResolve(TableStyleId);
 
-        if (StyleData != null)
+        ThemeAwareColor? color = styleData?.WholeTbl?.TextColor;
+
+        if (styleData != null)
         {
             int rowCount = Rows.Count;
             int colCount = ColumnWidthsEmu.Count;
@@ -378,18 +387,18 @@ public sealed class TableShape
                 {
                     int adjustedRow = rowIndex - bandBase;
                     bool isBand1 = adjustedRow % 2 == 0;
-                    color = (isBand1 ? StyleData.Band1H?.TextColor : StyleData.Band2H?.TextColor) ?? color;
+                    color = (isBand1 ? styleData.Band1H?.TextColor : styleData.Band2H?.TextColor) ?? color;
                 }
             }
 
             if (Flags.FirstRow && rowIndex == 0)
-                color = StyleData.FirstRow?.TextColor ?? color;
+                color = styleData.FirstRow?.TextColor ?? color;
             if (Flags.LastRow && rowIndex == rowCount - 1)
-                color = StyleData.LastRow?.TextColor ?? color;
+                color = styleData.LastRow?.TextColor ?? color;
             if (Flags.FirstCol && colIndex == 0)
-                color = StyleData.FirstCol?.TextColor ?? color;
+                color = styleData.FirstCol?.TextColor ?? color;
             if (Flags.LastCol && colIndex == colCount - 1)
-                color = StyleData.LastCol?.TextColor ?? color;
+                color = styleData.LastCol?.TextColor ?? color;
         }
 
         return color;

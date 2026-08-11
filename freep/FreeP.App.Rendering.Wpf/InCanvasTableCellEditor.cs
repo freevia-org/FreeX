@@ -29,6 +29,7 @@ public sealed class InCanvasTableCellEditor
     private readonly SlideCanvas    _canvas;
     private readonly EditingSession _editor;
     private readonly Canvas         _overlay;
+    private readonly Action<string, string>? _onClipboardWriteFailed;
 
     // ── Cell-edit state ───────────────────────────────────────────────────────
 
@@ -43,11 +44,21 @@ public sealed class InCanvasTableCellEditor
 
     private Rectangle? _cellHighlight;
 
-    public InCanvasTableCellEditor(SlideCanvas canvas, EditingSession editor, Canvas overlay)
+    /// <param name="onClipboardWriteFailed">
+    /// Invoked with (command, message) when an in-place table-cell Copy/Cut fails to write to
+    /// the OS clipboard, so callers can surface it (e.g. to the status bar) instead of the
+    /// failure vanishing silently while the user believes the copy succeeded.
+    /// </param>
+    public InCanvasTableCellEditor(
+        SlideCanvas canvas,
+        EditingSession editor,
+        Canvas overlay,
+        Action<string, string>? onClipboardWriteFailed = null)
     {
         _canvas  = canvas  ?? throw new ArgumentNullException(nameof(canvas));
         _editor  = editor  ?? throw new ArgumentNullException(nameof(editor));
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
+        _onClipboardWriteFailed = onClipboardWriteFailed;
 
         _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
 
@@ -371,10 +382,14 @@ public sealed class InCanvasTableCellEditor
         {
             if (e.Key is Key.C or Key.X or Key.V)
             {
-                _ = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
+                var result = await WpfRichTextClipboardAdapter.HandlePreviewKeyDownAsync(
                     e,
                     _cellTextBox,
                     currentBody);
+                if (e.Key is Key.C or Key.X &&
+                    !result.Handled &&
+                    result.FailureMessage is { } failureMessage)
+                    _onClipboardWriteFailed?.Invoke(e.Key == Key.X ? "Cut" : "Copy", failureMessage);
                 return;
             }
         }

@@ -582,6 +582,31 @@ public class DocumentMergeTests
     }
 
     [Fact]
+    public void CloneBlocks_DeepCopiesNestedTables()
+    {
+        var source = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0] = new TableCell("nested cell text");
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        // Word requires a cell that hosts a table to still carry a trailing paragraph.
+        outerTable.Rows[0].Cells[0].Paragraphs.Add(new Paragraph(string.Empty));
+        source.Blocks.Add(outerTable);
+
+        var clone = DocumentMerge.CloneBlocks(source).Single().Should().BeOfType<Table>().Subject;
+        var clonedCell = clone.Rows[0].Cells[0];
+
+        clonedCell.NestedTables.Should().ContainSingle();
+        var clonedNestedTable = clonedCell.NestedTables[0];
+        clonedNestedTable.Should().NotBeSameAs(nestedTable);
+        clonedNestedTable.Rows[0].Cells[0].PlainText.Should().Be("nested cell text");
+
+        // Independence: editing the cloned nested cell does not change the source.
+        clonedNestedTable.Rows[0].Cells[0].Paragraphs[0].Runs[0].Text = "Z";
+        nestedTable.Rows[0].Cells[0].PlainText.Should().Be("nested cell text");
+    }
+
+    [Fact]
     public void CloneBlocks_PreservesRichImageState_WithoutSharingTheImageModel()
     {
         var image = new InlineImage([1, 2, 3], 144, 72)

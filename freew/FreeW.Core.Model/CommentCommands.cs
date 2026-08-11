@@ -265,9 +265,16 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
                 break;
             case Table table:
                 foreach (var row in table.Rows)
+                {
                     foreach (var cell in row.Cells)
+                    {
                         foreach (var cellParagraph in cell.Paragraphs)
                             yield return cellParagraph;
+                        foreach (var nestedTable in cell.NestedTables)
+                            foreach (var nestedParagraph in ParagraphsInBlock(nestedTable))
+                                yield return nestedParagraph;
+                    }
+                }
                 break;
         }
     }

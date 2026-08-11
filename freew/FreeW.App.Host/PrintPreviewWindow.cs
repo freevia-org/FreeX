@@ -163,11 +163,19 @@ internal static class PrintLayout
             return;
 
         const double footnoteFrameClearanceDip = 24.0;
+
+        // Cap the reserve against the page's content height: the estimate grows with the footnote
+        // text, so long enough footnotes would reserve the whole body and leave the WPF paginator a
+        // non-positive page box, which it rejects — failing print and print preview outright.
+        var reserveDip = PaginationEngine.ClampFootnoteReserveDip(
+            notePlan.EstimatedHeightDip + footnoteFrameClearanceDip,
+            document.Page);
+
         flow.PagePadding = new Thickness(
             flow.PagePadding.Left,
             flow.PagePadding.Top,
             flow.PagePadding.Right,
-            flow.PagePadding.Bottom + notePlan.EstimatedHeightDip + footnoteFrameClearanceDip);
+            flow.PagePadding.Bottom + reserveDip);
     }
 
     /// <summary>
@@ -279,21 +287,77 @@ internal static class PrintLayout
         // carries a ParagraphTag). The Tags are metadata only, irrelevant to the printed rendering, so
         // clear them on the source for the duration of the serialization and restore them immediately
         // after. This runs synchronously on the UI thread, so the live editor is left exactly as it was.
+        //
+        // Decoded bitmaps need the same treatment for the same reason. A picture decoded by
+        // DocumentView.DecodeRaster is a BitmapFrameDecode — non-public, so XamlWriter.Save throws —
+        // and the fallback placeholder from BuildImagePlaceholder is a RenderTargetBitmap, which has no
+        // parameterless constructor, so XamlReader.Load throws. Either one crashed Print, Print Preview,
+        // Export to PDF and Export to XPS on any document containing a picture. Detach the sources for
+        // the serialization round trip, then hand the originals to the clone: an ImageSource is
+        // shareable between elements on one thread, so the printed pages keep the real image content.
         var saved = new List<(DependencyObject Node, object Tag)>();
+        var images = new List<Image>();
+        var savedSources = new List<ImageSource?>();
         if (element is DependencyObject root)
+        {
             StripTags(root, saved);
+            CollectImages(root, images);
+            foreach (var image in images)
+            {
+                savedSources.Add(image.Source);
+                image.Source = null;
+            }
+        }
+
         try
         {
             var xaml = XamlWriter.Save(element);
             using var reader = new StringReader(xaml);
             using var xmlReader = System.Xml.XmlReader.Create(reader);
-            return XamlReader.Load(xmlReader);
+            var clone = XamlReader.Load(xmlReader);
+            if (clone is DependencyObject cloneRoot)
+                RestoreImageSources(cloneRoot, savedSources);
+            return clone;
         }
         finally
         {
+            for (var i = 0; i < images.Count; i++)
+                images[i].Source = savedSources[i];
             foreach (var (node, tag) in saved)
                 SetTag(node, tag);
         }
+    }
+
+    /// <summary>
+    /// Collects every <see cref="Image"/> in the logical tree, in the same deterministic document order
+    /// that <see cref="XamlWriter"/> emits them, so source and clone can be correlated by index.
+    /// </summary>
+    private static void CollectImages(DependencyObject node, List<Image> images)
+    {
+        if (node is Image image)
+            images.Add(image);
+
+        foreach (var child in LogicalTreeHelper.GetChildren(node))
+            if (child is DependencyObject d)
+                CollectImages(d, images);
+    }
+
+    /// <summary>
+    /// Re-attaches the original <see cref="ImageSource"/>s onto the cloned document's images.
+    /// An <see cref="ImageSource"/> is shareable across elements on the same thread, so the clone
+    /// reuses the very bitmaps the editor decoded — no pixel copy, no fidelity loss.
+    /// </summary>
+    private static void RestoreImageSources(DependencyObject cloneRoot, List<ImageSource?> sources)
+    {
+        if (sources.Count == 0)
+            return;
+
+        var cloned = new List<Image>();
+        CollectImages(cloneRoot, cloned);
+        // Defensive: if the traversals ever disagree, restore the prefix they do agree on rather than
+        // pairing the wrong bitmap with the wrong placeholder.
+        for (var i = 0; i < cloned.Count && i < sources.Count; i++)
+            cloned[i].Source = sources[i];
     }
 
     /// <summary>

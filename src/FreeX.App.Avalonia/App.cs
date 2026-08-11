@@ -96,6 +96,24 @@ public sealed class App : Application
 
             var mainWindow = new MainWindow(StartupArguments, deferStartupFileOpen: true);
             desktop.MainWindow = mainWindow;
+
+            // R133-avalonia-multi-file-startup-args: the MainWindow ctor above only opens the FIRST
+            // startup-argument file (via StartupWorkbookLoader) into the primary window -- real Excel
+            // opens every file argument, each in its own window, e.g. when multiple files are dragged
+            // onto the taskbar icon in one launch (the OS delivers that as one process launch with
+            // multiple path arguments). Open every remaining resolvable file here, each in its own
+            // brand-new window, mirroring the WPF host's R118 fix (App.xaml.cs's
+            // PlanStartupFileOpens). Skipped for the special capture/validation launch modes, whose
+            // StartupArguments carry option flags rather than real file paths (mirrors the MainWindow
+            // ctor's own guard for those modes).
+            if (ParityCaptureOptions is null && GridCaptureOptions is null && InteractionValidationOptions is null)
+            {
+                var additionalStartupFilePaths =
+                    new StartupWorkbookLoader().ResolveAdditionalOpenableFilePaths(StartupArguments);
+                if (additionalStartupFilePaths.Count > 0)
+                    OpenAdditionalStartupFileWindows(additionalStartupFilePaths);
+            }
+
             Diagnostics?.RecordEvent("app_ready", new Dictionary<string, string?>
             {
                 ["source"] = "avalonia",
@@ -282,6 +300,221 @@ public sealed class App : Application
         return window;
     }
 
+    /// <summary>
+    /// R133-avalonia-multi-file-startup-args: opens every remaining startup-argument file path (i.e.
+    /// every one <see cref="StartupWorkbookLoader.Load"/> did NOT already open into the primary
+    /// window) in its own brand-new window, wiring each window's autosave coordinator exactly like
+    /// <see cref="OpenRecoveryWindow"/> / <c>MainWindow.WindowManagement.cs</c>'s <c>NewWindow()</c>
+    /// already do for every other live window.
+    /// </summary>
+    private static void OpenAdditionalStartupFileWindows(IReadOnlyList<string> additionalFilePaths)
+    {
+        foreach (var path in additionalFilePaths)
+        {
+            var window = new MainWindow([path]);
+            var snapshotStore = AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance);
+            var autosaveCoordinator = new AvaloniaAutosaveCoordinator(window, snapshotStore);
+            window.AttachAutosaveCoordinator(autosaveCoordinator);
+            window.Closed += (_, _) => autosaveCoordinator.OnWindowClosed();
+            autosaveCoordinator.Start();
+            window.Show();
+            window.Activate();
+        }
+    }
+
+    /// <summary>
+    /// Collapses recovery candidates that all belong to the same underlying document down to a
+    /// single one, deleting the rest — ports the WPF host's <c>DeduplicateCandidatesByDocument</c>
+    /// (App.xaml.cs) verbatim in behavior. A workbook shared across "New Window" views
+    /// (<c>MainWindow.WindowManagement.cs</c>'s <c>NewWindow()</c>) gets one autosave snapshot PER
+    /// WINDOW (autosave ownership is per-window, not per-document — see
+    /// <see cref="AvaloniaAutosaveCoordinator"/>'s constructor, which mints a unique snapshot id per
+    /// instance even when several coordinators share the same <c>WorkbookSession</c>'s workbook). If
+    /// the process crashes, that leaves multiple snapshot files with the same
+    /// <see cref="AutosaveSidecar.OriginalFilePath"/>/<see cref="AutosaveSidecar.DisplayName"/> on
+    /// disk for what was really one shared, dirtied document — without this step,
+    /// <see cref="OfferStartupRecoveryAsync"/> would offer each one individually, and accepting more
+    /// than one would load the same document into two independent windows with disconnected
+    /// sessions. Recovery only ever needs to restore ONE copy of a document, so we keep just the
+    /// newest snapshot per document identity and delete its siblings up front.
+    /// </summary>
+    private static IReadOnlyList<AutosaveRecoveryCandidate> DeduplicateCandidatesByDocument(
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
+    {
+        if (candidates.Count <= 1)
+            return candidates;
+
+        var newestByDocument = new Dictionary<string, AutosaveRecoveryCandidate>(StringComparer.OrdinalIgnoreCase);
+        var ordered = new List<string>();
+
+        foreach (var candidate in candidates)
+        {
+            var documentKey = GetDocumentIdentityKey(candidate);
+            if (!newestByDocument.TryGetValue(documentKey, out var existing))
+            {
+                newestByDocument[documentKey] = candidate;
+                ordered.Add(documentKey);
+                continue;
+            }
+
+            if (GetCandidateTimestamp(candidate) > GetCandidateTimestamp(existing))
+            {
+                try { AutosaveSnapshotStore.DeleteCandidate(existing); } catch { /* best-effort */ }
+                newestByDocument[documentKey] = candidate;
+            }
+            else
+            {
+                try { AutosaveSnapshotStore.DeleteCandidate(candidate); } catch { /* best-effort */ }
+            }
+        }
+
+        return ordered.Select(key => newestByDocument[key]).ToList();
+    }
+
+    /// <summary>
+    /// Drops any candidate whose ORIGINAL on-disk file was saved more recently than the crash
+    /// snapshot itself (R120-avalonia-startup-recovery-newer-original-1, porting the WPF host's
+    /// <c>FilterCandidatesWithNewerOriginal</c>/R74-services-autosave-recovery-4-1 verbatim in
+    /// behavior). This happens when the user saved the document normally after the crash that
+    /// produced the snapshot (e.g. reopened the file by hand and saved over it, or another
+    /// window/session saved it) — offering that snapshot would let the user unknowingly clobber
+    /// their own newer manual save with stale recovered content. Excel never offers recovery in
+    /// this situation. A candidate whose original file is missing (never saved, moved, or deleted)
+    /// or whose on-disk timestamp is older than or equal to the snapshot is unaffected and still
+    /// offered exactly as before. Filtered candidates are deleted outright rather than left on disk
+    /// to be silently re-checked (and re-skipped) forever — their content is already superseded by
+    /// the newer file on disk, so nothing of value would be recovered by keeping them.
+    /// </summary>
+    private static IReadOnlyList<AutosaveRecoveryCandidate> FilterCandidatesWithNewerOriginal(
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
+    {
+        if (candidates.Count == 0)
+            return candidates;
+
+        List<AutosaveRecoveryCandidate>? kept = null;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var candidate = candidates[i];
+            if (IsOriginalNewerThanSnapshot(candidate))
+            {
+                kept ??= new List<AutosaveRecoveryCandidate>(candidates.Take(i));
+                try { AutosaveSnapshotStore.DeleteCandidate(candidate); } catch { /* best-effort */ }
+                continue;
+            }
+
+            kept?.Add(candidate);
+        }
+
+        return kept ?? candidates;
+    }
+
+    private static bool IsOriginalNewerThanSnapshot(AutosaveRecoveryCandidate candidate)
+    {
+        var originalPath = candidate.Sidecar.OriginalFilePath;
+        if (string.IsNullOrWhiteSpace(originalPath))
+            return false;
+
+        try
+        {
+            if (!File.Exists(originalPath))
+                return false;
+
+            var originalWriteTimeUtc = File.GetLastWriteTimeUtc(originalPath);
+            return originalWriteTimeUtc > GetCandidateTimestamp(candidate).UtcDateTime;
+        }
+        catch
+        {
+            // If the original's timestamp cannot be determined, do not block recovery on it.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Identity key grouping candidates that are recovery snapshots of the same document — ports the
+    /// WPF host's <c>GetDocumentIdentityKey</c>. A saved workbook is keyed by its original file path
+    /// (case-insensitive); an unsaved workbook by its display name. Either way, the key is further
+    /// scoped to the originating process launch (see <see cref="GetLaunchScope"/>) and to the
+    /// sidecar's <see cref="AutosaveSidecar.DocumentId"/> (populated from
+    /// <c>MainWindow.DocumentId</c>, i.e. the in-memory <c>Workbook.Id</c>): genuine "New Window"
+    /// siblings share the exact same Workbook instance and therefore the same DocumentId, while two
+    /// independent windows (e.g. one detached via File &gt; Open/File &gt; New) each get their own
+    /// freshly created/deserialized Workbook and therefore different DocumentIds. Candidates whose
+    /// DocumentId is missing (a snapshot written by a build predating this field) are never treated
+    /// as provably the same document as another candidate — see
+    /// <see cref="GetDocumentIdentityComponent"/>. Candidates that have neither a path nor a name
+    /// (should not normally happen) each get their own unique key so they are never incorrectly
+    /// merged with an unrelated candidate.
+    /// </summary>
+    private static string GetDocumentIdentityKey(AutosaveRecoveryCandidate candidate)
+    {
+        if (!string.IsNullOrWhiteSpace(candidate.Sidecar.OriginalFilePath))
+        {
+            return "path:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.OriginalFilePath
+                + ":" + GetDocumentIdentityComponent(candidate);
+        }
+
+        if (!string.IsNullOrWhiteSpace(candidate.Sidecar.DisplayName))
+        {
+            return "name:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.DisplayName
+                + ":" + GetDocumentIdentityComponent(candidate);
+        }
+
+        return "snapshot:" + candidate.SnapshotPath;
+    }
+
+    /// <summary>
+    /// The DocumentId contribution to <see cref="GetDocumentIdentityKey"/>. When the sidecar carries
+    /// a <see cref="AutosaveSidecar.DocumentId"/> (every snapshot written by this build does — see
+    /// <c>SessionSnapshotSource.DocumentId</c> below), it is authoritative proof of whether two
+    /// candidates share the same underlying Workbook instance. When it is missing, the candidate's
+    /// own snapshot path is used instead so it is NEVER treated as provably the same document as
+    /// another candidate and silently merged/deleted — better to keep (and offer) an extra candidate
+    /// than to silently destroy an unrelated window's unsaved edits.
+    /// </summary>
+    private static string GetDocumentIdentityComponent(AutosaveRecoveryCandidate candidate) =>
+        string.IsNullOrWhiteSpace(candidate.Sidecar.DocumentId)
+            ? "unknown:" + candidate.SnapshotPath
+            : candidate.Sidecar.DocumentId;
+
+    /// <summary>
+    /// Extracts the "{processId}-{launchTag}" scope from a snapshot's file name, e.g.
+    /// "recovery-12345-a1b2c3d4-e5f6a7b8.fxl" -&gt; "12345-a1b2c3d4" (matching
+    /// <see cref="AvaloniaAutosaveCoordinator"/>'s snapshot-id format). This identifies the
+    /// originating process launch (not the individual window within it), so sibling windows of the
+    /// same crashed session still share a scope and can be deduplicated, while two different
+    /// processes/launches never do. Falls back to the full snapshot path when the file name does not
+    /// match the expected pattern, so an unrecognized name is always treated as its own distinct
+    /// scope rather than accidentally merged with anything else.
+    /// </summary>
+    private static string GetLaunchScope(AutosaveRecoveryCandidate candidate)
+    {
+        var baseName = Path.GetFileNameWithoutExtension(candidate.SnapshotPath);
+        var parts = baseName.Split('-');
+        if (!string.Equals(parts.Length > 0 ? parts[0] : null, "recovery", StringComparison.OrdinalIgnoreCase))
+            return candidate.SnapshotPath;
+
+        if (parts.Length >= 4)
+            return parts[1] + "-" + parts[2];
+        if (parts.Length == 3)
+            return parts[1];
+
+        return candidate.SnapshotPath;
+    }
+
+    private static DateTimeOffset GetCandidateTimestamp(AutosaveRecoveryCandidate candidate)
+    {
+        if (DateTimeOffset.TryParse(candidate.Sidecar.TimestampUtc, out var parsed))
+            return parsed;
+
+        try
+        {
+            return new DateTimeOffset(File.GetLastWriteTimeUtc(candidate.SnapshotPath), TimeSpan.Zero);
+        }
+        catch
+        {
+            return DateTimeOffset.MinValue;
+        }
+    }
 }
 
 /// <summary>

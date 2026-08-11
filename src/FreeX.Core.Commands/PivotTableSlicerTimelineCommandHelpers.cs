@@ -15,6 +15,35 @@ internal static class PivotTableSlicerTimelineCommandHelpers
         return null;
     }
 
+    /// <summary>
+    /// R133x-commands-slicer-timeline-multipivot-runtime: resolves every distinct pivot table name a
+    /// slicer/timeline connects to, primary name first. A slicer/timeline can drive SEVERAL pivot tables
+    /// at once (Excel's "Report Connections") -- <paramref name="connectedNames"/> (populated at load
+    /// with every <c>&lt;pivotTable&gt;</c> entry the control's cache carries, see
+    /// <see cref="SlicerModel.ConnectedPivotTableNames"/>/<see cref="TimelineModel.ConnectedPivotTableNames"/>)
+    /// is the authoritative list of ALL connections, while <paramref name="primaryName"/> (<c>SourcePivotTableName</c>)
+    /// only ever tracks the first/primary one. Falls back to a single-entry list of just
+    /// <paramref name="primaryName"/> when <paramref name="connectedNames"/> is empty -- a freshly
+    /// authored control (never loaded from a package) that was only ever connected to one pivot table --
+    /// so the common single-pivot case is unaffected.
+    /// </summary>
+    internal static List<string> ResolveConnectedPivotTableNames(string? primaryName, IReadOnlyList<string> connectedNames)
+    {
+        var result = new List<string>();
+        if (!string.IsNullOrWhiteSpace(primaryName))
+            result.Add(primaryName);
+
+        foreach (var name in connectedNames)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+            if (!result.Any(existing => string.Equals(existing, name, StringComparison.OrdinalIgnoreCase)))
+                result.Add(name);
+        }
+
+        return result;
+    }
+
     internal static List<string> ReadPivotHeaders(Sheet sheet, PivotTableModel pivotTable)
     {
         var headers = new List<string>();

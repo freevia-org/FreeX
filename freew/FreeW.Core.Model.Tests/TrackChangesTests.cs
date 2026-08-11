@@ -72,6 +72,122 @@ public class TrackChangesTests
         cellParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
     }
 
+    // --- Tracked changes inside a table nested in a table cell (tc/w:tbl) ---
+
+    [Fact]
+    public void HasRevisions_DetectsRevisionsInsideNestedTable()
+    {
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0].Runs.Add(
+            new Run("gone") { Revision = RevisionKind.Deleted, RevisionAuthor = "Eve" });
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AcceptAll_ResolvesRunRevisionsInsideNestedTable()
+    {
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        var nestedParagraph = nestedTable.Rows[0].Cells[0].Paragraphs[0];
+        nestedParagraph.Runs.Add(new Run("keep "));
+        nestedParagraph.Runs.Add(new Run("gone") { Revision = RevisionKind.Deleted, RevisionAuthor = "Eve" });
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+
+        TrackChanges.AcceptAll(doc);
+
+        nestedParagraph.PlainText.Should().Be("keep ");
+        nestedParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_ResolvesRunRevisionsInsideNestedTable()
+    {
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        var nestedParagraph = nestedTable.Rows[0].Cells[0].Paragraphs[0];
+        nestedParagraph.Runs.Add(new Run("keep "));
+        nestedParagraph.Runs.Add(new Run("added") { Revision = RevisionKind.Inserted, RevisionAuthor = "Eve" });
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+
+        TrackChanges.RejectAll(doc);
+
+        nestedParagraph.PlainText.Should().Be("keep ");
+        nestedParagraph.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptAll_OnInsertedRowInsideNestedTable_KeepsTheRow_AndClearsTheRevision()
+    {
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(2, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("keep row"));
+        nestedTable.Rows[1].Cells[0].Paragraphs[0].Runs.Add(new Run("tracked row"));
+        nestedTable.Rows[1].RowRevision = RevisionKind.Inserted;
+        nestedTable.Rows[1].RowRevisionAuthor = "Carol";
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+
+        TrackChanges.AcceptAll(doc);
+
+        nestedTable.Rows.Should().HaveCount(2);
+        nestedTable.Rows[1].RowRevision.Should().Be(RevisionKind.None);
+        nestedTable.Rows[1].RowRevisionAuthor.Should().BeNull();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RejectAll_OnInsertedRowInsideNestedTable_RemovesTheRow()
+    {
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(2, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0].Runs.Add(new Run("keep row"));
+        nestedTable.Rows[1].Cells[0].Paragraphs[0].Runs.Add(new Run("tracked row"));
+        nestedTable.Rows[1].RowRevision = RevisionKind.Inserted;
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+
+        TrackChanges.RejectAll(doc);
+
+        nestedTable.Rows.Should().ContainSingle();
+        nestedTable.Rows[0].Cells[0].PlainText.Should().Be("keep row");
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
+    [Fact]
+    public void AcceptAll_ResolvesRevisionsInsideDoublyNestedTable()
+    {
+        // A table nested inside a table nested inside a table cell: recursion must not stop at one level.
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var middleTable = Table.Create(1, 1);
+        var innerTable = Table.Create(1, 1);
+        var innerParagraph = innerTable.Rows[0].Cells[0].Paragraphs[0];
+        innerParagraph.Runs.Add(new Run("deep gone") { Revision = RevisionKind.Deleted, RevisionAuthor = "Eve" });
+        middleTable.Rows[0].Cells[0].NestedTables.Add(innerTable);
+        outerTable.Rows[0].Cells[0].NestedTables.Add(middleTable);
+        doc.Blocks.Add(outerTable);
+
+        TrackChanges.HasRevisions(doc).Should().BeTrue();
+
+        TrackChanges.AcceptAll(doc);
+
+        innerParagraph.Runs.Should().BeEmpty();
+        TrackChanges.HasRevisions(doc).Should().BeFalse();
+    }
+
     // --- Tracked formatting changes (w:rPrChange) ---
 
     private static TextDocument BuildFormatRevisionDocument()

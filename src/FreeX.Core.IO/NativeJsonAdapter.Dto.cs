@@ -857,6 +857,9 @@ public sealed partial class NativeJsonAdapter
         public string? Caption { get; set; }
         public string CacheName { get; set; } = "";
         public string? SourcePivotTableName { get; set; }
+
+        /// <summary>Mirrors <see cref="SlicerModel.ConnectedPivotTableNames"/> (R133-io-slicer-timeline-multipivot).</summary>
+        public List<string>? ConnectedPivotTableNames { get; set; }
         public string? SourceFieldName { get; set; }
         public string? StyleName { get; set; }
         public List<string> SelectedItems { get; set; } = [];
@@ -891,6 +894,9 @@ public sealed partial class NativeJsonAdapter
         public string? Caption { get; set; }
         public string CacheName { get; set; } = "";
         public string? SourcePivotTableName { get; set; }
+
+        /// <summary>Mirrors <see cref="TimelineModel.ConnectedPivotTableNames"/> (R133-io-slicer-timeline-multipivot).</summary>
+        public List<string>? ConnectedPivotTableNames { get; set; }
         public string? SourceFieldName { get; set; }
         public string? StyleName { get; set; }
         public string? StartDate { get; set; }

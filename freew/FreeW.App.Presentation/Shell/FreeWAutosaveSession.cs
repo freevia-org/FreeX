@@ -33,7 +33,12 @@ public sealed class FreeWAutosaveSession : IDisposable
         : this(
             ports,
             AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance),
-            AutosaveSnapshotStore.LaunchId.ToString("N"))
+            CreateSnapshotId())
+    {
+    }
+
+    public FreeWAutosaveSession(FreeWAutosavePorts ports, AutosaveSnapshotStore store)
+        : this(ports, store, CreateSnapshotId())
     {
     }
 
@@ -56,6 +61,16 @@ public sealed class FreeWAutosaveSession : IDisposable
         _coordinator = new AutosaveSnapshotCoordinator(store, snapshotId);
     }
 
+    public string SnapshotId => _coordinator.SnapshotId;
+
+    public static string CreateSnapshotId()
+    {
+        var launchTag = AutosaveSnapshotStore.LaunchId.ToString("N")[..8];
+        var windowTag = Guid.NewGuid().ToString("N")[..8];
+        return FormattableString.Invariant(
+            $"recovery-{Environment.ProcessId}-{launchTag}-{windowTag}");
+    }
+
     public void Snapshot() => _coordinator.Snapshot(_source);
 
     public void CompleteCleanExit()
@@ -72,6 +87,15 @@ public sealed class FreeWAutosaveSession : IDisposable
 
     public AutosaveRecoveryPlan? PlanLatestRecovery() =>
         AutosaveRecoveryPlanner.PlanLatest(_store);
+
+    public IReadOnlyList<AutosaveRecoveryPlan> PlanRecoveries() =>
+        AutosaveRecoveryPlanner.PlanAll(_store);
+
+    public AutosaveRecoveryDisposition CompleteRecoveryResult(
+        AutosaveRecoveryPlan plan,
+        bool accepted,
+        bool recovered) =>
+        AutosaveRecoveryPlanner.Complete(plan, accepted, recovered);
 
     public bool CompleteRecovery(
         AutosaveRecoveryPlan plan,

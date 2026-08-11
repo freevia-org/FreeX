@@ -26,7 +26,10 @@ public sealed record FreeWExportRequestPlan(
     public string DefaultExtensionWithoutDot => DefaultExtensionWithDot.TrimStart('.');
 }
 
-public sealed record FreeWExportArtifact(int? PageCount = null, string? Backend = null);
+public sealed record FreeWExportArtifact(
+    int? PageCount = null,
+    string? Backend = null,
+    int ImageWarningCount = 0);
 
 public enum FreeWExportExecutionOutcome
 {
@@ -147,7 +150,8 @@ public static class FreeWExportWorkflow
             return FreeWFileTextResources.FormatPdfExported(
                 pageCount,
                 backend,
-                Path.GetFileName(path));
+                Path.GetFileName(path),
+                artifact.ImageWarningCount);
         }
 
         return plan.Format == FreeWExportFormat.Xps

@@ -110,6 +110,7 @@ public sealed class WpfRichTextClipboardBoundaryTests
                 clipboard);
 
             result.Handled.Should().BeFalse();
+            result.FailureMessage.Should().Be("busy");
             eventArgs.Handled.Should().BeFalse();
         }
         finally

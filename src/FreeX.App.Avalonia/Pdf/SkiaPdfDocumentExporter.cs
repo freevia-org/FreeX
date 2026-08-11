@@ -41,10 +41,17 @@ public static class SkiaPdfDocumentExporter
             ? WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, exportPlan, workbookDirectory)
             : WorkbookPdfContentBuilder.Build(workbook, exportPlan, options);
 
-        var pageCount = SkiaPdfWriter.Write(document, stream);
+        // Populated by SkiaPdfWriter when an embedded picture's bytes cannot be decoded (corrupt or
+        // an unrecognized format): that image is silently omitted from the page unless this sink
+        // catches the diagnostic, so callers can surface the loss instead of the export looking clean.
+        var imageDiagnostics = new List<string>();
+        var pageCount = SkiaPdfWriter.Write(document, stream, imageDiagnostics);
 
-        return new PortablePdfDocumentExportResult(
-            pageCount,
-            $"Exported PDF (Skia, embedded fonts): {pageCount} {(pageCount == 1 ? "page" : "pages")}.");
+        var statusText = imageDiagnostics.Count == 0
+            ? $"Exported PDF (Skia, embedded fonts): {pageCount} {(pageCount == 1 ? "page" : "pages")}."
+            : $"Exported PDF (Skia, embedded fonts): {pageCount} {(pageCount == 1 ? "page" : "pages")} " +
+              $"({imageDiagnostics.Count} image warning{(imageDiagnostics.Count == 1 ? "" : "s")}).";
+
+        return new PortablePdfDocumentExportResult(pageCount, statusText, imageDiagnostics);
     }
 }

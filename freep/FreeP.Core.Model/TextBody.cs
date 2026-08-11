@@ -672,6 +672,35 @@ public sealed class Paragraph
     public double? SpaceAfterPt { get; set; }
 
     /// <summary>
+    /// Spacing before this paragraph as a percentage of a single line's height
+    /// (<c>a:spcBef/a:spcPct</c>). Mutually exclusive with <see cref="SpaceBeforePt"/> per
+    /// ECMA-376 (only one of spcPts/spcPct may be present); when both are non-null,
+    /// <see cref="SpaceBeforePt"/> wins because it came from the more specific spcPts child.
+    /// Stored as a plain percentage (100 = 100%), not the OOXML 1000ths-of-a-percent unit.
+    /// </summary>
+    public double? SpaceBeforePercent { get; set; }
+
+    /// <summary>
+    /// Spacing after this paragraph as a percentage of a single line's height
+    /// (<c>a:spcAft/a:spcPct</c>). See <see cref="SpaceBeforePercent"/> for unit/precedence notes.
+    /// </summary>
+    public double? SpaceAfterPercent { get; set; }
+
+    /// <summary>
+    /// Line spacing as a percentage of a single line's natural height, from
+    /// <c>a:lnSpc/a:spcPct</c> (e.g. 100 = single spacing, 150 = 1.5x, 200 = double).
+    /// Null means <see cref="LineSpacingPointsExact"/> is set instead, or the source omitted
+    /// <c>a:lnSpc</c> entirely (inherit / default single spacing).
+    /// </summary>
+    public double? LineSpacingPercent { get; set; }
+
+    /// <summary>
+    /// Exact line spacing in points, from <c>a:lnSpc/a:spcPts</c>. Null means
+    /// <see cref="LineSpacingPercent"/> is set instead, or the source omitted <c>a:lnSpc</c>.
+    /// </summary>
+    public double? LineSpacingPointsExact { get; set; }
+
+    /// <summary>
     /// Explicit tab stops for this paragraph, in position order.
     /// Corresponds to <c>a:pPr/a:tabLst/a:tab</c>.
     /// Empty means use default tab spacing (inherited / PowerPoint default 914400 EMU = 1 inch).

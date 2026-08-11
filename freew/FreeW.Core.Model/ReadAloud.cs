@@ -190,13 +190,10 @@ public sealed class ReadAloudController
     }
 
     // Every paragraph reachable in the document body, in reading order: top-level paragraphs and those
-    // nested in table cells (row by row, cell by cell) — the same walk DocumentInspector uses.
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
-    {
-        foreach (var block in document.Blocks)
-        foreach (var paragraph in EnumerateParagraphs(block))
-            yield return paragraph;
-    }
+    // nested in table cells (row by row, cell by cell), including tables nested inside table cells to
+    // any depth — the same walk DocumentInspector uses.
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document) =>
+        document.Blocks.SelectMany(EnumerateParagraphs);
 
     private static IEnumerable<Paragraph> EnumerateParagraphs(Block block)
     {
@@ -211,8 +208,13 @@ public sealed class ReadAloudController
 
         foreach (var row in table.Rows)
         foreach (var cell in row.Cells)
-        foreach (var cellParagraph in cell.Paragraphs)
-            yield return cellParagraph;
+        {
+            foreach (var cellParagraph in cell.Paragraphs)
+                yield return cellParagraph;
+            foreach (var nestedTable in cell.NestedTables)
+            foreach (var nestedParagraph in EnumerateParagraphs(nestedTable))
+                yield return nestedParagraph;
+        }
     }
 
     private static bool IsSpeakable(Paragraph paragraph) =>

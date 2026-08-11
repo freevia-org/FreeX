@@ -26,7 +26,9 @@ public sealed class WorkbookPrintWorkflowTests
             {
                 events.Add("render");
                 portable.IsReady.Should().BeTrue();
-                return Task.FromResult(new byte[] { 1, 2, 3 });
+                return Task.FromResult(new WorkbookPrintRenderResult(
+                    [1, 2, 3],
+                    ["picture warning"]));
             },
             (submission, _) =>
             {
@@ -41,6 +43,7 @@ public sealed class WorkbookPrintWorkflowTests
 
         result.Succeeded.Should().BeTrue();
         result.StatusText.Should().Be("queued");
+        result.RenderedDocument!.ImageDiagnostics.Should().Equal("picture warning");
         events.Should().Equal("render", "submit");
     }
 
@@ -58,7 +61,7 @@ public sealed class WorkbookPrintWorkflowTests
             plan,
             printerId: null,
             jobTitle: "Budget",
-            (_, _) => Task.FromResult(new byte[] { 4, 5 }),
+            (_, _) => Task.FromResult(new WorkbookPrintRenderResult([4, 5], [])),
             (_, _) => throw new InvalidOperationException("Fallback route must not submit."),
             (bytes, _) =>
             {

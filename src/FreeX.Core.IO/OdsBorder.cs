@@ -70,9 +70,16 @@ internal static class OdsBorder
         hex = hex.TrimStart('#');
         if (hex.Length != 6)
             return CellColor.Black;
-        return new CellColor(
-            byte.Parse(hex.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture),
-            byte.Parse(hex.AsSpan(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture),
-            byte.Parse(hex.AsSpan(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
+
+        // The length check does not make the characters hex: an ODS style with fo:color="#GGGGGG"
+        // is six characters and would throw FormatException out of the middle of the load. Every
+        // other adapter here parses hostile file data with TryParse and falls back rather than
+        // throwing a raw exception type; this was the outlier.
+        if (!byte.TryParse(hex.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) ||
+            !byte.TryParse(hex.AsSpan(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) ||
+            !byte.TryParse(hex.AsSpan(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+            return CellColor.Black;
+
+        return new CellColor(r, g, b);
     }
 }

@@ -85,4 +85,44 @@ public static class UserMessageServiceFileCommandExtensions
             UserMessageButtons.Ok,
             UserMessageIcon.Error);
     }
+
+    /// <summary>
+    /// Surfaces non-fatal image-decode losses collected during an export (e.g. an embedded picture
+    /// that could not be decoded) instead of letting the export look silently clean. A no-op when
+    /// <paramref name="imageDiagnostics"/> is empty. Shared so every sister app that plumbs an
+    /// <c>imageDiagnostics</c> sink through a PDF/export writer reports it identically, rather than
+    /// each app growing its own message-box formatting.
+    /// </summary>
+    public static void ShowExportImageWarnings(
+        this IUserMessageService messageService,
+        string exportedSummary,
+        IReadOnlyCollection<string> imageDiagnostics,
+        string appTitle)
+    {
+        ArgumentNullException.ThrowIfNull(messageService);
+        ArgumentNullException.ThrowIfNull(imageDiagnostics);
+
+        var message = BuildExportImageWarningMessage(exportedSummary, imageDiagnostics);
+        if (message is null)
+            return;
+
+        messageService.ShowMessage(
+            message,
+            appTitle,
+            UserMessageButtons.Ok,
+            UserMessageIcon.Warning);
+    }
+
+    public static string? BuildExportImageWarningMessage(
+        string exportedSummary,
+        IReadOnlyCollection<string> imageDiagnostics)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(exportedSummary);
+        ArgumentNullException.ThrowIfNull(imageDiagnostics);
+
+        return imageDiagnostics.Count == 0
+            ? null
+            : $"{exportedSummary}, but {imageDiagnostics.Count} image warning(s) occurred:\n" +
+                string.Join("\n", imageDiagnostics);
+    }
 }

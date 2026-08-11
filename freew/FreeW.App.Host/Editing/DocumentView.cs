@@ -114,6 +114,16 @@ public sealed class DocumentView : RichTextBox
     private static bool _renderPageBreakMarkers = true;
 
     /// <summary>
+    /// Collects a message for every embedded image the current <see cref="Render"/> pass could not
+    /// decode (see <see cref="DecodeImage"/>), so <see cref="ImageDecodeDiagnostics"/> reflects the
+    /// live document instead of the loss being visible only as a placeholder box in the editor. Reset
+    /// to a fresh list at the top of every <see cref="Render"/> pass; same [ThreadStatic] pattern as
+    /// <see cref="_renderFileName"/>.
+    /// </summary>
+    [ThreadStatic]
+    private static List<string>? _renderImageDiagnostics;
+
+    /// <summary>
     /// The 1-based page number to use when resolving PAGE fields during a header/footer sub-editor render
     /// in <see cref="DocumentViewMode.PagedEdit"/>. Zero means "not set" (fall back to cached). Set just
     /// before <see cref="LoadModel"/> on a header/footer sub-editor, then cleared immediately after so it
@@ -168,6 +178,20 @@ public sealed class DocumentView : RichTextBox
     }
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
     private double _zoomLevel = ZoomLevels.Default;
+
+    private IReadOnlyList<string> _imageDecodeDiagnostics = Array.Empty<string>();
+
+    /// <summary>
+    /// One message per embedded image in the document that could not be decoded and is currently
+    /// showing as a placeholder (see <see cref="DecodeImage"/>/<see cref="BuildImageRun"/>), as of the
+    /// most recent <see cref="Render"/> pass. Print/PDF/XPS export reuses this live editor's already-
+    /// rendered content (<c>PrintLayout.BuildPaginator</c> clones the existing FlowDocument rather than
+    /// re-decoding images), so an export command cannot observe this loss through its own PNG-decode
+    /// diagnostics alone -- the exported page's raster bytes are always well-formed, they just already
+    /// contain the placeholder. Callers merge this with the writer-level image diagnostics to surface
+    /// both loss points in one message.
+    /// </summary>
+    internal IReadOnlyList<string> ImageDecodeDiagnostics => _imageDecodeDiagnostics;
 
     /// <summary>The "plain"/continuous view padding (the original flat-text-box look) restored when Print Layout is off.</summary>
     private static readonly Thickness PlainPadding = new(48);
@@ -4840,6 +4864,7 @@ public sealed class DocumentView : RichTextBox
         _renderReviewDisplayPolicy = CurrentReviewDisplayPolicy;
         _renderPageBreakMarkers = RenderPageBreakMarkers;
         _renderViewMode = ViewMode;
+        _renderImageDiagnostics = new List<string>();
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
@@ -5048,6 +5073,10 @@ public sealed class DocumentView : RichTextBox
                 i++;
             }
         }
+
+        // Snapshot this pass's image-decode losses onto the instance so ImageDecodeDiagnostics reflects
+        // what is actually showing in the document right now (see the field's doc comment).
+        _imageDecodeDiagnostics = (IReadOnlyList<string>?)_renderImageDiagnostics ?? Array.Empty<string>();
 
         // See SpellCheckDocumentAssignmentGate: serialize the Document swap (and the WPF spell-checker
         // initialization it can trigger) across all DocumentView instances to avoid a native COM race
@@ -12700,6 +12729,14 @@ public sealed class DocumentView : RichTextBox
             // ExternalException ("A generic error occurred in GDI+") / ArgumentException / OutOfMemoryException
             // for malformed metafile bytes. (ExternalException covers its COMException subclass too.) Swallow
             // them so the rest of the document still renders; the caller draws a placeholder instead.
+            // Report it through the current render pass's diagnostics (see _renderImageDiagnostics /
+            // ImageDecodeDiagnostics) so the loss surfaces on export instead of being visible only as a
+            // placeholder box in the editor.
+            var label = string.IsNullOrWhiteSpace(image.AltText)
+                ? $"{image.Format.ToString().ToUpperInvariant()} image"
+                : $"{image.Format.ToString().ToUpperInvariant()} image \"{image.AltText}\"";
+            _renderImageDiagnostics?.Add(
+                $"Embedded {label} could not be decoded and was rendered as a placeholder: {ex.Message}");
             return null;
         }
     }

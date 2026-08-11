@@ -24,19 +24,29 @@ internal static class WpfRichTextClipboardAdapter
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(eventArgs);
-        var result = eventArgs.Key switch
+        WpfRichTextClipboardPreviewResult result;
+        if (eventArgs.Key == Key.C)
         {
-            Key.C => new WpfRichTextClipboardPreviewResult(
-                await TryCopyAsync(box, originalBody, clipboard, cancellationToken)),
-            Key.X => new WpfRichTextClipboardPreviewResult(
-                await TryCutAsync(box, originalBody, clipboard, cancellationToken)),
-            Key.V => await PastePreviewAsync(
+            var write = await TryCopyResultAsync(box, originalBody, clipboard, cancellationToken);
+            result = new WpfRichTextClipboardPreviewResult(write.IsSuccess, FailureMessage: write.ErrorMessage);
+        }
+        else if (eventArgs.Key == Key.X)
+        {
+            var write = await TryCutResultAsync(box, originalBody, clipboard, cancellationToken);
+            result = new WpfRichTextClipboardPreviewResult(write.IsSuccess, FailureMessage: write.ErrorMessage);
+        }
+        else if (eventArgs.Key == Key.V)
+        {
+            result = await PastePreviewAsync(
                 box,
                 originalBody,
                 clipboard,
-                cancellationToken),
-            _ => default,
-        };
+                cancellationToken);
+        }
+        else
+        {
+            result = default;
+        }
         eventArgs.Handled = result.Handled;
         return result;
     }
@@ -45,11 +55,18 @@ internal static class WpfRichTextClipboardAdapter
         RichTextBox box,
         TextBody? originalBody,
         IPlatformClipboard? clipboard = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        (await TryCopyResultAsync(box, originalBody, clipboard, cancellationToken)).IsSuccess;
+
+    private static async ValueTask<PlatformClipboardWriteResult> TryCopyResultAsync(
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard,
+        CancellationToken cancellationToken)
     {
         var payload = CreatePayload(box, originalBody);
         if (payload is null)
-            return false;
+            return PlatformClipboardWriteResult.Unavailable();
 
         var content = BuildClipboardContent(box, payload);
         var result = await PresentationRichTextClipboardWorkflow.WriteAsync(
@@ -59,7 +76,7 @@ internal static class WpfRichTextClipboardAdapter
             DataFormats.XamlPackage,
             DataFormats.Rtf,
             cancellationToken);
-        return result.IsSuccess;
+        return result;
     }
 
     internal static InCanvasRichClipboardPayload? CreatePayload(
@@ -80,13 +97,21 @@ internal static class WpfRichTextClipboardAdapter
         RichTextBox box,
         TextBody? originalBody,
         IPlatformClipboard? clipboard = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default) =>
+        (await TryCutResultAsync(box, originalBody, clipboard, cancellationToken)).IsSuccess;
+
+    private static async ValueTask<PlatformClipboardWriteResult> TryCutResultAsync(
+        RichTextBox box,
+        TextBody? originalBody,
+        IPlatformClipboard? clipboard,
+        CancellationToken cancellationToken)
     {
-        if (!await TryCopyAsync(box, originalBody, clipboard, cancellationToken))
-            return false;
+        var write = await TryCopyResultAsync(box, originalBody, clipboard, cancellationToken);
+        if (!write.IsSuccess)
+            return write;
 
         box.Selection.Text = string.Empty;
-        return true;
+        return write;
     }
 
     internal static async ValueTask<WpfRichTextClipboardPasteResult> TryPasteAsync(
@@ -274,4 +299,5 @@ internal readonly record struct WpfRichTextClipboardPasteResult(
 
 internal readonly record struct WpfRichTextClipboardPreviewResult(
     bool Handled,
-    TextBody? UpdatedBody = null);
+    TextBody? UpdatedBody = null,
+    string? FailureMessage = null);

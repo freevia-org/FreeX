@@ -54,6 +54,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private readonly MenuItem _copyContextMenuItem;
     private readonly MenuItem _cutContextMenuItem;
     private readonly MenuItem _pasteContextMenuItem;
+    private string? _lastWriteFailureMessage;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -217,6 +218,16 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     internal double? PreferredVerticalCaretX => _preferredVerticalX;
 
+    /// <summary>
+    /// The message from the most recent failed OS-clipboard write by <see
+    /// cref="CopySelectionAsync"/> or <see cref="CutSelectionAsync"/>, or null if the most recent
+    /// write succeeded (or none has run yet). In-place shape/table-cell text editing used to
+    /// swallow this failure silently; callers now read it after a false result so it reaches the
+    /// user instead of the user believing the copy/cut succeeded.
+    /// </summary>
+    internal string? LastWriteFailureMessage =>
+        !ReferenceEquals(EditingTarget, this) ? EditingTarget.LastWriteFailureMessage : _lastWriteFailureMessage;
+
     internal bool FocusEditor() => EditingTarget.InputBox.Focus();
 
     internal InCanvasRichClipboardPayload CreateClipboardPayload()
@@ -239,7 +250,12 @@ internal sealed class AvaloniaRichTextEditor : Grid
             return await EditingTarget.CutSelectionAsync(cancellationToken);
 
         if (Selection.IsCollapsed)
+        {
+            // Nothing selected to cut; not a write failure, so clear any stale error from an
+            // earlier call rather than letting it resurface on an unrelated empty-selection cut.
+            _lastWriteFailureMessage = null;
             return false;
+        }
 
         if (!await WriteRichClipboardAsync(CreateClipboardPayload(), cancellationToken))
             return false;
@@ -1050,7 +1066,12 @@ internal sealed class AvaloniaRichTextEditor : Grid
         CancellationToken cancellationToken)
     {
         if (payload.PlainText.Length == 0)
+        {
+            // Nothing selected to copy/cut; not a write failure, so clear any stale error from an
+            // earlier call rather than letting it resurface on an unrelated empty-selection copy.
+            _lastWriteFailureMessage = null;
             return false;
+        }
 
         var result = await PresentationRichTextClipboardWorkflow.WriteAsync(
             _clipboard,
@@ -1059,6 +1080,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
             NativeXamlPackageFormat,
             NativeRtfFormat,
             cancellationToken);
+        _lastWriteFailureMessage = result.IsSuccess ? null : result.ErrorMessage;
         return result.IsSuccess;
     }
 

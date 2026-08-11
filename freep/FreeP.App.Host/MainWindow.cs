@@ -459,7 +459,8 @@ public sealed partial class MainWindow : Window
         FreePOptions options,
         IApplicationOptionsStore<FreePOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
-        WpfNativePrintCapability? nativePrintCapability = null)
+        WpfNativePrintCapability? nativePrintCapability = null,
+        IReadOnlyList<string>? startupFilePaths = null)
     {
         _options = options ?? new FreePOptions();
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
@@ -642,7 +643,8 @@ public sealed partial class MainWindow : Window
             onSmartArtColorPreset: preset => ApplySmartArtColorPreset(preset),
             onSmartArtLayoutPreset: preset => ApplySmartArtLayoutPreset(preset),
             onSmartArtQuickStylePreset: preset => ApplySmartArtQuickStylePreset(preset),
-            importAsset: ImportPresentationAssetAsync);
+            importAsset: ImportPresentationAssetAsync,
+            onClipboardWriteFailed: ReportClipboardWriteFailure);
         var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
 
         // Body: slide pane + stage.
@@ -687,6 +689,8 @@ public sealed partial class MainWindow : Window
 
         Closed += (_, _) => _workareaSession.Dispose();
         _workareaSession.Initialize();
+        if (startupFilePaths is { Count: > 0 })
+            _file.OpenPath(startupFilePaths[0]);
     }
 
     // ── Editor construction ───────────────────────────────────────────────────────
@@ -711,7 +715,8 @@ public sealed partial class MainWindow : Window
             Editor,
             _textOverlay,
             TryOpenOleInPlace,
-            OnChartPointDoubleClick);
+            OnChartPointDoubleClick,
+            ReportClipboardWriteFailure);
         SlideCanvas.ApplyViewShowState(_viewShowState);
     }
 
@@ -3834,6 +3839,18 @@ public sealed partial class MainWindow : Window
         _slideCountText.Text = _workareaSession
             .BuildStatusPlan(FreePApplicationFrameDescriptor.ResolveDataFolderLabel())
             .Text;
+
+    /// <summary>
+    /// Copy/Cut used to swallow OS-clipboard write failures entirely (<see
+    /// cref="OsClipboardService.LastWriteFailureMessage"/> went unread), leaving the user believing
+    /// content was copied when it was not. Surface it in the status bar, mirroring how the Avalonia
+    /// shell reports command failures.
+    /// </summary>
+    private void ReportClipboardWriteFailure(string command, string message) =>
+        _slideCountText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+            PresentationFileTextResources.Presentation,
+            command,
+            message);
 
     // ── Quick-access + title ──────────────────────────────────────────────────────
 

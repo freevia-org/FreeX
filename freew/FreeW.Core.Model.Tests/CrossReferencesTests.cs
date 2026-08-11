@@ -279,6 +279,35 @@ public class CrossReferencesTests
     }
 
     [Fact]
+    public void Targets_NestedTableCellNoteCarriesOwningTopLevelBlockAndMarkerRun()
+    {
+        // Same as Targets_TableCellNoteCarriesOwningTopLevelBlockAndMarkerRun but the marker paragraph
+        // lives inside a table nested in the outer table's cell.
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Cell"));
+        paragraph.Runs.Add(Run.FootnoteReference(4));
+        paragraph.BookmarkNames.Add("_Ref1");
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0] = paragraph;
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+        doc.Footnotes[4] = new Footnote(4, "note");
+
+        var target = CrossReferences.Targets(doc, CrossRefType.Footnote)
+            .Should().ContainSingle().Which;
+        target.Should().Be(new CrossRefTarget("Footnote 4", null, 0, 4, 1));
+
+        var plan = CrossReferences.PlanInsertion(
+            doc, CrossRefType.Footnote, target, CrossRefInsertAs.Text, true, sourceBlockIndex: 1);
+        plan.TargetNoteId.Should().Be(4);
+        plan.TargetIsFootnote.Should().BeTrue();
+        plan.TargetRunIndex.Should().Be(1);
+        plan.FieldRun.CrossReference!.Target.Should().Be("_Ref2");
+    }
+
+    [Fact]
     public void Targets_NumberedItem_EnumeratesNumberedListParagraphs()
     {
         var doc = new TextDocument();

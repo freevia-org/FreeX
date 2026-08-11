@@ -56,7 +56,7 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
     private readonly string _slicerName;
     private readonly IReadOnlyList<string> _selectedItems;
     private SlicerSelectionSnapshot? _snapshot;
-    private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    private List<(Sheet Sheet, PivotTableModel PivotTable, List<(CellAddress Address, Cell? Cell)> Snapshot)>? _targetSnapshots;
     private TableSlicerSelectionSnapshot? _tableSnapshot;
 
     public SetSlicerSelectionCommand(string slicerName, IReadOnlyList<string> selectedItems)
@@ -84,28 +84,71 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             return new CommandOutcome(false, "Slicer is not connected to a PivotTable field.");
         }
 
-        var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
-        if (target is null)
+        // R133x-commands-slicer-timeline-multipivot-runtime: a slicer can drive SEVERAL pivot tables at
+        // once (Excel's "Report Connections") -- resolve every connection (ConnectedPivotTableNames,
+        // primary first), not just the single primary SourcePivotTableName, or every connection past the
+        // first silently stops being filtered by this control even though the R133 persistence fix keeps
+        // the file recording all of them.
+        var connectedNames = PivotTableSlicerTimelineCommandHelpers.ResolveConnectedPivotTableNames(
+            slicer.SourcePivotTableName, slicer.ConnectedPivotTableNames);
+
+        var targets = new List<(Sheet Sheet, PivotTableModel PivotTable)>();
+        foreach (var name in connectedNames)
+        {
+            var resolved = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, name);
+            if (resolved is null)
+            {
+                // The primary connection missing is a hard failure (pre-existing behavior); a stale
+                // secondary connection (e.g. a pivot table deleted outside this slicer's knowledge) is
+                // skipped so the still-valid connections keep working.
+                if (string.Equals(name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
+                    return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
+                continue;
+            }
+
+            targets.Add(resolved.Value);
+        }
+
+        if (targets.Count == 0)
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
 
-        var (sheet, pivotTable) = target.Value;
-        // Check protection of BOTH the pivot table's own sheet AND the sheet the slicer widget
-        // itself is anchored on (slicer.SourceSheetName) — they can differ when the slicer is
-        // placed on a dashboard sheet that filters a pivot living elsewhere.
-        if (PivotTableSlicerTimelineCommandGuards.RejectIfEitherSheetProtected(ctx.Workbook, sheet, slicer.SourceSheetName) is { } protectedOutcome)
-            return protectedOutcome;
+        // Check protection of BOTH each connected pivot table's own sheet AND the sheet the slicer
+        // widget itself is anchored on (slicer.SourceSheetName) — they can differ when the slicer is
+        // placed on a dashboard sheet that filters pivots living elsewhere. Validate every target BEFORE
+        // mutating anything so a protected connection blocks the whole selection change, not just part
+        // of it.
+        foreach (var (targetSheet, _) in targets)
+        {
+            if (PivotTableSlicerTimelineCommandGuards.RejectIfEitherSheetProtected(ctx.Workbook, targetSheet, slicer.SourceSheetName) is { } protectedOutcome)
+                return protectedOutcome;
+        }
 
-        var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
-        var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, pivotTable);
-        var sourceFieldIndex = PivotTableSlicerCommandLookups.FindSourceFieldIndex(
-            headers,
-            slicer.SourceFieldName,
-            StringComparison.OrdinalIgnoreCase);
-        if (sourceFieldIndex < 0)
+        var resolvedTargets = new List<(Sheet Sheet, PivotTableModel PivotTable, int SourceFieldIndex)>();
+        foreach (var (targetSheet, pivotTable) in targets)
+        {
+            var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? targetSheet;
+            var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, pivotTable);
+            var sourceFieldIndex = PivotTableSlicerCommandLookups.FindSourceFieldIndex(
+                headers,
+                slicer.SourceFieldName,
+                StringComparison.OrdinalIgnoreCase);
+            if (sourceFieldIndex < 0)
+            {
+                if (string.Equals(pivotTable.Name, slicer.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
+                    return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
+                continue;
+            }
+
+            resolvedTargets.Add((targetSheet, pivotTable, sourceFieldIndex));
+        }
+
+        if (resolvedTargets.Count == 0)
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
-        _snapshot = SlicerSelectionSnapshot.Capture(slicer, pivotTable);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
+        _snapshot = SlicerSelectionSnapshot.Capture(slicer, resolvedTargets);
+        _targetSnapshots = resolvedTargets
+            .Select(t => (t.Sheet, t.PivotTable, AddPivotTableCommand.Snapshot(t.Sheet, t.PivotTable.LastRenderedRange ?? t.PivotTable.TargetRange)))
+            .ToList();
 
         slicer.SelectedItems.Clear();
         slicer.SelectedItems.AddRange(_selectedItems.Where(item => !string.IsNullOrWhiteSpace(item)).Distinct(StringComparer.CurrentCultureIgnoreCase));
@@ -113,17 +156,22 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         // passes an empty list) reaches the model, so mark the selection as explicitly captured — an
         // empty SelectedItems from here on means "user cleared to select-all", not "never touched".
         slicer.SelectionCaptured = true;
-        // H10: a slicer can be connected to a field that was never dragged into Row/Column/PageFields.
-        // Excel still filters the pivot in that case (the field acts as a page/report filter); without
-        // this, ReplaceSelectedItems below would be a no-op against all three lists and the command
-        // would report success while leaving the pivot completely unfiltered.
-        PivotTableSlicerTimelineCommandHelpers.EnsureFieldInLayout(pivotTable.RowFields, pivotTable.ColumnFields, pivotTable.PageFields, sourceFieldIndex);
-        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, slicer.SelectedItems);
-        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, slicer.SelectedItems);
-        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, slicer.SelectedItems);
 
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+        foreach (var (targetSheet, pivotTable, sourceFieldIndex) in resolvedTargets)
+        {
+            // H10: a slicer can be connected to a field that was never dragged into Row/Column/PageFields.
+            // Excel still filters the pivot in that case (the field acts as a page/report filter); without
+            // this, ReplaceSelectedItems below would be a no-op against all three lists and the command
+            // would report success while leaving the pivot completely unfiltered.
+            PivotTableSlicerTimelineCommandHelpers.EnsureFieldInLayout(pivotTable.RowFields, pivotTable.ColumnFields, pivotTable.PageFields, sourceFieldIndex);
+            PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, slicer.SelectedItems);
+            PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, slicer.SelectedItems);
+            PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, slicer.SelectedItems);
+
+            PivotTableRefreshService.Refresh(ctx.Workbook, targetSheet, pivotTable);
+        }
+
+        return new CommandOutcome(true, AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray());
     }
 
     private CommandOutcome ApplyTableSlicer(ICommandContext ctx, SlicerModel slicer, int tableId, int columnId)
@@ -177,16 +225,29 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             return;
         }
 
-        var target = slicer?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, slicer.SourcePivotTableName);
-        if (slicer is not null && target is { } connected && _snapshot is not null)
+        if (slicer is not null && _snapshot is not null)
         {
-            PivotTableRefreshService.ClearRenderedRange(connected.Sheet, connected.PivotTable.LastRenderedRange);
-            _snapshot.Restore(slicer, connected.PivotTable);
-            AddPivotTableCommand.Restore(connected.Sheet, _targetSnapshot);
+            // Clear each affected pivot's CURRENT rendered range (post-Apply) before the snapshot
+            // restores RowFields/ColumnFields/PageFields/LastRenderedRange back to their pre-Apply
+            // values, mirroring the single-pivot original ordering for every connected pivot table.
+            // Uses the DIRECT sheet/pivot-table object references captured at Apply time (not a
+            // by-name re-lookup) so a rename applied after this command (e.g. RenamePivotTableCommand
+            // sitting above this one on the undo stack) can never make the restore silently miss its
+            // target -- the same live objects that were mutated are the ones restored.
+            foreach (var snapshot in _snapshot.PivotTables)
+                PivotTableRefreshService.ClearRenderedRange(snapshot.Sheet, snapshot.PivotTable.LastRenderedRange);
+
+            _snapshot.Restore(slicer);
+
+            if (_targetSnapshots is not null)
+            {
+                foreach (var (sheet, _, cellSnapshot) in _targetSnapshots)
+                    AddPivotTableCommand.Restore(sheet, cellSnapshot);
+            }
         }
 
         _snapshot = null;
-        _targetSnapshot = null;
+        _targetSnapshots = null;
     }
 
     private sealed record TableSlicerSelectionSnapshot(
@@ -222,34 +283,57 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
         }
     }
 
+    /// <summary>
+    /// R133x-commands-slicer-timeline-multipivot-runtime: the slicer-level selection (SelectedItems/
+    /// SelectionCaptured) is captured ONCE, but the pivot-table-level layout (RowFields/ColumnFields/
+    /// PageFields/LastRenderedRange) is captured per CONNECTED pivot table -- a single slicer selection
+    /// can mutate several pivot tables at once, and undo must restore every one of them, not just the
+    /// primary connection. Each entry holds a DIRECT reference to the mutated <see cref="PivotTableModel"/>
+    /// (not its name), so restoring never depends on a by-name re-lookup that a rename applied between
+    /// Apply and Revert (by another command sitting above this one on the undo stack) could invalidate.
+    /// </summary>
     private sealed record SlicerSelectionSnapshot(
         IReadOnlyList<string> SelectedItems,
         bool SelectionCaptured,
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        GridRange? LastRenderedRange)
+        IReadOnlyList<PivotTableFieldsSnapshot> PivotTables)
     {
-        public static SlicerSelectionSnapshot Capture(SlicerModel slicer, PivotTableModel pivotTable) =>
+        public static SlicerSelectionSnapshot Capture(
+            SlicerModel slicer, IReadOnlyList<(Sheet Sheet, PivotTableModel PivotTable, int SourceFieldIndex)> targets) =>
             new(
                 slicer.SelectedItems.ToList(),
                 slicer.SelectionCaptured,
-                pivotTable.RowFields.ToList(),
-                pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList(),
-                pivotTable.LastRenderedRange);
+                targets.Select(t => new PivotTableFieldsSnapshot(
+                    t.Sheet,
+                    t.PivotTable,
+                    t.PivotTable.RowFields.ToList(),
+                    t.PivotTable.ColumnFields.ToList(),
+                    t.PivotTable.PageFields.ToList(),
+                    t.PivotTable.LastRenderedRange)).ToList());
 
-        public void Restore(SlicerModel slicer, PivotTableModel pivotTable)
+        public void Restore(SlicerModel slicer)
         {
             slicer.SelectedItems.Clear();
             slicer.SelectedItems.AddRange(SelectedItems);
             slicer.SelectionCaptured = SelectionCaptured;
-            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
-            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
-            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
-            pivotTable.LastRenderedRange = LastRenderedRange;
+
+            foreach (var snapshot in PivotTables)
+            {
+                var pivotTable = snapshot.PivotTable;
+                PivotTableCommandCollections.Replace(pivotTable.RowFields, snapshot.RowFields);
+                PivotTableCommandCollections.Replace(pivotTable.ColumnFields, snapshot.ColumnFields);
+                PivotTableCommandCollections.Replace(pivotTable.PageFields, snapshot.PageFields);
+                pivotTable.LastRenderedRange = snapshot.LastRenderedRange;
+            }
         }
     }
+
+    private sealed record PivotTableFieldsSnapshot(
+        Sheet Sheet,
+        PivotTableModel PivotTable,
+        IReadOnlyList<PivotFieldModel> RowFields,
+        IReadOnlyList<PivotFieldModel> ColumnFields,
+        IReadOnlyList<PivotFieldModel> PageFields,
+        GridRange? LastRenderedRange);
 }
 
 public sealed class AddSlicerCommand : IWorkbookCommand

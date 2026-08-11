@@ -82,13 +82,14 @@ public sealed class FreeWBehaviorSourceGuardTests
     public void AutosaveHosts_DelegateNeutralRecoveryWorkflowToPresentation()
     {
         var session = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWAutosaveSession.cs");
+        var planner = ReadSource("freew", "FreeW.App.Presentation", "Shell", "AutosaveRecoveryPlanner.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "AutosaveCoordinator.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("new FreeWAutosaveSession(");
-            source.Should().Contain("_session.PlanLatestRecovery()");
+            source.Should().Contain("_session.PlanRecoveries()");
             source.Should().Contain("FreeWAutosaveSession.DefaultInterval");
             source.Should().NotContain("AutosaveSnapshotCoordinator");
             source.Should().NotContain("AutosaveRecoveryPlanner");
@@ -99,8 +100,9 @@ public sealed class FreeWBehaviorSourceGuardTests
         }
 
         session.Should().Contain("new AutosaveSnapshotCoordinator(");
-        session.Should().Contain("AutosaveRecoveryPlanner.PlanLatest(_store)");
+        session.Should().Contain("AutosaveRecoveryPlanner.PlanAll(_store)");
         session.Should().Contain("AutosaveRecoveryPlanner.Complete(");
+        planner.Should().Contain("SelectAllOrdered(store.EnumerateCandidates())");
         session.Should().Contain("class SnapshotSource : IAutosaveSnapshotSource");
         session.Should().Contain("ExecuteWithDocument(document => DocxWriter.Write(document, snapshotPath))");
         session.Should().Contain("DocxReader.Read(snapshotPath)");

@@ -24,9 +24,13 @@ namespace FreeX.Core.IO.Tests;
 ///   <item>
 ///     R47-io-cf-icon-databar-ext-3-2 -- "5Boxes" is a normal, gallery-selectable icon-set style
 ///     (<see cref="FreeX.App.Presentation.ConditionalFormatting.ConditionalFormatIconSetCatalog.GalleryOptions"/>)
-///     that, like "3Stars"/"3Triangles", has no member in the base ST_IconSetType enum. It must be
-///     routed through the same x14-only fallback path (legacy iconSet falls back to a valid base
-///     style, the real style is carried in the x14 extension).
+///     that, like "3Stars"/"3Triangles", has no member in the base ST_IconSetType enum. Unlike those
+///     two 3-icon styles, "5Boxes" has 5 icons, so writing its 5 real thresholds straight into the
+///     3-icon legacy fallback type would be schema-mismatched OOXML. Rather than omit the legacy
+///     compatibility block entirely (which leaves legacy-only readers with no rule at all), the
+///     writer downsamples the real thresholds to a valid 3-icon approximation and still writes the
+///     legacy block, while the x14 extension remains the authoritative full-fidelity representation
+///     (round133-io-cf-iconset-legacy-cfvo-count; round133-remediation-io-cf-iconset-legacy-fallback).
 ///   </item>
 ///   <item>
 ///     R47-io-cf-icon-databar-ext-3-3 -- when FreeX itself generates an x14 icon-set block for a rule
@@ -161,7 +165,7 @@ public sealed class R47_IconSetX14ExtTests
     // ------------------------------------------------------------------------------------------
 
     [Fact]
-    public void Save_FiveBoxesGalleryStyle_FallsBackLegacyStyleAndEmitsX14Block()
+    public void Save_FiveBoxesGalleryStyle_WritesApproximateLegacyBlockAndEmitsX14Block()
     {
         var workbook = new Workbook("CfFiveBoxes");
         var sheet = workbook.AddSheet("S1");
@@ -187,9 +191,16 @@ public sealed class R47_IconSetX14ExtTests
         XNamespace worksheetNs = WorksheetNs;
         XNamespace x14Ns = X14Ns;
 
-        // "5Boxes" has no member in the base ST_IconSetType enum -- must not be written raw.
-        var legacyIconSet = worksheetXml.Descendants(worksheetNs + "iconSet").Should().ContainSingle().Subject;
-        legacyIconSet.Attribute("iconSet")!.Value.Should().NotBe("5Boxes");
+        // "5Boxes" has no member in the base ST_IconSetType enum, and unlike "3Stars"/"3Triangles" it
+        // has 5 icons rather than 3, so there is no EXACT 3-icon legacy analogue -- but a downsampled
+        // 3-icon APPROXIMATION must still be written so legacy-only readers get a usable rule instead
+        // of nothing (round133-remediation-io-cf-iconset-legacy-fallback).
+        var legacyIconSet = worksheetXml.Descendants(worksheetNs + "iconSet")
+            .Should().ContainSingle("a legacy-only reader must still see a usable icon-set rule, not nothing")
+            .Subject;
+        legacyIconSet.Attribute("iconSet")!.Value.Should().Be("3TrafficLights1");
+        legacyIconSet.Elements(worksheetNs + "cfvo").Should().HaveCount(3,
+            "the legacy <cfvo> count must match the legacy iconSet's own (3-icon) icon count");
 
         var x14IconSet = worksheetXml.Root!
             .Elements(worksheetNs + "extLst")
@@ -202,6 +213,7 @@ public sealed class R47_IconSetX14ExtTests
             .Should().ContainSingle("the real x14-only style must be carried in the extension, not omitted")
             .Subject;
         x14IconSet.Attribute("iconSet")!.Value.Should().Be("5Boxes");
+        x14IconSet.Elements(x14Ns + "cfvo").Should().HaveCount(5, "the x14 block carries the full 5-icon threshold list");
 
         saved.Position = 0;
         SchemaErrors(saved).Should().BeEmpty();

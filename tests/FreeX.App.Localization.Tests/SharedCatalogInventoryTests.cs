@@ -15,7 +15,10 @@ public sealed class SharedCatalogInventoryTests
         var sharedKeys = sharedNeutralValues.Keys
             .ToHashSet(StringComparer.Ordinal);
 
-        sharedKeys.Should().HaveCount(68);
+        // Tripwire so shared-catalog growth is a deliberate act: bump this only after confirming the
+        // dedup loop below still passes, i.e. that the new keys were removed from every app catalog.
+        // The merged catalog contains the shared media-insert strings plus the campaign's shell text.
+        sharedKeys.Should().HaveCount(70);
         sharedKeys.Should().Contain([
             "Common_Cancel",
             "Backstage_Recent_LastOpenedTodayAt",

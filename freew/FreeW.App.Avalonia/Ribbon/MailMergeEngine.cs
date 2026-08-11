@@ -462,9 +462,13 @@ internal sealed class MailMergeEngine
     /// </summary>
     public MailMergeFinishBuildResult? BuildFinishedMerge(
         MailMergeFinishPlan finishPlan,
-        MergeState? mergeState = null)
+        MergeState? mergeState = null,
+        TextDocument? templateSnapshot = null)
     {
-        var execution = _workflow.BuildFinish(_editor.Document, finishPlan, mergeState);
+        var execution = _workflow.BuildFinish(
+            templateSnapshot ?? _editor.Document,
+            finishPlan,
+            mergeState);
         if (!execution.Success || execution.Document is null)
             return null;
 

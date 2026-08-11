@@ -34,6 +34,21 @@ public static class PresentationClipboardPlatformMapper
             .. RichTextFormats,
         ]);
 
+    public static PlatformClipboardFormatScope ResolveNativeScope() =>
+        OperatingSystem.IsWindows()
+            ? PlatformClipboardFormatScope.Platform
+            : PlatformClipboardFormatScope.Application;
+
+    public static string ResolveNativeXamlPackageFormat() =>
+        OperatingSystem.IsWindows()
+            ? PresentationClipboardFormats.WindowsXamlPackage
+            : PresentationClipboardFormats.LinuxXamlPackage;
+
+    public static string ResolveNativeRtfFormat() =>
+        OperatingSystem.IsWindows()
+            ? PresentationClipboardFormats.WindowsRtf
+            : PresentationClipboardFormats.LinuxRtf;
+
     public static PlatformClipboardContent ToPlatformContent(
         PresentationClipboardContent content,
         PlatformClipboardFormatScope nativeScope = PlatformClipboardFormatScope.Platform,

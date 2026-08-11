@@ -2848,6 +2848,11 @@ internal static class PptxChartWriter
 
     private static void WriteEntry(ZipArchive archive, string path, XDocument doc)
     {
+        // Chart titles and cached category/series text are user-typed, so they can carry characters
+        // XML cannot represent. This writer serializes its own parts, so it needs the same guard as
+        // PptxPackageWriter.WriteEntry — without it one such character aborts the entire save.
+        Free.Shared.Opc.OoxmlXmlText.SanitizeInPlace(doc);
+
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var stream = entry.Open();
         using var writer = System.Xml.XmlWriter.Create(stream, XmlSettings);

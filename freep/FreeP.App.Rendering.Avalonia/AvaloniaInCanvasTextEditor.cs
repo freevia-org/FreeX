@@ -124,6 +124,13 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     public Task<bool> PasteClipboardAsync() =>
         ActiveRichTextEditor?.PasteClipboardAsync() ?? Task.FromResult(false);
 
+    /// <summary>
+    /// The message from the most recent failed OS-clipboard write by <see
+    /// cref="CopySelectionAsync"/> or <see cref="CutSelectionAsync"/> on the active editor, or
+    /// null if the most recent write succeeded (or none has run yet).
+    /// </summary>
+    public string? LastWriteFailureMessage => ActiveRichTextEditor?.LastWriteFailureMessage;
+
     /// <summary>The id of the table shape currently being edited, or 0 if not active.</summary>
     public uint ActiveTableShapeId => _editingTableShapeId;
 

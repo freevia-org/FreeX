@@ -51,10 +51,12 @@ public sealed record PresentationFileCommandResult
 {
     private PresentationFileCommandResult(
         PresentationFileCommand command,
-        OperationOutcome<string, string, string> operation)
+        OperationOutcome<string, string, string> operation,
+        IReadOnlyList<string>? imageDiagnostics = null)
     {
         Command = command;
         Operation = operation;
+        ImageDiagnostics = imageDiagnostics?.ToArray() ?? [];
     }
 
     public PresentationFileCommandResult(
@@ -63,8 +65,12 @@ public sealed record PresentationFileCommandResult
         PresentationFileCommandValidation Validation,
         string? Path = null,
         string? Message = null,
-        PresentationFileCommandError? Error = null)
-        : this(Command, PresentationFileOperationOutcomeMapper.MapCommand(Status, Validation, Path, Message, Error))
+        PresentationFileCommandError? Error = null,
+        IReadOnlyList<string>? ImageDiagnostics = null)
+        : this(
+            Command,
+            PresentationFileOperationOutcomeMapper.MapCommand(Status, Validation, Path, Message, Error),
+            ImageDiagnostics)
     {
     }
 
@@ -76,6 +82,7 @@ public sealed record PresentationFileCommandResult
     public string? Path => Operation.Path;
     public string? Message => Operation.Value;
     public PresentationFileCommandError? Error => PresentationFileCommandError.FromOperation(Operation.Error);
+    public IReadOnlyList<string> ImageDiagnostics { get; }
     public bool Succeeded => Operation.Succeeded;
     public bool Cancelled => Operation.Cancelled;
 
@@ -98,8 +105,9 @@ public sealed record PresentationFileCommandResult
     public static PresentationFileCommandResult Success(
         PresentationFileCommand command,
         string? path = null,
-        string? message = null) =>
-        new(command, OperationOutcome<string, string, string>.Completed(message, path));
+        string? message = null,
+        IReadOnlyList<string>? imageDiagnostics = null) =>
+        new(command, OperationOutcome<string, string, string>.Completed(message, path), imageDiagnostics);
 
     public static PresentationFileCommandResult Cancel(
         PresentationFileCommand command,
@@ -364,6 +372,16 @@ public interface IPresentationFileRenderPort
     PresentationSlideImageRendererWithPrintMarkup? RenderSlideToPngWithPrintMarkup { get; }
     PresentationRasterPdfWriter WriteRasterPdf { get; }
     PresentationPdfContentWriter WriteVectorPdf { get; }
+
+    byte[] WriteRasterPdfWithDiagnostics(
+        PdfRasterDocument document,
+        ICollection<string> imageDiagnostics) =>
+        WriteRasterPdf(document);
+
+    byte[] WriteVectorPdfWithDiagnostics(
+        PdfContentDocument document,
+        ICollection<string> imageDiagnostics) =>
+        WriteVectorPdf(document);
 }
 
 public sealed record PresentationNativeCommandResult(
@@ -623,14 +641,17 @@ public sealed class PresentationFileCommandSession
 
         try
         {
-            var bytes = PresentationRasterPdfExporter.ExportToBytes(
+            var artifact = PresentationFilePdfExportExecutor.ExportRaster(
                 _getPresentation(),
                 request: null,
-                _render.RenderSlideToPng,
-                _render.WriteRasterPdf);
-            ExportAtomicWriter.WriteAllBytes(selection.Path!, bytes);
+                _render);
+            ExportAtomicWriter.WriteAllBytes(selection.Path!, artifact.Bytes);
             return await CompleteAsync(
-                PresentationFileCommandResult.Success(command, selection.Path, $"Exported {Path.GetFileName(selection.Path)}"),
+                PresentationFileCommandResult.Success(
+                    command,
+                    selection.Path,
+                    $"Exported {Path.GetFileName(selection.Path)}",
+                    artifact.ImageDiagnostics),
                 cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -682,13 +703,17 @@ public sealed class PresentationFileCommandSession
             LastNotesPagePdfRenderPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(
                 presentation,
                 request);
-            var bytes = PresentationNotesPagePdfExporter.ExportToBytes(
+            var artifact = PresentationFilePdfExportExecutor.ExportNotesPages(
                 presentation,
                 request,
-                _render.WriteVectorPdf);
-            ExportAtomicWriter.WriteAllBytes(selection.Path!, bytes);
+                _render);
+            ExportAtomicWriter.WriteAllBytes(selection.Path!, artifact.Bytes);
             return await CompleteAsync(
-                PresentationFileCommandResult.Success(command, selection.Path, $"Exported {Path.GetFileName(selection.Path)}"),
+                PresentationFileCommandResult.Success(
+                    command,
+                    selection.Path,
+                    $"Exported {Path.GetFileName(selection.Path)}",
+                    artifact.ImageDiagnostics),
                 cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -726,18 +751,23 @@ public sealed class PresentationFileCommandSession
     {
         try
         {
-            LastImageExportResult = PresentationImageExportExecutor.Export(
-                _getPresentation(),
-                new PresentationImageExportRequest(
-                    outputDirectory,
-                    BaseFileName: Path.GetFileNameWithoutExtension(CurrentFileName),
-                    SlideRange: range),
-                _render.RenderSlideToPng);
+            var imageDiagnostics = new List<string>();
+            using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
+            {
+                LastImageExportResult = PresentationImageExportExecutor.Export(
+                    _getPresentation(),
+                    new PresentationImageExportRequest(
+                        outputDirectory,
+                        BaseFileName: Path.GetFileNameWithoutExtension(CurrentFileName),
+                        SlideRange: range),
+                    _render.RenderSlideToPng);
+            }
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
                     PresentationFileCommand.ExportImages,
                     outputDirectory,
-                    $"Exported slides to {outputDirectory}"),
+                    $"Exported slides to {outputDirectory}",
+                    imageDiagnostics),
                 cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

@@ -215,4 +215,28 @@ public class RevisionListTests
         RevisionList.Accept(doc, deletion).Should().BeTrue();
         RevisionList.Accept(doc, deletion).Should().BeFalse();
     }
+
+    [Fact]
+    public void Enumerate_AndResolve_InsideNestedTableCells()
+    {
+        // A table nested inside a table cell: the Reviewing Pane must still surface (and let the user
+        // accept/reject) a tracked change anchored there, not just in top-level table cells.
+        var doc = new TextDocument();
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        var nestedParagraph = nestedTable.Rows[0].Cells[0].Paragraphs[0];
+        nestedParagraph.Runs.Add(new Run("keep "));
+        nestedParagraph.Runs.Add(new Run("gone") { Revision = RevisionKind.Deleted, RevisionAuthor = "Eve" });
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+
+        var entries = RevisionList.Enumerate(doc);
+        entries.Should().ContainSingle();
+        entries[0].Kind.Should().Be(RevisionEntryKind.Deletion);
+        entries[0].Author.Should().Be("Eve");
+
+        RevisionList.Accept(doc, entries[0]).Should().BeTrue();
+        nestedParagraph.PlainText.Should().Be("keep ");
+        RevisionList.Enumerate(doc).Should().BeEmpty();
+    }
 }

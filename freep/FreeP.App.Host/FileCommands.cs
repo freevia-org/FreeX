@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using Free.Shared.AppServices;
+using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
 using Free.Shared.Pdf.Wpf;
 using Free.Shared.Shell;
@@ -232,6 +233,16 @@ internal sealed class WpfPresentationFileRenderPort : IPresentationFileRenderPor
         WpfPresentationSlideImageRenderer.RenderSlideToPngWithPrintMarkup;
     public PresentationRasterPdfWriter WriteRasterPdf => WpfRasterPdfWriter.WriteToBytes;
     public PresentationPdfContentWriter WriteVectorPdf => SkiaPdfWriter.WriteToBytesWithPortableFallback;
+
+    public byte[] WriteRasterPdfWithDiagnostics(
+        PdfRasterDocument document,
+        ICollection<string> imageDiagnostics) =>
+        WpfRasterPdfWriter.WriteToBytes(document, imageDiagnostics);
+
+    public byte[] WriteVectorPdfWithDiagnostics(
+        PdfContentDocument document,
+        ICollection<string> imageDiagnostics) =>
+        SkiaPdfWriter.WriteToBytesWithPortableFallback(document, imageDiagnostics);
 }
 
 internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
@@ -362,6 +373,12 @@ internal sealed class WpfPresentationFileFeedbackPort : IPresentationFileCommand
             _workflow.ShowError(
                 plan.UnavailableDialogTitle,
                 new InvalidOperationException(plan.UnavailableDialogMessage!));
+        }
+        else if (result.Succeeded && result.ImageDiagnostics.Count > 0)
+        {
+            _workflow.ShowExportImageWarnings(
+                result.Message ?? "Export completed",
+                result.ImageDiagnostics);
         }
         return Task.CompletedTask;
     }

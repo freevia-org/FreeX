@@ -33,7 +33,7 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
     private readonly string? _selectedStartDate;
     private readonly string? _selectedEndDate;
     private TimelineRangeSnapshot? _snapshot;
-    private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    private List<(Sheet Sheet, PivotTableModel PivotTable, List<(CellAddress Address, Cell? Cell)> Snapshot)>? _targetSnapshots;
 
     public SetTimelineRangeCommand(string timelineName, string? selectedStartDate, string? selectedEndDate)
     {
@@ -70,103 +70,183 @@ public sealed class SetTimelineRangeCommand : IWorkbookCommand
         if (startDate > endDate)
             return new CommandOutcome(false, "Timeline start date must be on or before the end date.");
 
-        var target = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
-        if (target is null)
+        // R133x-commands-slicer-timeline-multipivot-runtime: a timeline can drive SEVERAL pivot tables at
+        // once (Excel's "Report Connections") -- resolve every connection (ConnectedPivotTableNames,
+        // primary first), not just the single primary SourcePivotTableName, or every connection past the
+        // first silently stops being filtered by this control even though the R133 persistence fix keeps
+        // the file recording all of them.
+        var connectedNames = PivotTableSlicerTimelineCommandHelpers.ResolveConnectedPivotTableNames(
+            timeline.SourcePivotTableName, timeline.ConnectedPivotTableNames);
+
+        var targets = new List<(Sheet Sheet, PivotTableModel PivotTable)>();
+        foreach (var name in connectedNames)
+        {
+            var resolved = PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, name);
+            if (resolved is null)
+            {
+                if (string.Equals(name, timeline.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
+                    return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
+                continue;
+            }
+
+            targets.Add(resolved.Value);
+        }
+
+        if (targets.Count == 0)
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableNotFound();
 
-        var (sheet, pivotTable) = target.Value;
-        // Check protection of BOTH the pivot table's own sheet AND the sheet the timeline widget
-        // itself is anchored on (timeline.SourceSheetName) — they can differ when the timeline is
-        // placed on a dashboard sheet that filters a pivot living elsewhere.
-        if (PivotTableSlicerTimelineCommandGuards.RejectIfEitherSheetProtected(ctx.Workbook, sheet, timeline.SourceSheetName) is { } protectedOutcome)
-            return protectedOutcome;
+        // Check protection of BOTH each connected pivot table's own sheet AND the sheet the timeline
+        // widget itself is anchored on (timeline.SourceSheetName) — they can differ when the timeline is
+        // placed on a dashboard sheet that filters pivots living elsewhere. Validate every target BEFORE
+        // mutating anything so a protected connection blocks the whole range change, not just part of it.
+        foreach (var (targetSheet, _) in targets)
+        {
+            if (PivotTableSlicerTimelineCommandGuards.RejectIfEitherSheetProtected(ctx.Workbook, targetSheet, timeline.SourceSheetName) is { } protectedOutcome)
+                return protectedOutcome;
+        }
 
-        var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? sheet;
-        var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, pivotTable);
-        var sourceFieldIndex = PivotTableTimelineCommandLookups.FindSourceFieldIndex(
-            headers,
-            timeline.SourceFieldName,
-            StringComparison.OrdinalIgnoreCase);
-        if (sourceFieldIndex < 0)
+        var resolvedTargets = new List<(Sheet Sheet, PivotTableModel PivotTable, Sheet SourceSheet, int SourceFieldIndex)>();
+        foreach (var (targetSheet, pivotTable) in targets)
+        {
+            var sourceSheet = ctx.Workbook.GetSheet(pivotTable.SourceRange.Start.Sheet) ?? targetSheet;
+            var headers = PivotTableSlicerTimelineCommandHelpers.ReadPivotHeaders(sourceSheet, pivotTable);
+            var sourceFieldIndex = PivotTableTimelineCommandLookups.FindSourceFieldIndex(
+                headers,
+                timeline.SourceFieldName,
+                StringComparison.OrdinalIgnoreCase);
+            if (sourceFieldIndex < 0)
+            {
+                if (string.Equals(pivotTable.Name, timeline.SourcePivotTableName, StringComparison.OrdinalIgnoreCase))
+                    return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
+                continue;
+            }
+
+            resolvedTargets.Add((targetSheet, pivotTable, sourceSheet, sourceFieldIndex));
+        }
+
+        if (resolvedTargets.Count == 0)
             return PivotTableSlicerTimelineCommandGuards.ConnectedPivotTableFieldNotFound();
 
-        _snapshot = TimelineRangeSnapshot.Capture(timeline, pivotTable);
-        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
+        _snapshot = TimelineRangeSnapshot.Capture(timeline, resolvedTargets.Select(t => (t.Sheet, t.PivotTable)).ToList());
+        _targetSnapshots = resolvedTargets
+            .Select(t => (t.Sheet, t.PivotTable, AddPivotTableCommand.Snapshot(t.Sheet, t.PivotTable.LastRenderedRange ?? t.PivotTable.TargetRange)))
+            .ToList();
 
         timeline.SelectedStartDate = NormalizeSelectedDate(_selectedStartDate);
         timeline.SelectedEndDate = NormalizeSelectedDate(_selectedEndDate);
 
-        // P9: a null/null range (both bounds cleared, e.g. clicking the timeline's clear icon) means
-        // "remove the filter", not "select every date currently in the source range". The previous
-        // code always called ReadSelectedItems(MinValue, MaxValue), which enumerates only the DateTimeValue
-        // rows that exist RIGHT NOW and installs that as an explicit SelectedItems list — rows with
-        // blank/text values in the field (which Excel keys to "(blank)"/text and which a real clear
-        // must restore) stay excluded, and rows added by a later refresh with dates outside today's
-        // snapshot also stay filtered out, even though HasActiveTimelineFilter/SelectedStartDate/
-        // SelectedEndDate all read back as "no filter" — an invisible, un-clearable stale filter.
-        // Passing an empty list makes ReplaceSelectedItems null out SelectedItem/SelectedItems (the
-        // same "genuinely cleared" path SetSlicerSelectionCommand's clear button already uses), so
-        // MatchesFieldSelections stops filtering the field entirely, matching Excel.
-        var selectedItems = timeline.SelectedStartDate is null && timeline.SelectedEndDate is null
-            ? []
-            : PivotTimelineSelectionPlanner.ReadSelectedItems(sourceSheet, pivotTable, sourceFieldIndex, startDate, endDate);
-        // H10: identical fix as SetSlicerSelectionCommand — a timeline can be connected to a date field
-        // that was never dragged into Row/Column/PageFields. Without ensuring it's in one of those
-        // lists, ReplaceSelectedItems below is a no-op and the range selection never filters anything.
-        PivotTableSlicerTimelineCommandHelpers.EnsureFieldInLayout(pivotTable.RowFields, pivotTable.ColumnFields, pivotTable.PageFields, sourceFieldIndex);
-        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, selectedItems);
-        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, selectedItems);
-        PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, selectedItems);
+        foreach (var (targetSheet, pivotTable, sourceSheet, sourceFieldIndex) in resolvedTargets)
+        {
+            // P9: a null/null range (both bounds cleared, e.g. clicking the timeline's clear icon) means
+            // "remove the filter", not "select every date currently in the source range". The previous
+            // code always called ReadSelectedItems(MinValue, MaxValue), which enumerates only the DateTimeValue
+            // rows that exist RIGHT NOW and installs that as an explicit SelectedItems list — rows with
+            // blank/text values in the field (which Excel keys to "(blank)"/text and which a real clear
+            // must restore) stay excluded, and rows added by a later refresh with dates outside today's
+            // snapshot also stay filtered out, even though HasActiveTimelineFilter/SelectedStartDate/
+            // SelectedEndDate all read back as "no filter" — an invisible, un-clearable stale filter.
+            // Passing an empty list makes ReplaceSelectedItems null out SelectedItem/SelectedItems (the
+            // same "genuinely cleared" path SetSlicerSelectionCommand's clear button already uses), so
+            // MatchesFieldSelections stops filtering the field entirely, matching Excel.
+            // R133x: computed PER connected pivot table -- each one resolves its own source rows, so the
+            // same date range can select a different concrete row set in a pivot with different source data.
+            var selectedItems = timeline.SelectedStartDate is null && timeline.SelectedEndDate is null
+                ? []
+                : PivotTimelineSelectionPlanner.ReadSelectedItems(sourceSheet, pivotTable, sourceFieldIndex, startDate, endDate);
+            // H10: identical fix as SetSlicerSelectionCommand — a timeline can be connected to a date field
+            // that was never dragged into Row/Column/PageFields. Without ensuring it's in one of those
+            // lists, ReplaceSelectedItems below is a no-op and the range selection never filters anything.
+            PivotTableSlicerTimelineCommandHelpers.EnsureFieldInLayout(pivotTable.RowFields, pivotTable.ColumnFields, pivotTable.PageFields, sourceFieldIndex);
+            PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.RowFields, sourceFieldIndex, selectedItems);
+            PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.ColumnFields, sourceFieldIndex, selectedItems);
+            PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, selectedItems);
 
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
-        return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
+            PivotTableRefreshService.Refresh(ctx.Workbook, targetSheet, pivotTable);
+        }
+
+        return new CommandOutcome(true, AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray());
     }
 
     public void Revert(ICommandContext ctx)
     {
         var timeline = PivotTableTimelineCommandLookups.FindTimeline(ctx.Workbook, _timelineName);
-        var target = timeline?.SourcePivotTableName is null ? null : PivotTableSlicerTimelineCommandHelpers.FindConnectedPivotTable(ctx.Workbook, timeline.SourcePivotTableName);
-        if (timeline is not null && target is { } connected && _snapshot is not null)
+        if (timeline is not null && _snapshot is not null)
         {
-            PivotTableRefreshService.ClearRenderedRange(connected.Sheet, connected.PivotTable.LastRenderedRange);
-            _snapshot.Restore(timeline, connected.PivotTable);
-            AddPivotTableCommand.Restore(connected.Sheet, _targetSnapshot);
+            // Clear each affected pivot's CURRENT rendered range (post-Apply) before the snapshot
+            // restores RowFields/ColumnFields/PageFields/LastRenderedRange back to their pre-Apply
+            // values, mirroring the single-pivot original ordering for every connected pivot table.
+            // Uses the DIRECT sheet/pivot-table object references captured at Apply time (not a
+            // by-name re-lookup) so a rename applied after this command (e.g. RenamePivotTableCommand
+            // sitting above this one on the undo stack) can never make the restore silently miss its
+            // target -- the same live objects that were mutated are the ones restored.
+            foreach (var snapshot in _snapshot.PivotTables)
+                PivotTableRefreshService.ClearRenderedRange(snapshot.Sheet, snapshot.PivotTable.LastRenderedRange);
+
+            _snapshot.Restore(timeline);
+
+            if (_targetSnapshots is not null)
+            {
+                foreach (var (sheet, _, cellSnapshot) in _targetSnapshots)
+                    AddPivotTableCommand.Restore(sheet, cellSnapshot);
+            }
         }
 
         _snapshot = null;
-        _targetSnapshot = null;
+        _targetSnapshots = null;
     }
 
     private static string? NormalizeSelectedDate(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>
+    /// R133x-commands-slicer-timeline-multipivot-runtime: the timeline-level selection (SelectedStartDate/
+    /// SelectedEndDate) is captured ONCE, but the pivot-table-level layout (RowFields/ColumnFields/
+    /// PageFields/LastRenderedRange) is captured per CONNECTED pivot table -- a single timeline range
+    /// change can mutate several pivot tables at once, and undo must restore every one of them, not just
+    /// the primary connection. Each entry holds a DIRECT reference to the mutated <see cref="PivotTableModel"/>
+    /// (not its name), so restoring never depends on a by-name re-lookup that a rename applied between
+    /// Apply and Revert (by another command sitting above this one on the undo stack) could invalidate.
+    /// </summary>
     private sealed record TimelineRangeSnapshot(
         string? SelectedStartDate,
         string? SelectedEndDate,
-        IReadOnlyList<PivotFieldModel> RowFields,
-        IReadOnlyList<PivotFieldModel> ColumnFields,
-        IReadOnlyList<PivotFieldModel> PageFields,
-        GridRange? LastRenderedRange)
+        IReadOnlyList<PivotTableFieldsSnapshot> PivotTables)
     {
-        public static TimelineRangeSnapshot Capture(TimelineModel timeline, PivotTableModel pivotTable) =>
+        public static TimelineRangeSnapshot Capture(TimelineModel timeline, IReadOnlyList<(Sheet Sheet, PivotTableModel PivotTable)> targets) =>
             new(
                 timeline.SelectedStartDate,
                 timeline.SelectedEndDate,
-                pivotTable.RowFields.ToList(),
-                pivotTable.ColumnFields.ToList(),
-                pivotTable.PageFields.ToList(),
-                pivotTable.LastRenderedRange);
+                targets.Select(t => new PivotTableFieldsSnapshot(
+                    t.Sheet,
+                    t.PivotTable,
+                    t.PivotTable.RowFields.ToList(),
+                    t.PivotTable.ColumnFields.ToList(),
+                    t.PivotTable.PageFields.ToList(),
+                    t.PivotTable.LastRenderedRange)).ToList());
 
-        public void Restore(TimelineModel timeline, PivotTableModel pivotTable)
+        public void Restore(TimelineModel timeline)
         {
             timeline.SelectedStartDate = SelectedStartDate;
             timeline.SelectedEndDate = SelectedEndDate;
-            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
-            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
-            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
-            pivotTable.LastRenderedRange = LastRenderedRange;
+
+            foreach (var snapshot in PivotTables)
+            {
+                var pivotTable = snapshot.PivotTable;
+                PivotTableCommandCollections.Replace(pivotTable.RowFields, snapshot.RowFields);
+                PivotTableCommandCollections.Replace(pivotTable.ColumnFields, snapshot.ColumnFields);
+                PivotTableCommandCollections.Replace(pivotTable.PageFields, snapshot.PageFields);
+                pivotTable.LastRenderedRange = snapshot.LastRenderedRange;
+            }
         }
     }
+
+    private sealed record PivotTableFieldsSnapshot(
+        Sheet Sheet,
+        PivotTableModel PivotTable,
+        IReadOnlyList<PivotFieldModel> RowFields,
+        IReadOnlyList<PivotFieldModel> ColumnFields,
+        IReadOnlyList<PivotFieldModel> PageFields,
+        GridRange? LastRenderedRange);
 }
 
 /// <summary>

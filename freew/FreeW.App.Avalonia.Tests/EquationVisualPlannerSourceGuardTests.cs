@@ -7,7 +7,9 @@ public sealed class EquationVisualPlannerSourceGuardTests
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
-        source.Should().Contain("DisplayCells(paragraph)");
+        // Pins the display-cell path, not its exact arity: the method gained a block index and a
+        // flow-break flag, which does not change what this guard is protecting.
+        source.Should().Contain("DisplayCells(blockIndex, paragraph");
         source.Should().Contain("EquationVisualPlanner.Build(equation)");
         source.Should().Contain("AddEquationVisualElement");
         source.Should().Contain("ApplyEquationVisualStyle");

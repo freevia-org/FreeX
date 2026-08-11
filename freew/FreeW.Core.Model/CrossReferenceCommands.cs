@@ -132,11 +132,16 @@ public sealed class InsertCrossReferenceCommand(
             if (block is not Table table)
                 continue;
 
-            foreach (var cellParagraph in table.Rows
-                         .SelectMany(row => row.Cells)
-                         .SelectMany(cell => cell.Paragraphs))
+            foreach (var row in table.Rows)
             {
-                yield return cellParagraph;
+                foreach (var cell in row.Cells)
+                {
+                    foreach (var cellParagraph in cell.Paragraphs)
+                        yield return cellParagraph;
+                    foreach (var nestedTable in cell.NestedTables)
+                        foreach (var nestedParagraph in EnumerateBodyParagraphs([nestedTable]))
+                            yield return nestedParagraph;
+                }
             }
         }
     }

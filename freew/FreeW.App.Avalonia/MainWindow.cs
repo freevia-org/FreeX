@@ -56,7 +56,13 @@ public sealed partial class MainWindow : Window
     private readonly FreeWPortablePrintWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
     private readonly Action<IInputElement?> _restorePrintOwnerFocus;
-    private readonly Action<DocumentView, Stream, PrintSelection> _savePrintPdf;
+    private readonly Func<DocumentView, Stream, PrintSelection, FreeWAvaloniaPdfExportResult> _savePrintPdf;
+
+    // Test-injected save-PDF seams (savePrintPdf/saveSelectedPrintPdf) are void Actions that write a
+    // synthetic file and don't go through the shared PDF writers, so they cannot produce real image
+    // diagnostics; this stands in for "none" so the result shape matches the production Save() path.
+    private static readonly FreeWAvaloniaPdfExportResult NoImageDiagnosticsPrintResult =
+        new(0, PdfExportBackend.PortableWinAnsi, []);
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
     private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
@@ -174,7 +180,8 @@ public sealed partial class MainWindow : Window
         DocumentPersistenceWorkflow? documentPersistence = null,
         Func<Task<string?>>? pickPdfImportPathAsync = null,
         Action<DocumentView, Stream, PrintSelection>? saveSelectedPrintPdf = null,
-        IPlatformClipboard? platformClipboard = null)
+        IPlatformClipboard? platformClipboard = null,
+        bool suppressStartupRecoveryOffer = false)
     {
         _optionsStore = optionsStore;
         _documentPersistence = documentPersistence ?? new DocumentPersistenceWorkflow();
@@ -188,10 +195,19 @@ public sealed partial class MainWindow : Window
             ((owner, discovery, cancellationToken) =>
                 CupsPrintDialog.ShowAsync(owner, discovery, cancellationToken: cancellationToken));
         _restorePrintOwnerFocus = restorePrintOwnerFocus ?? RestorePrintOwnerFocus;
-        _savePrintPdf = saveSelectedPrintPdf
-            ?? (savePrintPdf is not null
-                ? (view, stream, _) => savePrintPdf(view, stream)
-                : (view, stream, selection) => FreeWAvaloniaPdfExport.Save(view, stream, selection));
+        _savePrintPdf = saveSelectedPrintPdf is not null
+            ? (view, stream, selection) =>
+            {
+                saveSelectedPrintPdf(view, stream, selection);
+                return NoImageDiagnosticsPrintResult;
+            }
+            : savePrintPdf is not null
+                ? (view, stream, _) =>
+                {
+                    savePrintPdf(view, stream);
+                    return NoImageDiagnosticsPrintResult;
+                }
+                : (view, stream, selection) => FreeWAvaloniaPdfExport.Save(view, stream, selection);
         _pickExportPath = pickExportPath ?? PickExportPathAsync;
         _pickPdfImportPathAsync = pickPdfImportPathAsync ?? PromptPdfImportPathAsync;
         _askHeaderFooterText = askHeaderFooterText;
@@ -266,7 +282,10 @@ public sealed partial class MainWindow : Window
             ToggleCurrentFieldCode: _editor.ToggleFieldCodeAtCaret,
             ToggleFieldCodes: _editor.ToggleFieldCodes,
             UpdateCurrentField: _editor.UpdateFieldAtCaret));
-        _autosave = new AutosaveAdapter(_editor, _fileWorkflow.Workflow);
+        _autosave = new AutosaveAdapter(
+            _editor,
+            _fileWorkflow.Workflow,
+            recoverInNewWindowAsync: OpenNewWindowWithRecoveredSnapshotAsync);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: ConfirmCloseAllowedAndStopAutosaveAsync,
             requestClose: () =>
@@ -364,10 +383,16 @@ public sealed partial class MainWindow : Window
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
 
         // Start autosave once the window is shown; offer recovery on first open.
+        // R133-remediation: OfferRecoveryAsync now enumerates and offers EVERY pending snapshot,
+        // not just the latest. The extra windows it opens (via
+        // OpenNewWindowWithRecoveredSnapshotAsync) pass suppressStartupRecoveryOffer:true so their
+        // own Opened handler does not re-run OfferRecoveryAsync and re-prompt for the very
+        // candidates this window's call is already working through.
         Opened += async (_, _) =>
         {
             _autosave.Start();
-            await _autosave.OfferRecoveryAsync(this);
+            if (!suppressStartupRecoveryOffer)
+                await _autosave.OfferRecoveryAsync(this);
             await RefreshPrinterDiscoveryAsync();
             await RunTablePropertiesX11ValidationSeedAsync();
         };
@@ -1355,6 +1380,35 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // R133-remediation: AutosaveAdapter.OfferRecoveryAsync calls this for every accepted recovery
+    // candidate beyond the first (which restores directly into the window that is already open) --
+    // mirrors OpenNewWindow()'s window-creation pattern above so each additional pending snapshot
+    // from a multi-window crash gets its own window instead of being silently left on disk.
+    // suppressStartupRecoveryOffer:true stops the new window's own Opened handler from re-running
+    // OfferRecoveryAsync and re-prompting for the very candidates the caller's loop is already
+    // working through.
+    private async Task<bool> OpenNewWindowWithRecoveredSnapshotAsync(AutosaveRecoveryCandidate candidate)
+    {
+        try
+        {
+            var doc = DocxReader.Read(candidate.SnapshotPath);
+            var newWindow = new MainWindow(
+                Array.Empty<string>(),
+                null,
+                ApplicationOptionsStore<FreeWOptions>.Create(PlatformApplicationDataPathProvider.LocalInstance),
+                suppressStartupRecoveryOffer: true);
+            newWindow.LoadDocumentContent(doc);
+            newWindow._fileWorkflow.MarkDirtyWithPath(candidate.Sidecar.OriginalFilePath);
+            newWindow.Show();
+            newWindow.Activate();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private void OpenMailMergeErrorReport(TextDocument report)
     {
         var reportWindow = new MainWindow
@@ -2277,7 +2331,14 @@ public sealed partial class MainWindow : Window
             return;
 
         mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;
-        var result = await Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState));
+
+        // Snapshot the template on the UI thread before backgrounding the merge. Outside preview the
+        // merge would otherwise iterate the live document's Blocks and Styles once per record while
+        // the editor stays fully typeable — a keystroke that splits a paragraph mid-merge throws
+        // "collection was modified" on the background thread. Running the merge inline is not an
+        // option: its per-record prompts post to the UI thread and wait, so that would deadlock.
+        var templateSnapshot = _mailMerge.Session.IsPreviewing ? null : CloneDocument(_editor.Document);
+        var result = await Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState, templateSnapshot));
         if (result is null)
             return;
 
@@ -3291,6 +3352,16 @@ public sealed partial class MainWindow : Window
     }
 
     private Task<bool> OpenRecentPathAsync(string path) =>
+/*
+    /// <summary>
+    /// Backstage "Open Recent". Must run the dirty-gate through the async workflow: the shared
+    /// workflow's synchronous Open overload prompts for unsaved changes via a helper that blocks
+    /// the UI thread waiting on the async save-changes dialog's result, which can never be pumped
+    /// while that same UI thread is blocked — a guaranteed deadlock when the current document is
+    /// dirty.
+    /// </summary>
+    private Task<bool> OpenRecentAsync(string path) =>
+*/
         _fileWorkflow.OpenAsync(
             FileText.OpenAction,
             () => Task.FromResult<string?>(path),
@@ -3417,7 +3488,10 @@ public sealed partial class MainWindow : Window
             (stream, _) =>
             {
                 var result = FreeWAvaloniaPdfExport.Save(_editor, stream);
-                return ValueTask.FromResult(new FreeWExportArtifact(result.PageCount, result.Backend.ToString()));
+                return ValueTask.FromResult(new FreeWExportArtifact(
+                    result.PageCount,
+                    result.Backend.ToString(),
+                    result.ImageDiagnostics.Count));
             });
         _status.Text = execution.Message;
     }
@@ -3431,6 +3505,7 @@ public sealed partial class MainWindow : Window
         _printCancellation = cancellation;
         try
         {
+            FreeWAvaloniaPdfExportResult? printPdfResult = null;
             var execution = await _portablePrintWorkflow.ExecuteAsync(
                 (discovery, token) => _showPrintSelectionDialog(this, discovery, token),
                 (stream, selection, _) =>
@@ -3442,12 +3517,14 @@ public sealed partial class MainWindow : Window
                         printView.LoadDocument(document);
                     }
 
-                    _savePrintPdf(printView, stream, selection);
+                    printPdfResult = _savePrintPdf(printView, stream, selection);
                     return ValueTask.CompletedTask;
                 },
                 cancellation.Token);
             _latestPrinterDiscovery = execution.Discovery ?? _latestPrinterDiscovery;
-            _status.Text = execution.Message;
+            _status.Text = printPdfResult is { ImageDiagnostics.Count: > 0 }
+                ? $"{execution.Message} ({printPdfResult.ImageDiagnostics.Count} image warning(s))"
+                : execution.Message;
         }
         finally
         {

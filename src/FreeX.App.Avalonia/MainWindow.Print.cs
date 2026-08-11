@@ -401,10 +401,13 @@ public sealed partial class MainWindow
 
         if (result.Succeeded)
         {
+            var imageDiagnostics = result.RenderedDocument?.ImageDiagnostics ?? [];
             if (result.Submission is { } submission)
-                RefreshShell(UiText.Format("Print_Sent", submission.StatusText));
+                RefreshShell(AppendImageDiagnosticsSuffix(
+                    UiText.Format("Print_Sent", submission.StatusText),
+                    imageDiagnostics));
             else if (result.Fallback is { } fallback)
-                RefreshShell(fallback.StatusText);
+                RefreshShell(AppendImageDiagnosticsSuffix(fallback.StatusText, imageDiagnostics));
             return;
         }
 
@@ -419,20 +422,29 @@ public sealed partial class MainWindow
             : result.StatusText);
     }
 
-    private Task<byte[]> RenderPrintReadyPdfAsync(
+    private Task<WorkbookPrintRenderResult> RenderPrintReadyPdfAsync(
         PortablePdfExportPlan exportPlan,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var pdfBuffer = new MemoryStream();
-        Pdf.AvaloniaPdfDocumentExporter.Save(
+        var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
             _session.Workbook,
             exportPlan,
             pdfBuffer,
             options: null,
             workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
-        return Task.FromResult(pdfBuffer.ToArray());
+        return Task.FromResult(new WorkbookPrintRenderResult(
+            pdfBuffer.ToArray(),
+            outcome.Result.ImageDiagnostics));
     }
+
+    private static string AppendImageDiagnosticsSuffix(
+        string statusText,
+        IReadOnlyList<string> imageDiagnostics) =>
+        imageDiagnostics.Count == 0
+            ? statusText
+            : $"{statusText} ({imageDiagnostics.Count} image warning{(imageDiagnostics.Count == 1 ? "" : "s")})";
 
     private async Task<PrintSubmissionResult> SpoolPrintJobAsync(
         PrintJobSubmission submission,

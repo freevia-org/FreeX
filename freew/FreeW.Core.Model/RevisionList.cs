@@ -127,19 +127,33 @@ public static class RevisionList
         return true;
     }
 
-    // Every paragraph reachable in the document body — top-level paragraphs and those nested in table cells,
-    // the same walk TrackChanges/DocxWriter use, so the index is consistent across the reviewing surface.
-    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
+    // Every paragraph reachable in the document body — top-level paragraphs and those nested in table cells
+    // (including tables nested inside table cells, to any depth), the same walk TrackChanges/DocxWriter
+    // use, so the index is consistent across the reviewing surface.
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document) =>
+        document.Blocks.SelectMany(ParagraphsInBlock);
+
+    private static IEnumerable<Paragraph> ParagraphsInBlock(Block block)
     {
-        foreach (var block in document.Blocks)
+        if (block is Paragraph paragraph)
         {
-            if (block is Paragraph paragraph)
-                yield return paragraph;
-            else if (block is Table table)
-                foreach (var row in table.Rows)
-                    foreach (var cell in row.Cells)
-                        foreach (var cellParagraph in cell.Paragraphs)
-                            yield return cellParagraph;
+            yield return paragraph;
+            yield break;
+        }
+
+        if (block is not Table table)
+            yield break;
+
+        foreach (var row in table.Rows)
+        {
+            foreach (var cell in row.Cells)
+            {
+                foreach (var cellParagraph in cell.Paragraphs)
+                    yield return cellParagraph;
+                foreach (var nestedTable in cell.NestedTables)
+                    foreach (var nestedParagraph in ParagraphsInBlock(nestedTable))
+                        yield return nestedParagraph;
+            }
         }
     }
 }

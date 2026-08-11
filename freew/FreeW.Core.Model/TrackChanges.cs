@@ -5,7 +5,8 @@ namespace FreeW.Core.Model;
 /// <see cref="TableRow.RowRevision"/> and <see cref="Paragraph.MarkRevision"/>.
 /// Accept turns insertions into ordinary content and drops deletions; Reject does the inverse (drops
 /// insertions, restores deletions to ordinary content). Both walk every paragraph and table row in the
-/// document body (including paragraphs nested in table cells) and clear the revision marks they resolve.
+/// document body (including paragraphs nested in table cells, and tables nested inside table cells to
+/// any depth) and clear the revision marks they resolve.
 /// The document is mutated in place; nothing here touches the editor or docx layers.
 /// </summary>
 public static class TrackChanges
@@ -57,7 +58,9 @@ public static class TrackChanges
     private static bool TableHasRevisions(Table table) =>
         table.Rows.Any(row =>
             row.RowRevision != RevisionKind.None ||
-            row.Cells.Any(cell => cell.Paragraphs.Any(ParagraphHasRevisions)));
+            row.Cells.Any(cell =>
+                cell.Paragraphs.Any(ParagraphHasRevisions) ||
+                cell.NestedTables.Any(TableHasRevisions)));
 
     // --- Accept/Reject resolution ---
 
@@ -135,7 +138,8 @@ public static class TrackChanges
 
     // Resolve every row of a table: a row whose RowRevision resolves to "removed" (an accepted deletion
     // or a rejected insertion) is dropped entirely; a kept row has its revision mark cleared and its
-    // cells' paragraphs resolved.
+    // cells' paragraphs resolved. Any table nested inside a cell (to any depth) is resolved the same way,
+    // recursively — a tracked change inside a nested table must not survive Accept/Reject All.
     private static void ResolveTable(Table table, bool accept, RevisionKind dropKind)
     {
         for (var i = table.Rows.Count - 1; i >= 0; i--)
@@ -154,7 +158,11 @@ public static class TrackChanges
             }
 
             foreach (var cell in row.Cells)
+            {
                 ResolveParagraphContainer(cell.Paragraphs, accept);
+                foreach (var nestedTable in cell.NestedTables)
+                    ResolveTable(nestedTable, accept, dropKind);
+            }
         }
     }
 

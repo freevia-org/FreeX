@@ -1382,6 +1382,34 @@ public static class DocxReader
         var partHyperlinks = ReadPartHyperlinkRelationships(archive, partPath);
 
         var result = new HeaderFooter();
+
+        // Word's classic Left/Center/Right header/footer building block wraps its ENTIRE content in a
+        // single-row, three-cell w:tbl (borders off) so the three pieces of text sit side-by-side instead of
+        // stacking. When that pattern is present (the table is the only real content — optionally followed
+        // by Word's usual trailing filler paragraph), preserve the table structure in the model instead of
+        // flattening it, so both shells can render it as an actual table. The SAME Paragraph instances that
+        // land inside the table's cells are also flattened into result.Paragraphs below (shared object
+        // identity, not a re-parse) so every existing paragraph-based consumer — field resolution, spell
+        // check, mail merge, plain-text extraction, and the docx writer's own image/hyperlink collection —
+        // keeps working exactly as before even though a table is now present.
+        if (IsSingleTableHeaderFooterContent(root, out var tableElement))
+        {
+            var table = ReadTable(
+                tableElement!,
+                archive,
+                partRelationships,
+                partHyperlinks,
+                numbering,
+                EmptyStartOverrides,
+                document,
+                inheritedControl: null,
+                subDocumentRelationships: null);
+            result.Table = table;
+            foreach (var paragraph in EnumerateTableParagraphs(table))
+                result.Paragraphs.Add(paragraph);
+            return result;
+        }
+
         // Use Descendants, not direct children: real Word headers/footers routinely wrap their content in a
         // w:tbl (and/or w:sdt content controls), so the visible text lives in paragraphs NESTED inside table
         // cells / SDTs rather than as direct children of w:hdr/w:ftr. Reading only direct-child w:p (as before)
@@ -1389,8 +1417,10 @@ public static class DocxReader
         // "headers dropped on round-trip" bug. Paragraphs never nest inside paragraphs in OOXML, so Descendants
         // yields each content paragraph exactly once, in document order. A DrawingML text box contains its own
         // w:p descendants, but ReadShape owns those paragraphs; flattening them here would duplicate the text
-        // when the header is saved again. We still flatten table/SDT structure to the model's paragraph list
-        // (the model carries no per-header table) and leave legacy VML text boxes on their existing path.
+        // when the header is saved again. Headers/footers whose table isn't the sole content (e.g. a table
+        // alongside real paragraph text) still flatten here — mixed table+paragraph header/footer layout is
+        // a much rarer pattern than the single all-encompassing layout table and is out of scope for the
+        // table-preservation path above; leave legacy VML text boxes on their existing path too.
         foreach (var p in ReadStoryParagraphs(root))
         {
             // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
@@ -1421,6 +1451,51 @@ public static class DocxReader
                 preservedDrawingRelationshipTargets: partRelationships));
         }
         return result;
+    }
+
+    /// <summary>Empty numbering-restart-override map for the header/footer table-preservation path (table
+    /// restarts inside a layout-only header/footer table are not tracked, mirroring every other reader path
+    /// that has no restart context to feed in).</summary>
+    private static readonly Dictionary<(int NumId, int Level), int> EmptyStartOverrides = new();
+
+    /// <summary>
+    /// True when a header/footer part's entire visible content is exactly one top-level w:tbl (optionally
+    /// followed only by blank filler w:p elements with no runs at all, which Word sometimes appends after a
+    /// table). This is the classic Left/Center/Right header/footer layout building block. Returns the table
+    /// element via <paramref name="tableElement"/> when true.
+    /// </summary>
+    private static bool IsSingleTableHeaderFooterContent(XElement root, out XElement? tableElement)
+    {
+        tableElement = null;
+        var children = root.Elements().Where(e => e.Name != W + "sectPr").ToList();
+        var tables = children.Where(e => e.Name == W + "tbl").ToList();
+        if (tables.Count != 1)
+            return false;
+        // Every other direct child must be a paragraph with no runs at all (Word's trailing filler
+        // paragraph). Any real content — text, images, a second table, an SDT — falls back to flattening.
+        if (children.Any(e => e.Name != W + "tbl" && (e.Name != W + "p" || e.Descendants(W + "r").Any())))
+            return false;
+        tableElement = tables[0];
+        return true;
+    }
+
+    /// <summary>Depth-first walk of every paragraph in a table's cells (including nested tables), in
+    /// row/cell/document order — used to derive the flattened, back-compat <see cref="HeaderFooter.Paragraphs"/>
+    /// list from a preserved <see cref="HeaderFooter.Table"/> without re-parsing (so the SAME Paragraph/Run
+    /// instances are shared between the two views).</summary>
+    private static IEnumerable<Paragraph> EnumerateTableParagraphs(Table table)
+    {
+        foreach (var row in table.Rows)
+        {
+            foreach (var cell in row.Cells)
+            {
+                foreach (var paragraph in cell.Paragraphs)
+                    yield return paragraph;
+                foreach (var nested in cell.NestedTables)
+                    foreach (var paragraph in EnumerateTableParagraphs(nested))
+                        yield return paragraph;
+            }
+        }
     }
 
     private static IEnumerable<XElement> ReadStoryParagraphs(XElement container) =>
@@ -2176,13 +2251,9 @@ public static class DocxReader
             if (!string.Equals(contentType, "text/html", StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            using var stream = new MemoryStream(bytes, writable: false);
-            using var reader = new StreamReader(
-                stream,
-                Encoding.UTF8,
-                detectEncodingFromByteOrderMarks: true,
-                bufferSize: 4096,
-                leaveOpen: false);
+            // Honor the chunk's own BOM/declared charset instead of assuming UTF-8 (mirrors
+            // HtmlFileAdapter.Load — altChunk HTML can be authored/saved in a legacy code page).
+            var html = HtmlFileAdapter.DecodeBytes(bytes);
 
             var partDirectory = OpcPathHelper.GetDirectoryName(partPath);
             var imagesByRelationshipId = ReadPartImageRelationships(archive, partPath);
@@ -2201,7 +2272,7 @@ public static class DocxReader
                 ? new InlineImage(imageBytes, 72, 72, ResolveImageFormat(path, imageBytes))
                 : null;
 
-            blocks = HtmlFileAdapter.LoadHtml(reader.ReadToEnd(), ResolveImage).Blocks.ToList();
+            blocks = HtmlFileAdapter.LoadHtml(html, ResolveImage).Blocks.ToList();
             return true;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException
@@ -5236,6 +5307,24 @@ public static class DocxReader
                 shape.CustomGeometry = custGeo;
         }
 
+        // No author-supplied custom geometry, and the preset didn't map to one of FreeW's three named
+        // ShapeKinds (rect/roundRect/ellipse — see ShapeKindFromPreset) so `kind` collapsed to Rectangle.
+        // Route it through the shared 45-preset geometry tier instead of leaving it a plain rectangle:
+        // synthesize a freeform polygon matching the ACTUAL preset (triangle, arrow, star, callout, ...)
+        // and render it via the same freeform-polygon path FreeW already uses for "Convert to Freeform"
+        // shapes (see DocumentView shape rendering: HasCustomGeometry is checked before falling back to
+        // the 3-case ShapeKind switch).
+        if (!shape.HasCustomGeometry && kind == ShapeKind.Rectangle && !string.IsNullOrEmpty(preset)
+            && Free.Shared.Drawing.DrawingMlPresetGeometryMap.TryGetShapeKind(preset, out var sharedPresetKind)
+            && sharedPresetKind is not (Free.Shared.Drawing.DrawingShapeKind.Rectangle
+                or Free.Shared.Drawing.DrawingShapeKind.RoundedRectangle
+                or Free.Shared.Drawing.DrawingShapeKind.Ellipse))
+        {
+            var synthesized = BuildCustomGeometryFromPreset(sharedPresetKind);
+            if (synthesized is not null)
+                shape.CustomGeometry = synthesized;
+        }
+
         // Fill: extended fills (gradient / pattern / no-fill) take priority over solid.
         var solidFillEl = spPr?.Element(A + "solidFill");
         var gradFillEl  = spPr?.Element(A + "gradFill");
@@ -5399,6 +5488,63 @@ public static class DocxReader
         "ellipse" => ShapeKind.Ellipse,
         _ => hasTextBody ? ShapeKind.TextBox : ShapeKind.Rectangle,
     };
+
+    /// <summary>
+    /// Synthesizes a freeform <see cref="CustomGeometry"/> polygon for a DrawingML preset that
+    /// <see cref="ShapeKindFromPreset"/> has no dedicated <see cref="ShapeKind"/> for (anything beyond
+    /// rect/roundRect/ellipse — FreeW's inline Shape model deliberately stops at those three named kinds).
+    /// Routes preset resolution through the shared 45-preset geometry tier
+    /// (<see cref="Free.Shared.Drawing.ShapeGeometryBuilder"/>, the same engine FreeX/FreeP use for their
+    /// own drawing objects) instead of leaving the shape a plain rectangle. The vertex/segment geometry is
+    /// converted into FreeW's own 21600×21600-grid freeform format (matching
+    /// <see cref="CustomGeometry.RectanglePoly"/>) so it renders via the SAME tested freeform-polygon path
+    /// both shells already use for "Convert to Freeform" shapes — no new drawing code needed.
+    /// <para>
+    /// Returns null when the shared builder has no contours for the preset, or when any contour uses an
+    /// elliptical arc segment: FreeW's freeform model has only MoveTo/LineTo/CubicBezierTo/Close (no arc
+    /// primitive). A minority of the 45 shared presets are arc-based (e.g. Cylinder and OvalCallout build
+    /// directly on the shared Ellipse contour; RoundedRectangularCallout builds on the shared rounded-
+    /// rectangle contour, which uses arcs for its corners); those presets keep importing as a plain
+    /// rectangle exactly as they did before this fix, a small and deliberate scope limit rather than a
+    /// silent gap.
+    /// </para>
+    /// </summary>
+    private static CustomGeometry? BuildCustomGeometryFromPreset(Free.Shared.Drawing.DrawingShapeKind presetKind)
+    {
+        const long Grid = 21600;
+        var geometry = Free.Shared.Drawing.ShapeGeometryBuilder.Build(
+            presetKind,
+            new Free.Shared.Drawing.LayoutRect(0, 0, Grid, Grid));
+        if (geometry.Contours.Count == 0)
+            return null;
+        if (geometry.Contours.Any(contour =>
+                contour.Segments.Any(segment => segment.Kind == Free.Shared.Drawing.ShapeSegmentKind.Arc)))
+            return null;
+
+        var result = new CustomGeometry { Width = Grid, Height = Grid };
+        foreach (var contour in geometry.Contours)
+        {
+            result.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, ToCustomPoint(contour.Start)));
+            foreach (var segment in contour.Segments)
+            {
+                result.Segments.Add(segment.Kind switch
+                {
+                    Free.Shared.Drawing.ShapeSegmentKind.CubicBezier => new CustomSegment(
+                        CustomSegmentKind.CubicBezierTo,
+                        ToCustomPoint(segment.End),
+                        ToCustomPoint(segment.Control1),
+                        ToCustomPoint(segment.Control2)),
+                    _ => new CustomSegment(CustomSegmentKind.LineTo, ToCustomPoint(segment.End)),
+                });
+            }
+            if (contour.Closed)
+                result.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        }
+        return result.Segments.Count > 0 ? result : null;
+    }
+
+    private static CustomPoint ToCustomPoint(Free.Shared.Drawing.LayoutPoint point) =>
+        new((long)Math.Round(point.X), (long)Math.Round(point.Y));
 
     /// <summary>
     /// Reads an embedded OLE object (a w:object wrapping a VML v:shape + o:OLEObject) from a run into an

@@ -8,9 +8,18 @@ namespace Free.Shared.Shell;
 /// App-specific WPF startup inputs. The runner owns the common application/diagnostics ceremony; hosts
 /// provide identity, optional shell seam installation, and their focused workarea window factory.
 /// </summary>
+/// <param name="CreateWindow">
+/// Builds the host's main window from the loaded options/store and the resolved startup file-path
+/// arguments (R133-wpf-startup-file-args: command-line arguments and file-association/drag-drop
+/// launches -- e.g. double-clicking a document, dragging one onto the taskbar icon, or passing a path
+/// on the command line -- used to be silently ignored here, always opening the host's hardcoded sample
+/// document instead). The host decides how to use them: open the first into the returned window and
+/// open any remaining ones in their own windows, or ignore them entirely if the host has no concept of
+/// startup documents.
+/// </param>
 public sealed record WpfApplicationStartupSpec<TOptions>(
     AppProductIdentity ProductIdentity,
-    Func<TOptions, ApplicationOptionsStore<TOptions>, Window> CreateWindow)
+    Func<TOptions, ApplicationOptionsStore<TOptions>, IReadOnlyList<string>, Window> CreateWindow)
     where TOptions : class, INormalizableApplicationOptions, new()
 {
     public Action? InstallSharedSeams { get; init; }
@@ -81,17 +90,29 @@ public static class WpfApplicationStartupRunner
     public const string StartupEventName = "app_start";
     public const string ExitEventName = "app_exit";
 
-    public static void Run<TOptions>(WpfApplicationStartupSpec<TOptions> spec)
+    /// <param name="spec">The app-specific startup inputs (identity, window factory, theme, ...).</param>
+    /// <param name="startupArgs">
+    /// R133-wpf-startup-file-args: the process's command-line arguments (typically <c>Main(string[]
+    /// args)</c>'s own parameter, forwarded unchanged), so a file-association double-click, a
+    /// dragged-file launch, or a plain command-line invocation reaches <see
+    /// cref="WpfApplicationStartupSpec{TOptions}.CreateWindow"/> instead of being silently dropped.
+    /// Defaults to empty (no startup files) when omitted.
+    /// </param>
+    public static void Run<TOptions>(
+        WpfApplicationStartupSpec<TOptions> spec,
+        IReadOnlyList<string>? startupArgs = null)
         where TOptions : class, INormalizableApplicationOptions, new() =>
-        Run(spec, WpfApplicationStartupRuntime.Default);
+        Run(spec, WpfApplicationStartupRuntime.Default, startupArgs ?? []);
 
     internal static void Run<TOptions>(
         WpfApplicationStartupSpec<TOptions> spec,
-        WpfApplicationStartupRuntime runtime)
+        WpfApplicationStartupRuntime runtime,
+        IReadOnlyList<string>? startupArgs = null)
         where TOptions : class, INormalizableApplicationOptions, new()
     {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(runtime);
+        startupArgs ??= [];
 
         AppProduct.Current = spec.ProductIdentity;
         spec.InstallSharedSeams?.Invoke();
@@ -118,7 +139,7 @@ public static class WpfApplicationStartupRunner
 
         spec.Theme?.Apply(app, runtime.GetEnvironmentVariable);
         spec.Localization?.Apply(options);
-        runtime.RunApplication(app, spec.CreateWindow(options, optionsStore));
+        runtime.RunApplication(app, spec.CreateWindow(options, optionsStore, startupArgs));
 
         diagnostics.RecordEvent(ExitEventName);
     }

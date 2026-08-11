@@ -21524,6 +21524,9 @@ public partial class FileAdapterSmokeTests
             Caption = "Region",
             CacheName = "Slicer_Region",
             SourcePivotTableName = "PivotTable1",
+            // R133-io-slicer-timeline-multipivot: the reader now captures every <pivotTable> entry the
+            // cache lists (not just the first), so this single-connection fixture round-trips one entry.
+            ConnectedPivotTableNames = ["PivotTable1"],
             SourceFieldName = "Region",
             StyleName = "SlicerStyleLight2",
             PackagePart = "xl/slicers/slicer1.xml"
@@ -21534,6 +21537,7 @@ public partial class FileAdapterSmokeTests
             Caption = "Order Date",
             CacheName = "Timeline_Date",
             SourcePivotTableName = "PivotTable1",
+            ConnectedPivotTableNames = ["PivotTable1"],
             SourceFieldName = "Date",
             StartDate = "2026-01-01",
             EndDate = "2026-03-31",

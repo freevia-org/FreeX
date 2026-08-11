@@ -3142,6 +3142,13 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         var idx = Math.Clamp(_capturedIndex, 0, shapes.Count);
         shapes.Insert(idx, _captured);
 
+        // Every other slide-indexed command in this file re-validates the captured index in both
+        // Apply and Revert, because the slide count can differ by the time an undo runs; this was
+        // the one that indexed straight into Slides. The shape is already restored above, so
+        // stopping here still undoes the delete — it only skips the animation restore.
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return;
+
         var slide = p.Slides[_slideIndex];
         if (_capturedAnimations is not null)
         {

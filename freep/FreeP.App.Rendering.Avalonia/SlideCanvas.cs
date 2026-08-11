@@ -848,7 +848,14 @@ public sealed partial class SlideCanvas : Control
             using var ms = new MemoryStream(pic.Bytes);
             bitmap = new Bitmap(ms);
         }
-        catch { return; }
+        catch (Exception ex)
+        {
+            // Skip undecodable images rather than crashing the renderer, but report the loss through
+            // the ambient diagnostics sink (see SlideImageRenderDiagnostics) so an export command that
+            // installed a collector can surface it instead of the slide looking silently incomplete.
+            SlideImageRenderDiagnostics.ReportUndecodableImage(pic.ShapeId, ex.Message);
+            return;
+        }
 
         var plan = PictureRenderPlanner.Plan(pic, bitmap.PixelSize.Width, bitmap.PixelSize.Height);
         var destination = plan.DestinationDip;
@@ -1453,7 +1460,8 @@ public sealed partial class SlideCanvas : Control
                 i,
                 ft.Height,
                 para.SpaceBeforePt,
-                para.SpaceAfterPt));
+                para.SpaceAfterPt,
+                paragraphLineSpacingScale: TextLayoutPlanner.ResolveParagraphLineSpacingScale(para, ft.Height)));
         }
 
         var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(text, area.Height, initialMeasured);
@@ -1472,7 +1480,8 @@ public sealed partial class SlideCanvas : Control
                 i,
                 ft.Height,
                 para.SpaceBeforePt,
-                para.SpaceAfterPt));
+                para.SpaceAfterPt,
+                paragraphLineSpacingScale: TextLayoutPlanner.ResolveParagraphLineSpacingScale(para, ft.Height)));
         }
 
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);

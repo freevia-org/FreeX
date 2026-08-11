@@ -194,7 +194,7 @@ public readonly record struct TextAutoFitOverflowPlan(
 {
     public bool AppliesRuntimeShrink =>
         Mode == TextAutoFitOverflowMode.RuntimeShrink &&
-        (FontScale < 1.0 || LineSpacingReduction > 0.0);
+        (Math.Abs(FontScale - 1.0) > 0.001 || LineSpacingReduction > 0.0);
 }
 
 public enum TextParagraphRenderRoute
@@ -348,7 +348,7 @@ public static class TextLayoutPlanner
             return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.NoAutoFit, 1.0, 0.0);
 
         if (text.HasStoredFontScale && text.FontScale > 0)
-            return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.StoredFontScale, 1.0, 0.0);
+            return PlanStoredFontScaleOverflow(text, textAreaHeightDip, paragraphs);
 
         double measuredHeight = paragraphs.Sum(p => p.TotalHeightDip);
         if (textAreaHeightDip <= 0 || measuredHeight <= 0)
@@ -372,6 +372,64 @@ public static class TextLayoutPlanner
             TextAutoFitOverflowMode.RuntimeShrink,
             fontScale,
             lineSpacingReduction);
+    }
+
+    /// <summary>
+    /// A stored <c>a:normAutofit fontScale</c>/<c>lnSpcReduction</c> reflects what PowerPoint (or an
+    /// earlier FreeP session) computed for the box size <em>at the time it was cached</em>. Trusting
+    /// it forever leaves stale text scaling after the shape is resized or the text body is edited:
+    /// shrink the box and the cached scale under-shrinks (overflow); grow the box and the cached
+    /// scale keeps the text needlessly small. Recompute against the CURRENT geometry every time
+    /// instead, using the same overflow math as the no-cache path above.
+    /// <para>
+    /// <see cref="SlideCompositor"/> already multiplies every run (and bullet) font size by the
+    /// cached scale when it resolves the text body, so <paramref name="paragraphs"/> arrives here
+    /// already shrunk by <c>text.FontScale</c>. Back that out to recover the paragraphs' authored
+    /// (100%) height before re-deriving what the current box actually needs, then express the result
+    /// as a correction relative to the cached baseline — <see cref="ApplyAutoFitPlan(ResolvedTextLayout, TextAutoFitOverflowPlan)"/>
+    /// multiplies the already-scaled run sizes by this correction to reach the recomputed target.
+    /// </para>
+    /// </summary>
+    private static TextAutoFitOverflowPlan PlanStoredFontScaleOverflow(
+        ResolvedTextLayout text,
+        double textAreaHeightDip,
+        IReadOnlyList<TextParagraphMeasure> paragraphs)
+    {
+        double cachedScale = text.FontScale;
+        double unscaledHeight = paragraphs.Sum(p =>
+            p.HeightDip / cachedScale + p.SpaceBeforeDip + p.SpaceAfterDip);
+        if (textAreaHeightDip <= 0 || unscaledHeight <= 0)
+            return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.StoredFontScale, 1.0, 0.0);
+
+        double unscaledEffectiveHeight = unscaledHeight * GetLineSpacingScale(text);
+        double targetFontScale = 1.0;
+        double targetLineSpacingReduction = 0.0;
+        if (unscaledEffectiveHeight > textAreaHeightDip + 0.5)
+        {
+            double requiredScale = textAreaHeightDip / unscaledEffectiveHeight;
+            targetFontScale = Math.Clamp(requiredScale, RuntimeAutoFitMinimumFontScale, 1.0);
+            double projectedHeight = unscaledEffectiveHeight * targetFontScale;
+            if (projectedHeight > textAreaHeightDip + 0.5)
+            {
+                double requiredLineScale = textAreaHeightDip / projectedHeight;
+                targetLineSpacingReduction = Math.Clamp(1.0 - requiredLineScale, 0.0, RuntimeAutoFitMaximumLineSpacingReduction);
+            }
+        }
+
+        // The recomputed target already accounts for the (possibly stale) cached scale, since the
+        // measured heights were derived from it. Express the result as a multiplicative correction
+        // relative to that cached baseline; when nothing has changed since the cache was produced,
+        // the correction collapses to ~1.0 and the cached scale is kept as-is (no object churn, no
+        // double-scaling — same outcome PowerPoint's own cache would give for an unchanged box).
+        double correctionScale = targetFontScale / cachedScale;
+        bool needsCorrection = Math.Abs(correctionScale - 1.0) > 0.001 || targetLineSpacingReduction > 0.0;
+        if (!needsCorrection)
+            return new TextAutoFitOverflowPlan(TextAutoFitOverflowMode.StoredFontScale, 1.0, 0.0);
+
+        return new TextAutoFitOverflowPlan(
+            TextAutoFitOverflowMode.RuntimeShrink,
+            correctionScale,
+            targetLineSpacingReduction);
     }
 
     /// <summary>
@@ -414,10 +472,19 @@ public static class TextLayoutPlanner
         if (!plan.AppliesRuntimeShrink)
             return text;
 
+        // When text.FontScale already carries a cached normAutofit scale, run/bullet font sizes
+        // were pre-multiplied by it in SlideCompositor — plan.FontScale here is only the
+        // *correction* relative to that baseline (see PlanStoredFontScaleOverflow). Paragraph
+        // spacing (SpaceBeforePt/AfterPt), by contrast, was never pre-scaled, so it needs the
+        // *absolute* target (baseline * correction) to land on the same final proportion as the
+        // fonts. Pass the baseline through so ApplyAutoFitPlan(ResolvedParagraph, ...) can tell
+        // the two apart; for the no-cache path baseline is 1.0 and both notions coincide.
+        double baselineFontScale = text.HasStoredFontScale && text.FontScale > 0 ? text.FontScale : 1.0;
+
         return new ResolvedTextLayout
         {
             Paragraphs = text.Paragraphs
-                .Select(paragraph => ApplyAutoFitPlan(paragraph, plan))
+                .Select(paragraph => ApplyAutoFitPlan(paragraph, plan, baselineFontScale))
                 .ToArray(),
             Anchor = text.Anchor,
             InsetLeftDip = text.InsetLeftDip,
@@ -432,7 +499,11 @@ public static class TextLayoutPlanner
             AutoFitKind = text.AutoFitKind,
             HasStoredFontScale = text.HasStoredFontScale,
             FontScale = text.FontScale * plan.FontScale,
-            LnSpcReduction = text.LnSpcReduction,
+            // The runtime plan's LineSpacingReduction now fully represents the reduction the
+            // CURRENT geometry needs (recomputed fresh — see PlanStoredFontScaleOverflow); keep
+            // the stale cached LnSpcReduction from double-applying on top of it via
+            // GetLineSpacingScale's storedScale term.
+            LnSpcReduction = 0.0,
             ColumnCount = text.ColumnCount,
             ColumnSpacingDip = text.ColumnSpacingDip
         };
@@ -440,20 +511,30 @@ public static class TextLayoutPlanner
 
     public static ResolvedParagraph ApplyAutoFitPlan(
         ResolvedParagraph paragraph,
-        TextAutoFitOverflowPlan plan)
+        TextAutoFitOverflowPlan plan) =>
+        ApplyAutoFitPlan(paragraph, plan, baselineFontScale: 1.0);
+
+    private static ResolvedParagraph ApplyAutoFitPlan(
+        ResolvedParagraph paragraph,
+        TextAutoFitOverflowPlan plan,
+        double baselineFontScale)
     {
         ArgumentNullException.ThrowIfNull(paragraph);
         if (!plan.AppliesRuntimeShrink)
             return paragraph;
 
-        double scale = plan.FontScale;
+        // Run/bullet font sizes are already scaled by baselineFontScale (see ApplyAutoFitPlan
+        // above), so plan.FontScale — relative to that baseline — is the right multiplier for
+        // them. Paragraph spacing was never pre-scaled, so it needs the absolute target instead.
+        double fontScale = plan.FontScale;
+        double spaceScale = plan.FontScale * baselineFontScale;
         return new ResolvedParagraph
         {
             Runs = paragraph.Runs.Select(run => new ResolvedRun
             {
                 Text = run.Text,
                 FontFamily = run.FontFamily,
-                FontSizePt = run.FontSizePt * scale,
+                FontSizePt = run.FontSizePt * fontScale,
                 BaselineOffset = run.BaselineOffset,
                 Bold = run.Bold,
                 Italic = run.Italic,
@@ -473,13 +554,15 @@ public static class TextLayoutPlanner
             Level = paragraph.Level,
             BulletKind = paragraph.BulletKind,
             BulletChar = paragraph.BulletChar,
-            SpaceBeforePt = paragraph.SpaceBeforePt * scale,
-            SpaceAfterPt = paragraph.SpaceAfterPt * scale,
+            SpaceBeforePt = paragraph.SpaceBeforePt * spaceScale,
+            SpaceAfterPt = paragraph.SpaceAfterPt * spaceScale,
+            LineSpacingPercent = paragraph.LineSpacingPercent,
+            LineSpacingPointsExact = paragraph.LineSpacingPointsExact,
             TabStops = paragraph.TabStops,
             BulletText = paragraph.BulletText,
             BulletColor = paragraph.BulletColor,
             BulletFontFamily = paragraph.BulletFontFamily,
-            BulletFontSizePt = paragraph.BulletFontSizePt * scale,
+            BulletFontSizePt = paragraph.BulletFontSizePt * fontScale,
             BulletImage = paragraph.BulletImage,
             IndentDip = paragraph.IndentDip,
             HangingDip = paragraph.HangingDip
@@ -810,12 +893,31 @@ public static class TextLayoutPlanner
         double heightDip,
         double spaceBeforePt,
         double spaceAfterPt,
-        double lineSpacingScale = 1.0) =>
+        double lineSpacingScale = 1.0,
+        double paragraphLineSpacingScale = 1.0) =>
         new(
             paragraphIndex,
-            heightDip * lineSpacingScale,
+            heightDip * lineSpacingScale * paragraphLineSpacingScale,
             PointsToDip(spaceBeforePt) * lineSpacingScale,
             PointsToDip(spaceAfterPt) * lineSpacingScale);
+
+    /// <summary>
+    /// Resolves the authored <c>a:lnSpc</c> line-spacing multiplier for a single paragraph,
+    /// relative to its own naturally-measured height. 1.0 (no-op) when the paragraph has no
+    /// explicit line spacing (inherits default single spacing).
+    /// <paramref name="naturalHeightDip"/> is the paragraph's measured height at single spacing
+    /// (e.g. FormattedText.Height) — required to convert an exact-points value into a scale
+    /// factor relative to that measurement.
+    /// </summary>
+    public static double ResolveParagraphLineSpacingScale(ResolvedParagraph paragraph, double naturalHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        if (paragraph.LineSpacingPercent is { } pct && pct > 0)
+            return pct / 100.0;
+        if (paragraph.LineSpacingPointsExact is { } pts && pts > 0 && naturalHeightDip > 0)
+            return PointsToDip(pts) / naturalHeightDip;
+        return 1.0;
+    }
 
     public static TextBlockLayoutPlan PlanTableCellText(
         ResolvedTextLayout text,

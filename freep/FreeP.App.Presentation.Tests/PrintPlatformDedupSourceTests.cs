@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace FreeP.App.Presentation.Tests;
+namespace FreeP.App.Compositor.Tests;
 
 public sealed class PrintPlatformDedupSourceTests
 {

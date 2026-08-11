@@ -18,6 +18,7 @@ public sealed class InCanvasTextEditor : IDisposable
     private readonly SlideCanvas _canvas;
     private readonly EditingSession _editor;
     private readonly Canvas _overlay;
+    private readonly Action<string, string>? _onClipboardWriteFailed;
 
     private RichTextBox? _richBox;
     private InCanvasTextEditPlanner? _editPlan;
@@ -26,11 +27,21 @@ public sealed class InCanvasTextEditor : IDisposable
     private bool _active;
     private bool _canceling;
 
-    public InCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Canvas overlay)
+    /// <param name="onClipboardWriteFailed">
+    /// Invoked with (command, message) when an in-place Copy/Cut fails to write to the OS
+    /// clipboard, so callers can surface it (e.g. to the status bar) instead of the failure
+    /// vanishing silently while the user believes the copy succeeded.
+    /// </param>
+    public InCanvasTextEditor(
+        SlideCanvas canvas,
+        EditingSession editor,
+        Canvas overlay,
+        Action<string, string>? onClipboardWriteFailed = null)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
+        _onClipboardWriteFailed = onClipboardWriteFailed;
 
         _canvas.MouseLeftButtonDown += OnCanvasMouseDown;
         _editor.CurrentSlideChanged += OnEditorCurrentSlideChanged;
@@ -593,6 +604,10 @@ public sealed class InCanvasTextEditor : IDisposable
                 _shapeParagraphBody);
             if (e.Key == Key.V && result.Handled)
                 _shapeParagraphBody = result.UpdatedBody;
+            else if (e.Key is Key.C or Key.X &&
+                     !result.Handled &&
+                     result.FailureMessage is { } failureMessage)
+                _onClipboardWriteFailed?.Invoke(e.Key == Key.X ? "Cut" : "Copy", failureMessage);
             return;
         }
 

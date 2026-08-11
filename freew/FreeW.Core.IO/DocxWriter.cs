@@ -1801,7 +1801,14 @@ public static class DocxWriter
         if (part.Watermark is not null)
             root.Add(BuildWatermarkParagraph(part.Watermark, part.WatermarkImage));
 
-        if (part.Content.Paragraphs.Count == 0 && part.Watermark is null)
+        if (part.Content.Table is { } table)
+        {
+            // A preserved side-by-side layout table (see HeaderFooter.Table): write it back as a real
+            // w:tbl instead of the flattened paragraph list, so the Left/Center/Right layout Word itself
+            // authored round-trips instead of collapsing to stacked paragraphs on every save.
+            root.Add(BuildTable(table, drawings, part.Hyperlinks));
+        }
+        else if (part.Content.Paragraphs.Count == 0 && part.Watermark is null)
             root.Add(new XElement(W + "p"));
         else
             foreach (var paragraph in part.Content.Paragraphs)
@@ -5219,7 +5226,10 @@ public static class DocxWriter
 
         var run = new XElement(W + "r",
             rPr,
-            new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), wordArt.Text));
+            // WordArt text is user-typed like any other run, so it needs the same sanitizing as the
+            // paragraph-run and field-instruction sites; this was the one text site that missed it,
+            // and an unrepresentable character here aborts the whole save.
+            new XElement(W + "t", new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(wordArt.Text)));
 
         return new XElement(W + "p", run);
     }

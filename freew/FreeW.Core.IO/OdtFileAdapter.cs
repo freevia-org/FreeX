@@ -166,8 +166,10 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
     private ListKind ListKindOf(XElement list, ReadContext ctx)
     {
-        // The list style governs bullet vs number; default to bullet when unknown.
+        // The list style governs bullet vs number vs multi-level; default to bullet when unknown.
         var styleName = (string?)list.Attribute(Text + "style-name");
+        if (ctx.Styles.IsMultiLevelList(styleName))
+            return ListKind.MultiLevel;
         return ctx.Styles.IsNumberedList(styleName) ? ListKind.Number : ListKind.Bullet;
     }
 
@@ -313,10 +315,13 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         var noteClass = (string?)note.Attribute(Text + "note-class");
         var bodyEl = note.Element(Text + "note-body");
         var paragraphs = new List<Paragraph>();
+        // Reuse ReadBlocks (not a bare text:p/text:h scan) so list-formatted footnote/endnote body
+        // paragraphs — written as text:list/text:list-item by WriteNote — round-trip their
+        // ListKind/ListLevel instead of being silently dropped.
         if (bodyEl is not null)
-            foreach (var child in bodyEl.Elements())
-                if (child.Name == Text + "p" || child.Name == Text + "h")
-                    paragraphs.Add(ReadParagraph(child, ctx));
+            foreach (var block in ReadBlocks(bodyEl, ctx))
+                if (block is Paragraph p)
+                    paragraphs.Add(p);
 
         if (paragraphs.Count == 0)
             paragraphs.Add(new Paragraph());
@@ -350,9 +355,12 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         if (!string.IsNullOrEmpty(date))
             comment.DateXml = date;
 
-        foreach (var child in annotation.Elements())
-            if (child.Name == Text + "p" || child.Name == Text + "h")
-                comment.Content.Add(ReadParagraph(child, ctx));
+        // Reuse ReadBlocks so list-formatted comment-body paragraphs — written as
+        // text:list/text:list-item by WriteAnnotation — round-trip their ListKind/ListLevel
+        // instead of being silently dropped (a bare text:p/text:h scan would skip them).
+        foreach (var block in ReadBlocks(annotation, ctx))
+            if (block is Paragraph p)
+                comment.Content.Add(p);
         if (comment.Content.Count == 0)
             comment.Content.Add(new Paragraph());
 
@@ -487,8 +495,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
         // Build content.xml body first so the auto-style table is fully populated before serialising styles.
         var bodyText = new XElement(Office + "text");
-        foreach (var block in document.Blocks)
-            WriteBlock(block, bodyText, document, styleWriter, pictureWriter);
+        WriteBlocksWithLists(document.Blocks, bodyText, document, styleWriter, pictureWriter);
         if (!bodyText.HasElements)
             bodyText.Add(new XElement(Text + "p"));
 
@@ -523,18 +530,131 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         es.Write(bytes, 0, bytes.Length);
     }
 
-    private void WriteBlock(
-        Block block, XElement parent, TextDocument document, OdtStyleWriter styles, OdtPictureWriter pictures)
+    /// <summary>
+    /// Writes a mixed sequence of body blocks (paragraphs + tables), batching consecutive
+    /// list-formatted paragraphs (<see cref="ParagraphFormatting.ListKind"/> != None) into
+    /// proper <c>text:list</c>/<c>text:list-item</c> structures so list formatting round-trips
+    /// through <see cref="OdtFileAdapter.ReadList"/> instead of being flattened to plain paragraphs.
+    /// </summary>
+    private void WriteBlocksWithLists(
+        IReadOnlyList<Block> blocks, XElement parent, TextDocument document, OdtStyleWriter styles, OdtPictureWriter pictures)
     {
-        switch (block)
+        var run = new List<Paragraph>();
+        foreach (var block in blocks)
         {
-            case Paragraph p:
-                WriteParagraph(p, parent, document, styles, pictures);
-                break;
-            case Table t:
+            if (block is Paragraph p)
+            {
+                run.Add(p);
+                continue;
+            }
+
+            if (run.Count > 0)
+            {
+                WriteParagraphRun(run, parent, document, styles, pictures);
+                run.Clear();
+            }
+
+            if (block is Table t)
                 WriteTable(t, parent, document, styles, pictures);
-                break;
         }
+
+        if (run.Count > 0)
+            WriteParagraphRun(run, parent, document, styles, pictures);
+    }
+
+    /// <summary>One open <c>text:list</c> level while folding a flat (kind, level) paragraph run into nested lists.</summary>
+    private sealed class ListFrame
+    {
+        public required int Level;
+        public required ListKind Kind;
+        public required XElement ListEl;
+        public XElement? LastItem;
+    }
+
+    /// <summary>
+    /// Writes a contiguous run of paragraphs (table-cell content or a body run between non-paragraph
+    /// blocks), grouping consecutive list-formatted paragraphs into nested <c>text:list</c> structures
+    /// keyed by <see cref="ParagraphFormatting.ListKind"/>/<see cref="ParagraphFormatting.ListLevel"/>,
+    /// mirroring the nesting <see cref="ReadList"/> understands on read-back.
+    /// </summary>
+    private void WriteParagraphRun(
+        IReadOnlyList<Paragraph> paragraphs, XElement parent, TextDocument document, OdtStyleWriter styles, OdtPictureWriter pictures)
+    {
+        var frames = new List<ListFrame>();
+
+        foreach (var p in paragraphs)
+        {
+            var kind = p.Formatting.ListKind;
+            if (kind == ListKind.None)
+            {
+                frames.Clear();
+                WriteParagraph(p, parent, document, styles, pictures);
+                continue;
+            }
+
+            var level = Math.Clamp(p.Formatting.ListLevel, 0, MaxOdtListLevel);
+
+            // Close any open levels deeper than the one this paragraph belongs to.
+            while (frames.Count > 0 && frames[^1].Level > level)
+                frames.RemoveAt(frames.Count - 1);
+
+            if (frames.Count == 0 || frames[^1].Level < level)
+            {
+                // Open new nested list(s) down to `level`, each hosted inside the previous level's last item.
+                var startLevel = frames.Count == 0 ? 0 : frames[^1].Level + 1;
+                for (var lv = startLevel; lv <= level; lv++)
+                    frames.Add(OpenListFrame(frames.Count == 0 ? null : frames[^1], lv, kind, parent, styles));
+            }
+            else if (frames[^1].Kind != kind)
+            {
+                // Same level, but the bullet/number kind changed: start a sibling list at this level.
+                var closed = frames[^1];
+                frames.RemoveAt(frames.Count - 1);
+                frames.Add(OpenListFrame(frames.Count == 0 ? null : frames[^1], closed.Level, kind, parent, styles));
+            }
+
+            var top = frames[^1];
+            var itemEl = new XElement(Text + "list-item");
+            WriteParagraph(p, itemEl, document, styles, pictures);
+            top.ListEl.Add(itemEl);
+            top.LastItem = itemEl;
+        }
+    }
+
+    // Mirrors the Avalonia editor's MaxListDepth-1 clamp (levels 0..8, 9 nesting levels).
+    private const int MaxOdtListLevel = 8;
+
+    private static ListFrame OpenListFrame(ListFrame? outer, int level, ListKind kind, XElement bodyParent, OdtStyleWriter styles)
+    {
+        // Root-level lists attach directly to the surrounding body/cell; nested lists must live inside
+        // the enclosing level's current list-item (synthesizing a pass-through one if none exists yet,
+        // e.g. when a paragraph jumps straight from level 0 to level 2 in one step).
+        var container = outer is null ? bodyParent : EnsureLastItem(outer);
+        var listEl = new XElement(Text + "list", new XAttribute(Text + "style-name", styles.ListStyleName(kind)));
+        container.Add(listEl);
+        return new ListFrame { Level = level, Kind = kind, ListEl = listEl, LastItem = null };
+    }
+
+    /// <summary>
+    /// Returns the frame's current last <c>text:list-item</c> to host a deeper nested list, synthesizing
+    /// an empty one if none exists yet. The synthesized item deliberately carries NO <c>text:p</c>/<c>text:h</c>
+    /// child — ODF's <c>text:list-item</c> content model is zero-or-more of (h|p|list|soft-page-break), so an
+    /// item containing only a nested <c>text:list</c> is valid and renders with no bullet/number/paragraph of
+    /// its own (the standard ODF "pass-through container" idiom for skipped intermediate levels). Giving it a
+    /// bare <c>text:p</c> instead would materialise a real, visible, empty bullet for every intermediate level
+    /// on the way down to a deeper-level paragraph — e.g. two phantom bullets before a document's first list
+    /// paragraph if that paragraph starts at level 2 (0-based) — and <see cref="ReadList"/> would read it back
+    /// as a genuine empty paragraph, corrupting the round-trip.
+    /// </summary>
+    private static XElement EnsureLastItem(ListFrame frame)
+    {
+        if (frame.LastItem is not null)
+            return frame.LastItem;
+
+        var itemEl = new XElement(Text + "list-item");
+        frame.ListEl.Add(itemEl);
+        frame.LastItem = itemEl;
+        return itemEl;
     }
 
     private void WriteParagraph(
@@ -588,37 +708,35 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 continue;
 
             var spanStyle = styles.RunStyle(run.Formatting);
-            XElement textHolder;
-            if (spanStyle is null)
-            {
-                textHolder = parent;
-                AppendText(textHolder, run.Text);
-            }
-            else
-            {
-                var span = new XElement(Text + "span", new XAttribute(Text + "style-name", spanStyle));
-                AppendText(span, run.Text);
-                textHolder = span;
-            }
 
+            // Decide the wrapping BEFORE appending any text:s/text:tab/text:line-break structural nodes:
+            // AppendText can emit several sibling nodes (not just a single XText) for runs containing tabs,
+            // newlines, or 2+ spaces, so building into `parent` and later relocating only XText nodes would
+            // strand those structural nodes outside <text:a>, duplicating content on the next read.
             if (!string.IsNullOrEmpty(run.HyperlinkUrl))
             {
                 var anchor = new XElement(Text + "a", new XAttribute(Xlink + "href", run.HyperlinkUrl));
                 if (spanStyle is null)
                 {
-                    // Move the bare text we just appended into the anchor instead.
-                    textHolder.Nodes().Where(n => n is XText).Remove();
                     AppendText(anchor, run.Text);
                 }
                 else
                 {
-                    anchor.Add(textHolder);
+                    var span = new XElement(Text + "span", new XAttribute(Text + "style-name", spanStyle));
+                    AppendText(span, run.Text);
+                    anchor.Add(span);
                 }
                 parent.Add(anchor);
             }
-            else if (spanStyle is not null)
+            else if (spanStyle is null)
             {
-                parent.Add(textHolder);
+                AppendText(parent, run.Text);
+            }
+            else
+            {
+                var span = new XElement(Text + "span", new XAttribute(Text + "style-name", spanStyle));
+                AppendText(span, run.Text);
+                parent.Add(span);
             }
         }
     }
@@ -689,8 +807,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         TextDocument document, OdtStyleWriter styles, OdtPictureWriter pictures)
     {
         var bodyEl = new XElement(Text + "note-body");
-        foreach (var p in content)
-            WriteParagraph(p, bodyEl, document, styles, pictures);
+        WriteParagraphRun(content, bodyEl, document, styles, pictures);
         if (!bodyEl.HasElements)
             bodyEl.Add(new XElement(Text + "p"));
 
@@ -709,8 +826,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             el.Add(new XElement(Dc + "creator", comment.Author));
         if (!string.IsNullOrEmpty(comment.DateXml))
             el.Add(new XElement(Dc + "date", comment.DateXml));
-        foreach (var p in comment.Content)
-            WriteParagraph(p, el, document, styles, pictures);
+        WriteParagraphRun(comment.Content, el, document, styles, pictures);
         if (comment.Content.Count == 0)
             el.Add(new XElement(Text + "p"));
         return el;
@@ -736,8 +852,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 if (cell.GridSpan > 1)
                     cellEl.Add(new XAttribute(TableNs + "number-columns-spanned", cell.GridSpan));
 
-                foreach (var p in cell.Paragraphs)
-                    WriteParagraph(p, cellEl, document, styles, pictures);
+                WriteParagraphRun(cell.Paragraphs, cellEl, document, styles, pictures);
                 if (cell.Paragraphs.Count == 0)
                     cellEl.Add(new XElement(Text + "p"));
                 rowEl.Add(cellEl);
@@ -967,6 +1082,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
         private readonly Dictionary<string, Entry> _styles = new(StringComparer.Ordinal);
         private readonly Dictionary<string, bool> _listNumbered = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, bool> _listMultiLevel = new(StringComparer.Ordinal);
         private readonly Dictionary<string, double> _columnWidths = new(StringComparer.Ordinal);
 
         public void Collect(XElement? root)
@@ -999,7 +1115,14 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 {
                     var name = (string?)ls.Attribute(Style + "name");
                     if (!string.IsNullOrEmpty(name))
+                    {
                         _listNumbered[name] = ls.Element(Text + "list-level-style-number") is not null;
+
+                        // MultiLevel (outline/legal) numbering accumulates ancestor counters (1, 1.1, 1.1.1),
+                        // which ODF expresses via text:display-levels > 1 on a list-level-style-number.
+                        _listMultiLevel[name] = ls.Elements(Text + "list-level-style-number")
+                            .Any(lvl => ((int?)lvl.Attribute(Text + "display-levels") ?? 1) > 1);
+                    }
                 }
             }
         }
@@ -1035,6 +1158,9 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
         public bool IsNumberedList(string? styleName) =>
             !string.IsNullOrEmpty(styleName) && _listNumbered.GetValueOrDefault(styleName);
+
+        public bool IsMultiLevelList(string? styleName) =>
+            !string.IsNullOrEmpty(styleName) && _listMultiLevel.GetValueOrDefault(styleName);
 
         public double? ColumnWidthPt(string? styleName) =>
             !string.IsNullOrEmpty(styleName) && _columnWidths.TryGetValue(styleName, out var w) ? w : null;
@@ -1159,6 +1285,8 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         private readonly Dictionary<string, string> _runNames = new(StringComparer.Ordinal);
         private readonly List<XElement> _paraStyles = new();
         private readonly List<XElement> _runStyles = new();
+        private readonly Dictionary<ListKind, string> _listStyleNames = new();
+        private readonly List<XElement> _listStyles = new();
         private int _tableCounter;
 
         public string ParagraphStyle(ParagraphFormatting f)
@@ -1187,8 +1315,37 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
 
         public string TableName() => "Table" + (++_tableCounter);
 
+        /// <summary>
+        /// Returns the (lazily-created) <c>text:list-style</c> name for a bullet, numbered, or multi-level
+        /// (outline/legal) list, defining levels 1..9 (matching the editor's <c>MaxListDepth</c>) so nested
+        /// lists at any supported depth resolve to a valid style. <see cref="ListKind.MultiLevel"/> gets its
+        /// own style (rather than sharing <see cref="ListKind.Number"/>'s) so <see cref="OdtStyleTable.IsMultiLevelList"/>
+        /// can tell it apart from a plain numbered list on read via its per-level <c>text:display-levels</c>.
+        /// </summary>
+        public string ListStyleName(ListKind kind)
+        {
+            var key = kind switch
+            {
+                ListKind.Bullet => ListKind.Bullet,
+                ListKind.MultiLevel => ListKind.MultiLevel,
+                _ => ListKind.Number
+            };
+            if (_listStyleNames.TryGetValue(key, out var existing))
+                return existing;
+
+            var name = key switch
+            {
+                ListKind.Bullet => "LB1",
+                ListKind.MultiLevel => "LM1",
+                _ => "LN1"
+            };
+            _listStyleNames[key] = name;
+            _listStyles.Add(BuildListStyle(name, key));
+            return name;
+        }
+
         public XElement BuildContentAutoStyles() =>
-            new(Office + "automatic-styles", _paraStyles.Concat(_runStyles));
+            new(Office + "automatic-styles", _paraStyles.Concat(_runStyles).Concat(_listStyles));
 
         public XElement BuildNamedStyles(TextDocument document)
         {
@@ -1250,6 +1407,48 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 new XAttribute(Style + "name", name),
                 new XAttribute(Style + "family", "text"),
                 props);
+        }
+
+        private const int ListStyleLevels = 9; // matches the Avalonia editor's MaxListDepth.
+
+        private static XElement BuildListStyle(string name, ListKind kind)
+        {
+            var numbered = kind != ListKind.Bullet;
+            var listStyle = new XElement(Text + "list-style", new XAttribute(Style + "name", name));
+            for (var level = 1; level <= ListStyleLevels; level++)
+            {
+                var labelIndent = FormatLength(0.25 * 72 * (level - 1));
+                var levelProps = new XElement(Style + "list-level-properties",
+                    new XAttribute(Text + "space-before", labelIndent),
+                    new XAttribute(Text + "min-label-width", FormatLength(0.25 * 72)));
+
+                XElement levelStyle;
+                if (numbered)
+                {
+                    levelStyle = new XElement(Text + "list-level-style-number",
+                        new XAttribute(Text + "level", level),
+                        new XAttribute(Style + "num-format", "1"),
+                        new XAttribute(Style + "num-suffix", "."),
+                        levelProps);
+
+                    // MultiLevel is an outline/legal numbering whose level text accumulates the ancestors'
+                    // counters (1, 1.1, 1.1.1, …); ODF expresses that via text:display-levels = the level
+                    // depth itself. A plain Number list omits the attribute (defaults to 1: no accumulation),
+                    // which is exactly what OdtStyleTable.IsMultiLevelList inspects to tell them apart on read.
+                    if (kind == ListKind.MultiLevel)
+                        levelStyle.Add(new XAttribute(Text + "display-levels", level));
+                }
+                else
+                {
+                    levelStyle = new XElement(Text + "list-level-style-bullet",
+                        new XAttribute(Text + "level", level),
+                        new XAttribute(Text + "bullet-char", "•"),
+                        levelProps);
+                }
+
+                listStyle.Add(levelStyle);
+            }
+            return listStyle;
         }
     }
 

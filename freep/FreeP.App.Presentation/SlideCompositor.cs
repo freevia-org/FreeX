@@ -181,9 +181,17 @@ public static class SlideCompositor
                 break;
 
             case SlideShapeKind.Group:
-                // Flatten group children (simplified — no group-level transform for now).
+                // Flatten group children (still no group-level ROTATION transform — pre-existing
+                // gap, out of scope here). Children are stored with absolute slide-space EMU
+                // coordinates authored relative to the group's a:chOff/a:chExt child space; for a
+                // freshly-authored (never-resized) group that space is numerically identical to
+                // the group's own off/ext, so most files need no correction. When PowerPoint
+                // resizes a group after its children were authored, chOff/chExt stay at their
+                // original values while off/ext move to the new box, so the two spaces diverge —
+                // apply that mapping here so descendants land where PowerPoint actually renders
+                // them: absolute = groupOff + (childRaw - chOff) * (groupExt / chExt).
                 foreach (var child in shape.Children)
-                    ComposeShape(child, slide, presentation, theme, ops, slideIndex, effectiveClrMap, groupDepth + 1);
+                    ComposeShape(TransformGroupChild(shape, child), slide, presentation, theme, ops, slideIndex, effectiveClrMap, groupDepth + 1);
                 break;
 
             case SlideShapeKind.Table:
@@ -223,6 +231,38 @@ public static class SlideCompositor
                 ComposeAutoShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Maps a group child's authored (child-space) offset/extent into the group's own absolute
+    /// space using the standard ECMA-376 group transform: absolute = groupOff + (raw - chOff) *
+    /// (groupExt / chExt). Returns the original child unchanged (no allocation) when the group's
+    /// child space is absent or numerically identical to its own off/ext — the overwhelmingly
+    /// common case for groups that were never resized after authoring, including every group this
+    /// app itself writes (PptxPackageWriter always emits chOff==off, chExt==ext).
+    /// </summary>
+    private static SlideShape TransformGroupChild(SlideShape group, SlideShape child)
+    {
+        long chOffX = group.ChildOffsetXEmu ?? group.OffsetXEmu;
+        long chOffY = group.ChildOffsetYEmu ?? group.OffsetYEmu;
+        long chExtCx = group.ChildExtentCxEmu ?? group.ExtentCxEmu;
+        long chExtCy = group.ChildExtentCyEmu ?? group.ExtentCyEmu;
+
+        if (chOffX == group.OffsetXEmu && chOffY == group.OffsetYEmu &&
+            chExtCx == group.ExtentCxEmu && chExtCy == group.ExtentCyEmu)
+        {
+            return child; // identity transform — nothing to correct
+        }
+
+        double scaleX = chExtCx != 0 ? (double)group.ExtentCxEmu / chExtCx : 1.0;
+        double scaleY = chExtCy != 0 ? (double)group.ExtentCyEmu / chExtCy : 1.0;
+
+        long absX  = group.OffsetXEmu + (long)Math.Round((child.OffsetXEmu - chOffX) * scaleX);
+        long absY  = group.OffsetYEmu + (long)Math.Round((child.OffsetYEmu - chOffY) * scaleY);
+        long absCx = (long)Math.Round(child.ExtentCxEmu * scaleX);
+        long absCy = (long)Math.Round(child.ExtentCyEmu * scaleY);
+
+        return child.WithTransformedBounds(absX, absY, absCx, absCy);
     }
 
     // ─── AutoShape / textbox / connector ────────────────────────────────────────────────────
@@ -1945,7 +1985,9 @@ public static class SlideCompositor
                 BulletChar   = para.BulletChar,
                 BulletImage  = para.BulletImage,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
-                SpaceAfterPt  = para.SpaceAfterPt ?? 0
+                SpaceAfterPt  = para.SpaceAfterPt ?? 0,
+                LineSpacingPercent = para.LineSpacingPercent,
+                LineSpacingPointsExact = para.LineSpacingPointsExact
             });
         }
 
@@ -2430,6 +2472,8 @@ public static class SlideCompositor
                 BulletImage = marker.Image,
                 SpaceBeforePt = para.SpaceBeforePt ?? 0,
                 SpaceAfterPt = para.SpaceAfterPt ?? 0,
+                LineSpacingPercent = para.LineSpacingPercent,
+                LineSpacingPointsExact = para.LineSpacingPointsExact,
                 TabStops = resolvedTabStops,  // Wave 18B
                 // Wave 19A:
                 BulletText       = marker.Text,

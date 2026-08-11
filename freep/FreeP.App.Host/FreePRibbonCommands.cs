@@ -85,7 +85,8 @@ internal static class FreePRibbonCommands
         Action? onSetZoomCoverImage = null,
         Action? onResetZoomCoverImage = null,
         Action? onSlideShowSettings = null,
-        Func<PresentationAssetImportKind, Task<PresentationAssetImportResult>>? importAsset = null)
+        Func<PresentationAssetImportKind, Task<PresentationAssetImportResult>>? importAsset = null,
+        Action<string, string>? onClipboardWriteFailed = null)
     {
         var actionEndpoints = BuildHostActionEndpoints(
             editor,
@@ -154,7 +155,8 @@ internal static class FreePRibbonCommands
             onResetZoomCoverImage,
             onCustomShows,
             onSlideShowSettings,
-            importAsset);
+            importAsset,
+            onClipboardWriteFailed);
         var profile = new FreePRibbonHostProfile
         {
             ActionEndpoints = actionEndpoints,
@@ -255,11 +257,18 @@ internal static class FreePRibbonCommands
         Action? onResetZoomCoverImage,
         Action? onCustomShows,
         Action? onSlideShowSettings,
-        Func<PresentationAssetImportKind, Task<PresentationAssetImportResult>>? importAsset) =>
+        Func<PresentationAssetImportKind, Task<PresentationAssetImportResult>>? importAsset,
+        Action<string, string>? onClipboardWriteFailed) =>
         new()
         {
-            Copy = () => WpfClipboardCommands.Copy(editor, osClipboard),
-            Cut = () => WpfClipboardCommands.Cut(editor, osClipboard),
+            Copy = () => WpfClipboardCommands.Copy(
+                editor,
+                osClipboard,
+                error => onClipboardWriteFailed?.Invoke("Copy", error)),
+            Cut = () => WpfClipboardCommands.Cut(
+                editor,
+                osClipboard,
+                error => onClipboardWriteFailed?.Invoke("Cut", error)),
             Paste = () =>
             {
                 if (osClipboard is not null)

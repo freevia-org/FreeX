@@ -39,12 +39,8 @@ public static class SkiaPdfWriter
     /// dependency-free writer as a platform fallback when Skia cannot initialize.
     /// </summary>
     /// <remarks>
-    /// Deliberately kept single-parameter (no <c>imageDiagnostics</c> pass-through, unlike
-    /// <see cref="WriteToBytes"/>): several hosts bind this method as a bare method-group to a
-    /// fixed single-parameter delegate type (e.g. FreeP's <c>PresentationPdfContentWriter</c>), and
-    /// C# method-group-to-delegate conversion does not permit dropping trailing optional parameters
-    /// -- adding one here breaks that binding at compile time. Callers that need image diagnostics
-    /// should call <see cref="WriteToBytes"/> or <see cref="Write"/> directly.
+    /// The one-parameter overload remains available for method-group bindings. Callers that collect
+    /// non-fatal image warnings can use the required two-parameter overload below.
     /// </remarks>
     public static byte[] WriteToBytesWithPortableFallback(PdfContentDocument document)
     {
@@ -59,6 +55,28 @@ public static class SkiaPdfWriter
                 return document.Pages.Count;
             });
         return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Uses the same Skia-then-portable fallback while forwarding non-fatal image diagnostics from
+    /// the backend that ultimately produced the document.
+    /// </summary>
+    public static byte[] WriteToBytesWithPortableFallback(
+        PdfContentDocument document,
+        ICollection<string> imageDiagnostics)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(imageDiagnostics);
+
+        try
+        {
+            return WriteToBytes(document, imageDiagnostics);
+        }
+        catch (Exception ex) when (SkiaPdfAvailabilityHelper.IsSkiaUnavailable(ex))
+        {
+            imageDiagnostics.Clear();
+            return PortablePdfWriter.WriteToBytes(document, imageDiagnostics: imageDiagnostics);
+        }
     }
 
     public static IReadOnlyList<byte[]> RenderPagesToPng(PdfContentDocument document, int dpi = 96)

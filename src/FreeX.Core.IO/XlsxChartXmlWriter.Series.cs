@@ -207,7 +207,30 @@ internal static partial class XlsxChartXmlWriter
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", valueRange),
                         valueCache)),
-                chart.Type is ChartType.Line or ChartType.ThreeDLine || forceLineShapeProperties
+                // R133-io-chart-radar-stale-smooth: gated on forceLineShapeProperties (the same
+                // flag the marker/spPr branch above already keys off) AND chart.Type != Radar,
+                // rather than on a standalone chart.Type allowlist. Two hazards, not one:
+                //   1. forceLineShapeProperties is true for Radar too (it shares line-style
+                //      marker/spPr handling above), but CT_RadarSer has no <c:smooth> child at
+                //      all -- only CT_LineSer (Line/ThreeDLine, and the stockChart <c:ser> built
+                //      by CreateStockPlotChart) does. A bare "chart.Type is ... or
+                //      ChartType.Stock" check does not exclude Radar by itself, so the Type!=Radar
+                //      guard is still required alongside forceLineShapeProperties.
+                //   2. chart.Type stays ChartType.Stock for BOTH series CreateStockPlotChart
+                //      writes -- e.g. VolumeHighLowClose/VolumeOpenHighLowClose subtypes pair a
+                //      <c:barChart> (the volume series, via CreateStockVolumeBarChart, CT_BarSer --
+                //      also has no <c:smooth>) with the <c:stockChart> (CT_LineSer). A bare
+                //      chart.Type check cannot tell those two <c:ser> emissions apart and would
+                //      wrongly emit <c:smooth> into the volume <c:barChart> series too. Gating on
+                //      forceLineShapeProperties instead is correct here because
+                //      CreateStockVolumeBarChart is the ONLY BuildChartSeries caller that leaves it
+                //      at its default (false) for a Stock chart -- CreateStockPlotChart always
+                //      passes true.
+                // Either hazard alone would leave a series with a stale Smooth flag from a prior
+                // Line/ThreeDLine/Scatter chart type (e.g. a chart type change that never ran
+                // through SetChartLayoutCommand's model-side ClampSeriesFormat, or a model
+                // constructed directly) producing a schema-invalid file Excel has to repair.
+                forceLineShapeProperties && chart.Type is not ChartType.Radar
                     ? ToSeriesSmoothXml(chart, seriesIndex, chartNs)
                     : null,
                 ToRangeDataLabelsExtXml(chart, seriesIndex, chartNs));

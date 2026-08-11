@@ -7870,20 +7870,36 @@ public sealed partial class MainWindow : Window
 
     private void QueueClipboardCopy()
     {
-        if (TryQueueActiveRichClipboard(static editor => editor.CopySelectionAsync()))
+        if (TryQueueActiveRichClipboard(static editor => editor.CopySelectionAsync(), "Copy"))
             return;
 
         var request = _clipboardService.PrepareWrite(Editor);
-        QueueClipboardOperation(() => _clipboardService.ExecuteCopyAsync(request));
+        QueueClipboardOperation(async () =>
+            ReportClipboardWriteFailureIfAny(
+                await _clipboardService.ExecuteCopyAsync(request),
+                "Copy",
+                _clipboardService.LastWriteFailureMessage));
     }
 
     private void QueueClipboardCut()
     {
-        if (TryQueueActiveRichClipboard(static editor => editor.CutSelectionAsync()))
+        if (TryQueueActiveRichClipboard(static editor => editor.CutSelectionAsync(), "Cut"))
             return;
 
         var request = _clipboardService.PrepareWrite(Editor);
-        QueueClipboardOperation(() => _clipboardService.ExecuteCutAsync(request));
+        QueueClipboardOperation(async () =>
+            ReportClipboardWriteFailureIfAny(
+                await _clipboardService.ExecuteCutAsync(request),
+                "Cut",
+                _clipboardService.LastWriteFailureMessage));
+    }
+
+    private void ReportClipboardWriteFailureIfAny(bool succeeded, string command, string? errorMessage)
+    {
+        if (succeeded || errorMessage is not { } error)
+            return;
+
+        _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, command, error);
     }
 
     private void QueueClipboardPaste()
@@ -7896,7 +7912,8 @@ public sealed partial class MainWindow : Window
     }
 
     private bool TryQueueActiveRichClipboard(
-        Func<AvaloniaInCanvasTextEditor, Task<bool>> operation)
+        Func<AvaloniaInCanvasTextEditor, Task<bool>> operation,
+        string? failureCommandName = null)
     {
         ArgumentNullException.ThrowIfNull(operation);
         var textEditor = _textEditor;
@@ -7905,7 +7922,14 @@ public sealed partial class MainWindow : Window
 
         QueueClipboardOperation(async () =>
         {
-            _ = await operation(textEditor);
+            var succeeded = await operation(textEditor);
+            if (failureCommandName is not null)
+            {
+                ReportClipboardWriteFailureIfAny(
+                    succeeded,
+                    failureCommandName,
+                    textEditor.LastWriteFailureMessage);
+            }
         });
         return true;
     }

@@ -212,4 +212,44 @@ public sealed class NoteCommandTests
         document.FootnoteNumbering.StartAt.Should().Be(7);
         document.EndnoteNumbering.StartAt.Should().Be(11);
     }
+
+    [Fact]
+    public void DeleteNote_RemovesMarkerInsideTableNestedInCell_AndUndoRedoRestoresExactRuns()
+    {
+        // Distinct from DeleteNote_RemovesNestedTableMarker_AndUndoRedoRestoresExactRuns above: here the
+        // marker paragraph lives inside a table that is itself nested inside the outer table's cell.
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var body = new Paragraph();
+        body.Runs.Add(new Run("body"));
+        body.Runs.Add(Run.FootnoteReference(4));
+        document.Blocks.Add(body);
+
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        var cellParagraph = nestedTable.Rows[0].Cells[0].Paragraphs[0];
+        cellParagraph.Runs.Clear();
+        cellParagraph.Runs.Add(new Run("cell-before"));
+        cellParagraph.Runs.Add(Run.FootnoteReference(4));
+        cellParagraph.Runs.Add(new Run("cell-after"));
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        document.Blocks.Add(outerTable);
+        document.Footnotes[4] = new Footnote(4, "deeply nested marker note");
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new DeleteNoteCommand(4, footnote: true));
+
+        document.Footnotes.Should().NotContainKey(4);
+        body.Runs.Should().NotContain(run => run.FootnoteId == 4);
+        cellParagraph.Runs.Should().NotContain(run => run.FootnoteId == 4);
+
+        bus.Undo().Should().BeTrue();
+        document.Footnotes[4].PlainText.Should().Be("deeply nested marker note");
+        cellParagraph.Runs.Select(run => (run.Text, run.FootnoteId))
+            .Should().Equal(("cell-before", null), ("4", 4), ("cell-after", null));
+
+        bus.Redo().Should().BeTrue();
+        document.Footnotes.Should().NotContainKey(4);
+        cellParagraph.Runs.Should().NotContain(run => run.FootnoteId == 4);
+    }
 }

@@ -108,6 +108,27 @@ public class ReadAloudControllerTests
     }
 
     [Fact]
+    public void ExtractSegments_IncludesParagraphsInsideNestedTableInReadingOrder()
+    {
+        // A table nested inside a table cell: Read Aloud must not silently skip that text.
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Intro"));
+
+        var outerTable = Table.Create(1, 1);
+        var nestedTable = Table.Create(1, 1);
+        nestedTable.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Nested");
+        outerTable.Rows[0].Cells[0].NestedTables.Add(nestedTable);
+        doc.Blocks.Add(outerTable);
+
+        doc.Blocks.Add(new Paragraph("Outro"));
+
+        var segments = ReadAloudController.ExtractSegments(doc);
+
+        segments.Select(s => s.Text).Should().Equal("Intro", "Nested", "Outro");
+    }
+
+    [Fact]
     public void Start_SpeaksFirstSegmentAndIsPlaying()
     {
         var engine = new FakeSpeechEngine();
