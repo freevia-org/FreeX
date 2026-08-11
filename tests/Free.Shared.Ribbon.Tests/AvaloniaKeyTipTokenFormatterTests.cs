@@ -31,7 +31,7 @@ public sealed class AvaloniaKeyTipTokenFormatterTests
 
         foreach (var source in hostSources)
         {
-            source.Should().Contain("AvaloniaRibbonKeyTipInputPlanner.Resolve(")
+            source.Should().Contain("AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(")
                 .And.NotContain("AvaloniaKeyTipTokenFormatter.Format(")
                 .And.NotContain("ToRibbonKeyTipToken");
         }

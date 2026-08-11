@@ -36,32 +36,24 @@ public sealed partial class MainWindow
             return true;
         }
 
-        var input = AvaloniaRibbonKeyTipInputPlanner.Resolve(
+        var transition = AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
             args.Key,
             args.KeyModifiers,
             _ribbonKeyTipsVisible,
             acceptDirectAltToken: true);
-        if (input.Action == AvaloniaRibbonKeyTipInputAction.ToggleMode)
+        if (transition.ModeVisible is { } modeVisible)
+            SetRibbonKeyTipsVisible(modeVisible);
+        if (!transition.ShouldRouteToken)
         {
-            SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
-            args.Handled = true;
-            return true;
-        }
-
-        if (input.Action == AvaloniaRibbonKeyTipInputAction.Ignore)
-            return false;
-
-        if (input.Action == AvaloniaRibbonKeyTipInputAction.DismissMode)
-        {
-            SetRibbonKeyTipsVisible(false);
-            args.Handled = true;
-            return true;
+            if (transition.Handled)
+                args.Handled = true;
+            return transition.Handled;
         }
 
         if (_ribbonControl is null)
             return false;
 
-        var activated = AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, input.Token!);
+        var activated = AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, transition.Token!);
         SetRibbonKeyTipsVisible(false);
         args.Handled = activated;
         return activated;

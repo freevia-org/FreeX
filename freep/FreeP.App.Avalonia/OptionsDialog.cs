@@ -86,9 +86,9 @@ internal sealed class OptionsDialog : Window
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
-        AddRow(grid, 0, _surface.RecentFilesLabel, _recentFilesCap);
-        AddRow(grid, 1, _surface.DefaultSaveFormatLabel, _defaultFormat);
-        AddRow(grid, 2, _surface.UiLanguageLabel, _uiLanguage, _surface.UiLanguageHint);
+        AvaloniaLabeledFormRow.Add(grid, 0, _surface.RecentFilesLabel, _recentFilesCap);
+        AvaloniaLabeledFormRow.Add(grid, 1, _surface.DefaultSaveFormatLabel, _defaultFormat);
+        AvaloniaLabeledFormRow.Add(grid, 2, _surface.UiLanguageLabel, _uiLanguage, _surface.UiLanguageHint);
 
         var ok = new Button { Content = _surface.AcceptLabel };
         ok.Click += (_, _) => Accept();
@@ -135,41 +135,4 @@ internal sealed class OptionsDialog : Window
             Close();
     }
 
-    private static void AddRow(Grid grid, int row, string label, Control field, string? hint = null)
-    {
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var text = new TextBlock
-        {
-            Text = label,
-            Margin = new Thickness(0, 4, 12, 4),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetRow(text, row);
-        Grid.SetColumn(text, 0);
-
-        field.Margin = new Thickness(0, 4, 0, 4);
-
-        Control value = field;
-        if (!string.IsNullOrWhiteSpace(hint))
-        {
-            var stack = new StackPanel();
-            stack.Children.Add(field);
-            stack.Children.Add(new TextBlock
-            {
-                Text = hint,
-                FontSize = 11,
-                Foreground = Brushes.Gray,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 4),
-            });
-            value = stack;
-        }
-
-        Grid.SetRow(value, row);
-        Grid.SetColumn(value, 1);
-
-        grid.Children.Add(text);
-        grid.Children.Add(value);
-    }
 }

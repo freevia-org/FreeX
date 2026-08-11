@@ -18,10 +18,68 @@ public sealed class AvaloniaRibbonKeyTipInputPlannerTests
 
         foreach (var source in hostSources)
         {
-            source.Should().Contain("AvaloniaRibbonKeyTipInputPlanner.Resolve(")
+            source.Should().Contain("AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(")
+                .And.NotContain("input.Action == AvaloniaRibbonKeyTipInputAction")
                 .And.NotContain("args.Key is Key.LeftAlt or Key.RightAlt")
                 .And.NotContain("args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None");
         }
+    }
+
+    [Theory]
+    [InlineData(Key.LeftAlt, false, true)]
+    [InlineData(Key.RightAlt, true, false)]
+    public void ModeTransitionTogglesVisibilityAndConsumesAlt(
+        Key key,
+        bool currentVisibility,
+        bool expectedVisibility)
+    {
+        AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
+                key,
+                KeyModifiers.None,
+                currentVisibility)
+            .Should().Be(new AvaloniaRibbonKeyTipModeTransitionPlan(
+                ShouldRouteToken: false,
+                Handled: true,
+                ModeVisible: expectedVisibility));
+    }
+
+    [Fact]
+    public void ModeTransitionDismissesVisibleModeAndConsumesEscape()
+    {
+        AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
+                Key.Escape,
+                KeyModifiers.None,
+                modeVisible: true)
+            .Should().Be(new AvaloniaRibbonKeyTipModeTransitionPlan(
+                ShouldRouteToken: false,
+                Handled: true,
+                ModeVisible: false));
+    }
+
+    [Fact]
+    public void ModeTransitionLeavesIgnoredInputForTheProductHost()
+    {
+        AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
+                Key.A,
+                KeyModifiers.None,
+                modeVisible: false)
+            .Should().Be(new AvaloniaRibbonKeyTipModeTransitionPlan(
+                ShouldRouteToken: false,
+                Handled: false));
+    }
+
+    [Fact]
+    public void ModeTransitionRoutesNormalizedTokensWithoutApplyingProductPolicy()
+    {
+        AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
+                Key.D,
+                KeyModifiers.Alt,
+                modeVisible: false,
+                acceptDirectAltToken: true)
+            .Should().Be(new AvaloniaRibbonKeyTipModeTransitionPlan(
+                ShouldRouteToken: true,
+                Handled: false,
+                Token: "D"));
     }
 
     [Theory]

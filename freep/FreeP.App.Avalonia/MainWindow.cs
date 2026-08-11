@@ -7943,28 +7943,20 @@ public sealed partial class MainWindow : Window
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {
-        var input = AvaloniaRibbonKeyTipInputPlanner.Resolve(
+        var transition = AvaloniaRibbonKeyTipInputPlanner.ResolveModeTransition(
             args.Key,
             args.KeyModifiers,
             _ribbonKeyTipsVisible);
-        if (input.Action == AvaloniaRibbonKeyTipInputAction.ToggleMode)
+        if (transition.ModeVisible is { } modeVisible)
+            SetRibbonKeyTipsVisible(modeVisible);
+        if (!transition.ShouldRouteToken)
         {
-            SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
-            args.Handled = true;
-            return true;
+            if (transition.Handled)
+                args.Handled = true;
+            return transition.Handled;
         }
 
-        if (input.Action == AvaloniaRibbonKeyTipInputAction.Ignore)
-            return false;
-
-        if (input.Action == AvaloniaRibbonKeyTipInputAction.DismissMode)
-        {
-            SetRibbonKeyTipsVisible(false);
-            args.Handled = true;
-            return true;
-        }
-
-        var token = input.Token!;
+        var token = transition.Token!;
 
         if (_ribbonKeyTipTabId is null)
         {

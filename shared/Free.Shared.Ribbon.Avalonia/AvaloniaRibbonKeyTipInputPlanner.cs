@@ -14,12 +14,43 @@ public readonly record struct AvaloniaRibbonKeyTipInputPlan(
     AvaloniaRibbonKeyTipInputAction Action,
     string? Token = null);
 
+public readonly record struct AvaloniaRibbonKeyTipModeTransitionPlan(
+    bool ShouldRouteToken,
+    bool Handled,
+    bool? ModeVisible = null,
+    string? Token = null);
+
 /// <summary>
 /// Owns the common Avalonia shell decision that maps keyboard input to ribbon key-tip mode actions.
 /// Product hosts retain scope traversal, command activation, and visual realization.
 /// </summary>
 public static class AvaloniaRibbonKeyTipInputPlanner
 {
+    public static AvaloniaRibbonKeyTipModeTransitionPlan ResolveModeTransition(
+        Key key,
+        KeyModifiers modifiers,
+        bool modeVisible,
+        bool acceptDirectAltToken = false)
+    {
+        var input = Resolve(key, modifiers, modeVisible, acceptDirectAltToken);
+        return input.Action switch
+        {
+            AvaloniaRibbonKeyTipInputAction.ToggleMode => new(
+                ShouldRouteToken: false,
+                Handled: true,
+                ModeVisible: !modeVisible),
+            AvaloniaRibbonKeyTipInputAction.DismissMode => new(
+                ShouldRouteToken: false,
+                Handled: true,
+                ModeVisible: false),
+            AvaloniaRibbonKeyTipInputAction.ProcessToken => new(
+                ShouldRouteToken: true,
+                Handled: false,
+                Token: input.Token),
+            _ => new(ShouldRouteToken: false, Handled: false),
+        };
+    }
+
     public static AvaloniaRibbonKeyTipInputPlan Resolve(
         Key key,
         KeyModifiers modifiers,

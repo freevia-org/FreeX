@@ -201,7 +201,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         for (var index = 0; index < _surface.General.Fields.Count; index++)
         {
             var field = _surface.General.Fields[index];
-            AddRow(grid, index, field.Label, GeneralControlFor(field.Kind), field.Hint);
+            AvaloniaLabeledFormRow.Add(grid, index, field.Label, GeneralControlFor(field.Kind), field.Hint);
         }
         return grid;
     }
@@ -403,48 +403,6 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             OptionsDialogGeneralFieldKind.UiLanguage => _uiLanguage,
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
         };
-
-    private static void AddRow(Grid grid, int row, string label, Control field, string? hint = null)
-    {
-        grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-
-        var text = new TextBlock
-        {
-            Text = label,
-            Margin = new Thickness(0, 4, 12, 4),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetRow(text, row);
-        Grid.SetColumn(text, 0);
-
-        field.Margin = new Thickness(0, 4, 0, 4);
-
-        Control value = field;
-        if (!string.IsNullOrWhiteSpace(hint))
-        {
-            value = new StackPanel
-            {
-                Children =
-                {
-                    field,
-                    new TextBlock
-                    {
-                        Text = hint,
-                        FontSize = 11,
-                        Foreground = Brushes.Gray,
-                        TextWrapping = TextWrapping.Wrap,
-                        Margin = new Thickness(0, 0, 0, 4),
-                    },
-                },
-            };
-        }
-
-        Grid.SetRow(value, row);
-        Grid.SetColumn(value, 1);
-
-        grid.Children.Add(text);
-        grid.Children.Add(value);
-    }
 
     private sealed class ReplacementEditor
     {
