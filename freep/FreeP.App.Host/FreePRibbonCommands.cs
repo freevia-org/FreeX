@@ -98,7 +98,6 @@ internal static class FreePRibbonCommands
             onRecordTimings,
             onEditChartData,
             onEditPoints,
-            onCustomSlideSize,
             onInsertLink,
             onInsertSlideZoom,
             onInsertSectionZoom,
@@ -124,7 +123,6 @@ internal static class FreePRibbonCommands
             onResolveComment,
             onReopenComment,
             onAnimPane,
-            onLayoutPicker,
             onTablePicker,
             onHeaderFooter,
             applyViewShowState,
@@ -157,7 +155,7 @@ internal static class FreePRibbonCommands
             onSlideShowSettings,
             importAsset,
             onClipboardWriteFailed);
-        var profile = new FreePRibbonHostProfile
+        var profile = FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts
         {
             ActionEndpoints = actionEndpoints,
             QueryEndpoints = new FreePRibbonHostQueryEndpoints
@@ -168,11 +166,16 @@ internal static class FreePRibbonCommands
                 ViewShowState = () => getViewShowState?.Invoke(),
                 ViewZoomState = () => getViewZoomState?.Invoke(),
             },
-            TextActionEndpoints = BuildTextActionEndpoints(
+            TextActionTargets = BuildTextActionTargets(
                 getSlideCanvas,
                 tryApplyNotesTextFormat,
                 tryApplyNotesValueFormat,
                 tryApplyNotesParagraphFormat),
+            DesignCommands = new FreePRibbonDesignCommandEndpoints
+            {
+                OpenCustomSlideSize = _ => onCustomSlideSize?.Invoke(),
+                OpenLayoutPicker = _ => onLayoutPicker?.Invoke(),
+            },
             OleCommands = new FreePRibbonOleCommandEndpoints
             {
                 InsertEmbeddedObject = onInsertEmbeddedObject,
@@ -185,7 +188,7 @@ internal static class FreePRibbonCommands
                         return true;
                     },
             },
-        };
+        });
 
         return FreePRibbonHostRegistryComposer.Build(editor, stateStore, profile).Registry;
     }
@@ -200,7 +203,6 @@ internal static class FreePRibbonCommands
         Action? onRecordTimings,
         Action? onEditChartData,
         Action? onEditPoints,
-        Action? onCustomSlideSize,
         Action? onInsertLink,
         Action? onInsertSlideZoom,
         Action? onInsertSectionZoom,
@@ -226,7 +228,6 @@ internal static class FreePRibbonCommands
         Action? onResolveComment,
         Action? onReopenComment,
         Action? onAnimPane,
-        Action? onLayoutPicker,
         Action? onTablePicker,
         Action<HeaderFooterCommandFocus>? onHeaderFooter,
         Action<PresentationViewShowState>? applyViewShowState,
@@ -279,13 +280,7 @@ internal static class FreePRibbonCommands
             InsertPicture = () => QueueAssetImport(importAsset, PresentationAssetImportKind.Picture),
             InsertVideo = () => QueueAssetImport(importAsset, PresentationAssetImportKind.Video),
             InsertAudio = () => QueueAssetImport(importAsset, PresentationAssetImportKind.Audio),
-            OpenTablePicker = () =>
-            {
-                if (onTablePicker is not null)
-                    onTablePicker();
-                else
-                    ApplyBuiltInInsertion(editor, SlideObjectInsertionPlanner.Table3x3CommandId);
-            },
+            OpenTablePicker = onTablePicker,
             MergeTableCells = () => editor.TryMergeActiveTableCell(),
             SplitTableCell = () => editor.TrySplitActiveTableCell(),
             PickPictureBullet = () =>
@@ -303,8 +298,7 @@ internal static class FreePRibbonCommands
             FormatZoom = onFormatZoom,
             SetZoomCoverImage = onSetZoomCoverImage,
             ResetZoomCoverImage = onResetZoomCoverImage,
-            OpenHeaderFooter = focus => ExecuteHeaderFooter(editor, focus, onHeaderFooter),
-            DesignRequest = request => ExecuteDesignRequest(request, onCustomSlideSize, onLayoutPicker),
+            OpenHeaderFooter = onHeaderFooter,
             ApplySmartArtColor = onSmartArtColorPreset,
             ApplySmartArtLayout = onSmartArtLayoutPreset,
             ApplySmartArtQuickStyle = onSmartArtQuickStylePreset,
@@ -362,72 +356,67 @@ internal static class FreePRibbonCommands
             OpenSlideShowSettings = onSlideShowSettings,
         };
 
-    private static FreePRibbonTextActionEndpoints BuildTextActionEndpoints(
+    private static FreePRibbonTextActionTargets BuildTextActionTargets(
         Func<SlideCanvas?>? getSlideCanvas,
         Func<TableCellTextFormatKind, bool>? tryApplyNotesTextFormat,
         Func<TableCellTextValueFormatKind, object?, bool>? tryApplyNotesValueFormat,
         Func<TableCellParagraphFormatKind, object?, bool>? tryApplyNotesParagraphFormat) => new()
     {
-        ToggleFormat = kind =>
-            tryApplyNotesTextFormat?.Invoke(kind) == true ||
-            WithCanvas(getSlideCanvas, canvas => RouteTextFormat(canvas, kind)),
-        SetParagraphAlignment = alignment =>
-            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Alignment, alignment) == true ||
-            WithCanvas(
+        Notes = FreePRibbonTextActionEndpointFactory.CreateFormattingTarget(
+            tryApplyNotesTextFormat,
+            tryApplyNotesValueFormat,
+            tryApplyNotesParagraphFormat),
+        Shape = new FreePRibbonTextActionEndpoints
+        {
+            ToggleFormat = kind => WithCanvas(
+                getSlideCanvas,
+                canvas => ApplyShapeTextFormat(canvas, kind)),
+            SetParagraphAlignment = alignment => WithCanvas(
                 getSlideCanvas,
                 canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true),
-        ApplyListPreset = preset =>
-            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.ListPreset, preset) == true ||
-            WithCanvas(
+            ApplyListPreset = preset => WithCanvas(
                 getSlideCanvas,
                 canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true),
-        ToggleBullets = () =>
-            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.BulletToggle, null) == true ||
-            WithCanvas(
+            ToggleBullets = () => WithCanvas(
                 getSlideCanvas,
                 canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphBulletToggle() == true),
-        ToggleNumbering = () =>
-            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.NumberingToggle, null) == true ||
-            WithCanvas(
+            ToggleNumbering = () => WithCanvas(
                 getSlideCanvas,
                 canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true),
-        Indent = () =>
-            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Indent, null) == true ||
-            WithCanvas(
+            Indent = () => WithCanvas(
                 getSlideCanvas,
                 canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphIndent() == true),
-        Outdent = () =>
-            tryApplyNotesParagraphFormat?.Invoke(TableCellParagraphFormatKind.Outdent, null) == true ||
-            WithCanvas(
+            Outdent = () => WithCanvas(
                 getSlideCanvas,
                 canvas => canvas.TextEditor?.TryApplyActiveShapeParagraphOutdent() == true),
-        SetFontFamily = family =>
-            tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.FontFamily, family) == true ||
-            WithCanvas(
+            SetFontFamily = family => WithShapeEditor(
                 getSlideCanvas,
-                canvas => RouteToActiveRichEditor(
-                    canvas,
-                    editor => editor.ApplyFont(family),
-                    editor => editor.ApplyFont(family))),
-        SetFontSize = sizePt =>
-            tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.FontSize, sizePt) == true ||
-            WithCanvas(
+                editor => editor.ApplyFont(family)),
+            SetFontSize = sizePt => WithShapeEditor(
                 getSlideCanvas,
-                canvas => RouteToActiveRichEditor(
-                    canvas,
-                    editor => editor.ApplyFontSize(sizePt),
-                    editor => editor.ApplyFontSize(sizePt))),
-        SetColor = color =>
-            tryApplyNotesValueFormat?.Invoke(TableCellTextValueFormatKind.Color, color) == true ||
-            WithCanvas(
+                editor => editor.ApplyFontSize(sizePt)),
+            SetColor = color => WithShapeEditor(
                 getSlideCanvas,
-                canvas => RouteToActiveRichEditor(
-                    canvas,
-                    editor => editor.ApplyColor(color),
-                    editor => editor.ApplyColor(color))),
-        RemoveHyperlink = () => WithCanvas(
-            getSlideCanvas,
-            canvas => canvas.TextEditor?.TryApplySelectedShapeRunHyperlink(null) == true),
+                editor => editor.ApplyColor(color)),
+            RemoveHyperlink = () => WithCanvas(
+                getSlideCanvas,
+                canvas => canvas.TextEditor?.TryApplySelectedShapeRunHyperlink(null) == true),
+        },
+        Table = new FreePRibbonTextActionEndpoints
+        {
+            ToggleFormat = kind => WithCanvas(
+                getSlideCanvas,
+                canvas => ApplyTableTextFormat(canvas, kind)),
+            SetFontFamily = family => WithTableEditor(
+                getSlideCanvas,
+                editor => editor.ApplyFont(family)),
+            SetFontSize = sizePt => WithTableEditor(
+                getSlideCanvas,
+                editor => editor.ApplyFontSize(sizePt)),
+            SetColor = color => WithTableEditor(
+                getSlideCanvas,
+                editor => editor.ApplyColor(color)),
+        },
     };
 
     private static bool WithCanvas(
@@ -435,71 +424,75 @@ internal static class FreePRibbonCommands
         Func<SlideCanvas, bool> execute) =>
         getSlideCanvas?.Invoke() is { } canvas && execute(canvas);
 
-    private static bool RouteTextFormat(SlideCanvas canvas, TableCellTextFormatKind kind) => kind switch
+    private static bool ApplyShapeTextFormat(SlideCanvas canvas, TableCellTextFormatKind kind)
     {
-        TableCellTextFormatKind.Bold => RouteToActiveRichEditor(canvas, static editor => editor.ApplyBold(), static editor => editor.ApplyBold()),
-        TableCellTextFormatKind.Italic => RouteToActiveRichEditor(canvas, static editor => editor.ApplyItalic(), static editor => editor.ApplyItalic()),
-        TableCellTextFormatKind.Underline => RouteToActiveRichEditor(canvas, static editor => editor.ApplyUnderline(), static editor => editor.ApplyUnderline()),
-        TableCellTextFormatKind.Strikethrough => RouteToActiveRichEditor(canvas, static editor => editor.ApplyStrikethrough(), static editor => editor.ApplyStrikethrough()),
-        TableCellTextFormatKind.Superscript => RouteToActiveRichEditor(canvas, static editor => editor.ApplySuperscript(), static editor => editor.ApplySuperscript()),
-        TableCellTextFormatKind.Subscript => RouteToActiveRichEditor(canvas, static editor => editor.ApplySubscript(), static editor => editor.ApplySubscript()),
-        _ => false,
-    };
+        if (canvas.TextEditor?.IsActive != true)
+            return false;
 
-    private static bool RouteToActiveRichEditor(
-        SlideCanvas canvas,
-        Action<InCanvasTextEditor> shapeAction,
-        Action<InCanvasTableCellEditor> tableAction)
+        return ApplyTextFormat(kind, canvas.TextEditor);
+    }
+
+    private static bool ApplyTableTextFormat(SlideCanvas canvas, TableCellTextFormatKind kind)
     {
-        if (canvas.TextEditor?.IsActive == true)
+        if (canvas.TableCellEditor?.IsCellRichEditActive != true)
+            return false;
+
+        return ApplyTextFormat(kind, canvas.TableCellEditor);
+    }
+
+    private static bool ApplyTextFormat(TableCellTextFormatKind kind, InCanvasTextEditor editor)
+    {
+        switch (kind)
         {
-            shapeAction(canvas.TextEditor);
+            case TableCellTextFormatKind.Bold: editor.ApplyBold(); break;
+            case TableCellTextFormatKind.Italic: editor.ApplyItalic(); break;
+            case TableCellTextFormatKind.Underline: editor.ApplyUnderline(); break;
+            case TableCellTextFormatKind.Strikethrough: editor.ApplyStrikethrough(); break;
+            case TableCellTextFormatKind.Superscript: editor.ApplySuperscript(); break;
+            case TableCellTextFormatKind.Subscript: editor.ApplySubscript(); break;
+            default: return false;
+        }
+
+        return true;
+    }
+
+    private static bool ApplyTextFormat(TableCellTextFormatKind kind, InCanvasTableCellEditor editor)
+    {
+        switch (kind)
+        {
+            case TableCellTextFormatKind.Bold: editor.ApplyBold(); break;
+            case TableCellTextFormatKind.Italic: editor.ApplyItalic(); break;
+            case TableCellTextFormatKind.Underline: editor.ApplyUnderline(); break;
+            case TableCellTextFormatKind.Strikethrough: editor.ApplyStrikethrough(); break;
+            case TableCellTextFormatKind.Superscript: editor.ApplySuperscript(); break;
+            case TableCellTextFormatKind.Subscript: editor.ApplySubscript(); break;
+            default: return false;
+        }
+
+        return true;
+    }
+
+    private static bool WithShapeEditor(
+        Func<SlideCanvas?>? getSlideCanvas,
+        Action<InCanvasTextEditor> execute) =>
+        WithCanvas(getSlideCanvas, canvas =>
+        {
+            if (canvas.TextEditor?.IsActive != true)
+                return false;
+            execute(canvas.TextEditor);
             return true;
-        }
+        });
 
-        if (canvas.TableCellEditor?.IsCellRichEditActive == true)
+    private static bool WithTableEditor(
+        Func<SlideCanvas?>? getSlideCanvas,
+        Action<InCanvasTableCellEditor> execute) =>
+        WithCanvas(getSlideCanvas, canvas =>
         {
-            tableAction(canvas.TableCellEditor);
+            if (canvas.TableCellEditor?.IsCellRichEditActive != true)
+                return false;
+            execute(canvas.TableCellEditor);
             return true;
-        }
-
-        return false;
-    }
-
-    private static void ExecuteHeaderFooter(
-        EditingSession editor,
-        HeaderFooterCommandFocus focus,
-        Action<HeaderFooterCommandFocus>? onHeaderFooter)
-    {
-        if (onHeaderFooter is not null)
-        {
-            onHeaderFooter(focus);
-            return;
-        }
-
-        var state = HeaderFooterCommandPlanner.BuildState(editor);
-        HeaderFooterCommandPlanner.TryApply(
-            editor,
-            HeaderFooterCommandPlanner.BuildDefaultOptions(state, focus),
-            out _);
-    }
-
-    private static void ExecuteDesignRequest(
-        PresentationDesignCommandPlan plan,
-        Action? onCustomSlideSize,
-        Action? onLayoutPicker)
-    {
-        if (plan.Intent == PresentationDesignCommandIntentKind.RequestCustomSlideSize)
-            onCustomSlideSize?.Invoke();
-        else if (plan.Intent == PresentationDesignCommandIntentKind.RequestLayoutPicker)
-            onLayoutPicker?.Invoke();
-    }
-
-    private static void ApplyBuiltInInsertion(EditingSession editor, string commandId)
-    {
-        var plan = SlideObjectInsertionPlanner.BuiltInPlans.Single(item => item.CommandId == commandId);
-        SlideObjectInsertionPlanner.Apply(editor, plan);
-    }
+        });
 
     private static void ApplyPictureBullet(
         EditingSession editor,

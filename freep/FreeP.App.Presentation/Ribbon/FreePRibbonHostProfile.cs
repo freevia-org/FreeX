@@ -49,25 +49,61 @@ public sealed class FreePRibbonOleCommandEndpoints
     public Func<OleObjectInfo, bool>? TryOpenSelectedEmbeddedObject { get; init; }
 }
 
+/// <summary>Renderer-owned native ports consumed by the Presentation profile factory.</summary>
+public sealed class FreePRibbonHostPorts
+{
+    public FreePRibbonHostActionEndpoints ActionEndpoints { get; init; } = new();
+    public FreePRibbonHostQueryEndpoints QueryEndpoints { get; init; } = new();
+    public FreePRibbonTextActionTargets TextActionTargets { get; init; } = new();
+    public FreePRibbonDesignCommandEndpoints DesignCommands { get; init; } = new();
+    public FreePRibbonFileCommandEndpoints? FileCommands { get; init; }
+    public FreePRibbonOleCommandEndpoints? OleCommands { get; init; }
+}
+
 /// <summary>
 /// Portable composition profile for FreeP's ribbon registry. Renderers provide native endpoints;
 /// command inventory, dispatch, query routing, and OLE selection policy remain Presentation-owned.
 /// </summary>
 public sealed class FreePRibbonHostProfile
 {
-    public FreePRibbonHostActionEndpoints ActionEndpoints { get; init; } = new();
-    public FreePRibbonHostQueryEndpoints QueryEndpoints { get; init; } = new();
-    public FreePRibbonTextActionEndpoints TextActionEndpoints { get; init; } = new();
-    public FreePRibbonFileCommandEndpoints? FileCommands { get; init; }
-    public FreePRibbonOleCommandEndpoints? OleCommands { get; init; }
-
-    internal FreePRibbonCommandHostAdapter CreateCommandHostAdapter() => new()
+    internal FreePRibbonHostProfile(FreePRibbonHostPorts ports)
     {
-        ExecuteAction = action => FreePRibbonHostActionDispatcher.Dispatch(action, ActionEndpoints),
+        ActionEndpoints = ports.ActionEndpoints;
+        QueryEndpoints = ports.QueryEndpoints;
+        TextActionTargets = ports.TextActionTargets;
+        DesignCommands = ports.DesignCommands;
+        FileCommands = ports.FileCommands;
+        OleCommands = ports.OleCommands;
+    }
+
+    internal FreePRibbonHostActionEndpoints ActionEndpoints { get; }
+    internal FreePRibbonHostQueryEndpoints QueryEndpoints { get; }
+    internal FreePRibbonTextActionTargets TextActionTargets { get; }
+    internal FreePRibbonDesignCommandEndpoints DesignCommands { get; }
+    internal FreePRibbonFileCommandEndpoints? FileCommands { get; }
+    internal FreePRibbonOleCommandEndpoints? OleCommands { get; }
+
+    internal FreePRibbonCommandHostAdapter CreateCommandHostAdapter(EditingSession editor) => new()
+    {
+        ExecuteAction = action => FreePRibbonHostActionRouter.Dispatch(
+            editor,
+            action,
+            ActionEndpoints,
+            DesignCommands),
         QueryState = QueryEndpoints.Query,
         TryHandleTextAction = action =>
-            FreePRibbonTextActionDispatcher.Dispatch(action, TextActionEndpoints),
+            FreePRibbonTextActionTargetRouter.Dispatch(action, TextActionTargets),
     };
+}
+
+/// <summary>Creates the canonical typed profile from renderer-owned native ports.</summary>
+public static class FreePRibbonHostProfileFactory
+{
+    public static FreePRibbonHostProfile Create(FreePRibbonHostPorts ports)
+    {
+        ArgumentNullException.ThrowIfNull(ports);
+        return new FreePRibbonHostProfile(ports);
+    }
 }
 
 public sealed record FreePRibbonHostRegistryBuildResult(
@@ -119,7 +155,7 @@ public static class FreePRibbonHostRegistryComposer
         var common = FreePRibbonCommandWorkflow.Build(
             editor,
             stateStore,
-            profile.CreateCommandHostAdapter());
+            profile.CreateCommandHostAdapter(editor));
         var nativeCommandIds = RegisterNativeCommands(common.Registry, editor, profile);
         return new FreePRibbonHostRegistryBuildResult(
             common.Registry,
@@ -142,7 +178,7 @@ public static class FreePRibbonHostRegistryComposer
             target,
             editor,
             stateStore,
-            profile.CreateCommandHostAdapter());
+            profile.CreateCommandHostAdapter(editor));
         var nativeCommandIds = RegisterNativeCommands(target, editor, profile);
         return new FreePRibbonHostRegistryBuildResult(
             target,

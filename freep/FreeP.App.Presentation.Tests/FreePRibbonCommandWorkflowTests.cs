@@ -119,25 +119,35 @@ public sealed class FreePRibbonCommandWorkflowTests
         var avaloniaRegistry = Slice(
             avalonia,
             "internal RibbonCommandRegistry BuildCommandRegistry()",
-            "private void OnDesignHostRequest");
+            "private void OnCustomSlideSizeRequested");
 
         wpf.Should().Contain("FreePRibbonHostRegistryComposer.Build(editor, stateStore, profile)")
-            .And.Contain("new FreePRibbonHostProfile")
+            .And.Contain("FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts")
             .And.Contain("new FreePRibbonOleCommandEndpoints")
-            .And.Contain("FreePRibbonTextActionEndpoints");
+            .And.Contain("FreePRibbonTextActionTargets");
         wpf.Should().NotContain("registry.Register(")
             .And.NotContain("new FreePRibbonCommandHostAdapter")
-            .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(");
+            .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(")
+            .And.NotContain("new FreePRibbonHostProfile")
+            .And.NotContain("BuildTextActionEndpoints")
+            .And.NotContain("DesignRequest =")
+            .And.NotContain("ApplyBuiltInInsertion")
+            .And.NotContain("ExecuteHeaderFooter")
+            .And.NotContain("ExecuteDesignRequest");
         avaloniaRegistry.Should().Contain("FreePRibbonHostRegistryComposer.Build(")
+            .And.Contain("FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts")
             .And.Contain("new FreePRibbonFileCommandEndpoints")
             .And.Contain("new FreePRibbonOleCommandEndpoints")
             .And.Contain("new FreePRibbonHostQueryEndpoints")
-            .And.Contain("FreePRibbonTextActionEndpoints");
+            .And.Contain("FreePRibbonTextActionTargets");
         avaloniaRegistry.Should().NotContain("freep.bold")
             .And.NotContain("SmartArtAuthoringPlanner.ThemeAccentsCommandId")
             .And.NotContain("PresentationTransitionCommandPlanner.BuiltInPlans")
             .And.NotContain("registry.Register(")
-            .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(");
+            .And.NotContain("FreePRibbonHostActionDispatcher.Dispatch(")
+            .And.NotContain("new FreePRibbonHostProfile")
+            .And.NotContain("BuildRibbonTextActionEndpoints")
+            .And.NotContain("DesignRequest =");
         avaloniaWorkareaEndpoint.Should().Contain("FreePRibbonHostRegistryComposer.BindInto(");
         avalonia.Should().NotContain("TransitionAdvanceOnClickToggleCommand")
             .And.NotContain("AnimationPaneToggleCommand")

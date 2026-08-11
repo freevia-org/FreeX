@@ -27,7 +27,10 @@ public sealed class FreePRibbonHostProfileTests
         var wpf = FreePRibbonHostRegistryComposer.Build(
             MakeEditor(),
             new RibbonStateStore(),
-            new FreePRibbonHostProfile { OleCommands = new FreePRibbonOleCommandEndpoints() });
+            CreateProfile(new FreePRibbonHostPorts
+            {
+                OleCommands = new FreePRibbonOleCommandEndpoints(),
+            }));
         var avalonia = FreePRibbonHostRegistryComposer.Build(
             MakeEditor(),
             new RibbonStateStore(),
@@ -44,19 +47,22 @@ public sealed class FreePRibbonHostProfileTests
     {
         var copied = false;
         TableCellTextFormatKind? textFormat = null;
-        var profile = new FreePRibbonHostProfile
+        var profile = CreateProfile(new FreePRibbonHostPorts
         {
             ActionEndpoints = new FreePRibbonHostActionEndpoints { Copy = () => copied = true },
             QueryEndpoints = new FreePRibbonHostQueryEndpoints { EditPointsEnabled = () => true },
-            TextActionEndpoints = new FreePRibbonTextActionEndpoints
+            TextActionTargets = new FreePRibbonTextActionTargets
             {
-                ToggleFormat = format =>
+                Notes = new FreePRibbonTextActionEndpoints
                 {
-                    textFormat = format;
-                    return true;
+                    ToggleFormat = format =>
+                    {
+                        textFormat = format;
+                        return true;
+                    },
                 },
             },
-        };
+        });
         var result = FreePRibbonHostRegistryComposer.Build(
             MakeEditor(),
             new RibbonStateStore(),
@@ -78,7 +84,7 @@ public sealed class FreePRibbonHostProfileTests
         var editor = MakeEditorWithSelectedOle(out _);
         var inlineCalls = 0;
         var selectedCalls = 0;
-        var profile = new FreePRibbonHostProfile
+        var profile = CreateProfile(new FreePRibbonHostPorts
         {
             OleCommands = new FreePRibbonOleCommandEndpoints
             {
@@ -93,7 +99,7 @@ public sealed class FreePRibbonHostProfileTests
                     return true;
                 },
             },
-        };
+        });
         var result = FreePRibbonHostRegistryComposer.Build(
             editor,
             new RibbonStateStore(),
@@ -111,7 +117,7 @@ public sealed class FreePRibbonHostProfileTests
         var original = MakeEditorWithSelectedOle(out var originalOle);
         var replacement = MakeEditorWithSelectedOle(out var replacementOle);
         OleObjectInfo? opened = null;
-        var profile = new FreePRibbonHostProfile
+        var profile = CreateProfile(new FreePRibbonHostPorts
         {
             OleCommands = new FreePRibbonOleCommandEndpoints
             {
@@ -121,7 +127,7 @@ public sealed class FreePRibbonHostProfileTests
                     return true;
                 },
             },
-        };
+        });
         var stateStore = new RibbonStateStore();
         var result = FreePRibbonHostRegistryComposer.Build(original, stateStore, profile);
 
@@ -185,11 +191,93 @@ public sealed class FreePRibbonHostProfileTests
         calls.Should().Be(0);
     }
 
-    private static FreePRibbonHostProfile CompleteNativeProfile() => new()
+    [Fact]
+    public void TextTargetRouterUsesNotesThenShapeThenTablePrecedence()
     {
-        FileCommands = new FreePRibbonFileCommandEndpoints(),
-        OleCommands = new FreePRibbonOleCommandEndpoints(),
-    };
+        var calls = new List<string>();
+        var action = new FreePRibbonTextAction(
+            FreePRibbonTextActionKind.ToggleFormat,
+            TableCellTextFormatKind.Bold);
+        var targets = new FreePRibbonTextActionTargets
+        {
+            Notes = new FreePRibbonTextActionEndpoints
+            {
+                ToggleFormat = _ =>
+                {
+                    calls.Add("notes");
+                    return false;
+                },
+            },
+            Shape = new FreePRibbonTextActionEndpoints
+            {
+                ToggleFormat = _ =>
+                {
+                    calls.Add("shape");
+                    return true;
+                },
+            },
+            Table = new FreePRibbonTextActionEndpoints
+            {
+                ToggleFormat = _ =>
+                {
+                    calls.Add("table");
+                    return true;
+                },
+            },
+        };
+
+        FreePRibbonTextActionTargetRouter.Dispatch(action, targets).Should().BeTrue();
+        calls.Should().Equal("notes", "shape");
+    }
+
+    [Fact]
+    public void TextTargetRouterFallsThroughToTableWhenEarlierTargetsDecline()
+    {
+        var calls = new List<string>();
+        var action = new FreePRibbonTextAction(
+            FreePRibbonTextActionKind.SetFontFamily,
+            "Aptos");
+        var targets = new FreePRibbonTextActionTargets
+        {
+            Notes = new FreePRibbonTextActionEndpoints
+            {
+                SetFontFamily = _ =>
+                {
+                    calls.Add("notes");
+                    return false;
+                },
+            },
+            Shape = new FreePRibbonTextActionEndpoints
+            {
+                SetFontFamily = _ =>
+                {
+                    calls.Add("shape");
+                    return false;
+                },
+            },
+            Table = new FreePRibbonTextActionEndpoints
+            {
+                SetFontFamily = _ =>
+                {
+                    calls.Add("table");
+                    return true;
+                },
+            },
+        };
+
+        FreePRibbonTextActionTargetRouter.Dispatch(action, targets).Should().BeTrue();
+        calls.Should().Equal("notes", "shape", "table");
+    }
+
+    private static FreePRibbonHostProfile CompleteNativeProfile() => CreateProfile(
+        new FreePRibbonHostPorts
+        {
+            FileCommands = new FreePRibbonFileCommandEndpoints(),
+            OleCommands = new FreePRibbonOleCommandEndpoints(),
+        });
+
+    private static FreePRibbonHostProfile CreateProfile(FreePRibbonHostPorts ports) =>
+        FreePRibbonHostProfileFactory.Create(ports);
 
     private static EditingSession MakeEditor()
     {

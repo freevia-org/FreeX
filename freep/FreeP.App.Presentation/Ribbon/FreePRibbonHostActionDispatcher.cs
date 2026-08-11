@@ -23,7 +23,6 @@ public sealed class FreePRibbonHostActionEndpoints
     public Action? SetZoomCoverImage { get; init; }
     public Action? ResetZoomCoverImage { get; init; }
     public Action<HeaderFooterCommandFocus>? OpenHeaderFooter { get; init; }
-    public Action<PresentationDesignCommandPlan>? DesignRequest { get; init; }
     public Action<SmartArtColorPreset>? ApplySmartArtColor { get; init; }
     public Action<SmartArtLayoutPreset>? ApplySmartArtLayout { get; init; }
     public Action<SmartArtQuickStylePreset>? ApplySmartArtQuickStyle { get; init; }
@@ -75,6 +74,98 @@ public sealed class FreePRibbonHostActionEndpoints
     public Action? OpenSlideShowSettings { get; init; }
 }
 
+/// <summary>Native surfaces selected by portable presentation design command plans.</summary>
+public sealed class FreePRibbonDesignCommandEndpoints
+{
+    public Action<PresentationDesignCommandPlan>? OpenCustomSlideSize { get; init; }
+    public Action<PresentationDesignCommandPlan>? OpenLayoutPicker { get; init; }
+}
+
+/// <summary>
+/// Applies portable host policy before falling through to native action dispatch. This keeps
+/// renderer-specific callbacks thin while preserving Presentation's built-in fallbacks.
+/// </summary>
+public static class FreePRibbonHostActionRouter
+{
+    public static bool Dispatch(
+        EditingSession editor,
+        FreePRibbonHostAction action,
+        FreePRibbonHostActionEndpoints endpoints,
+        FreePRibbonDesignCommandEndpoints designEndpoints)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(action);
+        ArgumentNullException.ThrowIfNull(endpoints);
+        ArgumentNullException.ThrowIfNull(designEndpoints);
+
+        return action.Kind switch
+        {
+            FreePRibbonHostActionKind.OpenTablePicker => OpenTablePicker(editor, endpoints),
+            FreePRibbonHostActionKind.OpenHeaderFooter =>
+                OpenHeaderFooter(editor, action.Argument, endpoints),
+            FreePRibbonHostActionKind.DesignRequest =>
+                RouteDesignRequest(action.Argument, designEndpoints),
+            _ => FreePRibbonHostActionDispatcher.Dispatch(action, endpoints),
+        };
+    }
+
+    private static bool OpenTablePicker(
+        EditingSession editor,
+        FreePRibbonHostActionEndpoints endpoints)
+    {
+        if (endpoints.OpenTablePicker is not null)
+            return FreePRibbonHostActionDispatcher.Dispatch(
+                new FreePRibbonHostAction(FreePRibbonHostActionKind.OpenTablePicker),
+                endpoints);
+
+        var plan = SlideObjectInsertionPlanner.BuiltInPlans.Single(
+            item => item.CommandId == SlideObjectInsertionPlanner.Table3x3CommandId);
+        SlideObjectInsertionPlanner.Apply(editor, plan);
+        return true;
+    }
+
+    private static bool OpenHeaderFooter(
+        EditingSession editor,
+        object? argument,
+        FreePRibbonHostActionEndpoints endpoints)
+    {
+        if (argument is not HeaderFooterCommandFocus focus)
+            return false;
+
+        if (endpoints.OpenHeaderFooter is not null)
+            return FreePRibbonHostActionDispatcher.Dispatch(
+                new FreePRibbonHostAction(FreePRibbonHostActionKind.OpenHeaderFooter, focus),
+                endpoints);
+
+        var state = HeaderFooterCommandPlanner.BuildState(editor);
+        HeaderFooterCommandPlanner.TryApply(
+            editor,
+            HeaderFooterCommandPlanner.BuildDefaultOptions(state, focus),
+            out _);
+        return true;
+    }
+
+    private static bool RouteDesignRequest(
+        object? argument,
+        FreePRibbonDesignCommandEndpoints endpoints)
+    {
+        if (argument is not PresentationDesignCommandPlan plan)
+            return false;
+
+        var endpoint = plan.Intent switch
+        {
+            PresentationDesignCommandIntentKind.RequestCustomSlideSize => endpoints.OpenCustomSlideSize,
+            PresentationDesignCommandIntentKind.RequestLayoutPicker => endpoints.OpenLayoutPicker,
+            _ => null,
+        };
+        if (endpoint is null)
+            return false;
+
+        endpoint(plan);
+        return true;
+    }
+}
+
 /// <summary>
 /// Exhaustive, renderer-neutral dispatch for FreeP ribbon host actions. Renderers provide only
 /// native endpoints; action classification and typed payload validation remain shared.
@@ -109,7 +200,6 @@ public static class FreePRibbonHostActionDispatcher
             FreePRibbonHostActionKind.SetZoomCoverImage => Invoke(endpoints.SetZoomCoverImage),
             FreePRibbonHostActionKind.ResetZoomCoverImage => Invoke(endpoints.ResetZoomCoverImage),
             FreePRibbonHostActionKind.OpenHeaderFooter => Invoke(action.Argument, endpoints.OpenHeaderFooter),
-            FreePRibbonHostActionKind.DesignRequest => Invoke(action.Argument, endpoints.DesignRequest),
             FreePRibbonHostActionKind.ApplySmartArtColor => Invoke(action.Argument, endpoints.ApplySmartArtColor),
             FreePRibbonHostActionKind.ApplySmartArtLayout => Invoke(action.Argument, endpoints.ApplySmartArtLayout),
             FreePRibbonHostActionKind.ApplySmartArtQuickStyle => Invoke(action.Argument, endpoints.ApplySmartArtQuickStyle),

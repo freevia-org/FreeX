@@ -2566,8 +2566,9 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             CreateRibbonHostProfile()).Registry;
     }
 
-    private FreePRibbonHostProfile CreateRibbonHostProfile() => new()
-    {
+    private FreePRibbonHostProfile CreateRibbonHostProfile() =>
+        FreePRibbonHostProfileFactory.Create(new FreePRibbonHostPorts
+        {
         ActionEndpoints = GetRibbonHostActionEndpoints(),
         QueryEndpoints = new FreePRibbonHostQueryEndpoints
         {
@@ -2583,7 +2584,12 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             ViewShowState = () => _viewShowState,
             ViewZoomState = () => _viewZoomState,
         },
-        TextActionEndpoints = BuildRibbonTextActionEndpoints(),
+        TextActionTargets = CreateRibbonTextActionTargets(),
+        DesignCommands = new FreePRibbonDesignCommandEndpoints
+        {
+            OpenCustomSlideSize = OnCustomSlideSizeRequested,
+            OpenLayoutPicker = OnLayoutPickerRequested,
+        },
         FileCommands = new FreePRibbonFileCommandEndpoints
         {
             New = FileNew,
@@ -2610,7 +2616,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 return true;
             },
         },
-    };
+    });
 
     private FreePRibbonHostActionEndpoints GetRibbonHostActionEndpoints() =>
         _ribbonHostActionEndpoints ??= new FreePRibbonHostActionEndpoints
@@ -2644,7 +2650,6 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             SetZoomCoverImage = () => _ = OpenZoomCoverImagePickerAsync(),
             ResetZoomCoverImage = () => _ = RestoreZoomPreviewAsync(),
             OpenHeaderFooter = OpenHeaderFooterDialog,
-            DesignRequest = OnDesignHostRequest,
             ApplySmartArtColor = preset => ApplySmartArtColorPreset(preset),
             ApplySmartArtLayout = preset => ApplySmartArtLayoutPreset(preset),
             ApplySmartArtQuickStyle = preset => ApplySmartArtQuickStylePreset(preset),
@@ -2696,77 +2701,58 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             OpenSlideShowSettings = OpenSlideShowSettingsDialog,
         };
 
-    private FreePRibbonTextActionEndpoints BuildRibbonTextActionEndpoints() => new()
+    private FreePRibbonTextActionTargets CreateRibbonTextActionTargets() => new()
     {
-        ToggleFormat = format =>
-            TryApplyCurrentSlideNotesTextFormat(format) ||
-            _textEditor?.TryApplyActiveShapeTextFormat(format) == true ||
-            _textEditor?.TryApplyActiveTableCellTextFormat(format) == true,
-        SetParagraphAlignment = alignment =>
-            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Alignment, alignment) ||
-            _textEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true ||
-            _textEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true,
-        ApplyListPreset = preset =>
-            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.ListPreset, preset) ||
-            _textEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true ||
-            _textEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true,
-        ToggleBullets = () =>
-            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.BulletToggle) ||
-            _textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true ||
-            _textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true,
-        ToggleNumbering = () =>
-            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.NumberingToggle) ||
-            _textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true ||
-            _textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true,
-        Indent = () =>
-            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Indent) ||
-            _textEditor?.TryApplyActiveShapeParagraphIndent() == true ||
-            _textEditor?.TryApplyActiveTableCellParagraphIndent() == true,
-        Outdent = () =>
-            TryApplyCurrentSlideNotesParagraphFormat(TableCellParagraphFormatKind.Outdent) ||
-            _textEditor?.TryApplyActiveShapeParagraphOutdent() == true ||
-            _textEditor?.TryApplyActiveTableCellParagraphOutdent() == true,
-        SetFontFamily = family =>
-            TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.FontFamily, family) ||
-            _textEditor?.TryApplyActiveShapeFontFamily(family) == true ||
-            _textEditor?.TryApplyActiveTableCellFontFamily(family) == true,
-        SetFontSize = sizePt =>
-            TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.FontSize, sizePt) ||
-            _textEditor?.TryApplyActiveShapeFontSize(sizePt) == true ||
-            _textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true,
-        SetColor = color =>
-            TryApplyCurrentSlideNotesValueFormat(TableCellTextValueFormatKind.Color, color) ||
-            _textEditor?.TryApplyActiveShapeColor(color) == true ||
-            _textEditor?.TryApplyActiveTableCellColor(color) == true,
-        SetTextVerticalType = verticalType =>
-            _textEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true,
-        SetTableCellFill = color =>
-            _textEditor?.TryApplyActiveTableCellFill(color) == true,
-        SetTableCellAnchor = anchor =>
-            _textEditor?.TryApplyActiveTableCellAnchor(anchor) == true,
-        SetTableCellBorder = (side, outline) =>
-            _textEditor?.TryApplyActiveTableCellBorder(side, outline) == true,
-        SetTableCellInset = (side, value) =>
-            _textEditor?.TryApplyActiveTableCellInset(side, value) == true,
-        SetTableRowHeight = height =>
-            _textEditor?.TryApplyActiveTableRowHeight(height) == true,
-        RemoveHyperlink = () =>
-            _textEditor?.TryApplySelectedShapeRunHyperlink(null) == true,
-    };
-
-
-    private void OnDesignHostRequest(PresentationDesignCommandPlan plan)
-    {
-        switch (plan.Intent)
+        Notes = FreePRibbonTextActionEndpointFactory.CreateFormattingTarget(
+            TryApplyCurrentSlideNotesTextFormat,
+            TryApplyCurrentSlideNotesValueFormat,
+            TryApplyCurrentSlideNotesParagraphFormat),
+        Shape = new FreePRibbonTextActionEndpoints
         {
-            case PresentationDesignCommandIntentKind.RequestCustomSlideSize:
-                OnCustomSlideSizeRequested(plan);
-                break;
-            case PresentationDesignCommandIntentKind.RequestLayoutPicker:
-                OnLayoutPickerRequested(plan);
-                break;
-        }
-    }
+            ToggleFormat = format => _textEditor?.TryApplyActiveShapeTextFormat(format) == true,
+            SetParagraphAlignment = alignment =>
+                _textEditor?.TryApplyActiveShapeParagraphAlignment(alignment) == true,
+            ApplyListPreset = preset =>
+                _textEditor?.TryApplyActiveShapeParagraphListPreset(preset) == true,
+            ToggleBullets = () =>
+                _textEditor?.TryApplyActiveShapeParagraphBulletToggle() == true,
+            ToggleNumbering = () =>
+                _textEditor?.TryApplyActiveShapeParagraphNumberingToggle() == true,
+            Indent = () => _textEditor?.TryApplyActiveShapeParagraphIndent() == true,
+            Outdent = () => _textEditor?.TryApplyActiveShapeParagraphOutdent() == true,
+            SetFontFamily = family => _textEditor?.TryApplyActiveShapeFontFamily(family) == true,
+            SetFontSize = sizePt => _textEditor?.TryApplyActiveShapeFontSize(sizePt) == true,
+            SetColor = color => _textEditor?.TryApplyActiveShapeColor(color) == true,
+            RemoveHyperlink = () =>
+                _textEditor?.TryApplySelectedShapeRunHyperlink(null) == true,
+        },
+        Table = new FreePRibbonTextActionEndpoints
+        {
+            ToggleFormat = format => _textEditor?.TryApplyActiveTableCellTextFormat(format) == true,
+            SetParagraphAlignment = alignment =>
+                _textEditor?.TryApplyActiveTableCellParagraphAlignment(alignment) == true,
+            ApplyListPreset = preset =>
+                _textEditor?.TryApplyActiveTableCellParagraphListPreset(preset) == true,
+            ToggleBullets = () =>
+                _textEditor?.TryApplyActiveTableCellParagraphBulletToggle() == true,
+            ToggleNumbering = () =>
+                _textEditor?.TryApplyActiveTableCellParagraphNumberingToggle() == true,
+            Indent = () => _textEditor?.TryApplyActiveTableCellParagraphIndent() == true,
+            Outdent = () => _textEditor?.TryApplyActiveTableCellParagraphOutdent() == true,
+            SetFontFamily = family => _textEditor?.TryApplyActiveTableCellFontFamily(family) == true,
+            SetFontSize = sizePt => _textEditor?.TryApplyActiveTableCellFontSize(sizePt) == true,
+            SetColor = color => _textEditor?.TryApplyActiveTableCellColor(color) == true,
+            SetTextVerticalType = verticalType =>
+                _textEditor?.TryApplyActiveTableCellTextVerticalType(verticalType) == true,
+            SetTableCellFill = color => _textEditor?.TryApplyActiveTableCellFill(color) == true,
+            SetTableCellAnchor = anchor => _textEditor?.TryApplyActiveTableCellAnchor(anchor) == true,
+            SetTableCellBorder = (side, outline) =>
+                _textEditor?.TryApplyActiveTableCellBorder(side, outline) == true,
+            SetTableCellInset = (side, value) =>
+                _textEditor?.TryApplyActiveTableCellInset(side, value) == true,
+            SetTableRowHeight = height => _textEditor?.TryApplyActiveTableRowHeight(height) == true,
+        },
+    };
 
     private void OnCustomSlideSizeRequested(PresentationDesignCommandPlan plan)
     {

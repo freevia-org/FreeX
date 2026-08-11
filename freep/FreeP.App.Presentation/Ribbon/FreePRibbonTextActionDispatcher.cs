@@ -24,6 +24,68 @@ public sealed class FreePRibbonTextActionEndpoints
     public Func<bool>? RemoveHyperlink { get; init; }
 }
 
+/// <summary>
+/// Native text targets in the order used by the ribbon. A renderer describes what each target
+/// can do; Presentation owns target precedence and action dispatch.
+/// </summary>
+public sealed class FreePRibbonTextActionTargets
+{
+    public FreePRibbonTextActionEndpoints Notes { get; init; } = new();
+    public FreePRibbonTextActionEndpoints Shape { get; init; } = new();
+    public FreePRibbonTextActionEndpoints Table { get; init; } = new();
+}
+
+/// <summary>Builds the common text endpoint catalog from renderer-native formatting ports.</summary>
+public static class FreePRibbonTextActionEndpointFactory
+{
+    public static FreePRibbonTextActionEndpoints CreateFormattingTarget(
+        Func<TableCellTextFormatKind, bool>? applyTextFormat,
+        Func<TableCellTextValueFormatKind, object?, bool>? applyValueFormat,
+        Func<TableCellParagraphFormatKind, object?, bool>? applyParagraphFormat,
+        Func<bool>? removeHyperlink = null) => new()
+    {
+        ToggleFormat = kind => applyTextFormat?.Invoke(kind) == true,
+        SetParagraphAlignment = alignment => applyParagraphFormat?.Invoke(
+            TableCellParagraphFormatKind.Alignment,
+            alignment) == true,
+        ApplyListPreset = preset => applyParagraphFormat?.Invoke(
+            TableCellParagraphFormatKind.ListPreset,
+            preset) == true,
+        ToggleBullets = () => applyParagraphFormat?.Invoke(
+            TableCellParagraphFormatKind.BulletToggle,
+            null) == true,
+        ToggleNumbering = () => applyParagraphFormat?.Invoke(
+            TableCellParagraphFormatKind.NumberingToggle,
+            null) == true,
+        Indent = () => applyParagraphFormat?.Invoke(TableCellParagraphFormatKind.Indent, null) == true,
+        Outdent = () => applyParagraphFormat?.Invoke(TableCellParagraphFormatKind.Outdent, null) == true,
+        SetFontFamily = family => applyValueFormat?.Invoke(
+            TableCellTextValueFormatKind.FontFamily,
+            family) == true,
+        SetFontSize = sizePt => applyValueFormat?.Invoke(
+            TableCellTextValueFormatKind.FontSize,
+            sizePt) == true,
+        SetColor = color => applyValueFormat?.Invoke(TableCellTextValueFormatKind.Color, color) == true,
+        RemoveHyperlink = removeHyperlink,
+    };
+}
+
+/// <summary>Routes every text command to notes, then the active shape editor, then the table editor.</summary>
+public static class FreePRibbonTextActionTargetRouter
+{
+    public static bool Dispatch(
+        FreePRibbonTextAction action,
+        FreePRibbonTextActionTargets targets)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        ArgumentNullException.ThrowIfNull(targets);
+
+        return FreePRibbonTextActionDispatcher.Dispatch(action, targets.Notes) ||
+               FreePRibbonTextActionDispatcher.Dispatch(action, targets.Shape) ||
+               FreePRibbonTextActionDispatcher.Dispatch(action, targets.Table);
+    }
+}
+
 /// <summary>Exhaustive typed dispatch from portable ribbon text actions to native editor ports.</summary>
 public static class FreePRibbonTextActionDispatcher
 {
