@@ -79,7 +79,7 @@ public partial class MainWindow
     /// decision: an existing usable path saves directly to it; otherwise the Save-As dialog is shown.
     /// The concrete <see cref="FileSaveTarget"/> (path + adapter) is produced by FreeX's adapter-resolving
     /// <see cref="FileSavePlanner.TryResolveExistingPath"/> -- unless the session was marked read-only
-    /// by <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/>, in which case
+    /// by <see cref="ApplyWorkbookReadOnlyOpenPolicy"/>, in which case
     /// <see cref="ResolveExistingSaveTarget"/> withholds the existing path so this falls through to the
     /// Save-As dialog instead of silently overwriting the original file (Excel parity: Ctrl+S on a
     /// Read-Only-Recommended/write-reservation workbook is always forced through Save-As). Shared
@@ -97,7 +97,7 @@ public partial class MainWindow
 
     /// <summary>
     /// The existing-path save target, or <c>null</c> if there is none usable OR this session was
-    /// marked read-only by <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/> -- see
+    /// marked read-only by <see cref="ApplyWorkbookReadOnlyOpenPolicy"/> -- see
     /// <see cref="SaveResolvedAsync"/> for why a read-only session must never resolve back to its
     /// original path.
     /// </summary>

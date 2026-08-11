@@ -33,7 +33,7 @@ namespace FreeX.App.Avalonia.Tests;
 ///
 /// These tests drive the REAL production entry points directly via the internal test seams
 /// <c>OpenWorkbookFromTargetAsyncForTest</c>/<c>SaveWorkbookToTargetAsyncForTest</c> (mirroring the
-/// <c>ApplyReadOnlyRecommendedPromptIfNeededForTest</c> convention) -- the fixture file on disk is
+/// <c>ApplyWorkbookReadOnlyOpenPolicyForTest</c> convention) -- the fixture file on disk is
 /// produced by <see cref="XlsxFileAdapter"/> itself (our own writer), never hand-authored XML, so the
 /// open/save round-trip is real.
 /// </summary>

@@ -9,7 +9,7 @@ namespace FreeX.App.Avalonia.Tests;
 
 /// <summary>
 /// Regression coverage for R83-services-doc-recovery-props-5-1 (src/FreeX.App.Avalonia/MainWindow.cs).
-/// Before the fix, <c>ApplyReadOnlyRecommendedPromptIfNeeded</c> (see
+/// Before the fix, <c>ApplyWorkbookReadOnlyOpenPolicy</c> (see
 /// R75_ProtectionSelectionAndReadOnlyPromptTests) set <c>_isWorkbookReadOnly</c> on open but nothing
 /// ever consulted it again: <c>SaveCurrentWorkbookAsync</c> resolved straight to the existing path via
 /// <c>_session.CanSaveCurrentSource</c> and would have silently overwritten the very file the user had
@@ -37,7 +37,7 @@ public sealed class R83_ReadOnlyWorkbookSaveEnforcementTests
                 var target = window.ResolveExistingSaveTargetForTest();
 
                 target.Should().BeNull(
-                    "a session marked read-only by ApplyReadOnlyRecommendedPromptIfNeeded must never " +
+                    "a session marked read-only by ApplyWorkbookReadOnlyOpenPolicy must never " +
                     "resolve back to its own path -- Save must fall through to Save-As instead of " +
                     "silently overwriting the protected file");
             }

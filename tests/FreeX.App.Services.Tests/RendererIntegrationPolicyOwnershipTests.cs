@@ -20,10 +20,16 @@ public sealed class RendererIntegrationPolicyOwnershipTests
 
         wpfWindow.Should().Contain("private readonly WorkbookReadOnlySession _workbookReadOnlySession = new();");
         avalonia.Should().Contain("private readonly WorkbookReadOnlySession _workbookReadOnlySession = new();");
-        wpfBackstage.Should().Contain("_workbookReadOnlySession.PlanOpen(workbook)");
-        avalonia.Should().Contain("_workbookReadOnlySession.PlanOpen(workbook)");
-        wpfBackstage.Should().Contain("_workbookReadOnlySession.ApplyReservationPassword(entered)");
-        avalonia.Should().Contain("_workbookReadOnlySession.ApplyReservationPassword(entered)");
+        wpfBackstage.Should().Contain("_workbookReadOnlySession.RunOpen(workbook");
+        avalonia.Should().Contain("_workbookReadOnlySession.RunOpen(workbook");
+        wpfBackstage.Should().Contain("WpfWorkbookReadOnlyOpenPromptPort");
+        avalonia.Should().Contain("AvaloniaWorkbookReadOnlyOpenPromptPort");
+        wpfBackstage.Should().NotContain("_workbookReadOnlySession.PlanOpen(");
+        avalonia.Should().NotContain("_workbookReadOnlySession.PlanOpen(");
+        wpfBackstage.Should().NotContain("_workbookReadOnlySession.ApplyReservationPassword(");
+        avalonia.Should().NotContain("_workbookReadOnlySession.ApplyReservationPassword(");
+        wpfBackstage.Should().NotContain("plan.PromptKind");
+        avalonia.Should().NotContain("plan.PromptKind");
         wpfBackstage.Should().NotContain("ProtectionPasswordHelper.VerifyStoredPassword(");
         avalonia.Should().NotContain("ProtectionPasswordHelper.VerifyStoredPassword(");
         wpfLifecycle.Should().Contain("_workbookReadOnlySession.ResolveExistingSaveTarget(");

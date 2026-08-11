@@ -760,7 +760,7 @@ public partial class MainWindow
             ShowOpenProgress(CreateOpenProgress("done", TimeSpan.Zero, 100));
             ShowUnsupportedXlsxFeatureOpenWarningIfNeeded();
             ShowXlsxLoadWarningsIfNeeded(result.LoadWarnings);
-            ApplyReadOnlyRecommendedPromptIfNeeded(_workbook);
+            ApplyWorkbookReadOnlyOpenPolicy(_workbook);
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
@@ -1480,33 +1480,27 @@ public partial class MainWindow
     /// Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1). Individual
     /// edit commands are not yet blocked -- that remains out of scope (tracked separately).
     /// </summary>
-    private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
+    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook) =>
+        _workbookReadOnlySession.RunOpen(workbook, new WpfWorkbookReadOnlyOpenPromptPort(this));
+
+    private sealed class WpfWorkbookReadOnlyOpenPromptPort(MainWindow owner) : IWorkbookReadOnlyOpenPromptPort
     {
-        var plan = _workbookReadOnlySession.PlanOpen(workbook);
-        if (!plan.ShouldPrompt)
-            return;
+        public WorkbookReadOnlyRecommendationChoice PromptReadOnlyRecommended(WorkbookReadOnlyOpenPlan plan) =>
+            owner.ShowOwnedSynchronousPrompt(
+                FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(plan.WorkbookName)) == UserMessageResult.Yes
+                ? WorkbookReadOnlyRecommendationChoice.OpenReadOnly
+                : WorkbookReadOnlyRecommendationChoice.OpenEditable;
 
-        if (plan.PromptKind == WorkbookReadOnlyPromptKind.ReservationPassword)
-        {
-            var entered = ResolveReservationPasswordPrompt(plan.WorkbookName);
-            var decision = _workbookReadOnlySession.ApplyReservationPassword(entered);
-            if (decision.ShouldShowIncorrectPasswordNotice)
-            {
-                // Only the case where the user actually typed something wrong needs an explicit
-                // "opened as read-only" notice -- a plain Cancel already communicated its own intent.
-                ShowOwnedMessage(
-                    UiText.Get("MainWindowMessage_ReservationPasswordIncorrectBody"),
-                    UiText.Get("MainWindowMessage_ReservationPasswordTitle"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            }
+        public WorkbookReservationPasswordResponse PromptReservationPassword(WorkbookReadOnlyOpenPlan plan) =>
+            WorkbookReservationPasswordResponse.FromPromptResult(
+                owner.ResolveReservationPasswordPrompt(plan.WorkbookName));
 
-            return;
-        }
-
-        var result = ShowOwnedSynchronousPrompt(
-            FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(plan.WorkbookName));
-        _workbookReadOnlySession.ApplyPromptDecision(result == UserMessageResult.Yes);
+        public void ShowIncorrectReservationPasswordNotice(WorkbookReadOnlyOpenPlan plan) =>
+            owner.ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_ReservationPasswordIncorrectBody"),
+                UiText.Get("MainWindowMessage_ReservationPasswordTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
     }
 
     /// <summary>

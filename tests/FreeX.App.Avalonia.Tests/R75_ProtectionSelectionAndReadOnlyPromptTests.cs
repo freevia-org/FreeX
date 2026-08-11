@@ -7,6 +7,7 @@ using Avalonia.Input;
 using FluentAssertions;
 
 using Free.Shared.AppServices;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -23,7 +24,7 @@ namespace FreeX.App.Avalonia.Tests;
 ///
 ///   R75-services-protection-security-4-2: a workbook saved with "Read-Only Recommended" or a
 ///   write-reservation password opened fully editable on this shell with no prompt at all (the WPF
-///   host already prompted). <c>MainWindow.ApplyReadOnlyRecommendedPromptIfNeeded</c> now mirrors
+///   host already prompted). <c>MainWindow.ApplyWorkbookReadOnlyOpenPolicy</c> now mirrors
 ///   the WPF host's logic, prompting via the injectable <c>ReadOnlyRecommendedPromptOverrideForTest</c>
 ///   seam and marking <c>_isWorkbookReadOnly</c> on accept.
 /// </summary>
@@ -228,10 +229,10 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
         }, CancellationToken.None);
     }
 
-    // ── ApplyReadOnlyRecommendedPromptIfNeeded (R75-services-protection-security-4-2) ────────────
+    // ── ApplyWorkbookReadOnlyOpenPolicy (R75-services-protection-security-4-2) ───────────────────
 
     [Fact]
-    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReadOnlyRecommendedWorkbook_PromptsAndMarksReadOnlyOnAccept()
+    public async Task ApplyWorkbookReadOnlyOpenPolicy_ReadOnlyRecommendedWorkbook_PromptsAndMarksReadOnlyOnAccept()
     {
         await Session.Dispatch(() =>
         {
@@ -248,10 +249,11 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
                     return UserMessageResult.Yes;
                 };
 
-                window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
+                var outcome = window.ApplyWorkbookReadOnlyOpenPolicyForTest(workbook);
 
                 promptedBodies.Should().HaveCount(1,
                     "a ReadOnlyRecommended workbook must prompt exactly once on open");
+                outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReadOnlyRecommendedAccepted);
                 window.IsWorkbookReadOnlyForTest.Should().BeTrue(
                     "accepting the prompt (Yes) must mark the session read-only");
             }
@@ -273,7 +275,7 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
     // verifies it with ProtectionPasswordHelper.VerifyStoredPassword.
 
     [Fact]
-    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReservationPasswordWorkbook_CorrectPassword_UnlocksEditableSession()
+    public async Task ApplyWorkbookReadOnlyOpenPolicy_ReservationPasswordWorkbook_CorrectPassword_UnlocksEditableSession()
     {
         await Session.Dispatch(() =>
         {
@@ -290,9 +292,10 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
                     return "secret";
                 };
 
-                window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
+                var outcome = window.ApplyWorkbookReadOnlyOpenPolicyForTest(workbook);
 
                 promptCount.Should().Be(1, "a write-reservation-password workbook must prompt for the password on open");
+                outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReservationPasswordAccepted);
                 window.IsWorkbookReadOnlyForTest.Should().BeFalse(
                     "typing the correct write-reservation password must unlock a fully editable session");
             }
@@ -306,7 +309,7 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
     }
 
     [Fact]
-    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReservationPasswordWorkbook_WrongPassword_OpensReadOnly()
+    public async Task ApplyWorkbookReadOnlyOpenPolicy_ReservationPasswordWorkbook_WrongPassword_OpensReadOnly()
     {
         // THE security case: before the round-134 fix, declining/answering "No" to a plain Yes/No
         // question granted full write access with no password ever checked. A wrong password must
@@ -322,8 +325,9 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
                 var noticeCount = 0;
                 window.ReservationPasswordIncorrectNoticeOverrideForTest = () => noticeCount++;
 
-                window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
+                var outcome = window.ApplyWorkbookReadOnlyOpenPolicyForTest(workbook);
 
+                outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReservationPasswordRejected);
                 window.IsWorkbookReadOnlyForTest.Should().BeTrue(
                     "a wrong write-reservation password must fall back to a read-only session, not grant write access");
                 noticeCount.Should().Be(1, "a wrong password must surface an 'opened as read-only' notice");
@@ -338,7 +342,7 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
     }
 
     [Fact]
-    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReservationPasswordWorkbook_CancelledPrompt_OpensReadOnly()
+    public async Task ApplyWorkbookReadOnlyOpenPolicy_ReservationPasswordWorkbook_CancelledPrompt_OpensReadOnly()
     {
         await Session.Dispatch(() =>
         {
@@ -351,8 +355,9 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
                 var noticeCount = 0;
                 window.ReservationPasswordIncorrectNoticeOverrideForTest = () => noticeCount++;
 
-                window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
+                var outcome = window.ApplyWorkbookReadOnlyOpenPolicyForTest(workbook);
 
+                outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReservationPasswordCancelled);
                 window.IsWorkbookReadOnlyForTest.Should().BeTrue(
                     "cancelling the write-reservation password prompt must fall back to a read-only session");
                 noticeCount.Should().Be(0,
@@ -368,7 +373,7 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
     }
 
     [Fact]
-    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_ReadOnlyRecommendedWorkbook_DeclinedPrompt_StaysEditable()
+    public async Task ApplyWorkbookReadOnlyOpenPolicy_ReadOnlyRecommendedWorkbook_DeclinedPrompt_StaysEditable()
     {
         await Session.Dispatch(() =>
         {
@@ -379,8 +384,9 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
                 workbook.FileSharing = new WorkbookFileSharingModel { ReadOnlyRecommended = true };
                 window.ReadOnlyRecommendedPromptOverrideForTest = _ => UserMessageResult.No;
 
-                window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
+                var outcome = window.ApplyWorkbookReadOnlyOpenPolicyForTest(workbook);
 
+                outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.ReadOnlyRecommendedDeclined);
                 window.IsWorkbookReadOnlyForTest.Should().BeFalse(
                     "declining (No) the prompt must leave the session editable");
             }
@@ -394,7 +400,7 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
     }
 
     [Fact]
-    public async Task ApplyReadOnlyRecommendedPromptIfNeeded_NormalWorkbook_DoesNotPrompt()
+    public async Task ApplyWorkbookReadOnlyOpenPolicy_NormalWorkbook_DoesNotPrompt()
     {
         // Sibling/no-regression: a workbook with no FileSharing metadata (or with
         // ReadOnlyRecommended explicitly false and no reservation password) must open without any
@@ -414,9 +420,10 @@ public sealed class R75_ProtectionSelectionAndReadOnlyPromptTests
                     return UserMessageResult.Yes;
                 };
 
-                window.ApplyReadOnlyRecommendedPromptIfNeededForTest(workbook);
+                var outcome = window.ApplyWorkbookReadOnlyOpenPolicyForTest(workbook);
 
                 promptCount.Should().Be(0, "a normal workbook must not prompt at all");
+                outcome.Kind.Should().Be(WorkbookReadOnlyOpenOutcomeKind.Editable);
                 window.IsWorkbookReadOnlyForTest.Should().BeFalse();
             }
             finally

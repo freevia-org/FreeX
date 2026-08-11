@@ -8657,29 +8657,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// prompt, verifies the stored password, and owns the resulting read-only state. A wrong password
     /// or Cancel falls back to a read-only session rather than refusing to open the file.
     /// </para>
-    /// Mirrors the WPF host's <c>MainWindow.Backstage.ApplyReadOnlyRecommendedPromptIfNeeded</c>.
+    /// Both renderers delegate this policy to <see cref="WorkbookReadOnlySession.RunOpen"/>.
     /// <see cref="SaveCurrentWorkbookAsync"/> reads the shared state on every Save to force Save-over
     /// through the Save-As dialog instead of a silent overwrite (R83-services-doc-recovery-props-5-1).
     /// Individual edit commands are not yet blocked -- that remains out of scope.
     /// </summary>
-    private void ApplyReadOnlyRecommendedPromptIfNeeded(Workbook workbook)
+    private WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicy(Workbook workbook) =>
+        _workbookReadOnlySession.RunOpen(workbook, new AvaloniaWorkbookReadOnlyOpenPromptPort(this));
+
+    private sealed class AvaloniaWorkbookReadOnlyOpenPromptPort(MainWindow owner) : IWorkbookReadOnlyOpenPromptPort
     {
-        var plan = _workbookReadOnlySession.PlanOpen(workbook);
-        if (!plan.ShouldPrompt)
-            return;
+        public WorkbookReadOnlyRecommendationChoice PromptReadOnlyRecommended(WorkbookReadOnlyOpenPlan plan) =>
+            owner.ResolveReadOnlyRecommendedPrompt(
+                FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(plan.WorkbookName)) == UserMessageResult.Yes
+                ? WorkbookReadOnlyRecommendationChoice.OpenReadOnly
+                : WorkbookReadOnlyRecommendationChoice.OpenEditable;
 
-        if (plan.PromptKind == WorkbookReadOnlyPromptKind.ReservationPassword)
-        {
-            var entered = ResolveReservationPasswordPrompt(plan.WorkbookName);
-            var decision = _workbookReadOnlySession.ApplyReservationPassword(entered);
-            if (decision.ShouldShowIncorrectPasswordNotice)
-                ResolveReservationPasswordIncorrectNotice();
-            return;
-        }
+        public WorkbookReservationPasswordResponse PromptReservationPassword(WorkbookReadOnlyOpenPlan plan) =>
+            WorkbookReservationPasswordResponse.FromPromptResult(
+                owner.ResolveReservationPasswordPrompt(plan.WorkbookName));
 
-        var prompt = FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(plan.WorkbookName);
-        _workbookReadOnlySession.ApplyPromptDecision(
-            ResolveReadOnlyRecommendedPrompt(prompt) == UserMessageResult.Yes);
+        public void ShowIncorrectReservationPasswordNotice(WorkbookReadOnlyOpenPlan plan) =>
+            owner.ResolveReservationPasswordIncorrectNotice();
     }
 
     /// <summary>
@@ -8843,16 +8842,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
-    /// Test-only seam for <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/> -- mirrors the
+    /// Test-only seam for <see cref="ApplyWorkbookReadOnlyOpenPolicy"/> -- mirrors the
     /// <c>RaiseKeyDownForTest</c>/<c>RaiseAutofillHandleDoubleClickForTest</c> convention of driving
     /// the real production method directly instead of a source-string proxy. Not used by production
     /// code paths.
     /// </summary>
-    internal void ApplyReadOnlyRecommendedPromptIfNeededForTest(Workbook workbook) =>
-        ApplyReadOnlyRecommendedPromptIfNeeded(workbook);
+    internal WorkbookReadOnlyOpenOutcome ApplyWorkbookReadOnlyOpenPolicyForTest(Workbook workbook) =>
+        ApplyWorkbookReadOnlyOpenPolicy(workbook);
 
     /// <summary>Test-only seam for the shared read-only session -- sets the state directly instead
-    /// of driving it through <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/>,
+    /// of driving it through <see cref="ApplyWorkbookReadOnlyOpenPolicy"/>,
     /// so Save-enforcement tests (R83-services-doc-recovery-props-5-1) don't need FileSharing metadata
     /// and a prompt override just to reach the read-only state. Not used by production code paths.
     /// </summary>
@@ -28115,9 +28114,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // A workbook saved with "Read-Only Recommended" or a write-reservation password used
             // to open fully editable on this shell with no prompt at all until this fix
             // (R75-services-protection-security-4-2); mirrors the WPF host's
-            // ApplyReadOnlyRecommendedPromptIfNeeded (MainWindow.Backstage.cs), called at the same
+            // ApplyWorkbookReadOnlyOpenPolicy (MainWindow.Backstage.cs), called at the same
             // point in the open sequence, right after the session/shell refresh.
-            ApplyReadOnlyRecommendedPromptIfNeeded(_session.Workbook);
+            ApplyWorkbookReadOnlyOpenPolicy(_session.Workbook);
             return Task.CompletedTask;
             }
         }
@@ -28220,7 +28219,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     /// <summary>
     /// The existing-path save target, or <c>null</c> if there is none usable OR this session was
-    /// marked read-only by <see cref="ApplyReadOnlyRecommendedPromptIfNeeded"/> -- withholding the
+    /// marked read-only by <see cref="ApplyWorkbookReadOnlyOpenPolicy"/> -- withholding the
     /// target here falls <see cref="SaveCurrentWorkbookAsync"/> through to the Save-As dialog instead
     /// of silently overwriting the original file (R83-services-doc-recovery-props-5-1, mirrors the
     /// WPF host's <c>MainWindow.WorkbookLifecycle.ResolveExistingSaveTarget</c>).
@@ -29097,7 +29096,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     internal DateTime? CurrentFileSourceLastWriteTimeUtcForTest => _currentFileSourceLastWriteTimeUtc;
 
     /// <summary>Test-only seam driving <see cref="OpenWorkbookFromTargetAsync"/> directly (mirrors
-    /// <see cref="ApplyReadOnlyRecommendedPromptIfNeededForTest"/>'s convention) -- lets a test open a
+    /// <see cref="ApplyWorkbookReadOnlyOpenPolicyForTest"/>'s convention) -- lets a test open a
     /// REAL file through the real production open path without going through the OS file picker.
     /// Not used by production code paths.</summary>
     internal Task OpenWorkbookFromTargetAsyncForTest(WorkbookOpenTarget target) =>
