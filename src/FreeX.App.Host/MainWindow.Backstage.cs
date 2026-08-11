@@ -1064,7 +1064,8 @@ public partial class MainWindow
             _options,
             _workbook.DisabledFormulaErrorCodes,
             initialSection,
-            OptionsDialogCalculationSettings.FromWorkbook(_workbook));
+            OptionsDialogCalculationSettings.FromWorkbook(_workbook),
+            _optionsRuntimeSession);
         if (ShowOwnedDialog(dlg) == true)
         {
             _options = dlg.Result;

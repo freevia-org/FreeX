@@ -23,8 +23,6 @@ public partial class App : Application
 {
     private static readonly IUserMessageService StartupMessageService = new WpfUserMessageService();
 
-    private static AppOptions? _startupOptions;
-
     private static ServiceProvider? _services;
 
     /// <summary>
@@ -75,7 +73,8 @@ public partial class App : Application
 
         // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,
         // so install/update/uninstall hooks are serviced before any UI initializes.
-        var options = AppOptionsStore.Load();
+        var optionsRuntimeSession = new FreeXOptionsRuntimeSession();
+        var options = optionsRuntimeSession.LiveOptions;
         AppLocalization.Bootstrap.InstallSharedSeams();
         AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);
         AppLocalization.Bootstrap.ApplyCurrentCultureToWpf();
@@ -110,15 +109,7 @@ public partial class App : Application
 
         // Configure DI
         var serviceCollection = new ServiceCollection();
-        _startupOptions = options;
-        try
-        {
-            ConfigureServices(serviceCollection);
-        }
-        finally
-        {
-            _startupOptions = null;
-        }
+        ConfigureServices(serviceCollection, optionsRuntimeSession);
         _services = serviceCollection.BuildServiceProvider();
 
         // Headless cross-platform visual-parity capture: render each app surface to a PNG and exit,
@@ -145,7 +136,7 @@ public partial class App : Application
         var crashAnalytics = Services.GetRequiredService<ICrashAnalytics>();
         var crashAnalyticsOptions = Services.GetRequiredService<AppCrashAnalyticsOptions>();
         var diagnosticsMetadata = Services.GetRequiredService<AppDiagnosticsMetadata>();
-        PromptForCrashAnalyticsConsentIfNeeded(options, crashAnalyticsOptions);
+        PromptForCrashAnalyticsConsentIfNeeded(optionsRuntimeSession, crashAnalyticsOptions);
         if (options.CrashAnalyticsEnabled != crashAnalyticsOptions.IsEnabled)
         {
             crashAnalyticsOptions = AppCrashAnalyticsOptions.CreateDefault(options.CrashAnalyticsEnabled);
@@ -302,8 +293,12 @@ public partial class App : Application
         return Environment.GetCommandLineArgs().Skip(1).ToArray();
     }
 
-    private static void ConfigureServices(IServiceCollection services)
+    private static void ConfigureServices(
+        IServiceCollection services,
+        FreeXOptionsRuntimeSession optionsRuntimeSession)
     {
+        ArgumentNullException.ThrowIfNull(optionsRuntimeSession);
+
         // Logging
         services.AddLogging(builder =>
         {
@@ -311,8 +306,9 @@ public partial class App : Application
             builder.AddSerilog();
         });
 
-        var options = _startupOptions ?? AppOptionsStore.Load();
+        var options = optionsRuntimeSession.LiveOptions;
         services.AddSingleton(options);
+        services.AddSingleton(optionsRuntimeSession);
 
         services.AddSingleton<IApplicationDataPathProvider>(PlatformApplicationDataPathProvider.Instance);
         services.AddSingleton<IAppDiagnosticsPathProvider>(PlatformAppDiagnosticsPathProvider.Instance);
@@ -521,9 +517,10 @@ public partial class App : Application
     }
 
     private static void PromptForCrashAnalyticsConsentIfNeeded(
-        AppOptions options,
+        FreeXOptionsRuntimeSession optionsRuntimeSession,
         AppCrashAnalyticsOptions crashAnalyticsOptions)
     {
+        var options = optionsRuntimeSession.LiveOptions;
         if (!CrashAnalyticsConsentWorkflowPlanner.ShouldPrompt(
                 options.CrashAnalyticsPrompted,
                 crashAnalyticsOptions.Dsn,
@@ -533,9 +530,11 @@ public partial class App : Application
         var accepted = AskStartupYesNo(
             UiText.Get("Startup_CrashReportsConsentPrompt"),
             UiText.Get("Startup_CrashReportsTitle"));
-        options.CrashAnalyticsEnabled = accepted;
-        options.CrashAnalyticsPrompted = true;
-        AppOptionsStore.Save(options);
+        optionsRuntimeSession.MutateFresh(latestOptions =>
+        {
+            latestOptions.CrashAnalyticsEnabled = accepted;
+            latestOptions.CrashAnalyticsPrompted = true;
+        });
     }
 
     private static bool AskStartupYesNo(string message, string title) =>

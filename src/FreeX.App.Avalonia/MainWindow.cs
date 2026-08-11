@@ -1298,13 +1298,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
     }
 
-    internal MainWindow(IReadOnlyList<string> startupArguments, WorkbookSession sharedSession)
+    internal MainWindow(
+        IReadOnlyList<string> startupArguments,
+        WorkbookSession sharedSession,
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
         : this(
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
             WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
             new CupsPlatformPrinter(),
-            sharedSession)
+            sharedSession,
+            optionsRuntimeSession: optionsRuntimeSession)
     {
     }
 
@@ -1331,12 +1335,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IPlatformPrinter platformPrinter,
         WorkbookSession? sharedSession,
         IPlatformClipboard? platformClipboard = null,
-        bool deferStartupFileOpen = false)
+        bool deferStartupFileOpen = false,
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
         ArgumentNullException.ThrowIfNull(workbookFileAccessService);
         ArgumentNullException.ThrowIfNull(platformPrinter);
 
+        _optionsRuntimeSession = optionsRuntimeSession ?? new FreeXOptionsRuntimeSession();
+        _statusBarOptionVisibility = StatusBarOptionVisibilityStore
+            .ToVisibility(_optionsRuntimeSession.LiveOptions)
+            .ToDictionary();
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
         _platformPrinter = platformPrinter;
@@ -29649,187 +29658,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session.Workbook.GetSheet(address.Sheet),
             _session.Workbook);
 
-    // Cache for UseR1C1ReferenceStyle: avoids a File.ReadAllText + JsonSerializer.Deserialize round
-    // trip through AppOptionsStore.Load() on every RefreshShell (selecting a cell, typing, pasting,
-    // undo/redo all funnel through FormatEditText -> UseR1C1ReferenceStyle). We still need to notice
-    // when the Options dialog (MainWindow.Options.cs) persists a change via AppOptionsStore.Save, so
-    // the cache is keyed on the options file's last-write time: a cheap File.Exists/GetLastWriteTimeUtc
-    // stat call is orders of magnitude cheaper than re-reading and re-parsing the whole JSON document,
-    // and only the read+parse work is redone when the timestamp actually moves (i.e. right after a
-    // save). Mirrors WPF's live <c>_options.UseR1C1ReferenceStyle</c> field (MainWindow.Editing.cs,
-    // MainWindow.FormulaReferenceEditing.cs), which is populated once and updated in place on save.
-    private static bool? _cachedUseR1C1ReferenceStyle;
-    private static DateTime _cachedUseR1C1ReferenceStyleWriteTimeUtc;
-    private static string? _cachedUseR1C1ReferenceStyleStorePath;
+    // Application options are loaded and adopted by the renderer-neutral runtime session. Hot edit
+    // paths read its in-memory snapshot directly, so the Avalonia renderer needs no file-time cache.
+    private bool UseR1C1ReferenceStyle =>
+        _optionsRuntimeSession.LiveOptions.UseR1C1ReferenceStyle;
 
-    /// <summary>
-    /// Reads the persisted "R1C1 Reference Style" toggle (Options ▸ Formulas), caching the parsed value
-    /// and only re-loading from disk when the underlying options file's last-write time changes (see the
-    /// cache fields above for why).
-    /// </summary>
-    private static bool UseR1C1ReferenceStyle
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+    private bool GenerateGetPivotData =>
+        _optionsRuntimeSession.LiveOptions.GenerateGetPivotData;
 
-            if (_cachedUseR1C1ReferenceStyle is { } cached &&
-                _cachedUseR1C1ReferenceStyleStorePath == storePath &&
-                _cachedUseR1C1ReferenceStyleWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
+    private bool EnableFillHandleAndCellDragAndDrop =>
+        _optionsRuntimeSession.LiveOptions.EnableFillHandleAndCellDragAndDrop;
 
-            var value = AppOptionsStore.Load().UseR1C1ReferenceStyle;
-            _cachedUseR1C1ReferenceStyle = value;
-            _cachedUseR1C1ReferenceStyleStorePath = storePath;
-            _cachedUseR1C1ReferenceStyleWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
+    private bool EnableAutoCompleteForCellValues =>
+        _optionsRuntimeSession.LiveOptions.EnableAutoCompleteForCellValues;
 
-    private static bool? _cachedGenerateGetPivotData;
-    private static DateTime _cachedGenerateGetPivotDataWriteTimeUtc;
-    private static string? _cachedGenerateGetPivotDataStorePath;
+    private bool MoveSelectionAfterEnter =>
+        _optionsRuntimeSession.LiveOptions.MoveSelectionAfterEnter;
 
-    private static bool GenerateGetPivotData
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedGenerateGetPivotData is { } cached &&
-                _cachedGenerateGetPivotDataStorePath == storePath &&
-                _cachedGenerateGetPivotDataWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = AppOptionsStore.Load().GenerateGetPivotData;
-            _cachedGenerateGetPivotData = value;
-            _cachedGenerateGetPivotDataStorePath = storePath;
-            _cachedGenerateGetPivotDataWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "Enable fill handle and
-    // cell drag-and-drop" option (Options > Advanced). Both pointer gesture hosts read the same
-    // persisted AppOptions value; keyboard and ribbon fill commands do not use this gate.
-    private static bool? _cachedEnableFillHandleAndCellDragAndDrop;
-    private static DateTime _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc;
-    private static string? _cachedEnableFillHandleAndCellDragAndDropStorePath;
-
-    private static bool EnableFillHandleAndCellDragAndDrop
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedEnableFillHandleAndCellDragAndDrop is { } cached &&
-                _cachedEnableFillHandleAndCellDragAndDropStorePath == storePath &&
-                _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = AppOptionsStore.Load().EnableFillHandleAndCellDragAndDrop;
-            _cachedEnableFillHandleAndCellDragAndDrop = value;
-            _cachedEnableFillHandleAndCellDragAndDropStorePath = storePath;
-            _cachedEnableFillHandleAndCellDragAndDropWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "Enable AutoComplete for
-    // cell values" option (Options ▸ Advanced ▸ Editing options): mirrors WPF's live
-    // <c>_options.EnableAutoCompleteForCellValues</c> field (MainWindow.Editing.cs), which gates
-    // ApplyCellValueAutoCompleteSuggestion.
-    private static bool? _cachedEnableAutoCompleteForCellValues;
-    private static DateTime _cachedEnableAutoCompleteForCellValuesWriteTimeUtc;
-    private static string? _cachedEnableAutoCompleteForCellValuesStorePath;
-
-    private static bool EnableAutoCompleteForCellValues
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedEnableAutoCompleteForCellValues is { } cached &&
-                _cachedEnableAutoCompleteForCellValuesStorePath == storePath &&
-                _cachedEnableAutoCompleteForCellValuesWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = AppOptionsStore.Load().EnableAutoCompleteForCellValues;
-            _cachedEnableAutoCompleteForCellValues = value;
-            _cachedEnableAutoCompleteForCellValuesStorePath = storePath;
-            _cachedEnableAutoCompleteForCellValuesWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    // Same write-time cache strategy as UseR1C1ReferenceStyle above, for the "After pressing
-    // Enter, move selection" option (Options ▸ Advanced): mirrors WPF's live
-    // <c>_options.MoveSelectionAfterEnter</c> / <c>_options.AfterEnterDirection</c> fields
-    // (MainWindow.Editing.cs), which are forwarded into ExcelEditKeyPlanner.GetIntent so Enter
-    // moves the active cell in the persisted direction (or not at all) instead of always Down.
-    private static bool? _cachedMoveSelectionAfterEnter;
-    private static DateTime _cachedMoveSelectionAfterEnterWriteTimeUtc;
-    private static string? _cachedMoveSelectionAfterEnterStorePath;
-
-    private static bool MoveSelectionAfterEnter
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedMoveSelectionAfterEnter is { } cached &&
-                _cachedMoveSelectionAfterEnterStorePath == storePath &&
-                _cachedMoveSelectionAfterEnterWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = AppOptionsStore.Load().MoveSelectionAfterEnter;
-            _cachedMoveSelectionAfterEnter = value;
-            _cachedMoveSelectionAfterEnterStorePath = storePath;
-            _cachedMoveSelectionAfterEnterWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
-
-    private static FormulaEditorEnterDirection? _cachedAfterEnterDirection;
-    private static DateTime _cachedAfterEnterDirectionWriteTimeUtc;
-    private static string? _cachedAfterEnterDirectionStorePath;
-
-    private static FormulaEditorEnterDirection AfterEnterDirection
-    {
-        get
-        {
-            var storePath = AppOptionsStore.StorePath;
-            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
-
-            if (_cachedAfterEnterDirection is { } cached &&
-                _cachedAfterEnterDirectionStorePath == storePath &&
-                _cachedAfterEnterDirectionWriteTimeUtc == writeTimeUtc)
-            {
-                return cached;
-            }
-
-            var value = ToFormulaEditorEnterDirection(AppOptionsStore.Load().AfterEnterDirection);
-            _cachedAfterEnterDirection = value;
-            _cachedAfterEnterDirectionStorePath = storePath;
-            _cachedAfterEnterDirectionWriteTimeUtc = writeTimeUtc;
-            return value;
-        }
-    }
+    private FormulaEditorEnterDirection AfterEnterDirection =>
+        ToFormulaEditorEnterDirection(_optionsRuntimeSession.LiveOptions.AfterEnterDirection);
 
     private static FormulaEditorEnterDirection ToFormulaEditorEnterDirection(AppOptionsEnterDirection direction) =>
         direction switch

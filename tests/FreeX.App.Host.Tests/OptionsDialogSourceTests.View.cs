@@ -19,8 +19,8 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("OptShowFormulaBar.IsChecked = _opts.ShowFormulaBar");
         source.Should().Contain("OptFormulaBarExpanded.IsChecked = _opts.FormulaBarExpanded");
         source.Should().Contain("ShowFormulaBar     = OptShowFormulaBar.IsChecked == true");
-        source.Should().Contain("FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
-        source.Should().Contain("OptionsDialogPlanner.MergeOntoFreshLoad(");
+        source.Should().Contain("formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("private void ShowFormulaBar_Changed(object sender, RoutedEventArgs e)");
         source.Should().Contain("private void UpdateFormulaBarExpandedState()");
         source.Should().Contain("OptFormulaBarExpanded.IsEnabled = OptShowFormulaBar.IsChecked == true;");
-        source.Should().Contain("FormulaBarExpanded = OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
+        source.Should().Contain("formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true");
     }
 
     [Fact]

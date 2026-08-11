@@ -39,9 +39,8 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("private readonly CustomDictionaryEditorSession _customDictionaryEditor");
         source.Should().Contain("_customDictionaryEditor.SetPendingWord(ProofingCustomDictionaryWordBox.Text)");
         source.Should().Contain("_customDictionaryEditor.AddPendingWord();");
-        source.Should().Contain("SpellCheckCustomDictionaryWords = _customDictionaryEditor.Model.Words.ToList()");
-        source.Should().Contain("OptionsDialogPlanner.MergeOntoFreshLoad(");
-        source.Should().Contain("AppOptionsStore.Load(),");
+        source.Should().Contain("_customDictionaryEditor = _dialogSession.CustomDictionary;");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
         source.Should().Contain("OptProofingIgnoreUppercase.IsChecked = _opts.ProofingIgnoreUppercase;");
     }
 

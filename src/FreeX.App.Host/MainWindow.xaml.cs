@@ -159,6 +159,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly WorkbookFileWorkflow _fileWorkflow;
     private readonly IWorkbookShareService _shareService = new WindowsWorkbookShareService();
     private List<RecentFileViewModel> _allRecentItems = [];
+    private readonly FreeXOptionsRuntimeSession _optionsRuntimeSession;
     private AppOptions _options;
     // _currentFilePath is declared as a delegating property in the dirty/save-state cluster above.
     private XlsxFeatureReport? _currentXlsxFeatureReport;
@@ -277,7 +278,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         WorkbookWindowRegistry? windowRegistry = null,
         NewWorkbookNameSequence? newWorkbookNameSequence = null,
         WorkbookSession? workbookSession = null,
-        IPlatformClipboard? platformClipboard = null)
+        IPlatformClipboard? platformClipboard = null,
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
         : this(
             logger,
             viewportService,
@@ -293,7 +295,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
             windowRegistry,
             newWorkbookNameSequence,
             workbookSession,
-            platformClipboard)
+            platformClipboard,
+            optionsRuntimeSession)
     {
     }
 
@@ -312,7 +315,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         WorkbookWindowRegistry? windowRegistry = null,
         NewWorkbookNameSequence? newWorkbookNameSequence = null,
         WorkbookSession? workbookSession = null,
-        IPlatformClipboard? platformClipboard = null)
+        IPlatformClipboard? platformClipboard = null,
+        FreeXOptionsRuntimeSession? optionsRuntimeSession = null)
     {
         // The MainWindow DI factory supplies a fresh per-document WorkbookDocumentState. Sibling
         // windows receive a WorkbookSession that already shares the originating document state.
@@ -358,7 +362,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
         }
         _currentSheetId = _session.ActiveSheet.Id;
         ConfigureWorkbookSessionRendererAdapters();
-        _options = options ?? AppOptionsStore.Load();
+        _optionsRuntimeSession = optionsRuntimeSession ?? new FreeXOptionsRuntimeSession(options);
+        _options = _optionsRuntimeSession.LiveOptions;
         _windowRegistry = windowRegistry;
         // A window handed a workbook that a registered window already views is a secondary view
         // of that document (View > New Window passed the originating window's context); it must

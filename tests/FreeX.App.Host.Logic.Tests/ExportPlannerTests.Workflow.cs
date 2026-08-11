@@ -17,8 +17,8 @@ public partial class ExportPlannerTests
         printExport.Should().Contain("WorkbookExportInteractionPlanner.CreateCommandPlan(");
         printExport.Should().Contain("new ExportOptionsDialog(commandPlan.HasSelection, _options.PdfExportLanguage, selectedFormat)");
         printExport.Should().Contain("if (requestPlan.ShouldPersistPdfLanguage)");
-        printExport.Should().Contain("_options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;");
-        printExport.Should().Contain("AppOptionsStore.Save(_options);");
+        printExport.Should().Contain("MutateRuntimeOptions(options =>");
+        printExport.Should().Contain("options.PdfExportLanguage = optionsDialog.Result.PdfLanguage);");
         printExport.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
         printExport.Should().Contain("requestPlan.ShouldConfirmNormalizedOverwrite");
         printExport.Should().Contain("UiText.Format(\"MainWindowMessage_ExportNormalizedOverwritePrompt\", requestPlan.Request.Path)");

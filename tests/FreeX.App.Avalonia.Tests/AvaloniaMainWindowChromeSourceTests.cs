@@ -387,8 +387,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         contextMenuSource.Should().Contain("WindowDecorationsElementRole.User");
         AssertBefore(
             contextMenuSource,
-            "var latestOptions = AppOptionsStore.Load();",
-            "latestOptions.QuickAccessToolbarCommands =");
+            "var saveResult = _optionsRuntimeSession.MutateFresh(options =>",
+            "options.QuickAccessToolbarCommands =");
 
         sharedFrameSource.Should().Contain("spec.Window.ExtendClientAreaToDecorationsHint = true;");
         sharedFrameSource.Should().Contain("spec.Window.ExtendClientAreaTitleBarHeightHint = spec.TitleBarHeight;");

@@ -86,7 +86,9 @@ public sealed partial class SpellCheckWorkflowPlannerTests
 
         source.Should().Contain("new SpellCheckSessionController(new SpellCheckSessionAdapter(");
         source.Should().Contain("() => _options.SpellCheckCustomDictionaryWords");
-        source.Should().Contain("() => AppOptionsStore.Save(_options)");
+        source.Should().Contain("() => MutateRuntimeOptions(options =>");
+        source.Should().Contain("options.SpellCheckCustomDictionaryWords =");
+        source.Should().Contain("}).IsPersisted");
         controllerSource.Should().Contain("case SpellCheckSessionAction.AddToDictionary:");
         controllerSource.Should().Contain("SpellCheckWorkflowPlanner.AddCustomDictionaryWord(");
         controllerSource.Should().Contain("_adapter.PersistCustomDictionary();");

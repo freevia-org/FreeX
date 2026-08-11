@@ -60,13 +60,9 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        source.Should().Contain("var edited = new AppOptions");
-        source.Should().Contain("var opts = OptionsDialogPlanner.MergeOntoFreshLoad(");
-        source.Should().Contain("AppOptionsStore.Load(),");
-        source.Should().Contain("_opts,");
-        source.Should().Contain("edited);");
-        source.Should().Contain("PdfExportLanguage = ExportPlanner.NormalizePdfLanguage(_opts.PdfExportLanguage)");
-        source.Should().Contain("SpellCheckCustomDictionaryWords = _customDictionaryEditor.Model.Words.ToList()");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
+        source.Should().Contain("_dialogSession = (runtimeSession ?? new FreeXOptionsRuntimeSession(opts)).BeginDialog(opts);");
+        source.Should().Contain("_customDictionaryEditor = _dialogSession.CustomDictionary;");
         source.Should().NotContain("SpellCheckCustomDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(_opts.SpellCheckCustomDictionaryWords)");
     }
 
@@ -218,14 +214,15 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("OptAppLanguage.ItemsSource = AppLanguageCatalog.GetAvailableLanguages()");
         source.Should().Contain("OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage)");
         source.Should().Contain("AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
-        source.Should().Contain("OptionsDialogPlanner.MergeOntoFreshLoad(");
+        source.Should().Contain("var saveResult = _dialogSession.Commit(");
 
         backstageSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage)");
         backstageSource.Should().Contain("UiText.Get(\"Options_AppLanguageRestartMessage\")");
         appSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);");
-        appSource.Should().Contain("_startupOptions = options;");
-        appSource.Should().Contain("ConfigureServices(serviceCollection);");
-        appSource.Should().Contain("var options = _startupOptions ?? AppOptionsStore.Load();");
+        appSource.Should().Contain("var optionsRuntimeSession = new FreeXOptionsRuntimeSession();");
+        appSource.Should().Contain("ConfigureServices(serviceCollection, optionsRuntimeSession);");
+        appSource.Should().Contain("var options = optionsRuntimeSession.LiveOptions;");
+        appSource.Should().Contain("services.AddSingleton(optionsRuntimeSession);");
         appSource.Should().NotContain("var options = Services.GetRequiredService<AppOptions>();");
     }
 
@@ -249,8 +246,8 @@ public sealed partial class OptionsDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
 
-        source.Should().Contain("if (!AppOptionsStore.Save(opts))");
-        source.Should().Contain("DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);");
+        source.Should().Contain("if (!saveResult.IsPersisted)");
+        source.Should().Contain("DialogMessageHelper.ShowError(this, saveResult.PersistenceError, Title);");
         source.Should().Contain("return;");
         source.Should().Contain("DialogResult = true;");
     }

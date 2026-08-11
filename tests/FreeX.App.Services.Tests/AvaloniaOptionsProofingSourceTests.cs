@@ -54,9 +54,9 @@ public sealed class AvaloniaOptionsProofingSourceTests
         source.Should().Contain("current.ProofingIgnoreUppercase");
         source.Should().Contain("current.ProofingIgnoreNumbers");
         source.Should().Contain("QuickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true");
-        source.Should().Contain("QuickAccessToolbarCommands: QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList()");
-        source.Should().Contain("SpellCheckCustomDictionaryWords: customDictionaryEditor.Model.Words.ToList()");
-        source.Should().Contain("_avaloniaQuickAccessOptions = AppOptionsStore.Load();");
+        source.Should().Contain("quickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true");
+        source.Should().Contain("optionsDialogSession.Commit(");
+        source.Should().Contain("_avaloniaQuickAccessOptions = current;");
         source.Should().Contain("RebuildAvaloniaQuickAccessToolbar();");
         source.Should().Contain("DeferredCommandMessagePlanner.AutoCorrectOptions()");
         source.Should().Contain("DeferredCommandMessageResolver.Resolve(");

@@ -38,7 +38,11 @@ public partial class MainWindow
                     outcome.ErrorMessage,
                     outcome.IsNoOp);
             },
-            () => AppOptionsStore.Save(_options)));
+            () => MutateRuntimeOptions(options =>
+            {
+                options.SpellCheckCustomDictionaryWords =
+                    _options.SpellCheckCustomDictionaryWords.ToList();
+            }).IsPersisted));
         var transition = controller.Start();
 
         while (transition.RequiresReview)

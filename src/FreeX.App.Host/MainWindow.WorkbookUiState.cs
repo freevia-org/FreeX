@@ -44,7 +44,7 @@ public partial class MainWindow
     /// Applies a Formula Bar visibility value to THIS window's chrome (the checked ribbon toggle
     /// and the actual FormulaBarBorder visibility). Show Formula Bar is a genuine Excel-instance
     /// display preference (R83-app-view-modes-5-2), so this is called both when this window loads
-    /// its own options and when the <see cref="WorkbookWindowRegistry"/> broadcasts a change made
+    /// the shared runtime options and when the <see cref="WorkbookWindowRegistry"/> broadcasts a change made
     /// in another window of the same process (see <see cref="IWorkbookWindow.ApplyFormulaBarVisibility"/>).
     /// </summary>
     public void ApplyFormulaBarVisibility(bool visible)

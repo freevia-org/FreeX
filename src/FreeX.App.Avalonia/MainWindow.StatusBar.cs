@@ -20,8 +20,7 @@ public sealed partial class MainWindow
     // (via the shared StatusBarOptionVisibilityStore, the same store the WPF host's FreeXOptions
     // implements) rather than always the hardcoded Excel defaults, so a customization made in a
     // previous session survives a relaunch instead of silently resetting every time.
-    private readonly Dictionary<string, bool> _statusBarOptionVisibility =
-        StatusBarOptionVisibilityStore.ToVisibility(AppOptionsStore.Load()).ToDictionary();
+    private readonly Dictionary<string, bool> _statusBarOptionVisibility;
 
     // Tracks the runtime-built customize toggle items by OptionTag so the menu's live checked state can
     // be refreshed on open, mirroring the WPF host's _statusBarCustomizeMenuItems registry.
@@ -132,11 +131,13 @@ public sealed partial class MainWindow
 
     private void OnStatusBarCustomizeToggled(string optionTag, bool isChecked)
     {
-        _statusBarOptionVisibility[optionTag] = isChecked;
-
-        // Reload-before-mutate preserves sibling-window changes; both renderers share the mutation and
-        // persistence ceremony while retaining their own error presentation and live refresh.
-        var result = StatusBarOptionUpdateWorkflow.ApplyToFreshOptionsAndSave(optionTag, isChecked);
+        var result = StatusBarOptionUpdateWorkflow.ApplyToRuntimeSession(
+            _optionsRuntimeSession,
+            optionTag,
+            isChecked);
+        _statusBarOptionVisibility.Clear();
+        foreach (var (tag, isVisible) in result.Visibility.ToDictionary())
+            _statusBarOptionVisibility[tag] = isVisible;
         if (result.IsRecognized && !result.IsPersisted)
         {
             ShowEditIssue(result.PersistenceError ?? UiText.Get("Options_SaveFailed"));

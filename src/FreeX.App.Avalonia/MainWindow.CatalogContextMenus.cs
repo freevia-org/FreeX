@@ -68,7 +68,7 @@ public sealed partial class MainWindow
             _avaloniaQuickAccessToolbar,
             WindowDecorationsElementRole.User);
 
-        _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+        _avaloniaQuickAccessOptions = _optionsRuntimeSession.LiveOptions;
         RebuildAvaloniaQuickAccessToolbar();
     }
 
@@ -230,7 +230,7 @@ public sealed partial class MainWindow
     private QuickAccessToolbarCustomizationMenuState CreateAvaloniaQuickAccessCustomizationMenuState(
         string commandId)
     {
-        _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+        _avaloniaQuickAccessOptions = _optionsRuntimeSession.Reload();
         return new QuickAccessToolbarCustomizationMenuState(
             commandId,
             _avaloniaQuickAccessOptions.QuickAccessToolbarCommands);
@@ -280,16 +280,13 @@ public sealed partial class MainWindow
         if (action is null)
             return;
 
-        // Options can be changed while this window is open. Reload immediately before mutation so
-        // saving QAT customization cannot overwrite unrelated settings with the startup snapshot.
-        var latestOptions = AppOptionsStore.Load();
-        latestOptions.QuickAccessToolbarCommands =
-            QuickAccessToolbarCustomizationPlanner.Apply(
-                latestOptions.QuickAccessToolbarCommands,
+        var saveResult = _optionsRuntimeSession.MutateFresh(options =>
+            options.QuickAccessToolbarCommands =
+                QuickAccessToolbarCustomizationPlanner.Apply(
+                options.QuickAccessToolbarCommands,
                 command.CommandId,
-                action.Value).ToList();
-        AppOptionsStore.Save(latestOptions);
-        _avaloniaQuickAccessOptions = latestOptions;
+                action.Value).ToList());
+        _avaloniaQuickAccessOptions = saveResult.Options;
         RebuildAvaloniaQuickAccessToolbar();
     }
 

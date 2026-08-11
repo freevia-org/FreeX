@@ -62,4 +62,28 @@ public sealed class StatusBarOptionUpdateWorkflowTests
         result.Succeeded.Should().BeTrue();
         result.Visibility.Minimum.Should().BeTrue();
     }
+
+    [Fact]
+    public void ApplyToRuntimeSession_ReloadsPersistsAndAdopts()
+    {
+        AppOptions? saved = null;
+        var runtime = new FreeXOptionsRuntimeSession(
+            new AppOptions { StatusBarShowMaximum = false },
+            load: () => new AppOptions { StatusBarShowMaximum = false, UserName = "Fresh" },
+            save: options =>
+            {
+                saved = options;
+                return true;
+            });
+
+        var result = StatusBarOptionUpdateWorkflow.ApplyToRuntimeSession(
+            runtime,
+            StatusBarOptionTags.Maximum,
+            isVisible: true);
+
+        result.Succeeded.Should().BeTrue();
+        saved.Should().BeSameAs(runtime.LiveOptions);
+        runtime.LiveOptions.UserName.Should().Be("Fresh");
+        runtime.LiveOptions.StatusBarShowMaximum.Should().BeTrue();
+    }
 }

@@ -52,4 +52,30 @@ public static class StatusBarOptionUpdateWorkflow
         var options = load is null ? AppOptionsStore.Load() : load();
         return ApplyAndSave(options, optionTag, isVisible, save);
     }
+
+    public static StatusBarOptionUpdateResult ApplyToRuntimeSession(
+        FreeXOptionsRuntimeSession runtimeSession,
+        string optionTag,
+        bool isVisible)
+    {
+        ArgumentNullException.ThrowIfNull(runtimeSession);
+
+        var options = runtimeSession.Reload();
+        var recognized = StatusBarOptionVisibilityStore.TrySetOption(options, optionTag, isVisible);
+        if (!recognized)
+        {
+            return new StatusBarOptionUpdateResult(
+                IsRecognized: false,
+                IsPersisted: false,
+                StatusBarOptionVisibilityStore.ToVisibility(options),
+                PersistenceError: null);
+        }
+
+        var persistence = runtimeSession.SaveAndAdopt(options);
+        return new StatusBarOptionUpdateResult(
+            IsRecognized: true,
+            IsPersisted: persistence.IsPersisted,
+            StatusBarOptionVisibilityStore.ToVisibility(persistence.Options),
+            persistence.PersistenceError);
+    }
 }

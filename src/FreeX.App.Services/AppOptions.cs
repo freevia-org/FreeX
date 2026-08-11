@@ -111,6 +111,67 @@ public sealed class AppOptions : INormalizableApplicationOptions, IStatusBarOpti
     /// <inheritdoc cref="INormalizableApplicationOptions.Normalize"/>
     public void Normalize() => NormalizePersistedCollections();
 
+    /// <summary>
+    /// Replaces this runtime snapshot with another normalized snapshot while preserving object identity.
+    /// Shells and sibling windows can retain one live reference as the options session adopts reloads.
+    /// </summary>
+    public void CopyFrom(AppOptions source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        DefaultFontName = source.DefaultFontName;
+        DefaultFontSize = source.DefaultFontSize;
+        DefaultSheetCount = source.DefaultSheetCount;
+        UserName = source.UserName;
+        CollapseRibbonAutomatically = source.CollapseRibbonAutomatically;
+        ShowScreenTips = source.ShowScreenTips;
+        AppLanguage = source.AppLanguage;
+        SpellCheckCustomDictionaryWords = source.SpellCheckCustomDictionaryWords.ToList();
+        AutoCalculate = source.AutoCalculate;
+        UseR1C1ReferenceStyle = source.UseR1C1ReferenceStyle;
+        GenerateGetPivotData = source.GenerateGetPivotData;
+        ErrorCheckingEnabled = source.ErrorCheckingEnabled;
+        ProofingIgnoreUppercase = source.ProofingIgnoreUppercase;
+        ProofingIgnoreNumbers = source.ProofingIgnoreNumbers;
+        ShowFormulaBar = source.ShowFormulaBar;
+        FormulaBarExpanded = source.FormulaBarExpanded;
+        MoveSelectionAfterEnter = source.MoveSelectionAfterEnter;
+        AfterEnterDirection = source.AfterEnterDirection;
+        EnableFillHandleAndCellDragAndDrop = source.EnableFillHandleAndCellDragAndDrop;
+        EnableAutoCompleteForCellValues = source.EnableAutoCompleteForCellValues;
+        ShowGridlines = source.ShowGridlines;
+        ShowHeadings = source.ShowHeadings;
+        ObjectsDisplay = source.ObjectsDisplay;
+        StatusBarShowCellMode = source.StatusBarShowCellMode;
+        StatusBarShowEndMode = source.StatusBarShowEndMode;
+        StatusBarShowSelectionMode = source.StatusBarShowSelectionMode;
+        StatusBarShowPageNumber = source.StatusBarShowPageNumber;
+        StatusBarShowAverage = source.StatusBarShowAverage;
+        StatusBarShowCount = source.StatusBarShowCount;
+        StatusBarShowNumericalCount = source.StatusBarShowNumericalCount;
+        StatusBarShowMinimum = source.StatusBarShowMinimum;
+        StatusBarShowMaximum = source.StatusBarShowMaximum;
+        StatusBarShowSum = source.StatusBarShowSum;
+        StatusBarShowViewShortcuts = source.StatusBarShowViewShortcuts;
+        StatusBarShowZoom = source.StatusBarShowZoom;
+        StatusBarShowZoomSlider = source.StatusBarShowZoomSlider;
+        DefaultFormat = source.DefaultFormat;
+        QuickAccessToolbarBelowRibbon = source.QuickAccessToolbarBelowRibbon;
+        QuickAccessToolbarCommands = source.QuickAccessToolbarCommands.ToList();
+        CrashAnalyticsEnabled = source.CrashAnalyticsEnabled;
+        CrashAnalyticsPrompted = source.CrashAnalyticsPrompted;
+        PdfExportLanguage = source.PdfExportLanguage;
+        LastPersistenceError = source.LastPersistenceError;
+        Normalize();
+    }
+
+    public AppOptions Clone()
+    {
+        var clone = new AppOptions();
+        clone.CopyFrom(this);
+        return clone;
+    }
+
     public void NormalizePersistedCollections()
     {
         DefaultFontName = NormalizeDefaultFontName(DefaultFontName);

@@ -554,24 +554,21 @@ public sealed class AvaloniaShellSourceTests
         menuSource.Should().Contain("_optionsMenuItem.Click += async (_, _) => await ExecuteOwnedNativeFileMenuItemAsync(NativeFileMenuItemId.Options);");
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.Options)");
 
-        // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
+        // The dialog edits AppOptions through the renderer-neutral runtime/dialog session.
         optionsSource.Should().Contain("var current = App.ParityCaptureOptions is null");
-        optionsSource.Should().Contain("? AppOptionsStore.Load()");
+        optionsSource.Should().Contain("? _optionsRuntimeSession.Reload()");
         optionsSource.Should().Contain(": OptionsDialogParityFixture.Create();");
+        optionsSource.Should().Contain("var optionsDialogSession = _optionsRuntimeSession.BeginDialog(current);");
         optionsSource.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
-        optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(");
-        optionsSource.Should().Contain("new OptionsDialogPlanner.OptionsDialogSupplementalInput(");
-        optionsSource.Should().Contain("EnableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true");
-        optionsSource.Should().NotContain("projected.EnableFillHandleAndCellDragAndDrop =");
+        optionsSource.Should().Contain("var saveResult = optionsDialogSession.Commit(");
+        optionsSource.Should().Contain("enableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true");
         // R124-avalonia-options-multiwindow-lastwriter: the OK handler reloads the freshest on-disk
-        // options and merges onto it only the fields this dialog session actually edited (see
-        // OptionsDialogPlanner.MergeOntoFreshLoad), instead of saving `projected` -- built purely from
-        // this dialog's open-time snapshot -- as the whole document. Saving `projected` directly would
-        // silently discard whatever another window (or this window's own reload-before-mutate context
-        // menus) persisted while this dialog was open.
-        optionsSource.Should().Contain("var merged = OptionsDialogPlanner.MergeOntoFreshLoad(AppOptionsStore.Load(), current, projected);");
-        optionsSource.Should().Contain("AppOptionsStore.Save(merged)");
-        optionsSource.Should().NotContain("AppOptionsStore.Save(projected)");
+        // options and merges only the fields edited by this dialog. The renderer does not own that
+        // persistence ceremony.
+        optionsSource.Should().Contain("if (!saveResult.IsPersisted)");
+        optionsSource.Should().Contain("current = saveResult.Options;");
+        optionsSource.Should().NotContain("OptionsDialogPlanner.MergeOntoFreshLoad(");
+        optionsSource.Should().NotContain("AppOptionsStore.Save(");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"OptionsDialog\");");
         optionsSource.Should().Contain("const double optionsDialogWidth = OptionsDialogPlanner.CaptureWidth;");
         optionsSource.Should().Contain("const double optionsDialogHeight = OptionsDialogPlanner.CaptureHeight;");

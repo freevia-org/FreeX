@@ -27,8 +27,8 @@ namespace FreeX.App.Avalonia;
 /// <summary>
 /// File ▸ Options — the Avalonia/macOS shell's Options (Settings) dialog. The Windows host already has
 /// a multi-tab <c>OptionsDialog</c> editing the shared <see cref="AppOptions"/> model; this is the
-/// portable shell's counterpart. It edits the same <see cref="AppOptions"/> (loaded/saved through
-/// <see cref="AppOptionsStore"/>), so settings persist across launches and are shared with the host.
+/// portable shell's counterpart. It edits the same <see cref="AppOptions"/> through the shared
+/// <see cref="FreeXOptionsRuntimeSession"/>, so settings persist across launches and are shared with the host.
 ///
 /// <para>
 /// The dialog is a left category list (General / Formulas / Proofing / View / Save) plus a right panel,
@@ -41,6 +41,8 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private readonly FreeXOptionsRuntimeSession _optionsRuntimeSession;
+
     private static AvaloniaCompactDialogChromeStyle OptionsDialogChromeStyle => new(FormulaBarFontFamily);
 
     // ── File ▸ Options entry point ──────────────────────────────────────────────
@@ -59,10 +61,12 @@ public sealed partial class MainWindow
         // Edit a snapshot loaded from the shared store during normal use. The capture route swaps
         // in a deterministic shared fixture so paired screenshots do not inherit user-local state.
         var current = App.ParityCaptureOptions is null
-            ? AppOptionsStore.Load()
+            ? _optionsRuntimeSession.Reload()
             : OptionsDialogParityFixture.Create();
-        var quickAccessCommandIds = QuickAccessToolbarCatalog.NormalizeCommandIds(current.QuickAccessToolbarCommands).ToList();
-        var customDictionaryEditor = new CustomDictionaryEditorSession(current.SpellCheckCustomDictionaryWords);
+        var optionsDialogSession = _optionsRuntimeSession.BeginDialog(current);
+        current = optionsDialogSession.OpenSnapshot;
+        var quickAccessSession = optionsDialogSession.QuickAccessToolbar;
+        var customDictionaryEditor = optionsDialogSession.CustomDictionary;
         var warningText = new TextBlock
         {
             Foreground = Brush(180, 30, 30),
@@ -658,21 +662,20 @@ public sealed partial class MainWindow
         void UpdateQuickAccessButtons()
         {
             quickAccessAddButton.IsEnabled = quickAccessAvailableList.SelectedItem is OptionsQuickAccessCommandChoice;
-            quickAccessRemoveButton.IsEnabled = quickAccessSelectedList.SelectedItem is OptionsQuickAccessCommandChoice && quickAccessCommandIds.Count > 1;
+            quickAccessRemoveButton.IsEnabled = quickAccessSelectedList.SelectedItem is OptionsQuickAccessCommandChoice && quickAccessSession.CommandIds.Count > 1;
             quickAccessMoveUpButton.IsEnabled = quickAccessSelectedList.SelectedIndex > 0;
-            quickAccessMoveDownButton.IsEnabled = quickAccessSelectedList.SelectedIndex >= 0 && quickAccessSelectedList.SelectedIndex < quickAccessCommandIds.Count - 1;
+            quickAccessMoveDownButton.IsEnabled = quickAccessSelectedList.SelectedIndex >= 0 && quickAccessSelectedList.SelectedIndex < quickAccessSession.CommandIds.Count - 1;
         }
 
         void RefreshQuickAccessLists(string? selectedAvailableId = null, string? selectedCommandId = null)
         {
             var filter = quickAccessSearchBox.Text?.Trim() ?? string.Empty;
-            var available = QuickAccessToolbarCustomizationPlanner.FilterAvailable(
-                    quickAccessCommandIds,
+            var available = quickAccessSession.FilterAvailable(
                     filter,
                     command => [UiText.Get(command.TitleResourceKey), UiText.Get(command.DescriptionResourceKey)])
                 .Select(command => new OptionsQuickAccessCommandChoice(command.Id, UiText.Get(command.TitleResourceKey)))
                 .ToList();
-            var selected = quickAccessCommandIds
+            var selected = quickAccessSession.CommandIds
                 .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command : null)
                 .Where(command => command is not null)
                 .Select(command => new OptionsQuickAccessCommandChoice(command!.Id, UiText.Get(command.TitleResourceKey)))
@@ -690,39 +693,30 @@ public sealed partial class MainWindow
         {
             if (quickAccessAvailableList.SelectedItem is not OptionsQuickAccessCommandChoice choice)
                 return;
-            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Apply(
-                quickAccessCommandIds,
-                choice.Id,
-                QuickAccessToolbarCustomizationAction.Add).ToList();
+            quickAccessSession.Apply(choice.Id, QuickAccessToolbarCustomizationAction.Add);
             RefreshQuickAccessLists(selectedCommandId: choice.Id);
         }
 
         void RemoveQuickAccessCommand()
         {
-            if (quickAccessSelectedList.SelectedItem is not OptionsQuickAccessCommandChoice choice || quickAccessCommandIds.Count <= 1)
+            if (quickAccessSelectedList.SelectedItem is not OptionsQuickAccessCommandChoice choice || quickAccessSession.CommandIds.Count <= 1)
                 return;
-            var index = quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+            var index = quickAccessSession.IndexOf(choice.Id);
             if (index < 0)
                 return;
-            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Apply(
-                quickAccessCommandIds,
-                choice.Id,
-                QuickAccessToolbarCustomizationAction.Remove).ToList();
-            var nextIndex = Math.Clamp(index, 0, quickAccessCommandIds.Count - 1);
-            RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[nextIndex]);
+            quickAccessSession.Apply(choice.Id, QuickAccessToolbarCustomizationAction.Remove);
+            var nextIndex = Math.Clamp(index, 0, quickAccessSession.CommandIds.Count - 1);
+            RefreshQuickAccessLists(selectedCommandId: quickAccessSession.CommandIds[nextIndex]);
         }
 
         void MoveQuickAccessCommand(int delta)
         {
             if (quickAccessSelectedList.SelectedItem is not OptionsQuickAccessCommandChoice choice)
                 return;
-            var index = quickAccessCommandIds.FindIndex(id => string.Equals(id, choice.Id, StringComparison.OrdinalIgnoreCase));
+            var index = quickAccessSession.IndexOf(choice.Id);
             if (index < 0)
                 return;
-            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Move(
-                quickAccessCommandIds,
-                choice.Id,
-                delta).ToList();
+            quickAccessSession.Move(choice.Id, delta);
             RefreshQuickAccessLists(selectedCommandId: choice.Id);
         }
 
@@ -768,8 +762,8 @@ public sealed partial class MainWindow
         quickAccessMoveDownButton.Click += (_, _) => MoveQuickAccessCommand(1);
         quickAccessResetButton.Click += (_, _) =>
         {
-            quickAccessCommandIds = QuickAccessToolbarCustomizationPlanner.Reset().ToList();
-            RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[0]);
+            quickAccessSession.Reset();
+            RefreshQuickAccessLists(selectedCommandId: quickAccessSession.CommandIds[0]);
         };
 
         async Task ImportQuickAccessCustomizationAsync()
@@ -793,15 +787,14 @@ public sealed partial class MainWindow
                         ShowOptionsWarning("Quick Access Toolbar import requires a local file path.");
                         return;
                     }
-                    var result = QuickAccessToolbarCustomizationFile.TryLoad(picker.LocalPath);
+                    var result = quickAccessSession.TryImport(picker.LocalPath);
                     if (!result.Success || result.Customization is null)
                     {
                         ShowOptionsWarning(result.ErrorMessage ?? "Could not import Quick Access Toolbar customization.");
                         return;
                     }
-                    quickAccessCommandIds = result.Customization.CommandIds.ToList();
-                    quickAccessBelowRibbonBox.IsChecked = result.Customization.QuickAccessToolbarBelowRibbon;
-                    RefreshQuickAccessLists(selectedCommandId: quickAccessCommandIds[0]);
+                    quickAccessBelowRibbonBox.IsChecked = quickAccessSession.QuickAccessToolbarBelowRibbon;
+                    RefreshQuickAccessLists(selectedCommandId: quickAccessSession.CommandIds[0]);
                 }
             }
             catch (Exception ex)
@@ -831,12 +824,9 @@ public sealed partial class MainWindow
                 using (picker)
                 {
                     string? errorMessage = null;
+                    quickAccessSession.SetPlacement(quickAccessBelowRibbonBox.IsChecked == true);
                     if (string.IsNullOrWhiteSpace(picker.LocalPath) ||
-                        !QuickAccessToolbarCustomizationFile.TrySave(
-                            picker.LocalPath,
-                            quickAccessCommandIds,
-                            quickAccessBelowRibbonBox.IsChecked == true,
-                            out errorMessage))
+                        !quickAccessSession.TryExport(picker.LocalPath, out errorMessage))
                     {
                         ShowOptionsWarning(errorMessage ?? "Quick Access Toolbar export requires a local file path.");
                     }
@@ -1207,36 +1197,20 @@ public sealed partial class MainWindow
                 return false;
             }
 
-            var projected = OptionsDialogPlanner.Project(
-                current,
+            var saveResult = optionsDialogSession.Commit(
                 input,
-                new OptionsDialogPlanner.OptionsDialogSupplementalInput(
-                    EnableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true,
-                    EnableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true,
-                    QuickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true,
-                    QuickAccessToolbarCommands: QuickAccessToolbarCatalog.NormalizeCommandIds(quickAccessCommandIds).ToList(),
-                    SpellCheckCustomDictionaryWords: customDictionaryEditor.Model.Words.ToList()));
-
-            // Reload the freshest on-disk options immediately before saving and merge onto it only the
-            // fields this dialog session actually edited (see OptionsDialogPlanner.MergeOntoFreshLoad),
-            // instead of saving `projected` -- built purely from `current`, this dialog's open-time
-            // snapshot -- as the whole document. AppOptions (options.json) is shared by every open
-            // window/process: without this reload, a second MainWindow opened via View > New Window
-            // (each independently loads its own AppOptions snapshot -- see
-            // MainWindow.WindowManagement.cs's NewWindow()) or this window's own right-click "Add to
-            // Quick Access Toolbar"/"Customize Status Bar" menus (which already reload-before-mutate)
-            // would have any change they persisted while this dialog was open silently discarded on OK
-            // (last-writer-wins / lost update). Mirrors the WPF host's OK handler (OptionsDialog.xaml.cs).
-            var merged = OptionsDialogPlanner.MergeOntoFreshLoad(AppOptionsStore.Load(), current, projected);
-            if (!AppOptionsStore.Save(merged))
+                enableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true,
+                enableAutoCompleteForCellValues: advancedAutoCompleteBox.IsChecked == true,
+                quickAccessToolbarBelowRibbon: quickAccessBelowRibbonBox.IsChecked == true);
+            if (!saveResult.IsPersisted)
             {
-                warningText.Text = merged.LastPersistenceError ?? UiText.Get("Options_SaveFailed");
+                warningText.Text = saveResult.PersistenceError ?? UiText.Get("Options_SaveFailed");
                 warningText.IsVisible = true;
                 return false;
             }
 
-            current = merged;
-            _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+            current = saveResult.Options;
+            _avaloniaQuickAccessOptions = current;
             RebuildAvaloniaQuickAccessToolbar();
             if (!ApplyFormulaErrorCheckingOptions())
                 return false;

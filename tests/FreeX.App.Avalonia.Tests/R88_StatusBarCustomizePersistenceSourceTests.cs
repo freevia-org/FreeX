@@ -13,7 +13,8 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class R88_StatusBarCustomizePersistenceSourceTests
 {
     private static string ReadStatusBarSource() =>
-        TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs");
+        TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs") +
+        TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot("src", "FreeX.App.Avalonia", "MainWindow.cs");
 
     [Fact]
     public void OptionVisibilityField_SeedsFromPersistedAppOptions_NotHardcodedDefaults()
@@ -23,7 +24,7 @@ public sealed class R88_StatusBarCustomizePersistenceSourceTests
         // This is the exact regression: before the fix, the field initializer never consulted the
         // on-disk options file at all.
         source.Should().Contain(
-            "StatusBarOptionVisibilityStore.ToVisibility(AppOptionsStore.Load()).ToDictionary()",
+            ".ToVisibility(_optionsRuntimeSession.LiveOptions)",
             "the status-bar customize toggles must be seeded from the persisted AppOptions.StatusBarShow* " +
             "values (mirroring the WPF host's FreeXOptions-backed store) instead of always resetting to " +
             "the hardcoded Excel defaults on every relaunch");
@@ -39,7 +40,8 @@ public sealed class R88_StatusBarCustomizePersistenceSourceTests
         methodEnd.Should().BeGreaterThan(methodStart);
         var method = source[methodStart..methodEnd];
 
-        method.Should().Contain("StatusBarOptionUpdateWorkflow.ApplyToFreshOptionsAndSave(optionTag, isChecked)");
+        method.Should().Contain("StatusBarOptionUpdateWorkflow.ApplyToRuntimeSession(");
+        method.Should().Contain("_optionsRuntimeSession,");
         method.Should().NotContain("StatusBarOptionVisibilityStore.TrySetOption(");
         method.Should().NotContain("AppOptionsStore.Save(");
     }
@@ -54,7 +56,8 @@ public sealed class R88_StatusBarCustomizePersistenceSourceTests
         var methodEnd = source.IndexOf("// ── Accessibility", methodStart, StringComparison.Ordinal);
         var method = source[methodStart..methodEnd];
 
-        method.Should().Contain("_statusBarOptionVisibility[optionTag] = isChecked;");
+        method.Should().Contain("_statusBarOptionVisibility.Clear();");
+        method.Should().Contain("_statusBarOptionVisibility[tag] = isVisible;");
         method.Should().Contain("ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());");
     }
 }

@@ -252,18 +252,16 @@ public partial class MainWindow
         string commandId,
         QuickAccessToolbarCustomizationAction action)
     {
-        var commandIds = QuickAccessToolbarCustomizationPlanner.Apply(
-            _options.QuickAccessToolbarCommands,
-            commandId,
-            action);
-        if (_options.QuickAccessToolbarCommands.SequenceEqual(commandIds, StringComparer.OrdinalIgnoreCase))
-            return;
-
-        _options.QuickAccessToolbarCommands = commandIds.ToList();
-        if (!AppOptionsStore.Save(_options))
+        var saveResult = MutateRuntimeOptions(options =>
+            options.QuickAccessToolbarCommands =
+                QuickAccessToolbarCustomizationPlanner.Apply(
+                    options.QuickAccessToolbarCommands,
+                    commandId,
+                    action).ToList());
+        if (!saveResult.IsPersisted)
         {
             ShowOwnedMessage(
-                _options.LastPersistenceError ?? "Failed to save Quick Access Toolbar customization.",
+                saveResult.PersistenceError ?? "Failed to save Quick Access Toolbar customization.",
                 UiText.Get("Options_QuickAccessToolbar"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

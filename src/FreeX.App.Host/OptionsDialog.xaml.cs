@@ -61,8 +61,9 @@ public partial class OptionsDialog : Window
     private readonly OptionsDialogCalculationSettings _calcSettings;
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<string> _quickAccessCommandIds = [];
-    private readonly CustomDictionaryEditorSession _customDictionaryEditor = new([]);
+    private readonly FreeXOptionsDialogSession _dialogSession;
+    private readonly QuickAccessToolbarOptionsSession _quickAccessSession;
+    private readonly CustomDictionaryEditorSession _customDictionaryEditor;
     private readonly OptionsDialogInitialSection _initialSection;
     public AppOptions Result { get; private set; }
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -86,9 +87,13 @@ public partial class OptionsDialog : Window
         AppOptions opts,
         IEnumerable<string>? disabledFormulaErrorCodes = null,
         OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General,
-        OptionsDialogCalculationSettings? calcSettings = null)
+        OptionsDialogCalculationSettings? calcSettings = null,
+        FreeXOptionsRuntimeSession? runtimeSession = null)
     {
-        _opts = opts;
+        _dialogSession = (runtimeSession ?? new FreeXOptionsRuntimeSession(opts)).BeginDialog(opts);
+        _opts = _dialogSession.OpenSnapshot;
+        _quickAccessSession = _dialogSession.QuickAccessToolbar;
+        _customDictionaryEditor = _dialogSession.CustomDictionary;
         // Falls back to the persisted app default only for callers that don't have a live workbook
         // handy (parity-capture surfaces, source-pinning unit tests). The real host call site always
         // passes the live workbook's calculation settings so the Formulas panel reflects the workbook
@@ -296,22 +301,19 @@ public partial class OptionsDialog : Window
 
     private void PopulateQuickAccessToolbarOptions()
     {
-        QuickAccessBelowRibbonCheckBox.IsChecked = _opts.QuickAccessToolbarBelowRibbon;
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(QuickAccessToolbarCatalog.NormalizeCommandIds(_opts.QuickAccessToolbarCommands));
+        QuickAccessBelowRibbonCheckBox.IsChecked = _quickAccessSession.QuickAccessToolbarBelowRibbon;
         RefreshQuickAccessToolbarCommandLists();
     }
 
     private void RefreshQuickAccessToolbarCommandLists(string? selectedAvailableId = null, string? selectedQatId = null)
     {
         var filterText = QuickAccessSearchBox.Text ?? string.Empty;
-        QuickAccessAvailableCommandsList.ItemsSource = QuickAccessToolbarCustomizationPlanner.FilterAvailable(
-                _quickAccessCommandIds,
+        QuickAccessAvailableCommandsList.ItemsSource = _quickAccessSession.FilterAvailable(
                 filterText,
                 command => [UiText.Get(command.TitleResourceKey), UiText.Get(command.DescriptionResourceKey)])
             .Select(CreateQuickAccessCommandChoice)
             .ToList();
-        QuickAccessSelectedCommandsList.ItemsSource = _quickAccessCommandIds
+        QuickAccessSelectedCommandsList.ItemsSource = _quickAccessSession.CommandIds
             .Select(id => QuickAccessToolbarCatalog.TryGet(id, out var command) ? command : null)
             .Where(command => command is not null)
             .Select(command => CreateQuickAccessCommandChoice(command!))
@@ -336,17 +338,6 @@ public partial class OptionsDialog : Window
         return null;
     }
 
-    private int IndexOfQuickAccessCommandId(string commandId)
-    {
-        for (var index = 0; index < _quickAccessCommandIds.Count; index++)
-        {
-            if (QuickAccessCommandIdsEqual(_quickAccessCommandIds[index], commandId))
-                return index;
-        }
-
-        return -1;
-    }
-
     private static bool QuickAccessCommandIdsEqual(string id, string otherId) =>
         string.Equals(id, otherId, StringComparison.OrdinalIgnoreCase);
 
@@ -363,11 +354,11 @@ public partial class OptionsDialog : Window
         QuickAccessAddButton.IsEnabled = QuickAccessAvailableCommandsList.SelectedItem is QuickAccessCommandChoice;
         QuickAccessRemoveButton.IsEnabled =
             QuickAccessSelectedCommandsList.SelectedItem is QuickAccessCommandChoice &&
-            _quickAccessCommandIds.Count > 1;
+            _quickAccessSession.CommandIds.Count > 1;
         QuickAccessMoveUpButton.IsEnabled = QuickAccessSelectedCommandsList.SelectedIndex > 0;
         QuickAccessMoveDownButton.IsEnabled =
             QuickAccessSelectedCommandsList.SelectedIndex >= 0 &&
-            QuickAccessSelectedCommandsList.SelectedIndex < _quickAccessCommandIds.Count - 1;
+            QuickAccessSelectedCommandsList.SelectedIndex < _quickAccessSession.CommandIds.Count - 1;
     }
 
     private void QuickAccessCommandLists_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
@@ -388,37 +379,27 @@ public partial class OptionsDialog : Window
         if (QuickAccessAvailableCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        var updated = QuickAccessToolbarCustomizationPlanner.Apply(
-            _quickAccessCommandIds,
-            choice.Id,
-            QuickAccessToolbarCustomizationAction.Add);
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(updated);
+        _quickAccessSession.Apply(choice.Id, QuickAccessToolbarCustomizationAction.Add);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
     private void QuickAccessRemoveButton_Click(object sender, RoutedEventArgs e)
     {
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice ||
-            _quickAccessCommandIds.Count <= 1)
+            _quickAccessSession.CommandIds.Count <= 1)
         {
             return;
         }
 
-        var removedIndex = IndexOfQuickAccessCommandId(choice.Id);
+        var removedIndex = _quickAccessSession.IndexOf(choice.Id);
         if (removedIndex < 0)
             return;
 
-        var updated = QuickAccessToolbarCustomizationPlanner.Apply(
-            _quickAccessCommandIds,
-            choice.Id,
-            QuickAccessToolbarCustomizationAction.Remove);
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(updated);
-        var nextIndex = Math.Clamp(removedIndex, 0, _quickAccessCommandIds.Count - 1);
+        _quickAccessSession.Apply(choice.Id, QuickAccessToolbarCustomizationAction.Remove);
+        var nextIndex = Math.Clamp(removedIndex, 0, _quickAccessSession.CommandIds.Count - 1);
         RefreshQuickAccessToolbarCommandLists(
             selectedAvailableId: choice.Id,
-            selectedQatId: _quickAccessCommandIds.ElementAtOrDefault(nextIndex));
+            selectedQatId: _quickAccessSession.CommandIds.ElementAtOrDefault(nextIndex));
     }
 
     private void QuickAccessAvailableCommandsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -496,13 +477,11 @@ public partial class OptionsDialog : Window
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        var index = IndexOfQuickAccessCommandId(choice.Id);
+        var index = _quickAccessSession.IndexOf(choice.Id);
         if (index <= 0)
             return;
 
-        var updated = QuickAccessToolbarCustomizationPlanner.Move(_quickAccessCommandIds, choice.Id, -1);
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(updated);
+        _quickAccessSession.Move(choice.Id, -1);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
@@ -511,13 +490,11 @@ public partial class OptionsDialog : Window
         if (QuickAccessSelectedCommandsList.SelectedItem is not QuickAccessCommandChoice choice)
             return;
 
-        var index = IndexOfQuickAccessCommandId(choice.Id);
-        if (index < 0 || index >= _quickAccessCommandIds.Count - 1)
+        var index = _quickAccessSession.IndexOf(choice.Id);
+        if (index < 0 || index >= _quickAccessSession.CommandIds.Count - 1)
             return;
 
-        var updated = QuickAccessToolbarCustomizationPlanner.Move(_quickAccessCommandIds, choice.Id, 1);
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(updated);
+        _quickAccessSession.Move(choice.Id, 1);
         RefreshQuickAccessToolbarCommandLists(selectedQatId: choice.Id);
     }
 
@@ -578,27 +555,19 @@ public partial class OptionsDialog : Window
             return;
         }
 
-        var edited = OptionsDialogPlanner.Project(
-            _opts,
+        var saveResult = _dialogSession.Commit(
             input,
-            new OptionsDialogPlanner.OptionsDialogSupplementalInput(
-                EnableFillHandleAndCellDragAndDrop: OptAdvancedFillHandle.IsChecked == true,
-                EnableAutoCompleteForCellValues: OptAdvancedAutoComplete.IsChecked == true,
-                QuickAccessToolbarBelowRibbon: QuickAccessBelowRibbonCheckBox.IsChecked == true,
-                QuickAccessToolbarCommands: QuickAccessToolbarCatalog.NormalizeCommandIds(_quickAccessCommandIds).ToList(),
-                SpellCheckCustomDictionaryWords: _customDictionaryEditor.Model.Words.ToList(),
-                FormulaBarExpanded: OptFormulaBarExpanded.IsChecked == true));
-        var opts = OptionsDialogPlanner.MergeOntoFreshLoad(
-            AppOptionsStore.Load(),
-            _opts,
-            edited);
-        if (!AppOptionsStore.Save(opts))
+            enableFillHandleAndCellDragAndDrop: OptAdvancedFillHandle.IsChecked == true,
+            enableAutoCompleteForCellValues: OptAdvancedAutoComplete.IsChecked == true,
+            quickAccessToolbarBelowRibbon: QuickAccessBelowRibbonCheckBox.IsChecked == true,
+            formulaBarExpanded: OptShowFormulaBar.IsChecked == true && OptFormulaBarExpanded.IsChecked == true);
+        if (!saveResult.IsPersisted)
         {
-            DialogMessageHelper.ShowError(this, opts.LastPersistenceError, Title);
+            DialogMessageHelper.ShowError(this, saveResult.PersistenceError, Title);
             return;
         }
 
-        Result = opts;
+        Result = saveResult.Options;
         DisabledFormulaErrorCodesResult = CollectDisabledFormulaErrorCodes();
 
         var editedCalcSettings = new OptionsDialogCalculationSettings(
@@ -718,10 +687,8 @@ public partial class OptionsDialog : Window
 
     private void QuickAccessResetButton_Click(object sender, RoutedEventArgs e)
     {
-        var reset = QuickAccessToolbarCustomizationPlanner.Reset();
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(reset);
-        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
+        _quickAccessSession.Reset();
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessSession.CommandIds[0]);
     }
 
     private void QuickAccessImportExportButton_Click(object sender, RoutedEventArgs e)
@@ -757,17 +724,15 @@ public partial class OptionsDialog : Window
         if (!pickerResult.Chosen)
             return;
 
-        var result = QuickAccessToolbarCustomizationFile.TryLoad(pickerResult.FileName!);
+        var result = _quickAccessSession.TryImport(pickerResult.FileName!);
         if (!result.Success || result.Customization is null)
         {
             DialogMessageHelper.ShowWarning(this, result.ErrorMessage, UiText.Get("Options_QuickAccessToolbar"));
             return;
         }
 
-        QuickAccessBelowRibbonCheckBox.IsChecked = result.Customization.QuickAccessToolbarBelowRibbon;
-        _quickAccessCommandIds.Clear();
-        _quickAccessCommandIds.AddRange(result.Customization.CommandIds);
-        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessCommandIds[0]);
+        QuickAccessBelowRibbonCheckBox.IsChecked = _quickAccessSession.QuickAccessToolbarBelowRibbon;
+        RefreshQuickAccessToolbarCommandLists(selectedQatId: _quickAccessSession.CommandIds[0]);
         DialogMessageHelper.ShowInfo(
             this,
             $"Imported Quick Access Toolbar customization from '{pickerResult.FileName!}'.",
@@ -786,11 +751,8 @@ public partial class OptionsDialog : Window
         if (!pickerResult.Chosen)
             return;
 
-        if (!QuickAccessToolbarCustomizationFile.TrySave(
-                pickerResult.FileName!,
-                _quickAccessCommandIds,
-                QuickAccessBelowRibbonCheckBox.IsChecked == true,
-                out var errorMessage))
+        _quickAccessSession.SetPlacement(QuickAccessBelowRibbonCheckBox.IsChecked == true);
+        if (!_quickAccessSession.TryExport(pickerResult.FileName!, out var errorMessage))
         {
             DialogMessageHelper.ShowError(this, errorMessage, UiText.Get("Options_QuickAccessToolbar"));
             return;

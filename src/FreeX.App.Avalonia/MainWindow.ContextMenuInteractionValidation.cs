@@ -502,14 +502,15 @@ public sealed partial class MainWindow
                     : [QuickAccessToolbarCommandIds.Save, commandId],
             };
             Environment.SetEnvironmentVariable(AppOptionsStore.OptionsPathEnvironmentVariable, fixturePath);
-            if (!AppOptionsStore.Save(options))
-                return Failed(row, options.LastPersistenceError ?? "Could not create the isolated QAT options fixture.");
+            var fixtureSave = _optionsRuntimeSession.SaveAndAdopt(options);
+            if (!fixtureSave.IsPersisted)
+                return Failed(row, fixtureSave.PersistenceError ?? "Could not create the isolated QAT options fixture.");
 
             ApplyAvaloniaQuickAccessCustomization(new QuickAccessToolbarMenuCommand(
                 "",
                 action,
                 CommandId: commandId));
-            var changed = AppOptionsStore.Load().QuickAccessToolbarCommands.Contains(
+            var changed = _optionsRuntimeSession.Reload().QuickAccessToolbarCommands.Contains(
                 commandId,
                 StringComparer.OrdinalIgnoreCase) == (action == QuickAccessToolbarMenuAction.Add);
             return changed
@@ -519,7 +520,7 @@ public sealed partial class MainWindow
         finally
         {
             Environment.SetEnvironmentVariable(AppOptionsStore.OptionsPathEnvironmentVariable, previousOptionsPath);
-            _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+            _avaloniaQuickAccessOptions = _optionsRuntimeSession.Reload();
             RebuildAvaloniaQuickAccessToolbar();
             try { Directory.Delete(fixtureDirectory, recursive: true); } catch { /* best-effort fixture cleanup */ }
         }

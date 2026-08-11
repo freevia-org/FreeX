@@ -250,10 +250,11 @@ public partial class MainWindow
         if (sender is not MenuItem menuItem || menuItem.Tag is not string option)
             return;
 
-        var result = StatusBarOptionUpdateWorkflow.ApplyAndSave(
-            _options,
+        var result = StatusBarOptionUpdateWorkflow.ApplyToRuntimeSession(
+            _optionsRuntimeSession,
             option,
             menuItem.IsChecked);
+        _options = _optionsRuntimeSession.LiveOptions;
         if (!result.IsRecognized)
             return;
 

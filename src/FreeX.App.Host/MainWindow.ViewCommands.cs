@@ -99,8 +99,7 @@ public partial class MainWindow
         if (_suppressAppViewOptionSync) return;
         if (sender is not System.Windows.Controls.CheckBox chk || FormulaBarBorder is null) return;
 
-        _options.ShowFormulaBar = chk.IsChecked == true;
-        AppOptionsStore.Save(_options);
+        MutateRuntimeOptions(options => options.ShowFormulaBar = chk.IsChecked == true);
         FormulaBarBorder.Visibility = _options.ShowFormulaBar ? Visibility.Visible : Visibility.Collapsed;
 
         // Show Formula Bar is an Excel-instance-wide display preference, not scoped to this
@@ -691,8 +690,7 @@ public partial class MainWindow
     private void FormulaBarExpandBtn_Click(object sender, RoutedEventArgs e)
     {
         _formulaBarExpanded = !_formulaBarExpanded;
-        _options.FormulaBarExpanded = _formulaBarExpanded;
-        AppOptionsStore.Save(_options);
+        MutateRuntimeOptions(options => options.FormulaBarExpanded = _formulaBarExpanded);
         ApplyFormulaBarExpansion();
     }
 

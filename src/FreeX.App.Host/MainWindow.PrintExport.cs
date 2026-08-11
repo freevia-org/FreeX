@@ -154,8 +154,8 @@ public partial class MainWindow
             File.Exists);
         if (requestPlan.ShouldPersistPdfLanguage)
         {
-            _options.PdfExportLanguage = optionsDialog.Result.PdfLanguage;
-            AppOptionsStore.Save(_options);
+            MutateRuntimeOptions(options =>
+                options.PdfExportLanguage = optionsDialog.Result.PdfLanguage);
         }
 
         if (requestPlan.ShouldConfirmNormalizedOverwrite &&

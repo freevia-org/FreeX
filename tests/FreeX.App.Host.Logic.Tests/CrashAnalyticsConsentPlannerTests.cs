@@ -28,8 +28,9 @@ public sealed class CrashAnalyticsConsentWorkflowPlannerTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
 
-        source.Should().Contain("options.CrashAnalyticsEnabled = accepted;");
-        source.Should().Contain("options.CrashAnalyticsPrompted = true;");
+        source.Should().Contain("optionsRuntimeSession.MutateFresh(latestOptions =>");
+        source.Should().Contain("latestOptions.CrashAnalyticsEnabled = accepted;");
+        source.Should().Contain("latestOptions.CrashAnalyticsPrompted = true;");
         source.Should().Contain("CrashAnalyticsConsentWorkflowPlanner.ShouldPrompt(");
     }
 }

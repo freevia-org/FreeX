@@ -128,14 +128,18 @@ public sealed partial class MainWindow : Window
     }
 
     internal MainWindow CreateSharedViewForTest() =>
-        new(App.StartupArguments, _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth));
+        new(
+            App.StartupArguments,
+            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth),
+            _optionsRuntimeSession);
 
     // view.newWindow
     private void NewWindow()
     {
         var window = new MainWindow(
             App.StartupArguments,
-            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth));
+            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth),
+            _optionsRuntimeSession);
         var snapshotStore = AutosaveSnapshotStore.CreateDefault(
             PlatformApplicationDataPathProvider.LocalInstance);
         var autosaveCoordinator = new AvaloniaAutosaveCoordinator(window, snapshotStore);

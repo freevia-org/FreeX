@@ -21,7 +21,7 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var options = AppOptionsStore.Load();
+        var options = _optionsRuntimeSession.Reload();
         var controller = new SpellCheckSessionController(new SpellCheckSessionAdapter(
             () => _session.Workbook,
             () => _session.ActiveSheet.Id,
@@ -34,7 +34,11 @@ public sealed partial class MainWindow
                     result.ErrorMessage,
                     result.IsNoOp);
             },
-            () => AppOptionsStore.Save(options)));
+            () => _optionsRuntimeSession.MutateFresh(fresh =>
+            {
+                fresh.SpellCheckCustomDictionaryWords =
+                    options.SpellCheckCustomDictionaryWords.ToList();
+            }).IsPersisted));
         var transition = controller.Start();
 
         if (transition.Status == SpellCheckSessionStatus.Complete)
