@@ -485,7 +485,7 @@ public class BackstageViewTests : IDisposable
             var buttons = view.GetLogicalDescendants()
                 .OfType<Button>()
                 .Where(button => (AutomationProperties.GetAutomationId(button) ?? string.Empty)
-                    .StartsWith("BackstageAction_", StringComparison.Ordinal))
+                    .StartsWith("InfoAction_", StringComparison.Ordinal))
                 .ToArray();
             buttons.Select(AutomationProperties.GetName).Should().Equal(
                 "Mark as Final",
@@ -739,7 +739,10 @@ public class BackstageViewTests : IDisposable
 
             view.TryActivateEntry("Export").Should().BeTrue();
 
-            var pdf = FindControl<Button>(view, "BackstageAction_Create_PDF_or_XPS");
+            var pdf = view.GetLogicalDescendants().OfType<Button>()
+                .Single(button => AutomationProperties.GetName(button) == "Create PDF or XPS");
+            AutomationProperties.GetAutomationId(pdf).Should().Be(
+                "BackstageAction_" + AutomationIdToken.KeepLettersAndDigits("Create PDF or XPS"));
             pdf.Content.Should().BeOfType<TextBlock>();
             ((TextBlock)pdf.Content!).Text.Should().Be("Create PDF or XPS");
             pdf.FontSize.Should().Be(14);
@@ -747,7 +750,10 @@ public class BackstageViewTests : IDisposable
             ((StackPanel)pdf.Parent!).Children.OfType<TextBlock>()
                 .Single(block => (block.Text ?? string.Empty).Contains("Export-only fixed-layout PDF copy", StringComparison.Ordinal));
 
-            var xps = FindControl<Button>(view, "BackstageAction_Export_to_XPS");
+            var xps = view.GetLogicalDescendants().OfType<Button>()
+                .Single(button => AutomationProperties.GetName(button) == "Export to XPS");
+            AutomationProperties.GetAutomationId(xps).Should().Be(
+                "BackstageAction_" + AutomationIdToken.KeepLettersAndDigits("Export to XPS"));
             xps.Content.Should().BeOfType<TextBlock>();
             ((TextBlock)xps.Content!).Text.Should().Be("Export to XPS");
             xps.Parent.Should().BeOfType<StackPanel>();

@@ -45,6 +45,7 @@ public sealed class PrintLifecycleTests : IDisposable
                 restorePrintOwnerFocus: _ => restoreCalls++);
 
             await window.PrintAsync();
+            return true;
         }, CancellationToken.None);
 
         restoreCalls.Should().Be(1);
@@ -67,6 +68,7 @@ public sealed class PrintLifecycleTests : IDisposable
                 restorePrintOwnerFocus: _ => restoreCalls++);
 
             await window.PrintAsync();
+            return true;
         }, CancellationToken.None);
 
         dialogCalls.Should().Be(1);
@@ -117,6 +119,7 @@ public sealed class PrintLifecycleTests : IDisposable
             capability.FieldValue.Should().NotContain("operating-system printer dialog");
             capability.ActionDescription.Should().Contain("platform printer service");
             capability.ActionDescription.Should().NotContain("native");
+            return true;
         }, CancellationToken.None);
     }
 
@@ -137,6 +140,7 @@ public sealed class PrintLifecycleTests : IDisposable
             callbacks.Print.Should().BeNull();
             window.PrintStatusForTests.Should().Contain("No printers");
             window.PrintStatusForTests.Should().Contain("Create PDF");
+            return true;
         }, CancellationToken.None);
 
         restoreCalls.Should().Be(1);
@@ -146,6 +150,7 @@ public sealed class PrintLifecycleTests : IDisposable
     public async Task FinishMergePrinter_prints_selected_record_without_replacing_preview_or_session()
     {
         string? exportedText = null;
+        string? printStatus = null;
         var printService = new FakePrintService(isSupported: true);
 
         await Session.Dispatch(async () =>
@@ -191,10 +196,13 @@ public sealed class PrintLifecycleTests : IDisposable
             engine.Session.Mapping.Should().BeSameAs(mapping);
             engine.Session.CurrentIndex.Should().Be(1);
             engine.Session.IsPreviewing.Should().BeTrue();
+            printStatus = window.PrintStatusForTests;
+            return true;
         }, CancellationToken.None);
 
-        printService.SubmittedFileExisted.Should().BeTrue();
-        printService.SubmittedPdfPath.Should().NotBeNull();
+        printService.SubmitCalls.Should().Be(1, $"print status was '{printStatus}'");
+        printService.SubmittedPdfPath.Should().NotBeNull($"print status was '{printStatus}'");
+        printService.SubmittedFileExisted.Should().BeTrue($"print status was '{printStatus}'");
         File.Exists(printService.SubmittedPdfPath!).Should().BeFalse("PrintAsync cleans its temporary merged PDF");
     }
 
@@ -225,6 +233,7 @@ public sealed class PrintLifecycleTests : IDisposable
         public bool IsSupported { get; } = isSupported;
         public string? SubmittedPdfPath { get; private set; }
         public bool SubmittedFileExisted { get; private set; }
+        public int SubmitCalls { get; private set; }
 
         public Task<PrinterDiscoveryResult> DiscoverAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(
@@ -241,6 +250,7 @@ public sealed class PrintLifecycleTests : IDisposable
             PrintSelection selection,
             CancellationToken cancellationToken = default)
         {
+            SubmitCalls++;
             SubmittedPdfPath = pdfPath;
             SubmittedFileExisted = File.Exists(pdfPath);
             return Task.FromResult(new PrintSubmissionResult(PrintSubmissionStatus.Submitted, selection.PrinterName));

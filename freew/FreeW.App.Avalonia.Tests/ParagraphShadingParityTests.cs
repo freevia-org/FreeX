@@ -41,11 +41,13 @@ public sealed class ParagraphShadingParityTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+        var catalog = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs"));
 
         source.Should().Contain("private sealed class ParagraphShadingCommand");
         source.Should().Contain("editor.ToggleParagraphShading(hex)");
+        source.Should().Contain("FreeWRibbonPaletteCatalog.ParagraphShadingPickerSwatches");
         source.Should().Contain("Content = \"No Color\"");
-        source.Should().Contain("#FFF2CC");
+        catalog.Should().Contain("new(\"freew.para-shading.light-yellow\", \"Light Yellow\", \"#FFF2CC\")");
     }
 
     [Fact]
@@ -82,11 +84,14 @@ public sealed class ParagraphShadingParityTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+        var planner = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Dialogs", "CharacterFormattingPickerPlanner.cs"));
+        var catalog = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs"));
 
         source.Should().Contain("private sealed class CharacterShadingCommand");
         source.Should().Contain("editor.SetCharacterShading(hex)");
         source.Should().Contain("Content = CharacterFormattingPickerPlanner.NoColorLabel");
-        source.Should().Contain("#FFF2CC");
+        planner.Should().Contain("FreeWRibbonPaletteCatalog.CharacterShading");
+        catalog.Should().Contain("new(\"freew.char-shading.light-yellow\", \"Light Yellow\", \"#FFF2CC\")");
     }
 
     [Fact]
@@ -123,11 +128,14 @@ public sealed class ParagraphShadingParityTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+        var planner = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Dialogs", "CharacterFormattingPickerPlanner.cs"));
+        var catalog = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs"));
 
         source.Should().Contain("private sealed class CharacterBorderCommand");
         source.Should().Contain("editor.SetCharacterBorder(border)");
         source.Should().Contain("Content = CharacterFormattingPickerPlanner.NoBorderLabel");
-        source.Should().Contain("#0070C0");
+        planner.Should().Contain("FreeWRibbonPaletteCatalog.CharacterBorders");
+        catalog.Should().Contain("new(\"freew.char-border.blue\", \"Blue\", \"#0070C0\")");
     }
 
     [Fact]
@@ -164,10 +172,12 @@ public sealed class ParagraphShadingParityTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+        var catalog = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs"));
 
         source.Should().Contain("new ColorPickCommand(editor, isHighlight: true)");
+        source.Should().Contain("FreeWRibbonPaletteCatalog.TextAndHighlightPickerSwatches");
         source.Should().Contain("Content = isHighlight ? \"No Color\" : \"Automatic\"");
-        source.Should().Contain("#2F5496");
+        catalog.Should().Contain("new(\"freew.highlight.dark-blue\", \"Dark Blue\", \"#2F5496\")");
     }
 
     private static void Execute(RibbonCommandRegistry registry, string id)

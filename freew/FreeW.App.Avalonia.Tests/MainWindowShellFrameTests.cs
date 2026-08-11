@@ -122,7 +122,7 @@ public sealed class MainWindowShellFrameTests
         mainWindow.Should().Contain("SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(");
         mainWindow.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
         mainWindow.Should().Contain("SisterQuickAccessToolbarBuilder.Render(");
-        mainWindow.Should().Contain("ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication");
+        mainWindow.Should().Contain("ApplicationPlacement: FreeWApplicationFrameDescriptor.Title.ApplicationPlacement");
         mainWindow.Should().Contain("ApplyWindowIcon();");
         mainWindow.Should().Contain("SisterAppStatusBarChrome.Build(");
         mainWindow.Should().Contain("private Border BuildStatusBar()");

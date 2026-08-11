@@ -16,8 +16,28 @@ public sealed class SharedLaunchSmokeBootstrapTests
         AvaloniaLaunchSmokeBootstrapTestSupport.AssertLaunchSmokeOptions(Spec);
 
     [Fact]
-    public void App_and_launch_smoke_sources_use_shared_sister_helpers() =>
-        AvaloniaLaunchSmokeBootstrapTestSupport.AssertAppAndLaunchSmokeSources(Spec);
+    public void App_and_launch_smoke_sources_use_shared_sister_helpers()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var app = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "App.cs"));
+        var smoke = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Smoke",
+            "LaunchSmoke.cs"));
+
+        app.Should().Contain("FreeWApplicationStartup.Theme.Apply(");
+        app.Should().Contain("AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix)");
+        app.Should().Contain("SisterAvaloniaAppBootstrap.Initialize(");
+        app.Should().Contain("new SisterAvaloniaAppBootstrapSpec<MainWindow>(");
+        app.Should().NotContain("Styles.Add(new FluentTheme())");
+        app.Should().NotContain("desktop.MainWindow = mainWindow;");
+
+        smoke.Should().Contain("global using LaunchSmokeOptions = Free.Shared.Shell.Avalonia.SisterAppLaunchSmokeOptions;");
+        smoke.Should().Contain("SisterAppLaunchSmokeCoordinator.Start(");
+        smoke.Should().Contain("new SisterAppLaunchSmokeReport(snapshot.IsPassed, snapshot.ToReport())");
+    }
 
     private static AvaloniaLaunchSmokeParseResult Parse(IReadOnlyList<string> args)
     {

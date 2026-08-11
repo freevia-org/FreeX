@@ -76,15 +76,15 @@ public sealed class SharedSaveChangesDialogTests
         mainWindow.Should().NotContain("_fileWorkflow.ConfirmCloseAllowed(\"closing\")");
 
         // The dirty-save and close paths must stay fully async — blocking the UI thread on them is
-        // the deadlock this guard exists to prevent. Exactly one block is permitted: the mail-merge
-        // per-record prompt resolver, which runs on the BACKGROUND merge thread and marshals its
-        // dialog to the UI thread, the inverse of the banned pattern. Counting rather than banning
-        // outright keeps any newly introduced blocking call failing this test.
-        var blockingCalls = mainWindow.Split("GetAwaiter().GetResult()").Length - 1;
-        blockingCalls.Should().Be(
-            1,
-            "the only permitted synchronous wait is the mail-merge prompt resolver");
-        mainWindow.Should().Contain("return completion.Task.GetAwaiter().GetResult();");
+        // the deadlock this guard exists to prevent. The closed exceptions are the background
+        // mail-merge prompt bridge and startup application of an already-loaded document result.
+        var blockingLines = mainWindow.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Contains("GetAwaiter().GetResult()", StringComparison.Ordinal))
+            .ToArray();
+        blockingLines.Should().BeEquivalentTo(
+            "return completion.Task.GetAwaiter().GetResult();",
+            "var execution = _documentFileWorkflow.ApplyOpenResultAsync(result).GetAwaiter().GetResult();");
         mainWindow.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
         sharedWorkflow.Should().Contain("AvaloniaSaveChangesDialog.ShowAsync(");
         sharedWorkflow.Should().Contain("AvaloniaSaveChangesPromptText.ForDocumentAction(");

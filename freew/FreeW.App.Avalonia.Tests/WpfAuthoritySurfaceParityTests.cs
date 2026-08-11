@@ -539,8 +539,10 @@ public sealed class WpfAuthoritySurfaceParityTests
                 command.Should().BeAssignableTo<IRibbonStatefulCommand>();
                 ((IRibbonStatefulCommand)command!).GetState().IsEnabled.Should().BeFalse();
                 var action = () => command.Execute(RibbonCommandContext.Empty);
-                action.Should().Throw<InvalidOperationException>();
+                action.Should().NotThrow("disabled shared commands are inert when invoked programmatically");
             }
+
+            (symbol, clips, about, legal, compare).Should().Be((1, 2, 1, 1, 1));
         }, CancellationToken.None);
     }
 

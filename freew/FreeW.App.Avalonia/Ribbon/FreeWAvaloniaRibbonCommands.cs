@@ -569,6 +569,7 @@ internal static class FreeWAvaloniaRibbonCommands
         FreeWRibbonEditorExecutionProfile.RegisterFloating(
             r,
             CreateFloatingExecutionPorts(editor));
+        RegisterShapeTextDirectionSelectionGuards(r, editor);
 
         // ── AV-CHARTTAB: Chart Design/Format + SmartArt Design contextual tabs ─
         FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
@@ -1800,6 +1801,22 @@ internal static class FreeWAvaloniaRibbonCommands
             Group: editor.GroupSelectedFloatingObjects,
             CanUngroup: () => editor.IsGroupSelected,
             Ungroup: editor.UngroupSelectedFloatingObject);
+
+    private static void RegisterShapeTextDirectionSelectionGuards(
+        FreeWRibbonCommandBindingPorts bindings,
+        DocumentView editor)
+    {
+        Bind(FreeWRibbonCommandAction.ShapeTextHorizontal, ShapeTextDirection.Horizontal);
+        Bind(FreeWRibbonCommandAction.ShapeTextRotate90, ShapeTextDirection.Rotate90);
+        Bind(FreeWRibbonCommandAction.ShapeTextRotate270, ShapeTextDirection.Rotate270);
+
+        void Bind(FreeWRibbonCommandAction action, ShapeTextDirection direction) =>
+            bindings.Bind(action, new FreeWRibbonStatefulPortCommand(
+                _ => editor.SetSelectedShapeTextDirection(direction),
+                () => new RibbonCommandState(
+                    IsEnabled: editor.SelectedFloatingShape() is { HasText: true }),
+                () => editor.Focus()));
+    }
 
     private static FreeWRibbonChartSmartArtExecutionPorts CreateChartSmartArtExecutionPorts(
         DocumentView editor,
