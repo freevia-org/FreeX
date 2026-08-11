@@ -523,7 +523,9 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("DispatcherTimer");
             source.Should().Contain("_screenModeOverlay");
             source.Should().Contain("_runtime.AnimationRendererSession.PlanStep(");
+            source.Should().Contain("_runtime.AnimationRendererSession.ExecuteStep(");
             source.Should().NotContain("SlideShowPlaybackPlanner.PlanAnimationStep(");
+            source.Should().NotContain("foreach (var operation in rendererPlan.Operations)");
             source.Should().NotContain("SlideShowSessionController");
             source.Should().NotContain("SlideShowSessionInputExecutionCallbacks");
             source.Should().NotContain("SlideShowHostExecutionCallbacks");

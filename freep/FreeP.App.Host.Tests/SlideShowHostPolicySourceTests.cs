@@ -14,7 +14,7 @@ public sealed class SlideShowHostPolicySourceTests
             "SlideShowMediaController.cs"));
 
         source.Should().Contain("slot.CaptionTrack?.Regions");
-        source.Should().Contain("ComputeCaptionPlacement(");
+        source.Should().Contain("PresentationMediaTranscriptPlanner.PlanOverlayPlacement(");
     }
 
     [Fact]
@@ -67,19 +67,21 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_runtime.EndPointerInk(");
         source.Should().Contain("_runtime.ClearInkStrokes(");
         source.Should().Contain("_runtime.UndoLastInkStroke(");
-        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildBlindsBand(");
-        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildRandomBars(");
-        source.Should().Contain("SlideShowPlaybackPlanner.RandomBarsBandCount");
+        source.Should().Contain("SlideShowMaskTimelinePlanner.BuildBlindsRendererPlan(");
+        source.Should().Contain("SlideShowMaskTimelinePlanner.BuildRandomBarsRendererPlan(");
+        source.Should().Contain("SlideShowMaskTimelinePlanner.BuildCheckerboardRendererPlan(");
         source.Should().Contain("var bars = new GeometryGroup();");
         source.Should().Contain("RectangleGeometry.RectProperty");
-        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildCheckerboardCell(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildCircle(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildDiamondPoint(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildPlusRects(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildStrips(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildWedge(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildWheel(");
-        source.Should().Contain("SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(");
+        source.Should().NotContain("SlideShowMaskGeometryPlanner.BuildBlindsBand(");
+        source.Should().NotContain("SlideShowMaskGeometryPlanner.BuildRandomBars(");
+        source.Should().NotContain("SlideShowMaskGeometryPlanner.BuildCheckerboardCell(");
+        source.Should().NotContain("SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(");
         source.Should().Contain("_runtime.HitTestHyperlink(");
         source.Should().NotContain("SlideShowSessionController");
         source.Should().NotContain("SlideShowSessionInputExecutionCallbacks");
@@ -217,13 +219,14 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_animationTargets.BuildAvailability()");
         source.Should().Contain("_animationTargets.Resolve(operation)");
         source.Should().NotContain("Dictionary<uint, FrameworkElement> _anim");
-        source.Should().Contain("foreach (var operation in rendererPlan.Operations)");
-        source.Should().Contain("ResolveAnimationTarget(operation)");
+        source.Should().Contain("_runtime.AnimationRendererSession.ExecuteStep(");
+        source.Should().Contain("ResolveAnimationTarget,");
         source.Should().Contain("_runtime.AnimationRendererSession.PlanFrame(");
-        source.Should().Contain("PlayShapeAnimation(element, operation);");
-        source.Should().Contain("if (operation.SuppressBaseBeforePlayback)");
+        source.Should().Contain("PlayShapeAnimation);");
+        source.Should().NotContain("foreach (var operation in rendererPlan.Operations)");
+        source.Should().NotContain("if (operation.SuppressBaseBeforePlayback)");
         source.Should().Contain("AttachReveal(sb, operation, route);");
-        source.Should().Contain("PlayFallbackAnimation(operation);");
+        source.Should().Contain("PlayFallbackAnimation,");
         source.Should().Contain("var visibilityPlan = operation.FallbackVisibility");
         source.Should().Contain("if (visibilityPlan.SuppressAtStart || visibilityPlan.SuppressAtCompletion)");
         source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(animation.ShapeId);");
@@ -327,10 +330,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("private static void ColorWaveEffect(");
         source.Should().Contain("DisappearEffect(sb, element, plan.DelayMs);");
         source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
-        source.Should().Contain("var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(");
-        source.Should().Contain("var closed = ToRect(randomBar.Geometry.Closed);");
-        source.Should().Contain("var from = isExit ? open : closed;");
-        source.Should().Contain("opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(plan.FromOpacity, KeyTime.FromPercent(0)))");
+        source.Should().Contain("SlideShowMaskTimelinePlanner.BuildRandomBarsRendererPlan(plan, w, h)");
+        source.Should().Contain("var from = ToRect(elementPlan.From);");
+        source.Should().Contain("rendererPlan.OpacityTrack!.KeyFrames");
         source.Should().Contain("isExit ? 0 : dx, isExit ? dx : 0");
         source.Should().Contain("var fromX = isExit ? 0 : dx;");
         source.Should().Contain("var toX = isExit ? dx : 0;");

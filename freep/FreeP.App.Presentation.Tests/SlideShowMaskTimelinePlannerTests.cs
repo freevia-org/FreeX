@@ -66,16 +66,82 @@ public sealed class SlideShowMaskTimelinePlannerTests
             .Should().Be(new SlideShowMaskElementTimeline(1, 300, 600));
     }
 
+    [Fact]
+    public void RendererPlansOwnMaskGeometryDirectionAndElementTiming()
+    {
+        var randomBars = SlideShowMaskTimelinePlanner.BuildRandomBarsRendererPlan(
+            BuildPlayback(AnimationKind.Exit, durationMs: 900, delayMs: 75),
+            width: 800,
+            height: 400);
+
+        randomBars.DelayMs.Should().Be(75);
+        randomBars.DurationMs.Should().Be(900);
+        randomBars.InitialOpacity.Should().Be(1);
+        randomBars.Elements.Should().HaveCount(SlideShowPlaybackPlanner.RandomBarsBandCount);
+        randomBars.Elements[0].From.Height.Should().BeGreaterThan(0);
+        randomBars.Elements[0].To.Height.Should().Be(0);
+        randomBars.Elements[0].StartOffsetMs.Should().Be(600);
+        randomBars.Elements[0].DurationMs.Should().Be(300);
+        SlideShowMaskTimelinePlanner.SampleOpacity(randomBars, 1).Should().Be(0);
+
+        var blindsPlayback = BuildPlayback(
+            AnimationKind.Entrance,
+            durationMs: 640,
+            delayMs: 40,
+            preset: AnimationPreset.Blinds) with
+        {
+            BlindsBandCount = 4,
+            BlindsHorizontal = false
+        };
+        var blinds = SlideShowMaskTimelinePlanner.BuildBlindsRendererPlan(
+            blindsPlayback,
+            width: 800,
+            height: 400);
+
+        blinds.DelayMs.Should().Be(40);
+        blinds.DurationMs.Should().Be(640);
+        blinds.Elements.Should().HaveCount(4);
+        blinds.Elements.Should().OnlyContain(element =>
+            element.StartOffsetMs == 0 && element.DurationMs == 640);
+        blinds.Elements[0].From.Width.Should().Be(0);
+        blinds.Elements[0].To.Width.Should().Be(200);
+
+        var checkerboardPlayback = BuildPlayback(
+            AnimationKind.Exit,
+            durationMs: 900,
+            delayMs: 30,
+            preset: AnimationPreset.Checkerboard) with
+        {
+            CheckerboardRowCount = 2,
+            CheckerboardColumnCount = 3,
+            CheckerboardHorizontal = true
+        };
+        var checkerboard = SlideShowMaskTimelinePlanner.BuildCheckerboardRendererPlan(
+            checkerboardPlayback,
+            width: 900,
+            height: 600);
+
+        checkerboard.DelayMs.Should().Be(30);
+        checkerboard.DurationMs.Should().Be(900);
+        checkerboard.Elements.Should().HaveCount(6);
+        checkerboard.Elements.Select(element => element.StartOffsetMs)
+            .Should().Equal(0, 300, 0, 300, 0, 300);
+        checkerboard.Elements.Should().OnlyContain(element => element.DurationMs == 600);
+        checkerboard.Elements[0].From.Width.Should().BeGreaterThan(0);
+        checkerboard.Elements[0].To.Width.Should().Be(0);
+    }
+
     private static SlideShowShapeAnimationPlaybackPlan BuildPlayback(
         AnimationKind kind,
         int durationMs,
-        int delayMs) =>
+        int delayMs,
+        AnimationPreset preset = AnimationPreset.RandomBars) =>
         SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 7,
                 Kind = kind,
-                Preset = AnimationPreset.RandomBars,
+                Preset = preset,
                 Direction = AnimationDirection.Horizontal,
                 DurationMs = durationMs
             },

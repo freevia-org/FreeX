@@ -9,8 +9,12 @@ public sealed class SlideShowPlaybackOwnershipSourceTests
     {
         foreach (var source in SlideShowWindowSources())
         {
-            source.Should().Contain("SlideShowMaskTimelinePlanner.BuildRandomBars(plan, randomBars)");
-            source.Should().Contain("SlideShowMaskTimelinePlanner.BuildCheckerboard(plan)");
+            source.Should().Contain("SlideShowMaskTimelinePlanner.BuildRandomBarsRendererPlan(plan, w, h)");
+            source.Should().Contain("SlideShowMaskTimelinePlanner.BuildBlindsRendererPlan(plan, w, h)");
+            source.Should().Contain("SlideShowMaskTimelinePlanner.BuildCheckerboardRendererPlan(plan, w, h)");
+            source.Should().NotContain("SlideShowMaskGeometryPlanner.BuildRandomBars(");
+            source.Should().NotContain("SlideShowMaskGeometryPlanner.BuildBlindsBand(");
+            source.Should().NotContain("SlideShowMaskGeometryPlanner.BuildCheckerboardCell(");
             source.Should().NotContain("var barStaggerMs =");
             source.Should().NotContain("plan.DurationMs / 3");
             source.Should().NotContain("DelayedAction(plan.DurationMs / 5");
@@ -38,7 +42,7 @@ public sealed class SlideShowPlaybackOwnershipSourceTests
         var transcript = Read(root, "freep", "FreeP.App.Presentation", "PresentationMediaTranscriptPlanner.cs");
 
         timeline.Should().Contain("public static class SlideShowMaskTimelinePlanner")
-            .And.Contain("SlideShowRandomBarsMaskTimelinePlan")
+            .And.Contain("SlideShowRectMaskRendererPlan")
             .And.NotContain("using System.Windows")
             .And.NotContain("using Avalonia");
         transcript.Should().Contain("public sealed record PresentationMediaOverlayPlacementRequest(")

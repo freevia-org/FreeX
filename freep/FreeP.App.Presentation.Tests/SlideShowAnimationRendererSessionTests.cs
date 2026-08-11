@@ -124,6 +124,62 @@ public sealed class SlideShowAnimationRendererSessionTests
     }
 
     [Fact]
+    public void ExecuteStepOwnsFallbackResolutionSuppressionAndPlaybackOrdering()
+    {
+        var presentation = new Presentation();
+        var session = new SlideShowAnimationRendererSession(presentation);
+        var entrance = Animation(1, AnimationKind.Entrance, AnimationPreset.Fade, 120);
+        var missing = Animation(2, AnimationKind.Emphasis, AnimationPreset.Pulse, 160);
+        var fallback = Animation(3, AnimationKind.Exit, AnimationPreset.Fade, 200);
+        var step = new AnimationStep([
+            new AnimationEntry(entrance, 0),
+            new AnimationEntry(missing, 20),
+            new AnimationEntry(fallback, 40)
+        ]);
+        var plan = session.PlanStep(
+            step,
+            slideIndex: 0,
+            slideWidthDip: 960,
+            slideHeightDip: 540,
+            targets: new SlideShowAnimationPlaybackTargetAvailability(
+                PrimaryShapeIds: new HashSet<uint> { 1, 2 },
+                ParagraphCounts: new Dictionary<uint, int>(),
+                FillShapeIds: new HashSet<uint>(),
+                LineShapeIds: new HashSet<uint>(),
+                FontStyleShapeIds: new HashSet<uint>(),
+                FontSizeShapeIds: new HashSet<uint>()));
+        var target = new object();
+        var events = new List<string>();
+
+        var executed = session.ExecuteStep(
+            plan,
+            operation =>
+            {
+                events.Add($"resolve:{operation.ShapeId}");
+                return operation.ShapeId == 1 ? target : null;
+            },
+            operation => events.Add($"fallback:{operation.ShapeId}"),
+            (element, operation) =>
+            {
+                element.Should().BeSameAs(target);
+                events.Add($"prepare:{operation.ShapeId}");
+            },
+            (element, operation) =>
+            {
+                element.Should().BeSameAs(target);
+                events.Add($"play:{operation.ShapeId}");
+            });
+
+        executed.Should().Be(2);
+        events.Should().Equal(
+            "resolve:1",
+            "prepare:1",
+            "play:1",
+            "resolve:2",
+            "fallback:3");
+    }
+
+    [Fact]
     public void TargetRegistryOwnsClassificationResolutionAndRevealEligibility()
     {
         var primary = new object();

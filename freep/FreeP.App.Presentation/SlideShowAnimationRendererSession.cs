@@ -500,6 +500,47 @@ public sealed class SlideShowAnimationRendererSession
         return LastFrame;
     }
 
+    public int ExecuteStep<TElement>(
+        SlideShowAnimationStepRendererPlan plan,
+        Func<SlideShowAnimationPlaybackOperation, TElement?> resolveTarget,
+        Action<SlideShowAnimationPlaybackOperation> playFallback,
+        Action<TElement, SlideShowAnimationPlaybackOperation> prepareTarget,
+        Action<TElement, SlideShowAnimationPlaybackOperation> playTarget)
+        where TElement : class
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(resolveTarget);
+        ArgumentNullException.ThrowIfNull(playFallback);
+        ArgumentNullException.ThrowIfNull(prepareTarget);
+        ArgumentNullException.ThrowIfNull(playTarget);
+
+        var executedCount = 0;
+        foreach (var operation in plan.Operations)
+        {
+            if (operation.IsFallback)
+            {
+                playFallback(operation);
+                executedCount++;
+                continue;
+            }
+
+            if (resolveTarget(operation) is not { } element)
+            {
+                continue;
+            }
+
+            if (operation.SuppressBaseBeforePlayback)
+            {
+                prepareTarget(element, operation);
+            }
+
+            playTarget(element, operation);
+            executedCount++;
+        }
+
+        return executedCount;
+    }
+
     public SlideShowAnimationEffectTrackPlan PlanEffectTracks(
         SlideShowShapeAnimationPlaybackPlan plan) =>
         SlideShowAnimationEffectTrackPlanner.Build(plan)
