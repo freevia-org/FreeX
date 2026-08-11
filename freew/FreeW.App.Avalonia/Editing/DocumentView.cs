@@ -22890,37 +22890,10 @@ public sealed class DocumentView : Control
     private Func<int, TableParagraphAddress?, string?>? BuildTableOfFiguresPageTextResolver()
     {
         var physicalPageOfBlock = BuildCrossReferencePageResolver();
-        if (physicalPageOfBlock is null)
-            return null;
-
-        var pageCount = Math.Max(1, _pageCount);
-        for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
-        {
-            var firstPage = physicalPageOfBlock(blockIndex)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
-                ?? 1;
-            pageCount = Math.Max(
-                pageCount,
-                firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_doc, blockIndex) - 1);
-        }
-        var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
+        return TableOfFiguresPageTextResolverPlanner.Build(
             _doc,
             physicalPageOfBlock,
-            pageCount);
-        return (blockIndex, tableParagraph) =>
-        {
-            var blockPage = physicalPageOfBlock(blockIndex)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(_doc, blockIndex)
-                ?? 1;
-            var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
-                _doc,
-                blockIndex,
-                tableParagraph);
-            var physicalPage = tablePageOffset is { } offset
-                ? blockPage + offset
-                : blockPage;
-            return displayTextOfPhysicalPage(physicalPage);
-        };
+            minimumPageCount: _pageCount);
     }
 
     private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()

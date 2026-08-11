@@ -17290,37 +17290,7 @@ public sealed class DocumentView : RichTextBox
     private Func<int, TableParagraphAddress?, string?>? BuildTableOfFiguresPageTextResolver()
     {
         var physicalPageOfBlock = BuildCrossReferencePageResolver();
-        if (physicalPageOfBlock is null)
-            return null;
-
-        var pageCount = 1;
-        for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
-        {
-            var firstPage = physicalPageOfBlock(blockIndex)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
-                ?? 1;
-            pageCount = Math.Max(
-                pageCount,
-                firstPage + DocumentViewLayoutPlanner.ResolveTablePageSpan(_model, blockIndex) - 1);
-        }
-        var displayTextOfPhysicalPage = PageNumberFormatDialogPlanner.BuildPhysicalPageReferenceResolver(
-            _model,
-            physicalPageOfBlock,
-            pageCount);
-        return (blockIndex, tableParagraph) =>
-        {
-            var blockPage = physicalPageOfBlock(blockIndex)
-                ?? CrossReferences.ExplicitPageNumberAtBlock(_model, blockIndex)
-                ?? 1;
-            var tablePageOffset = DocumentViewLayoutPlanner.ResolveTableParagraphPageOffset(
-                _model,
-                blockIndex,
-                tableParagraph);
-            var physicalPage = tablePageOffset is { } offset
-                ? blockPage + offset
-                : blockPage;
-            return displayTextOfPhysicalPage(physicalPage);
-        };
+        return TableOfFiguresPageTextResolverPlanner.Build(_model, physicalPageOfBlock);
     }
 
     private Func<int, IndexPageReferenceAddress?>? BuildGeneratedIndexPageReferenceResolver()
