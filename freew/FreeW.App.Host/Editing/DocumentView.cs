@@ -1669,13 +1669,9 @@ public sealed class DocumentView : RichTextBox
     {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
-        TableOfContents.EnsureStyles(_model);
-
         // Insert before the caret's block so the TOC reads as a front-matter region; fall back to the
         // document start when the caret can't be mapped.
-        var index = CaretBlockIndex();
-        if (index < 0 || index > _model.Blocks.Count)
-            index = 0;
+        var index = TableOfContentsMutationCoordinator.NormalizeInsertionIndex(_model, CaretBlockIndex());
 
         ApplyTableOfContentsAt(index, "Insert Table of Contents", replaceExisting: false);
     }
@@ -1694,91 +1690,20 @@ public sealed class DocumentView : RichTextBox
 
     private void RefreshTableOfContentsFromModel()
     {
-        TableOfContents.EnsureStyles(_model);
-
-        // Find the contiguous run of existing TOC paragraphs (the marker region). They are inserted as
-        // a block, so the first TOC paragraph anchors the region and the rest follow consecutively.
-        var firstToc = -1;
-        for (var i = 0; i < _model.Blocks.Count; i++)
-        {
-            if (TableOfContents.IsTocParagraph(_model.Blocks[i]))
-            {
-                firstToc = i;
-                break;
-            }
-        }
-
-        var insertAt = firstToc >= 0 ? firstToc : 0;
+        var insertAt = TableOfContentsMutationCoordinator.FindRefreshInsertionIndex(_model);
 
         ApplyTableOfContentsAt(insertAt, "Update Table of Contents", replaceExisting: true);
     }
 
     private void ApplyTableOfContentsAt(int at, string label, bool replaceExisting)
-    {
-        var toc = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
-        _commands.BeginUndoGroup();
-        try
-        {
-            if (replaceExisting)
-                DeleteAllTableOfContentsCommands();
-            InsertTableOfContentsCommands(at, toc);
-            var regionCount = toc.Count;
-            const int maxStabilizationPasses = 8;
-            var isStable = false;
-            for (var pass = 0; pass < maxStabilizationPasses; pass++)
-            {
-                Render();
-                var stabilized = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
-                if (TableOfContents.MatchesGeneratedRegionAt(_model, at, stabilized))
-                {
-                    isStable = true;
-                    break;
-                }
-                ReplaceTableOfContentsRegionCommands(at, regionCount, stabilized);
-                regionCount = stabilized.Count;
-            }
-            if (!isStable)
-            {
-                Render();
-                var finalCheck = TableOfContents.Build(_model, BuildGeneratedPageTextResolver());
-                if (!TableOfContents.MatchesGeneratedRegionAt(_model, at, finalCheck))
-                    throw new InvalidOperationException("Table of Contents pagination did not stabilize.");
-            }
-        }
-        catch
-        {
-            _commands.RollbackUndoGroup();
-            throw;
-        }
-
-        _commands.CommitUndoGroup(label);
-    }
-
-    private void DeleteAllTableOfContentsCommands()
-    {
-        var tocIndices = Enumerable.Range(0, _model.Blocks.Count)
-            .Where(index => TableOfContents.IsTocParagraph(_model.Blocks[index]))
-            .ToArray();
-        for (var i = tocIndices.Length - 1; i >= 0; i--)
-            _commands.Execute(new DeleteParagraphCommand(tocIndices[i]));
-    }
-
-    private void ReplaceTableOfContentsRegionCommands(
-        int at,
-        int currentCount,
-        IReadOnlyList<ModelParagraph> toc)
-    {
-        for (var i = 0; i < currentCount; i++)
-            _commands.Execute(new DeleteParagraphCommand(at));
-        InsertTableOfContentsCommands(at, toc);
-    }
-
-    private void InsertTableOfContentsCommands(int at, IReadOnlyList<ModelParagraph> toc)
-    {
-        var index = Math.Clamp(at, 0, _model.Blocks.Count);
-        foreach (var paragraph in toc)
-            _commands.Execute(new InsertParagraphCommand(index++, paragraph));
-    }
+        => TableOfContentsMutationCoordinator.Apply(
+            _model,
+            _commands,
+            at,
+            label,
+            replaceExisting,
+            () => TableOfContents.Build(_model, BuildGeneratedPageTextResolver()),
+            Render);
 
     /// <summary>
     /// Prepend a simple cover page (a Title paragraph, an optional author Subtitle, and a spacer) at the
