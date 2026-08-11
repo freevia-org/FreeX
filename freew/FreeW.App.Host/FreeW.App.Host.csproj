@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
     <!-- The on-demand DOCX visual-fidelity harness (tools/FreeW.RenderCompare) renders pages through the
          same print/preview paginator (internal PrintLayout.BuildPaginator). -->
     <InternalsVisibleTo Include="FreeW.RenderCompare" />

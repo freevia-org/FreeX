@@ -1223,7 +1223,10 @@ public sealed partial class MainWindow : Window
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
                 title,
-                DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)));
+                AvaloniaFilePickerTypeAdapter.ToFileTypes(
+                    DocumentFileDialogRequestPlanner
+                        .BuildOpenPickerPlan(_documentPersistence.Adapters)
+                        .FileTypes)));
         return file?.LocalPath;
     }
 
@@ -3261,7 +3264,10 @@ public sealed partial class MainWindow : Window
             StorageProvider,
             AvaloniaFilePickerOpenRequest.FromFileTypes(
                 FileText.OpenPickerTitle,
-                DocumentFilePickerTypes.BuildOpenTypes(_documentPersistence.Adapters)));
+                AvaloniaFilePickerTypeAdapter.ToFileTypes(
+                    DocumentFileDialogRequestPlanner
+                        .BuildOpenPickerPlan(_documentPersistence.Adapters)
+                        .FileTypes)));
         return file?.LocalPath;
     }
 

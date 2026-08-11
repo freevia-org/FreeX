@@ -21,9 +21,10 @@ public sealed class HelpCommandSourceTests
         source.Should().Contain("var dialog = new LegalNoticesDialog();");
         source.Should().Contain("ShowOwnedDialog(dialog);");
         source.Should().Contain("AppIssueReporter.CreateDiagnosticsText(context)");
-        source.Should().Contain("Clipboard.SetText(diagnosticsText);");
+        source.Should().Contain("_platformClipboard.WriteAsync(");
+        source.Should().Contain("new PlatformClipboardContent(Text: diagnosticsText)");
         source.Should().Contain("UiText.Get(\"MainWindowMessage_CopyDiagnosticsTitle\")");
-        source.Should().Contain("ExternalUrlLauncher.Open(");
+        source.Should().Contain("DesktopExternalUriLauncher.Open(");
         source.Should().Contain("ShowOwnedMessage(");
     }
 

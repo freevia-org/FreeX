@@ -1,9 +1,9 @@
 using Free.Shared.AppServices.Printing;
-using FreeW.App.Avalonia.Printing;
+using FreeW.App.Presentation.Shell;
 
-namespace FreeW.App.Avalonia.Tests.Printing;
+namespace FreeW.App.Presentation.Tests;
 
-public sealed class PrintSelectionHandoffPlannerTests
+public sealed class FreeWPrintSelectionHandoffPlannerTests
 {
     [Fact]
     public void Build_PreparedPdfCarriesRangeAndOrientationOnlyIntoPdfPayload()
@@ -14,7 +14,7 @@ public sealed class PrintSelectionHandoffPlannerTests
             PageRange: PrintPageRange.Between(2, 4),
             Orientation: PrintOrientation.Landscape);
 
-        var plan = PrintSelectionHandoffPlanner.Build(
+        var plan = FreeWPrintSelectionHandoffPlanner.Build(
             requested,
             PrintRangeAndOrientationHandling.PreparedPdf);
 
@@ -34,11 +34,25 @@ public sealed class PrintSelectionHandoffPlannerTests
             PageRange: PrintPageRange.Single(3),
             Orientation: PrintOrientation.Portrait);
 
-        var plan = PrintSelectionHandoffPlanner.Build(
+        var plan = FreeWPrintSelectionHandoffPlanner.Build(
             requested,
             PrintRangeAndOrientationHandling.PrinterSubmission);
 
         plan.PdfSelection.Should().Be(new PrintSelection());
         plan.SubmissionSelection.Should().Be(requested);
+    }
+
+    [Fact]
+    public void AvaloniaDoesNotOwnACompatibilityFacade()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var facadePath = Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "Printing",
+            "PrintSelectionHandoffPlanner.cs");
+
+        File.Exists(facadePath).Should().BeFalse();
     }
 }

@@ -3148,7 +3148,7 @@ public sealed class MainWindow : Window
             var (firstPage, lastPage) = FreeWPrintRequestPlanner.ResolvePageRange(
                 selectedRange,
                 plan.TotalPages);
-            paginator = PageRangeDocumentPaginator.Create(
+            paginator = WpfPageRangeDocumentPaginator.CreateClampedInclusive(
                 paginator,
                 firstPage,
                 lastPage);

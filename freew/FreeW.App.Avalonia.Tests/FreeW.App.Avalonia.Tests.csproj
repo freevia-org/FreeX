@@ -23,6 +23,7 @@
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
     <Using Include="FreeW.App.Presentation.DocumentView" />
+    <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>

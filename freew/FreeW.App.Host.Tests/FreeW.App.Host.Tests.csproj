@@ -29,6 +29,7 @@
     <Using Include="FreeW.Core.Model.Paragraph" Alias="Paragraph" />
     <Using Include="FreeW.Core.Model.Table" Alias="Table" />
     <Using Include="FreeW.App.Presentation.DocumentView" />
+    <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>

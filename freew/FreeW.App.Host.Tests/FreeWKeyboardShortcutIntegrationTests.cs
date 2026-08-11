@@ -143,7 +143,7 @@ public sealed class FreeWKeyboardShortcutIntegrationTests
         source.Should().Contain("var plan = FreeWPrintRequestPlanner.Create(");
         source.Should().Contain("dialog.UserPageRangeEnabled = plan.TotalPages > 1;");
         source.Should().Contain("dialog.PageRangeSelection == PageRangeSelection.UserPages");
-        source.Should().Contain("PageRangeDocumentPaginator.Create(");
+        source.Should().Contain("WpfPageRangeDocumentPaginator.CreateClampedInclusive(");
     }
 
     private static Key ToWpfKey(FreeWKeyboardKey key) =>

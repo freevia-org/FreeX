@@ -73,6 +73,7 @@
   <ItemGroup>
     <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Opc" />
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.AppServices" />

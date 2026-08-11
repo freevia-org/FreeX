@@ -66,7 +66,7 @@ public sealed class LocalizationUsageTests
     [Fact]
     public void AppSourceLocalizationKeys_AllExistInNeutralResources()
     {
-        var sourceRoot = DialogSourceTestSupport.FindHostSourceDirectory("UiText.cs");
+        var sourceRoot = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var resourceKeys = UiText.GetNeutralResourceKeys();
 
         var usedKeys = Directory
@@ -87,7 +87,7 @@ public sealed class LocalizationUsageTests
     [Fact]
     public void AppXamlUserFacingText_UsesLocalizationResources()
     {
-        var sourceRoot = DialogSourceTestSupport.FindHostSourceDirectory("UiText.cs");
+        var sourceRoot = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var offenders = Directory
             .EnumerateFiles(sourceRoot, "*.xaml", SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
@@ -123,7 +123,7 @@ public sealed class LocalizationUsageTests
     [Fact]
     public void AppCodeAutomationMetadata_UsesLocalizationResources()
     {
-        var sourceRoot = DialogSourceTestSupport.FindHostSourceDirectory("UiText.cs");
+        var sourceRoot = DialogSourceTestSupport.FindHostSourceDirectory("MainWindow.xaml");
         var offenders = Directory
             .EnumerateFiles(sourceRoot, "*.cs", SearchOption.TopDirectoryOnly)
             .SelectMany(FindRawAutomationPropertyText)

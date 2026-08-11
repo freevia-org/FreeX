@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Markup;
+using Free.Shared.Shell.Wpf;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Services;
 using FreeX.Core.Model;
@@ -598,7 +599,10 @@ public partial class MainWindow
         ExportOptions options,
         System.Windows.Documents.DocumentPaginator paginator) =>
         options.PageRange is { } pageRange
-            ? PageRangeDocumentPaginator.Create(paginator, pageRange)
+            ? WpfPageRangeDocumentPaginator.CreateValidatedInclusive(
+                paginator,
+                pageRange.FromPage,
+                pageRange.ToPage)
             : paginator;
 
     private static void OpenExportedFile(string path)

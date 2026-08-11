@@ -11,5 +11,7 @@ public sealed class WrapperDedupTests
             Loc,
             LocalizedUiText,
             AppLanguageCatalog>(
-            ["freep", "FreeP.App.Localization"]);
+            ["freep", "FreeP.App.Localization"],
+            ["freep", "FreeP.App.Host", "FreeP.App.Host.csproj"],
+            ["freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"]);
 }

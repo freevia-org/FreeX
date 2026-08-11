@@ -189,16 +189,16 @@ public partial class MainWindow
             return true;
         }
 
-        switch (ExternalUrlLauncher.Open(plan.Target))
+        switch (DesktopExternalUriLauncher.Open(plan.Target))
         {
-            case ExternalUrlLaunchResult.BlockedScheme:
+            case ExternalUriLaunchResult.BlockedScheme:
                 ShowOwnedMessage(
                     UiText.Get("MainWindowMessage_OpenHyperlinkBlockedScheme"),
                     UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 break;
-            case ExternalUrlLaunchResult.LaunchFailed:
+            case ExternalUriLaunchResult.LaunchFailed:
                 ShowOwnedMessage(
                     UiText.Get("MainWindowMessage_OpenHyperlinkOpenFailed"),
                     UiText.Get("MainWindowMessage_OpenHyperlinkTitle"),

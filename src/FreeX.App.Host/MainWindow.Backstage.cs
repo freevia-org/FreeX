@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
+using Free.Shared.Shell.Wpf;
 using FreeX.App.Localization;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Calculation;
@@ -322,9 +323,10 @@ public partial class MainWindow
                     settings.PageFrom, settings.PageTo, totalPages,
                     out var from, out var to))
             {
-                paginator = PageRangeDocumentPaginator.Create(
+                paginator = WpfPageRangeDocumentPaginator.CreateValidatedInclusive(
                     _backstagePrintPreviewDocument.DocumentPaginator,
-                    new ExportPageRange(from, to));
+                    from,
+                    to);
             }
         }
 

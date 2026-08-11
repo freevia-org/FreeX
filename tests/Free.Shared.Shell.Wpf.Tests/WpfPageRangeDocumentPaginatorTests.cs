@@ -98,21 +98,20 @@ public sealed class WpfPageRangeDocumentPaginatorTests
     }
 
     [Fact]
-    public void ProductWrappersDelegateRangePolicyToSharedWpfOwner()
+    public void ProductCallersUseSharedWpfOwnerDirectly()
     {
-        var freeW = File.ReadAllText(RepositoryFile(
-            "freew",
-            "FreeW.App.Host",
-            "PageRangeDocumentPaginator.cs"));
-        var freeX = File.ReadAllText(RepositoryFile(
-            "src",
-            "FreeX.App.Host",
-            "PageRangeDocumentPaginator.cs"));
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var freeW = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "MainWindow.cs"));
+        var freeXPreview = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Host", "WpfPrintPreviewToolbarPlanner.cs"));
+        var freeXExport = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Host", "MainWindow.PrintExport.cs"));
+        var freeXBackstage = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
 
         freeW.Should().Contain("WpfPageRangeDocumentPaginator.CreateClampedInclusive(");
-        freeX.Should().Contain("WpfPageRangeDocumentPaginator.CreateValidatedInclusive(");
-        freeW.Should().NotContain("override");
-        freeX.Should().NotContain("override");
+        freeXPreview.Should().Contain("WpfPageRangeDocumentPaginator.CreateValidatedInclusive(");
+        freeXExport.Should().Contain("WpfPageRangeDocumentPaginator.CreateValidatedInclusive(");
+        freeXBackstage.Should().Contain("WpfPageRangeDocumentPaginator.CreateValidatedInclusive(");
+        File.Exists(Path.Combine(root, "freew", "FreeW.App.Host", "PageRangeDocumentPaginator.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(root, "src", "FreeX.App.Host", "PageRangeDocumentPaginator.cs")).Should().BeFalse();
     }
 
     private sealed class RecordingPaginator : DocumentPaginator
@@ -159,6 +158,4 @@ public sealed class WpfPageRangeDocumentPaginatorTests
         }
     }
 
-    private static string RepositoryFile(params string[] parts) =>
-        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile("FreeX.slnx", parts);
 }

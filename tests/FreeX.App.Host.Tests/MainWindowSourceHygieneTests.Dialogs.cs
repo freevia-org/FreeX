@@ -163,7 +163,7 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("private void OpenExternalHelpLink(string url, string title)");
         // External links route through the single guarded launcher (scheme allowlist enforced there),
         // so the raw shell launch must NOT live in this file anymore.
-        source.Should().Contain("ExternalUrlLauncher.Open(url)");
+        source.Should().Contain("DesktopExternalUriLauncher.Open(url)");
         source.Should().NotContain("UseShellExecute");
         source.Should().Contain("ShowOwnedMessage(");
         source.Should().Contain("OpenExternalHelpLink(AppInfo.HelpUrl, UiText.Get(\"MainWindowMessage_HelpOnlineTitle\"))");

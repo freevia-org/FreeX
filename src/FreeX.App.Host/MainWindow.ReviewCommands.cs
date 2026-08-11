@@ -705,11 +705,11 @@ public partial class MainWindow
 
     private void OpenExternalHelpLink(string url, string title)
     {
-        var result = ExternalUrlLauncher.Open(url);
-        if (result == ExternalUrlLaunchResult.Launched)
+        var result = DesktopExternalUriLauncher.Open(url);
+        if (result == ExternalUriLaunchResult.Launched)
             return;
 
-        var reason = result == ExternalUrlLaunchResult.BlockedScheme
+        var reason = result == ExternalUriLaunchResult.BlockedScheme
             ? UiText.Get("MainWindowMessage_ExternalLinkBlockedScheme")
             : UiText.Get("MainWindowMessage_ExternalLinkCouldNotBeOpened");
         ShowOwnedMessage(

@@ -34,6 +34,7 @@
     <Using Include="Free.Shared.Ribbon.Wpf.RibbonTooltip" Alias="RibbonTooltip" />
     <Using Include="FreeX.Ribbon.Definitions" />
     <Using Include="FreeX.App.Services.Ribbon" />
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,7 +5,8 @@ using Free.Shared.Localization;
 internal static class LocalizationWrapperContractTestSupport
 {
     public static void AssertAppWrappers<TLoc, TUiText, TLanguageCatalog>(
-        string[] localizationProjectParts)
+        string[] localizationProjectParts,
+        params string[][] rendererProjectParts)
         where TLoc : class
     {
         typeof(TLoc).BaseType.Should().Be(typeof(LocalizedResourceCatalog<TLoc>));
@@ -48,5 +49,14 @@ internal static class LocalizationWrapperContractTestSupport
             .And.NotContain("GetAvailableLanguages(");
         sharedLanguageOption.Should().Contain(
             "public sealed record AppLanguageOption(string CultureName, string DisplayName);");
+
+        var expectedAlias = $"<Using Include=\"{typeof(TUiText).FullName}\" Alias=\"UiText\" />";
+        foreach (var projectParts in rendererProjectParts)
+        {
+            var projectPath = Path.Combine(root, Path.Combine(projectParts));
+            File.ReadAllText(projectPath).Should().Contain(expectedAlias);
+            File.Exists(Path.Combine(Path.GetDirectoryName(projectPath)!, "UiText.cs"))
+                .Should().BeFalse("renderers should alias the product-owned localization facade");
+        }
     }
 }

@@ -11,5 +11,7 @@ public sealed class WrapperDedupTests
             Loc,
             LocalizedUiText,
             AppLanguageCatalog>(
-            ["src", "FreeX.App.Localization"]);
+            ["src", "FreeX.App.Localization"],
+            ["src", "FreeX.App.Host", "FreeX.App.Host.csproj"],
+            ["src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"]);
 }

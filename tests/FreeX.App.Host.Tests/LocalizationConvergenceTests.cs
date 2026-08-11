@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.App.Localization;
@@ -90,16 +91,18 @@ public sealed class LocalizationConvergenceTests
     }
 
     [Fact]
-    public void PlatformUiTextFacades_InheritSharedLocalizedUiTextPolicy()
+    public void PlatformUiTextAliases_UseTheProductOwnedLocalizedUiTextPolicy()
     {
-        var host = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "UiText.cs");
-        var avalonia = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "UiText.cs");
+        var host = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "FreeX.App.Host.csproj");
+        var avalonia = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj");
         var shared = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Localization", "LocalizedUiText.cs");
 
-        host.Should().Contain("class UiText : LocalizedUiText");
-        avalonia.Should().Contain("class UiText : LocalizedUiText");
-        host.Should().NotContain("Loc.");
-        avalonia.Should().NotContain("Loc.");
+        const string alias = "<Using Include=\"FreeX.App.Localization.LocalizedUiText\" Alias=\"UiText\" />";
+        host.Should().Contain(alias);
+        avalonia.Should().Contain(alias);
+        var root = WorkspaceFileLocator.FindWorkspaceRoot();
+        File.Exists(Path.Combine(root, "src", "FreeX.App.Host", "UiText.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(root, "src", "FreeX.App.Avalonia", "UiText.cs")).Should().BeFalse();
 
         shared.Should().Contain("LocalizedUiTextCatalog<Loc>");
         var sharedCatalog = WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Localization", "LocalizedUiTextCatalog.cs");
