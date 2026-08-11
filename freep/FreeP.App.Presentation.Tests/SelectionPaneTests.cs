@@ -277,7 +277,8 @@ public sealed class SelectionPaneTests
             source.Should().Contain("itemSession.MoveTowardFront()");
             source.Should().Contain("itemSession.MoveTowardBack()");
             source.Should().Contain("item.VisibilityActionText");
-            source.Should().Contain("item.AccessibilityStateText");
+            source.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
+            source.Should().Contain("PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)");
             source.Should().Contain("BuildItem(");
             source.Should().Contain("rename.LostFocus");
             source.Should().Contain("Key.Enter");
@@ -291,6 +292,7 @@ public sealed class SelectionPaneTests
             source.Should().NotContain("PresentationSelectionPaneMoveDirection");
             source.Should().NotContain("offset:");
             source.Should().NotContain("item.IsHidden ?");
+            source.Should().NotContain("item.AccessibilityStateText");
             source.Should().NotContain(".SetShapeName(");
             source.Should().NotContain(".ToggleShapeHidden(");
             source.Should().NotContain(".MoveSelectedShapeInReadingOrder(");
