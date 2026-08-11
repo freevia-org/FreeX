@@ -74,7 +74,7 @@ public sealed class PresentationPaneAccessibilityTests
         selection.SelectedIndex.Should().Be(0);
         window.SelectionPaneItemsForAccessibilityTests.Should().ContainSingle();
         var selectionItem = window.SelectionPaneItemsForAccessibilityTests.Single();
-        AutomationProperties.GetAutomationId(selectionItem).Should().Be("FreePSelectionPaneItem1");
+        AutomationProperties.GetAutomationId(selectionItem).Should().Be("FreePSelectionPaneItemShape1");
         AutomationProperties.GetName(selectionItem).Should().Be(shape.Name);
         AutomationProperties.GetItemStatus(selectionItem).Should().Be("Selected; Order 1");
 
