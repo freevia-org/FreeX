@@ -183,13 +183,11 @@ public partial class MainWindow
 
     private void CycleShellFocus(bool reverse)
     {
-        var current = GetCurrentShellFocusTarget();
-        for (var attempt = 0; attempt < Enum.GetValues<ShellFocusTarget>().Length; attempt++)
-        {
-            current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
-            if (FocusShellRegion(current))
-                return;
-        }
+        ShellFocusCyclePlanner.TryFocusNextAvailable(
+            GetCurrentShellFocusTarget(),
+            reverse,
+            IsShellFocusTargetAvailable,
+            FocusShellRegion);
     }
 
     private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>

@@ -115,7 +115,9 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var keyboardFocusSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardFocus.cs");
 
-        keyboardFocusSource.Should().Contain("if (FocusShellRegion(current))");
+        keyboardFocusSource.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
+        keyboardFocusSource.Should().Contain("FocusShellRegion);");
+        keyboardFocusSource.Should().NotContain("Enum.GetValues<ShellFocusTarget>()");
         keyboardFocusSource.Should().Contain("return FormulaBar.Focus();");
         keyboardFocusSource.Should().Contain("return TryFocusCurrentSheetTab() || AddSheetButton.Focus();");
         keyboardFocusSource.Should().Contain("return FocusStatusBar();");

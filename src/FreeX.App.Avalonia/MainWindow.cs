@@ -10018,37 +10018,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var text = editor.Text ?? "";
         var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
-        var snapshot = new FormulaRangeEditorSnapshot(
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
             text,
             selectionStart,
             selectionLength,
             formulaCell.Value,
             UseR1C1ReferenceStyle,
-            _session.Workbook.GetSheet(range.Start.Sheet)?.Name);
-        if (!_formulaRangeEditingSession.TryPlanKeyboardDisjointRangeSelectionEdit(
+            _session.Workbook,
+            range);
+        if (!_formulaRangeEditingSession.TryApplyKeyboardDisjointRangeSelectionEdit(
                 snapshot,
                 current,
                 target,
                 extendSelection,
-                out var plan))
+                edit => ApplyFormulaRangeEditorEdit(editor, edit),
+                _ => _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start),
+                out _))
         {
             return TryApplyFormulaRangeSelection(range, range.Start, target);
         }
 
-        _isApplyingFormulaBoxText = true;
-        try
-        {
-            ApplyTextBoxEdit(editor, plan.Edit.TextEdit);
-            SetInlineCellEditorSelection(editor, plan.Edit.TextEdit);
-            SynchronizeFormulaEditors(editor);
-        }
-        finally
-        {
-            _isApplyingFormulaBoxText = false;
-        }
-
-        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
-        _formulaRangeEditingSession.ApplySelectionEdit(plan);
         _cellAddressText.Text = FormatRangeReference(range);
         _selectionStatsText.Text = _session.SelectionStatsText;
         RefreshFormulaReferenceHighlights();
@@ -10115,47 +10104,36 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var text = editor.Text ?? "";
         var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
-        var getPivotDataFunctionCall = GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(
-            _session.Workbook,
-            formulaCell.Value,
-            _session.ActiveSheet.Id,
-            range,
-            GenerateGetPivotData,
-            selectedWorkbookName);
-        var snapshot = new FormulaRangeEditorSnapshot(
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
             text,
             selectionStart,
             selectionLength,
             formulaCell.Value,
             UseR1C1ReferenceStyle,
-            selectedSheetNameOverride ?? _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+            _session.Workbook,
+            range,
+            selectedSheetNameOverride,
             selectedWorkbookName);
-        if (!_formulaRangeEditingSession.TryPlanRangeSelectionEdit(
+        if (!_formulaRangeEditingSession.TryApplyPointRangeSelectionEdit(
                 snapshot,
+                _session.Workbook,
+                _session.ActiveSheet.Id,
                 range,
                 selectionAnchor,
                 selectionCursor,
-                getPivotDataFunctionCall,
+                GenerateGetPivotData,
+                beforeEditorEdit: null,
+                applyEditorEdit: edit => ApplyFormulaRangeEditorEdit(editor, edit),
+                afterEditorEdit: editPlan =>
+                {
+                    if (editPlan.UpdateLocalSelection)
+                        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, selectionAnchor);
+                },
                 out var plan))
         {
             return false;
         }
 
-        _isApplyingFormulaBoxText = true;
-        try
-        {
-            ApplyTextBoxEdit(editor, plan.Edit.TextEdit);
-            SetInlineCellEditorSelection(editor, plan.Edit.TextEdit);
-            SynchronizeFormulaEditors(editor);
-        }
-        finally
-        {
-            _isApplyingFormulaBoxText = false;
-        }
-
-        if (plan.UpdateLocalSelection)
-            _session.SelectRangeForFormulaEdit(range, formulaCell.Value, selectionAnchor);
-        _formulaRangeEditingSession.ApplySelectionEdit(plan);
         if (plan.UpdateLocalSelection)
         {
             _cellAddressText.Text = FormatRangeReference(range);
@@ -10190,6 +10168,21 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             inlineEditor.CaretIndex = source.CaretIndex;
             inlineEditor.SelectionStart = source.SelectionStart;
             inlineEditor.SelectionEnd = source.SelectionEnd;
+        }
+    }
+
+    private void ApplyFormulaRangeEditorEdit(TextBox editor, ExcelTextEdit edit)
+    {
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            ApplyTextBoxEdit(editor, edit);
+            SetInlineCellEditorSelection(editor, edit);
+            SynchronizeFormulaEditors(editor);
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
         }
     }
 
@@ -10870,40 +10863,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var editorText = editor.Text ?? "";
         var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, editorText.Length);
-        var snapshot = new FormulaRangeEditorSnapshot(
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
             editorText,
             selectionStart,
             selectionLength,
             formulaCell.Value,
             UseR1C1ReferenceStyle,
-            selectedSheetNameOverride ?? _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+            _session.Workbook,
+            range,
+            selectedSheetNameOverride,
             selectedWorkbookName);
-        if (!_formulaRangeEditingSession.TryPlanDisjointRangeSelectionEdit(
+        if (!_formulaRangeEditingSession.TryApplyDisjointRangeSelectionEdit(
                 snapshot,
                 range,
                 range.Start,
                 range.End,
                 includeSheetSpan: false,
+                applyEditorEdit: edit => ApplyFormulaRangeEditorEdit(editor, edit),
+                afterEditorEdit: editPlan =>
+                {
+                    if (editPlan.UpdateLocalSelection)
+                        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
+                },
                 out var plan))
         {
             return false;
         }
 
-        _isApplyingFormulaBoxText = true;
-        try
-        {
-            ApplyTextBoxEdit(editor, plan.Edit.TextEdit);
-            SetInlineCellEditorSelection(editor, plan.Edit.TextEdit);
-            SynchronizeFormulaEditors(editor);
-        }
-        finally
-        {
-            _isApplyingFormulaBoxText = false;
-        }
-
-        if (plan.UpdateLocalSelection)
-            _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
-        _formulaRangeEditingSession.ApplySelectionEdit(plan);
         if (plan.UpdateLocalSelection)
         {
             _cellAddressText.Text = FormatRangeReference(range);
@@ -11422,26 +11408,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!FunctionAutocompleteIsOpen)
             return false;
 
-        var plan = _formulaRangeEditingSession.PlanFunctionAutocompleteKey(
+        return _formulaRangeEditingSession.ExecuteFunctionAutocompleteKey(
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(key),
-            _functionAutocompleteListBox!.SelectedIndex);
-        switch (plan.Action)
-        {
-            case FormulaFunctionAutocompleteKeyAction.MoveSelection:
-                _functionAutocompleteListBox.SelectedIndex = plan.SelectionIndex;
-                break;
-
-            case FormulaFunctionAutocompleteKeyAction.CommitSelection:
+            _functionAutocompleteListBox!.SelectedIndex,
+            index => _functionAutocompleteListBox.SelectedIndex = index,
+            _ =>
+            {
                 if (_functionAutocompleteListBox.SelectedItem is string chosen)
                     CommitFunctionAutocomplete(editor, chosen);
-                break;
-
-            case FormulaFunctionAutocompleteKeyAction.Dismiss:
-                HideFormulaFunctionAutocomplete();
-                break;
-        }
-
-        return plan.Handled;
+            },
+            HideFormulaFunctionAutocomplete);
     }
 
     private void CommitFunctionAutocomplete(TextBox editor, string chosenName)
@@ -27297,13 +27273,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void CycleShellFocus(bool reverse)
     {
-        var current = GetCurrentShellFocusTarget();
-        for (var attempt = 0; attempt < Enum.GetValues<ShellFocusTarget>().Length; attempt++)
-        {
-            current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
-            if (FocusShellRegion(current))
-                return;
-        }
+        ShellFocusCyclePlanner.TryFocusNextAvailable(
+            GetCurrentShellFocusTarget(),
+            reverse,
+            IsShellFocusTargetAvailable,
+            FocusShellRegion);
     }
 
     private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>

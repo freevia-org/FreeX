@@ -545,6 +545,11 @@ public sealed class AvaloniaShellSourceTests
         var menuSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var optionsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var calculationWorkflowSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src",
+            "FreeX.App.Presentation",
+            "Calculation",
+            "CalculationWorkflowSession.cs"));
 
         // Wired into the native File menu with an Options entry that routes through the shared
         // Backstage workflow planner before the platform executor calls ShowOptions.
@@ -601,8 +606,11 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain("_session.SetShowHeadings(input.ShowHeadings);");
         optionsSource.Should().Contain("FormulaErrorCheckingRuleCatalog.SupportedRules");
         optionsSource.Should().Contain("workbook.DisabledFormulaErrorCodes.Contains(rule.ErrorCode)");
-        optionsSource.Should().Contain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
-        optionsSource.Should().Contain("_session.ExecuteReviewCommand(command)");
+        optionsSource.Should().Contain("CalculationWorkflow.ChangeFormulaErrorRules(");
+        optionsSource.Should().NotContain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
+        optionsSource.Should().NotContain("_session.ExecuteReviewCommand(command)");
+        calculationWorkflowSource.Should().Contain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
+        calculationWorkflowSource.Should().Contain("_executeCommand(");
 
         // PresentationPortabilityGuard forbids these tokens in portable shell source — make sure we stayed clean.
         optionsSource.Should().NotContain("System.Windows");
@@ -5049,7 +5057,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("if (IsShellFocusCycleKey(e))");
         source.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
         source.Should().Contain("private void CycleShellFocus(bool reverse)");
-        source.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        source.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
+        source.Should().NotContain("Enum.GetValues<ShellFocusTarget>()");
         source.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
         source.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
         source.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");

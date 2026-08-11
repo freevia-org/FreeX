@@ -289,6 +289,27 @@ public static class WorkbookApplicationFrameCommandBinder
     }
 }
 
+/// <summary>
+/// Builds and validates the complete renderer-neutral application command surface. Renderers supply
+/// native endpoints while this factory owns binder ordering and route coverage.
+/// </summary>
+public static class WorkbookApplicationCommandBindingFactory
+{
+    public static WorkbookApplicationCommandBindings Create(
+        WorkbookApplicationFrameCommandHandlers frameHandlers,
+        WorkbookApplicationWorkareaCommandHandlers workareaHandlers)
+    {
+        ArgumentNullException.ThrowIfNull(frameHandlers);
+        ArgumentNullException.ThrowIfNull(workareaHandlers);
+
+        var bindings = new WorkbookApplicationCommandBindings();
+        WorkbookApplicationFrameCommandBinder.Bind(bindings, frameHandlers);
+        WorkbookApplicationWorkareaCommandBinder.Bind(bindings, workareaHandlers);
+        bindings.EnsureBound(WorkbookApplicationCommandRouter.AllRoutes);
+        return bindings;
+    }
+}
+
 public static class WorkbookApplicationCommandRouter
 {
     private static readonly IReadOnlyDictionary<string, WorkbookApplicationCommandRoute> QuickAccessByKey =
@@ -308,6 +329,13 @@ public static class WorkbookApplicationCommandRouter
 
     public static IReadOnlyList<WorkbookApplicationCommandRoute> KeyboardShortcutRoutes { get; } =
         ShortcutByRoute.Values.OrderBy(route => route.SourceKey, StringComparer.Ordinal).ToArray();
+
+    public static IReadOnlyList<WorkbookApplicationCommandRoute> AllRoutes { get; } =
+    [
+        .. QuickAccessRoutes,
+        .. WorksheetContextMenuRoutes,
+        .. KeyboardShortcutRoutes
+    ];
 
     public static bool TryRouteQuickAccess(
         string commandId,

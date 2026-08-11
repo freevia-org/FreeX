@@ -18,22 +18,25 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
         mainWindow.Should().Contain("WorkbookApplicationCommandRouter.TryRouteShortcut");
         mainWindow.Should().NotContain("case WorksheetContextMenuAction.Cut:");
         mainWindow.Should().NotContain("case WorkbookShortcutRoute.");
-        bindings.Should().Contain("WorkbookApplicationWorkareaCommandBinder.Bind(");
+        bindings.Should().Contain("WorkbookApplicationCommandBindingFactory.Create(");
+        bindings.Should().Contain("new WorkbookApplicationWorkareaCommandHandlers(");
         bindings.Should().Contain("new WorkbookApplicationWorkareaCommandEndpointProfile");
         bindings.Should().Contain("Undo = Handled(");
         bindings.Should().NotContain("ExecuteWorkbookApplicationWorkareaCommandAsync");
         bindings.Should().NotContain("WorkbookApplicationCommandIntent.");
         bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent");
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent");
+        bindings.Should().NotContain(".EnsureBound(");
     }
 
     [Fact]
-    public void AvaloniaApplicationFrameRoutesUseSharedBinder()
+    public void AvaloniaApplicationFrameRoutesUseSharedBindingFactory()
     {
         var bindings = File.ReadAllText(RepoFile("MainWindow.ApplicationCommandRouting.cs"));
 
-        bindings.Should().Contain("WorkbookApplicationFrameCommandBinder.Bind(");
+        bindings.Should().Contain("WorkbookApplicationCommandBindingFactory.Create(");
         bindings.Should().Contain("new WorkbookApplicationFrameCommandHandlers(");
+        bindings.Should().NotContain("WorkbookApplicationFrameCommandBinder.Bind(");
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook");
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.OpenWorkbook");
     }

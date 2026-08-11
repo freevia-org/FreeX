@@ -728,7 +728,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static bool IsShellFocusCycleKey(KeyEventArgs args)");
         script.Should().Contain("CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);");
         script.Should().Contain("private void CycleShellFocus(bool reverse)");
-        script.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        script.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
         script.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
         script.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
         script.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");
@@ -3214,9 +3214,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 private static bool IsShellFocusCycleKey(KeyEventArgs args) => true;
                 private void CycleShellFocus(bool reverse)
                 {
-                    var current = GetCurrentShellFocusTarget();
-                    current = ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable);
-                    FocusShellRegion(current);
+                    ShellFocusCyclePlanner.TryFocusNextAvailable(
+                        GetCurrentShellFocusTarget(),
+                        reverse,
+                        IsShellFocusTargetAvailable,
+                        FocusShellRegion);
                 }
                 private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
                     target != ShellFocusTarget.TaskPane ||
@@ -3316,6 +3318,21 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
+            "src/FreeX.App.Presentation/Shell/WorkbookApplicationCommandRouter.cs",
+            """
+            namespace FreeX.App.Presentation.Shell;
+
+            public static class WorkbookApplicationCommandBindingFactory
+            {
+                public static void PreserveSourceContract()
+                {
+                    WorkbookApplicationCommandBindingFactory.Create(
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
             "src/FreeX.App.Presentation/Shell/WorkbookApplicationWorkareaCommandEndpoint.cs",
             """
             namespace FreeX.App.Presentation.Shell;
@@ -3324,7 +3341,6 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private static void PreserveSourceContract()
                 {
-                    WorkbookApplicationWorkareaCommandBinder.Bind(
                     new WorkbookApplicationWorkareaCommandEndpointProfile
                     WorkbookApplicationCommandIntent.WorkbookStatistics =>
                     WorkbookApplicationCommandIntent.FlashFill =>

@@ -437,11 +437,14 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("private bool TryInsertFormulaPointReference(CellAddress address)");
         source.Should().Contain("_session.FormulaEditAddress is null");
         source.Should().Contain("_formulaRangeEditingSession.IsPointModeActive(");
-        source.Should().Contain("_formulaRangeEditingSession.TryPlanRangeSelectionEdit(");
+        source.Should().Contain("FormulaRangeEditorSnapshot.Capture(");
+        source.Should().Contain("_formulaRangeEditingSession.TryApplyPointRangeSelectionEdit(");
         sessionSource.Should().Contain("FormulaRangeEntryPlanner.TryApplyRangeSelection(");
         source.Should().Contain("new GridRange(address, address)");
-        source.Should().Contain("_formulaRangeEditingSession.ApplySelectionEdit(plan);");
-        source.Should().Contain("ApplyTextBoxEdit(editor, plan.Edit.TextEdit);");
+        source.Should().Contain("ApplyFormulaRangeEditorEdit(editor, edit)");
+        source.Should().NotContain("GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(");
+        source.Should().NotContain("new FormulaRangeEditorSnapshot(");
+        source.Should().NotContain("_formulaRangeEditingSession.ApplySelectionEdit(plan);");
         source.Should().Contain("_sheetGridHost.Content = BuildSheetGrid();");
         source.Should().Contain("RefreshFormulaReferenceHighlights();");
 
@@ -468,7 +471,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var pivotSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Pivot.cs"));
 
-        source.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        source.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
+        source.Should().NotContain("Enum.GetValues<ShellFocusTarget>()");
         source.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
         source.Should().Contain("private ShellFocusTarget GetCurrentShellFocusTarget()");
         source.Should().Contain("private bool FocusShellRegion(ShellFocusTarget target)");

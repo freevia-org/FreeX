@@ -1,4 +1,5 @@
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -18,7 +19,30 @@ public readonly record struct FormulaRangeEditorSnapshot(
     CellAddress FormulaCell,
     bool UseR1C1ReferenceStyle,
     string? SelectedSheetName = null,
-    string? SelectedWorkbookName = null);
+    string? SelectedWorkbookName = null)
+{
+    public static FormulaRangeEditorSnapshot Capture(
+        string? text,
+        int caretIndex,
+        int selectionLength,
+        CellAddress formulaCell,
+        bool useR1C1ReferenceStyle,
+        Workbook workbook,
+        GridRange selectedRange,
+        string? selectedSheetNameOverride = null,
+        string? selectedWorkbookName = null)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        return new FormulaRangeEditorSnapshot(
+            text ?? string.Empty,
+            caretIndex,
+            selectionLength,
+            formulaCell,
+            useR1C1ReferenceStyle,
+            selectedSheetNameOverride ?? workbook.GetSheet(selectedRange.Start.Sheet)?.Name,
+            selectedWorkbookName);
+    }
+}
 
 public readonly record struct FormulaRangeSelectionEditPlan(
     FormulaRangeEntryEdit Edit,
@@ -445,6 +469,69 @@ public sealed class FormulaRangeEditingSession
         return true;
     }
 
+    public bool TryApplyPointRangeSelectionEdit(
+        FormulaRangeEditorSnapshot editor,
+        Workbook workbook,
+        SheetId selectedSheetId,
+        GridRange range,
+        CellAddress selectionAnchor,
+        CellAddress selectionCursor,
+        bool generateGetPivotData,
+        Action<FormulaRangeSelectionEditPlan>? beforeEditorEdit,
+        Action<ExcelTextEdit> applyEditorEdit,
+        Action<FormulaRangeSelectionEditPlan>? afterEditorEdit,
+        out FormulaRangeSelectionEditPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        var getPivotDataFunctionCall = GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(
+            workbook,
+            editor.FormulaCell,
+            selectedSheetId,
+            range,
+            generateGetPivotData,
+            editor.SelectedWorkbookName);
+        return TryApplyRangeSelectionEdit(
+            editor,
+            range,
+            selectionAnchor,
+            selectionCursor,
+            getPivotDataFunctionCall,
+            beforeEditorEdit,
+            applyEditorEdit,
+            afterEditorEdit,
+            out plan);
+    }
+
+    public bool TryApplyRangeSelectionEdit(
+        FormulaRangeEditorSnapshot editor,
+        GridRange range,
+        CellAddress selectionAnchor,
+        CellAddress selectionCursor,
+        string? replacementText,
+        Action<FormulaRangeSelectionEditPlan>? beforeEditorEdit,
+        Action<ExcelTextEdit> applyEditorEdit,
+        Action<FormulaRangeSelectionEditPlan>? afterEditorEdit,
+        out FormulaRangeSelectionEditPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(applyEditorEdit);
+        if (!TryPlanRangeSelectionEdit(
+                editor,
+                range,
+                selectionAnchor,
+                selectionCursor,
+                replacementText,
+                out plan))
+        {
+            return false;
+        }
+
+        beforeEditorEdit?.Invoke(plan);
+        applyEditorEdit(plan.Edit.TextEdit);
+        afterEditorEdit?.Invoke(plan);
+        ApplySelectionEdit(plan);
+        return true;
+    }
+
     public bool TryPlanDisjointRangeSelectionEdit(
         FormulaRangeEditorSnapshot editor,
         GridRange range,
@@ -480,6 +567,34 @@ public sealed class FormulaRangeEditingSession
         return true;
     }
 
+    public bool TryApplyDisjointRangeSelectionEdit(
+        FormulaRangeEditorSnapshot editor,
+        GridRange range,
+        CellAddress selectionAnchor,
+        CellAddress selectionCursor,
+        bool includeSheetSpan,
+        Action<ExcelTextEdit> applyEditorEdit,
+        Action<FormulaRangeSelectionEditPlan>? afterEditorEdit,
+        out FormulaRangeSelectionEditPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(applyEditorEdit);
+        if (!TryPlanDisjointRangeSelectionEdit(
+                editor,
+                range,
+                selectionAnchor,
+                selectionCursor,
+                includeSheetSpan,
+                out plan))
+        {
+            return false;
+        }
+
+        applyEditorEdit(plan.Edit.TextEdit);
+        afterEditorEdit?.Invoke(plan);
+        ApplySelectionEdit(plan);
+        return true;
+    }
+
     public bool TryPlanKeyboardDisjointRangeSelectionEdit(
         FormulaRangeEditorSnapshot editor,
         CellAddress current,
@@ -495,6 +610,32 @@ public sealed class FormulaRangeEditingSession
             range.End,
             includeSheetSpan: true,
             out plan);
+    }
+
+    public bool TryApplyKeyboardDisjointRangeSelectionEdit(
+        FormulaRangeEditorSnapshot editor,
+        CellAddress current,
+        CellAddress target,
+        bool extendSelection,
+        Action<ExcelTextEdit> applyEditorEdit,
+        Action<FormulaRangeSelectionEditPlan>? afterEditorEdit,
+        out FormulaRangeSelectionEditPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(applyEditorEdit);
+        if (!TryPlanKeyboardDisjointRangeSelectionEdit(
+                editor,
+                current,
+                target,
+                extendSelection,
+                out plan))
+        {
+            return false;
+        }
+
+        applyEditorEdit(plan.Edit.TextEdit);
+        afterEditorEdit?.Invoke(plan);
+        ApplySelectionEdit(plan);
+        return true;
     }
 
     public GridRange PlanKeyboardSelectionRange(
@@ -663,6 +804,34 @@ public sealed class FormulaRangeEditingSession
                 currentIndex),
             _ => new(FormulaFunctionAutocompleteKeyAction.None, currentIndex),
         };
+
+    public bool ExecuteFunctionAutocompleteKey(
+        FormulaEditorKey key,
+        int currentIndex,
+        Action<int> moveSelection,
+        Action<int> commitSelection,
+        Action dismiss)
+    {
+        ArgumentNullException.ThrowIfNull(moveSelection);
+        ArgumentNullException.ThrowIfNull(commitSelection);
+        ArgumentNullException.ThrowIfNull(dismiss);
+
+        var plan = PlanFunctionAutocompleteKey(key, currentIndex);
+        switch (plan.Action)
+        {
+            case FormulaFunctionAutocompleteKeyAction.MoveSelection:
+                moveSelection(plan.SelectionIndex);
+                break;
+            case FormulaFunctionAutocompleteKeyAction.CommitSelection:
+                commitSelection(plan.SelectionIndex);
+                break;
+            case FormulaFunctionAutocompleteKeyAction.Dismiss:
+                dismiss();
+                break;
+        }
+
+        return plan.Handled;
+    }
 
     public ExcelTextEdit CommitFunctionAutocomplete(
         string text,

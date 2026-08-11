@@ -203,6 +203,79 @@ public sealed class FormulaRangeEditingSessionTests
     }
 
     [Fact]
+    public void PointRangeSelectionWorkflow_CapturesSheetBuildsPivotEditAndAppliesSessionState()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.SetCell(CellAddress.Parse("A1", sheet.Id), new TextValue("Region"));
+        sheet.SetCell(CellAddress.Parse("B1", sheet.Id), new TextValue("Amount"));
+        sheet.SetCell(CellAddress.Parse("E2", sheet.Id), new TextValue("Region"));
+        sheet.SetCell(CellAddress.Parse("F2", sheet.Id), new TextValue("Sum of Amount"));
+        sheet.SetCell(CellAddress.Parse("E4", sheet.Id), new TextValue("West"));
+        sheet.SetCell(CellAddress.Parse("F4", sheet.Id), new NumberValue(45));
+        var pivot = new PivotTableModel
+        {
+            Name = "PivotTable1",
+            CacheId = 1,
+            SourceRange = new GridRange(
+                CellAddress.Parse("A1", sheet.Id),
+                CellAddress.Parse("B5", sheet.Id)),
+            TargetRange = new GridRange(
+                CellAddress.Parse("E2", sheet.Id),
+                CellAddress.Parse("F5", sheet.Id))
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(1, "Sum of Amount", "sum"));
+        sheet.PivotTables.Add(pivot);
+
+        var formulaCell = CellAddress.Parse("A10", sheet.Id);
+        var selectedRange = new GridRange(
+            CellAddress.Parse("F4", sheet.Id),
+            CellAddress.Parse("F4", sheet.Id));
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
+            "=",
+            caretIndex: 1,
+            selectionLength: 0,
+            formulaCell,
+            useR1C1ReferenceStyle: false,
+            workbook,
+            selectedRange);
+        var sequence = new List<string>();
+        ExcelTextEdit? appliedEdit = null;
+        var session = new FormulaRangeEditingSession();
+        session.SetPointMode(true);
+
+        var applied = session.TryApplyPointRangeSelectionEdit(
+            snapshot,
+            workbook,
+            sheet.Id,
+            selectedRange,
+            selectedRange.Start,
+            selectedRange.End,
+            generateGetPivotData: true,
+            beforeEditorEdit: _ => sequence.Add("before"),
+            applyEditorEdit: edit =>
+            {
+                sequence.Add("edit");
+                appliedEdit = edit;
+            },
+            afterEditorEdit: _ => sequence.Add("after"),
+            out var plan);
+
+        applied.Should().BeTrue();
+        snapshot.SelectedSheetName.Should().Be("Sheet1");
+        appliedEdit.Should().Be(new ExcelTextEdit(
+            "=GETPIVOTDATA(\"Sum of Amount\",E2,\"Region\",\"West\")",
+            49,
+            0));
+        sequence.Should().Equal("before", "edit", "after");
+        session.ReferenceSpan.Should().Be(new FormulaReferenceEntrySpan(1, 48));
+        session.SelectionAnchor.Should().Be(selectedRange.Start);
+        session.SelectionCursor.Should().Be(selectedRange.End);
+        plan.UpdateLocalSelection.Should().BeTrue();
+    }
+
+    [Fact]
     public void DisjointAppendAndKeyboardNavigation_UseSessionState()
     {
         var sheet = SheetId.New();
@@ -351,6 +424,35 @@ public sealed class FormulaRangeEditingSessionTests
         plan.Action.Should().Be(expectedAction);
         plan.SelectionIndex.Should().Be(expectedIndex);
         plan.Handled.Should().Be(expectedHandled);
+    }
+
+    [Theory]
+    [InlineData(FormulaEditorKey.Down, "move:1")]
+    [InlineData(FormulaEditorKey.Enter, "commit:0")]
+    [InlineData(FormulaEditorKey.Escape, "dismiss")]
+    [InlineData(FormulaEditorKey.Left, null)]
+    public void FunctionAutocompleteKeyExecution_DispatchesSharedActionPlan(
+        FormulaEditorKey key,
+        string? expectedCall)
+    {
+        var session = new FormulaRangeEditingSession();
+        session.RefreshFunctionAutocomplete(
+            "=SU",
+            caretIndex: 3,
+            functionNames: ["SUM", "SUBTOTAL"],
+            definedNames: ["Summary"],
+            tableNames: null);
+        var calls = new List<string>();
+
+        var handled = session.ExecuteFunctionAutocompleteKey(
+            key,
+            currentIndex: 0,
+            index => calls.Add($"move:{index}"),
+            index => calls.Add($"commit:{index}"),
+            () => calls.Add("dismiss"));
+
+        handled.Should().Be(expectedCall is not null);
+        calls.Should().Equal(expectedCall is null ? Array.Empty<string>() : [expectedCall]);
     }
 
     [Fact]

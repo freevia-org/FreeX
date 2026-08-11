@@ -100,26 +100,25 @@ public partial class MainWindow
         if (editor is null || formulaCell is null)
             return false;
 
-        var snapshot = new FormulaRangeEditorSnapshot(
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
             editor.Text,
             editor.CaretIndex,
             editor.SelectionLength,
             formulaCell.Value,
             _options.UseR1C1ReferenceStyle,
-            _workbook.GetSheet(range.Start.Sheet)?.Name);
-        if (!_formulaRangeEditingSession.TryPlanKeyboardDisjointRangeSelectionEdit(
+            _workbook,
+            range);
+        if (!_formulaRangeEditingSession.TryApplyKeyboardDisjointRangeSelectionEdit(
                 snapshot,
                 current,
                 target,
                 extendSelection,
-                out var plan))
+                edit => ApplyFormulaEditorTextEdit(editor, edit),
+                afterEditorEdit: null,
+                out _))
         {
             return TryApplyFormulaRangeSelection(range, range.Start, target);
         }
-
-        ApplyFormulaEditorTextEdit(editor, plan.Edit.TextEdit);
-
-        _formulaRangeEditingSession.ApplySelectionEdit(plan);
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SheetGrid.SelectedRanges = null;
@@ -193,52 +192,48 @@ public partial class MainWindow
         if (formulaCell is null)
             return false;
 
-        var getPivotDataFunctionCall = GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(
-            _workbook,
-            formulaCell.Value,
-            _currentSheetId,
-            range,
-            _options.GenerateGetPivotData,
-            selectedWorkbookName);
-
         var referenceInsertionIndex = editor.SelectionLength > 0
             ? editor.SelectionStart
             : editor.CaretIndex;
-        var snapshot = new FormulaRangeEditorSnapshot(
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
             editor.Text,
             referenceInsertionIndex,
             editor.SelectionLength,
             formulaCell.Value,
             _options.UseR1C1ReferenceStyle,
-            selectedSheetNameOverride ?? _workbook.GetSheet(range.Start.Sheet)?.Name,
+            _workbook,
+            range,
+            selectedSheetNameOverride,
             selectedWorkbookName);
-        if (!_formulaRangeEditingSession.TryPlanRangeSelectionEdit(
+        if (!_formulaRangeEditingSession.TryApplyPointRangeSelectionEdit(
                 snapshot,
+                _workbook,
+                _currentSheetId,
                 range,
                 selectionAnchor,
                 selectionCursor,
-                getPivotDataFunctionCall,
-                out var plan))
+                _options.GenerateGetPivotData,
+                beforeEditorEdit: plan =>
+                {
+                    HideValidationDropdown();
+                    ClearCommentPreview();
+
+                    if (plan.UpdateLocalSelection)
+                    {
+                        _selectionAnchor = selectionAnchor;
+                        _selectionCursor = selectionCursor;
+                        SheetGrid.SelectedRanges = null;
+                        SheetGrid.SelectedRange = range;
+                        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+                    }
+                    RefreshStatusBar();
+                },
+                applyEditorEdit: edit => ApplyFormulaEditorTextEdit(editor, edit),
+                afterEditorEdit: null,
+                out _))
         {
             return false;
         }
-
-        HideValidationDropdown();
-        ClearCommentPreview();
-
-        if (plan.UpdateLocalSelection)
-        {
-            _selectionAnchor = selectionAnchor;
-            _selectionCursor = selectionCursor;
-            SheetGrid.SelectedRanges = null;
-            SheetGrid.SelectedRange = range;
-            CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
-        }
-        RefreshStatusBar();
-
-        ApplyFormulaEditorTextEdit(editor, plan.Edit.TextEdit);
-
-        _formulaRangeEditingSession.ApplySelectionEdit(plan);
         RefreshFormulaReferenceHighlights();
         SetFormulaEditStatusBarMode(pointMode: true);
         editor.Focus();

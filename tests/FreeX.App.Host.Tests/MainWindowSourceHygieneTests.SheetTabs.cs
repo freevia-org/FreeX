@@ -550,7 +550,8 @@ public sealed partial class MainWindowSourceHygieneTests
         var xaml = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml");
 
         keyboardFocusSource.Should().Contain("ShellFocusTarget.TaskPane");
-        keyboardFocusSource.Should().Contain("ShellFocusCyclePlanner.GetNextAvailable(current, reverse, IsShellFocusTargetAvailable)");
+        keyboardFocusSource.Should().Contain("ShellFocusCyclePlanner.TryFocusNextAvailable(");
+        keyboardFocusSource.Should().NotContain("Enum.GetValues<ShellFocusTarget>()");
         keyboardFocusSource.Should().Contain("private bool IsShellFocusTargetAvailable(ShellFocusTarget target)");
         keyboardFocusSource.Should().Contain("IsDescendantOf(focusedElement, PivotFieldListPane)");
         keyboardFocusSource.Should().Contain("return FocusVisibleTaskPane();");

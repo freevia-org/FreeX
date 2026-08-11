@@ -39,6 +39,9 @@ public sealed class PivotPlannerDedupSourceTests
         var formulaEditingSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.FormulaReferenceEditing.cs");
         var pivotCommandsSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotCommands.cs");
         var presentationSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "GetPivotDataFormulaPlanner.cs");
+        var formulaSessionSource = DialogSourceTestSupport.ReadPresentationSources(
+            "FormulaBar",
+            "FormulaRangeEditingSession.cs");
         var resolverSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotSourceHeaderResolver.cs");
 
         File.Exists(hostPlannerPath)
@@ -48,8 +51,10 @@ public sealed class PivotPlannerDedupSourceTests
             .Should()
             .BeFalse("pivot cache header fallback is shared PivotUI metadata resolution, not WPF Host rendering");
 
-        formulaEditingSource.Should().Contain("GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(");
+        formulaEditingSource.Should().Contain("_formulaRangeEditingSession.TryApplyPointRangeSelectionEdit(");
+        formulaEditingSource.Should().NotContain("GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(");
         formulaEditingSource.Should().NotContain("GetPivotDataFormulaPlanner.Create(");
+        formulaSessionSource.Should().Contain("GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(");
         pivotCommandsSource.Should().Contain("PivotApplication.ReadSourceHeaders(");
         pivotCommandsSource.Should().NotContain("PivotSourceHeaderResolver.Resolve(");
         presentationSource.Should().Contain("public sealed record GetPivotDataFormulaPlan");

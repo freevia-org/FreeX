@@ -188,6 +188,44 @@ public sealed class WorkbookApplicationCommandRouterTests
     }
 
     [Fact]
+    public async Task BindingFactory_BindsAndValidatesEveryApplicationRoute()
+    {
+        var endpointCalls = new List<EndpointCall>();
+        var frameCalls = new List<WorkbookApplicationCommandIntent>();
+        Task RecordFrame(WorkbookApplicationCommandInvocation invocation)
+        {
+            frameCalls.Add(invocation.Route.Intent);
+            return Task.CompletedTask;
+        }
+
+        var fallbackTarget = new CellAddress(new SheetId(Guid.NewGuid()), 1, 1);
+        var bindings = WorkbookApplicationCommandBindingFactory.Create(
+            new WorkbookApplicationFrameCommandHandlers(
+                RecordFrame,
+                RecordFrame,
+                RecordFrame,
+                RecordFrame,
+                RecordFrame,
+                RecordFrame),
+            new WorkbookApplicationWorkareaCommandHandlers(
+                CreateRecordingEndpointProfile(endpointCalls),
+                invocation => invocation.TargetAddress ?? fallbackTarget,
+                () => false));
+
+        bindings.Count.Should().Be(Enum.GetValues<WorkbookApplicationCommandIntent>().Length);
+        foreach (var route in WorkbookApplicationCommandRouter.AllRoutes
+                     .DistinctBy(route => route.Intent))
+        {
+            (await bindings.TryExecuteAsync(route)).Should().Be(
+                new WorkbookApplicationCommandExecutionResult(IsBound: true, Handled: true));
+        }
+
+        frameCalls.Should().OnlyContain(intent => FrameIntents.Contains(intent));
+        endpointCalls.Should().HaveCount(
+            Enum.GetValues<WorkbookApplicationCommandIntent>().Length - FrameIntents.Length);
+    }
+
+    [Fact]
     public async Task WorkareaBinder_OwnsEveryNonFrameIntentRegistration()
     {
         var calls = new List<EndpointCall>();

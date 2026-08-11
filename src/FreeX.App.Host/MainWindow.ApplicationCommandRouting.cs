@@ -15,10 +15,7 @@ public partial class MainWindow
 
     private WorkbookApplicationCommandBindings CreateWorkbookApplicationCommandBindings()
     {
-        var bindings = new WorkbookApplicationCommandBindings();
-
-        WorkbookApplicationFrameCommandBinder.Bind(
-            bindings,
+        return WorkbookApplicationCommandBindingFactory.Create(
             new WorkbookApplicationFrameCommandHandlers(
                 NewWorkbookAsync: _ => RequestNewWorkbookAsync(),
                 OpenWorkbookAsync: invocation => RunApplicationFrameCommand(() =>
@@ -31,20 +28,11 @@ public partial class MainWindow
                     PrintButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
                 ExportPdfXpsAsync: invocation => RunApplicationFrameCommand(() =>
                     ExportPdfButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
-                OpenPrintBackstageAsync: _ => RunApplicationFrameCommand(OpenPrintBackstage)));
-
-        WorkbookApplicationWorkareaCommandBinder.Bind(
-            bindings,
+                OpenPrintBackstageAsync: _ => RunApplicationFrameCommand(OpenPrintBackstage)),
             new WorkbookApplicationWorkareaCommandHandlers(
                 CreateWorkbookApplicationWorkareaCommandEndpointProfile(),
                 TargetAddress,
                 HasSelectedDrawingObject));
-
-        bindings.EnsureBound(
-            WorkbookApplicationCommandRouter.QuickAccessRoutes
-                .Concat(WorkbookApplicationCommandRouter.WorksheetContextMenuRoutes)
-                .Concat(WorkbookApplicationCommandRouter.KeyboardShortcutRoutes));
-        return bindings;
     }
 
     private WorkbookApplicationWorkareaCommandEndpointProfile

@@ -402,26 +402,16 @@ public partial class MainWindow
         if (!FunctionAutocompleteIsOpen)
             return false;
 
-        var plan = _formulaRangeEditingSession.PlanFunctionAutocompleteKey(
+        return _formulaRangeEditingSession.ExecuteFunctionAutocompleteKey(
             FormulaBarWpfInputAdapter.ToFormulaEditorKey(key),
-            _functionAutocompleteListBox!.SelectedIndex);
-        switch (plan.Action)
-        {
-            case FormulaFunctionAutocompleteKeyAction.MoveSelection:
-                _functionAutocompleteListBox.SelectedIndex = plan.SelectionIndex;
-                break;
-
-            case FormulaFunctionAutocompleteKeyAction.CommitSelection:
+            _functionAutocompleteListBox!.SelectedIndex,
+            index => _functionAutocompleteListBox.SelectedIndex = index,
+            _ =>
+            {
                 if (_functionAutocompleteListBox.SelectedItem is string chosen)
                     CommitFunctionAutocomplete(editor, chosen);
-                break;
-
-            case FormulaFunctionAutocompleteKeyAction.Dismiss:
-                HideFormulaFunctionAutocomplete();
-                break;
-        }
-
-        return plan.Handled;
+            },
+            HideFormulaFunctionAutocomplete);
     }
 
     private void CommitFunctionAutocomplete(System.Windows.Controls.TextBox editor, string chosenName)

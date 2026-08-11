@@ -32,27 +32,30 @@ public sealed class WorkbookApplicationCommandRoutingOwnershipTests
     }
 
     [Fact]
-    public void WpfApplicationFrameRoutesUseSharedBinder()
+    public void WpfApplicationFrameRoutesUseSharedBindingFactory()
     {
         var bindings = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        bindings.Should().Contain("WorkbookApplicationFrameCommandBinder.Bind(");
+        bindings.Should().Contain("WorkbookApplicationCommandBindingFactory.Create(");
         bindings.Should().Contain("new WorkbookApplicationFrameCommandHandlers(");
+        bindings.Should().NotContain("WorkbookApplicationFrameCommandBinder.Bind(");
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent.NewWorkbook");
         bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent.OpenWorkbook");
     }
 
     [Fact]
-    public void WpfWorkareaRoutesUseSharedBinder()
+    public void WpfWorkareaRoutesUseSharedBindingFactory()
     {
         var bindings = DialogSourceTestSupport.ReadHostSources("MainWindow.ApplicationCommandRouting.cs");
 
-        bindings.Should().Contain("WorkbookApplicationWorkareaCommandBinder.Bind(");
+        bindings.Should().Contain("WorkbookApplicationCommandBindingFactory.Create(");
+        bindings.Should().Contain("new WorkbookApplicationWorkareaCommandHandlers(");
         bindings.Should().Contain("new WorkbookApplicationWorkareaCommandEndpointProfile");
         bindings.Should().Contain("Undo = Handled(");
         bindings.Should().NotContain("ExecuteWorkbookApplicationWorkareaCommandAsync");
         bindings.Should().NotContain("WorkbookApplicationCommandIntent.");
         bindings.Should().NotContain("bindings.Bind(WorkbookApplicationCommandIntent");
         bindings.Should().NotContain("bindings.BindAsync(WorkbookApplicationCommandIntent");
+        bindings.Should().NotContain(".EnsureBound(");
     }
 }

@@ -102,6 +102,54 @@ public sealed class ShellFocusCyclePlannerTests
             "F6 routing should recover to the grid when transient shell state leaves no optional region focusable");
     }
 
+    [Fact]
+    public void TryFocusNextAvailable_SkipsUnavailableAndRejectedTargetsUntilFocusSucceeds()
+    {
+        var attempts = new List<ShellFocusTarget>();
+
+        var focused = ShellFocusCyclePlanner.TryFocusNextAvailable(
+            ShellFocusTarget.Worksheet,
+            reverse: false,
+            target => target != ShellFocusTarget.TaskPane,
+            target =>
+            {
+                attempts.Add(target);
+                return target == ShellFocusTarget.StatusBar;
+            });
+
+        focused.Should().BeTrue();
+        attempts.Should().Equal(
+            ShellFocusTarget.Ribbon,
+            ShellFocusTarget.FormulaBar,
+            ShellFocusTarget.SheetTabs,
+            ShellFocusTarget.StatusBar);
+    }
+
+    [Fact]
+    public void TryFocusNextAvailable_BoundsRejectedFocusAttemptsToTheSharedCycle()
+    {
+        var attempts = new List<ShellFocusTarget>();
+
+        var focused = ShellFocusCyclePlanner.TryFocusNextAvailable(
+            ShellFocusTarget.Worksheet,
+            reverse: false,
+            _ => true,
+            target =>
+            {
+                attempts.Add(target);
+                return false;
+            });
+
+        focused.Should().BeFalse();
+        attempts.Should().Equal(
+            ShellFocusTarget.Ribbon,
+            ShellFocusTarget.FormulaBar,
+            ShellFocusTarget.SheetTabs,
+            ShellFocusTarget.TaskPane,
+            ShellFocusTarget.StatusBar,
+            ShellFocusTarget.Worksheet);
+    }
+
     private static bool IsContextualTaskPaneVisible(
         bool pivotFieldListVisible,
         bool slicerTimelineVisible) =>

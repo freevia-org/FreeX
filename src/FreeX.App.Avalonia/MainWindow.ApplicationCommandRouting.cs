@@ -19,10 +19,7 @@ public partial class MainWindow
 
     private WorkbookApplicationCommandBindings CreateWorkbookApplicationCommandBindings()
     {
-        var bindings = new WorkbookApplicationCommandBindings();
-
-        WorkbookApplicationFrameCommandBinder.Bind(
-            bindings,
+        return WorkbookApplicationCommandBindingFactory.Create(
             new WorkbookApplicationFrameCommandHandlers(
                 NewWorkbookAsync: async invocation =>
                 {
@@ -46,20 +43,11 @@ public partial class MainWindow
                 {
                     ShowBackstagePrintPane();
                     return Task.CompletedTask;
-                }));
-
-        WorkbookApplicationWorkareaCommandBinder.Bind(
-            bindings,
+                }),
             new WorkbookApplicationWorkareaCommandHandlers(
                 CreateWorkbookApplicationWorkareaCommandEndpointProfile(),
                 TargetAddress,
                 HasSelectedDrawingObject));
-
-        bindings.EnsureBound(
-            WorkbookApplicationCommandRouter.QuickAccessRoutes
-                .Concat(WorkbookApplicationCommandRouter.WorksheetContextMenuRoutes)
-                .Concat(WorkbookApplicationCommandRouter.KeyboardShortcutRoutes));
-        return bindings;
     }
 
     private WorkbookApplicationWorkareaCommandEndpointProfile

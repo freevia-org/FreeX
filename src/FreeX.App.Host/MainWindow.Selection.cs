@@ -179,28 +179,28 @@ public partial class MainWindow
         if (_formulaEditCell is not { } formulaCell)
             return false;
 
-        var snapshot = new FormulaRangeEditorSnapshot(
+        var snapshot = FormulaRangeEditorSnapshot.Capture(
             editor.Text,
             editor.CaretIndex,
             editor.SelectionLength,
             formulaCell,
             _options.UseR1C1ReferenceStyle,
-            selectedSheetNameOverride ?? _workbook.GetSheet(range.Start.Sheet)?.Name,
+            _workbook,
+            range,
+            selectedSheetNameOverride,
             selectedWorkbookName);
-        if (!_formulaRangeEditingSession.TryPlanDisjointRangeSelectionEdit(
+        if (!_formulaRangeEditingSession.TryApplyDisjointRangeSelectionEdit(
                 snapshot,
                 range,
                 range.Start,
                 range.End,
                 includeSheetSpan: false,
+                applyEditorEdit: edit => ApplyFormulaEditorTextEdit(editor, edit),
+                afterEditorEdit: null,
                 out var plan))
         {
             return false;
         }
-
-        ApplyFormulaEditorTextEdit(editor, plan.Edit.TextEdit);
-
-        _formulaRangeEditingSession.ApplySelectionEdit(plan);
 
         HideValidationDropdown();
         ClearCommentPreview();
