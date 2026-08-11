@@ -2173,7 +2173,9 @@ function Test-SourceWiring {
                 "public static class PortablePdfDocumentExporter",
                 "PortablePdfTextCapabilityPlanner.CreatePlan(workbook, exportPlan, options)",
                 "WorkbookPdfContentBuilder.Build(workbook, exportPlan, options)",
-                "PortablePdfWriter.WriteToBytes(document, `"FreeX portable PDF`")"
+                # Marks that the export emits through the shared writer, without pinning the
+                # argument list — the call gained an image-diagnostics parameter in r133.
+                "PortablePdfWriter.WriteToBytes(document, `"FreeX portable PDF`""
             )
             OrderedPairs = @()
         },
