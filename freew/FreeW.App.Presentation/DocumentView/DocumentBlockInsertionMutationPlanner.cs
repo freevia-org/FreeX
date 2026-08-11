@@ -8,6 +8,14 @@ namespace FreeW.App.Presentation.DocumentView;
 /// </summary>
 public static class DocumentBlockInsertionMutationPlanner
 {
+    public static DocumentBlockReplacementPlan PlanCoverPage(
+        TextDocument document,
+        CoverPagePreset preset = CoverPagePreset.Default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return new DocumentBlockReplacementPlan(0, 0, DocumentOps.BuildCoverPage(document, preset));
+    }
+
     public static DocumentBlockReplacementPlan PlanPageBreak(TextDocument document, int caretBlockIndex) =>
         PlanAfterCaret(document, caretBlockIndex, [DocumentOps.CreatePageBreak()]);
 

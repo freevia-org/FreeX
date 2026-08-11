@@ -23424,19 +23424,16 @@ public sealed class DocumentView : Control
     /// </summary>
     public void InsertCoverPage(CoverPagePreset preset = CoverPagePreset.Default)
     {
-        var blocks = DocumentOps.BuildCoverPage(_doc, preset);
-        if (blocks.Count == 0)
+        var plan = DocumentBlockInsertionMutationPlanner.PlanCoverPage(_doc, preset);
+        if (plan.Replacement.Count == 0)
             return;
 
-        _bus.BeginUndoGroup();
-        for (var i = 0; i < blocks.Count; i++)
-            _bus.Execute(new InsertBlockCommand(i, blocks[i]));
-        _bus.CommitUndoGroup("Insert Cover Page");
+        ExecuteBlockInsertionPlan(plan);
 
         // Park the caret on the first body block after the cover page so typing continues in the body.
         _cellCaret = null;
         _hfCaret = null;
-        var bodyIndex = Math.Clamp(blocks.Count, 0, Math.Max(0, _doc.Blocks.Count - 1));
+        var bodyIndex = Math.Clamp(plan.Replacement.Count, 0, Math.Max(0, _doc.Blocks.Count - 1));
         _caret = new DocPosition(bodyIndex, 0);
         _selectionAnchor = _caret;
     }

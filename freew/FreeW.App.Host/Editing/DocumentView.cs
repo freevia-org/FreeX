@@ -1787,12 +1787,7 @@ public sealed class DocumentView : RichTextBox
     /// <see cref="DocumentOps.BuildCoverPage"/>). Re-renders the surface.
     /// </summary>
     public void InsertCoverPage()
-    {
-        CommitToModel();
-        var blocks = DocumentOps.BuildCoverPage(_model);
-        for (var i = 0; i < blocks.Count; i++)
-            _commands.Execute(new InsertBlockCommand(i, blocks[i]));
-    }
+        => InsertCoverPage(CoverPagePreset.Default);
 
     /// <summary>
     /// Prepend a cover page using the given <paramref name="preset"/> at the start of the document,
@@ -1802,9 +1797,8 @@ public sealed class DocumentView : RichTextBox
     public void InsertCoverPage(CoverPagePreset preset)
     {
         CommitToModel();
-        var blocks = DocumentOps.BuildCoverPage(_model, preset);
-        for (var i = 0; i < blocks.Count; i++)
-            _commands.Execute(new InsertBlockCommand(i, blocks[i]));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanCoverPage(_model, preset));
     }
 
     /// <summary>

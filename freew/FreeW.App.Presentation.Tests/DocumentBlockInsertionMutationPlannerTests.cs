@@ -5,6 +5,25 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class DocumentBlockInsertionMutationPlannerTests
 {
     [Theory]
+    [InlineData(CoverPagePreset.Default)]
+    [InlineData(CoverPagePreset.Banded)]
+    [InlineData(CoverPagePreset.Motion)]
+    public void Cover_page_is_one_atomic_prepend_plan(CoverPagePreset preset)
+    {
+        var document = DocumentWithTwoParagraphs();
+        document.Properties.Title = "Parity Plan";
+        document.Properties.Author = "FreeW";
+
+        var plan = DocumentBlockInsertionMutationPlanner.PlanCoverPage(document, preset);
+
+        plan.StartIndex.Should().Be(0);
+        plan.RemoveCount.Should().Be(0);
+        plan.Replacement.Should().NotBeEmpty();
+        plan.Replacement.Cast<Paragraph>()
+            .Should().Contain(paragraph => paragraph.PlainText.Contains("Parity Plan", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData(-1, 0)]
     [InlineData(0, 1)]
     [InlineData(1, 2)]
