@@ -378,6 +378,13 @@ public sealed class AvaloniaInteractionCoverageTests
         {
             var window = new MainWindow([]);
             var registry = Assert.IsAssignableFrom<IRibbonCommandRegistry>(window.RibbonCommandRegistryForTest);
+            foreach (var commandId in new[] { "Crop Picture", "Shape Gradient", "Shape Effects" })
+            {
+                Assert.True(registry.TryGet(new RibbonCommandId(commandId), out var drawCommand));
+                Assert.IsNotType<EmptyRibbonCommand>(drawCommand);
+                Assert.IsNotType<DisabledNoOpRibbonCommand>(drawCommand);
+                Assert.IsAssignableFrom<IRibbonStatefulCommand>(drawCommand);
+            }
             var unresolved = AvaloniaRibbonComposition
                 .EnumerateCommandIds(AvaloniaRibbonComposition.BuildDefinition())
                 .Distinct()

@@ -55,12 +55,6 @@ public static class AvaloniaRibbonRenderer
         };
     private static readonly AttachedProperty<string?> KeyTipProperty =
         AvaloniaProperty.RegisterAttached<Control, string?>("KeyTip", typeof(AvaloniaRibbonRenderer));
-    private static readonly IReadOnlySet<string> StaticDrawUnavailableCommandIds = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "Crop Picture",
-        "Shape Gradient",
-        "Shape Effects",
-    };
     private static readonly ConditionalWeakTable<CheckBox, CheckBoxExecutionState> CheckBoxExecutionStates = new();
     private static readonly ConditionalWeakTable<Control, KeyTipFlyoutState> KeyTipFlyoutStates = new();
     private static readonly ConditionalWeakTable<MenuItem, MenuKeyTipState> MenuKeyTipStates = new();
@@ -445,9 +439,6 @@ public static class AvaloniaRibbonRenderer
         }
 
         // WPF: Border { Background=FreeXRibbonSurfaceBrush (white); Padding 0,4,0,0 } — no accent rule.
-        if (string.Equals(tab.Id, "DrawTab", StringComparison.Ordinal))
-            DisableStaticDrawUnavailableCommands(panel);
-
         var result = new Border
         {
             Background = resolvedPalette.SurfaceBrush,
@@ -470,15 +461,6 @@ public static class AvaloniaRibbonRenderer
         var binding = new StateStoreBinding(root, stateStore, registry, palette);
         StateStoreBindings.Add(root, binding);
         binding.Attach();
-    }
-
-    private static void DisableStaticDrawUnavailableCommands(Control root)
-    {
-        ForEachRibbonDescendant(root, control =>
-        {
-            if (control.Tag is string id && StaticDrawUnavailableCommandIds.Contains(id))
-                control.IsEnabled = false;
-        });
     }
 
     private static void ForEachRibbonDescendant(Control control, Action<Control> visit)

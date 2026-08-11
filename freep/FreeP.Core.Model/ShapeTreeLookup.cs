@@ -1,9 +1,7 @@
-using FreeP.Core.Model;
+namespace FreeP.Core.Model;
 
-namespace FreeP.App.Avalonia;
-
-/// <summary>Resolves Avalonia host interactions against the complete slide shape tree.</summary>
-internal static class ShapeTreeLookup
+/// <summary>Resolves interactions against the complete slide shape tree.</summary>
+public static class ShapeTreeLookup
 {
     public static SlideShape? Find(Slide slide, uint shapeId) =>
         Find(slide.Shapes, shapeId);

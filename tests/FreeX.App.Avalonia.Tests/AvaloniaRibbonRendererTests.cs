@@ -818,7 +818,7 @@ public sealed class AvaloniaRibbonRendererTests
     }
 
     [Fact]
-    public Task StaticDrawTab_OnlyWindowsUnavailableFormatCommandsRenderDisabled() => RunOnUiThread(() =>
+    public Task StaticDrawTab_RendersAllBackedFormatCommandsEnabled() => RunOnUiThread(() =>
     {
         var definition = AvaloniaRibbonComposition.BuildDefinition();
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
@@ -843,9 +843,9 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.True(objectSize.IsEnabled);
         Assert.True(fill.IsEnabled);
         Assert.True(outline.IsEnabled);
-        Assert.False(crop.IsEnabled);
-        Assert.False(gradient.IsEnabled);
-        Assert.False(effects.IsEnabled);
+        Assert.True(crop.IsEnabled);
+        Assert.True(gradient.IsEnabled);
+        Assert.True(effects.IsEnabled);
     });
 
     [Fact]

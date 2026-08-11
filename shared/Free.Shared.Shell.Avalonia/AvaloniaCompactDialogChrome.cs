@@ -30,6 +30,11 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = 24;
     public double ActionSpacing { get; init; } = 8;
+    public CornerRadius ButtonCornerRadius { get; init; } = new(3);
+    public IBrush? ButtonBackgroundBrush { get; init; }
+    public IBrush? ButtonHoverBackgroundBrush { get; init; }
+    public IBrush? ButtonPressedBackgroundBrush { get; init; }
+    public IBrush? ButtonAccentBrush { get; init; }
     public IBrush? InputBorderBrush { get; init; }
     public IBrush? ComboBoxBackgroundBrush { get; init; }
     public IBrush? TextBoxBackgroundBrush { get; init; }
@@ -63,12 +68,15 @@ public static class AvaloniaCompactDialogChrome
     public static IBrush NeutralButtonBorderBrush => ButtonBorderBrush;
     public static IBrush DialogSeparatorBrush => DialogTabPaneBorderBrush;
 
-    private static readonly IBrush ButtonBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(221, 221, 221));
+    private static readonly IBrush ButtonBackgroundBrush = Brushes.White;
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
-    private static readonly IBrush DefaultButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
-    // WPF TextBox/ComboBox authority border (AB AD B3), rather than Fluent's darker
-    // neutral border. Keeping this in the shared chrome aligns all compact dialogs.
-    private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(171, 173, 179));
+    private static readonly IBrush ButtonAccentBrush = new ImmutableSolidColorBrush(Color.FromRgb(15, 109, 140));
+    private static readonly IBrush ButtonHoverBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(230, 246, 250));
+    private static readonly IBrush ButtonPressedBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 234, 242));
+    private static readonly IBrush DefaultButtonBorderBrush = ButtonAccentBrush;
+    // Match the shared WPF DialogFieldBorder authority (#B7BCC2), rather than
+    // Fluent's darker neutral border or the legacy Windows #ABADB3 shade.
+    private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(183, 188, 194));
     private static readonly IBrush ComboBoxBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240));
     private static readonly IBrush TextSelectionBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
@@ -180,11 +188,19 @@ public static class AvaloniaCompactDialogChrome
         button.MinHeight = style.ButtonHeight;
         button.MaxHeight = style.ButtonHeight;
         button.Padding = style.ButtonPadding;
-        button.CornerRadius = new CornerRadius(0);
-        button.Background = ButtonBackgroundBrush;
-        button.BorderBrush = isDefault
+        button.CornerRadius = style.ButtonCornerRadius;
+        var restingBackground = style.ButtonBackgroundBrush ?? ButtonBackgroundBrush;
+        var restingBorder = isDefault
             ? style.DefaultButtonBorderBrush ?? DefaultButtonBorderBrush
             : style.ButtonBorderBrush ?? ButtonBorderBrush;
+        button.Styles.Add(new Style(selector => selector.OfType<Button>())
+        {
+            Setters =
+            {
+                new Setter(Button.BackgroundProperty, restingBackground),
+                new Setter(Button.BorderBrushProperty, restingBorder),
+            },
+        });
         button.BorderThickness = new Thickness(1);
         button.FontSize = style.FontSize;
         button.FontFamily = style.FontFamily;
@@ -192,6 +208,23 @@ public static class AvaloniaCompactDialogChrome
             button.IsDefault = true;
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.VerticalContentAlignment = VerticalAlignment.Center;
+        var accentBrush = style.ButtonAccentBrush ?? ButtonAccentBrush;
+        button.Styles.Add(new Style(selector => selector.OfType<Button>().Class(":pointerover"))
+        {
+            Setters =
+            {
+                new Setter(Button.BackgroundProperty, style.ButtonHoverBackgroundBrush ?? ButtonHoverBackgroundBrush),
+                new Setter(Button.BorderBrushProperty, accentBrush),
+            },
+        });
+        button.Styles.Add(new Style(selector => selector.OfType<Button>().Class(":pressed"))
+        {
+            Setters =
+            {
+                new Setter(Button.BackgroundProperty, style.ButtonPressedBackgroundBrush ?? ButtonPressedBackgroundBrush),
+                new Setter(Button.BorderBrushProperty, accentBrush),
+            },
+        });
         if (button.Content is string content)
             AvaloniaDialogButtonContent.Apply(button, content);
     }
