@@ -147,6 +147,13 @@ public sealed class AutosaveRecoveryCandidateProcessorTests
         avaloniaSource.Should().NotContain("new Dictionary<string, AutosaveRecoveryCandidate>");
         hostSource.Should().NotContain("DateTimeOffset.TryParse(candidate.Sidecar.TimestampUtc");
         avaloniaSource.Should().NotContain("DateTimeOffset.TryParse(candidate.Sidecar.TimestampUtc");
+        avaloniaSource.Should().NotContain("DeduplicateCandidatesByDocument(");
+        avaloniaSource.Should().NotContain("FilterCandidatesWithNewerOriginal(");
+        avaloniaSource.Should().NotContain("IsOriginalNewerThanSnapshot(");
+        avaloniaSource.Should().NotContain("GetDocumentIdentityKey(");
+        avaloniaSource.Should().NotContain("GetDocumentIdentityComponent(");
+        avaloniaSource.Should().NotContain("GetLaunchScope(");
+        avaloniaSource.Should().NotContain("GetCandidateTimestamp(");
         plannerSource.Should().Contain("AutosaveRecoveryCandidateProcessor.PrepareForRecovery(candidates)");
         processorSource.Should().Contain("public static IReadOnlyList<AutosaveRecoveryCandidate> PrepareForRecovery(");
         processorSource.Should().Contain("FilterSupersededByNewerOriginal(DeduplicateByDocument(candidates))");

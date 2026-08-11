@@ -327,7 +327,7 @@ public sealed class MainWindow : Window
         _messageService = messageService;
         _platformClipboard = platformClipboard ?? new WpfPlatformClipboard(Dispatcher);
         _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreeWOptions>(_options);
-        Title = "FreeW";
+        Title = FreeWApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
         Height = 760;
         // Open maximized like FreeX, so the ribbon shows its groups in full rather than collapsing the

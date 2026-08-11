@@ -102,12 +102,7 @@ public sealed class FreePWorkareaSemanticPlannerTests
         invalidField.ShouldShowValidationMessage.Should().BeTrue();
         invalidField.DisplayLabel.Should().Be("Language - Enter a valid language tag.");
         invalidField.ToolTip.Should().Be("Enter a valid language tag.");
-        title.Should().Be(new FreePApplicationFrameTitleSpec(
-            "FreeP",
-            " \u2014 ",
-            " *",
-            WindowTitleApplicationPlacement.DocumentThenApplication));
-        title.ToApplicationWindowTitleSpec().Should().Be(new ApplicationWindowTitleSpec(
+        title.Should().Be(new ApplicationWindowTitleSpec(
             ApplicationName: "FreeP",
             DefaultDocumentDisplayName: "Untitled",
             DirtyMarker: " *",

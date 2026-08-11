@@ -57,6 +57,22 @@ public sealed class FreeWApplicationFrameOwnershipSourceTests
     }
 
     [Fact]
+    public void MainWindowRenderersUsePortableApplicationFrameTitle()
+    {
+        foreach (var source in MainWindowSources())
+        {
+            source.Should().Contain("Title = FreeWApplicationFrameDescriptor.Title.ApplicationName;")
+                .And.NotContain("Title = \"FreeW\";");
+        }
+
+        var avaloniaSource = MainWindowSources().Last();
+        avaloniaSource.Should().Contain("Separator: FreeWApplicationFrameDescriptor.Title.Separator")
+            .And.Contain("DirtyMarker: FreeWApplicationFrameDescriptor.Title.DirtyMarker")
+            .And.Contain("UntitledDisplayName: FreeWApplicationFrameDescriptor.Title.DefaultDocumentDisplayName")
+            .And.NotContain("private const string DefaultTitle");
+    }
+
+    [Fact]
     public void MainWindowRenderersDelegateDataFolderAndDesktopUriPolicies()
     {
         foreach (var source in MainWindowSources())

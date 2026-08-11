@@ -48,7 +48,6 @@ public sealed partial class MainWindow : Window
 {
     private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeW;
 
-    private const string DefaultTitle = "FreeW";
     private static readonly SisterAppFileTextSpec FileText = FreeWFileTextResources.Document;
 
     private readonly DocumentPersistenceWorkflow _documentPersistence;
@@ -216,7 +215,7 @@ public sealed partial class MainWindow : Window
         _optionsRuntime = new FreeWOptionsRuntimeSession(_options);
         ApplyEditorTypingOptions(_optionsRuntime.EditorTypingOptions);
 
-        Title = DefaultTitle;
+        Title = FreeWApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1040;
         Height = 720;
         MinWidth = 720;
@@ -226,9 +225,12 @@ public sealed partial class MainWindow : Window
         _fileWorkflow = new SisterAvaloniaFileCommandWorkflow(
             owner: this,
             titleSpec: new SisterAvaloniaFileTitleSpec(
-                ApplicationName: DefaultTitle,
-                Separator: " \u2014 ",
-                ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
+                ApplicationName: FreeWApplicationFrameDescriptor.Title.ApplicationName,
+                Separator: FreeWApplicationFrameDescriptor.Title.Separator,
+                DirtyMarker: FreeWApplicationFrameDescriptor.Title.DirtyMarker,
+                ApplicationPlacement: FreeWApplicationFrameDescriptor.Title.ApplicationPlacement,
+                UntitledDisplayName: FreeWApplicationFrameDescriptor.Title.DefaultDocumentDisplayName,
+                CollapseCleanUntitledTitle: FreeWApplicationFrameDescriptor.Title.CollapseCleanDefaultDocumentTitle),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: UpdateStatus,
             saveAsync: SaveAsync,
