@@ -368,18 +368,13 @@ public sealed partial class MainWindow
         if (ResolveSelectedShape() is not { } shape)
             return;
 
-        var plan = ShapeEffectsPlanner.CreatePlan(shape.GetEffectiveEffectPreset());
-        var options = plan.Options
-            .Select(option => new ShapeEffectsChoice(
-                option.Preset,
-                UiText.Get(option.LabelKey),
-                UiText.Get(option.DescriptionKey)))
-            .ToArray();
+        var plan = ShapeEffectsPlanner.CreateResolvedPlan(shape.GetEffectiveEffectPreset(), UiText.Get);
 
         var effectBox = new ComboBox
         {
-            ItemsSource = options,
-            SelectedIndex = ShapeEffectsPlanner.FindOptionIndex(plan.Options, plan.SelectedPreset),
+            ItemsSource = plan.Options,
+            SelectedItem = plan.SelectedOption,
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ShapeEffectsPlanner.ResolvedShapeEffectOption.Label)),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         effectBox.Margin = new Thickness(0, 0, 0, 10);
@@ -394,7 +389,7 @@ public sealed partial class MainWindow
 
         void UpdateDescription()
         {
-            descriptionText.Text = effectBox.SelectedItem is ShapeEffectsChoice choice
+            descriptionText.Text = effectBox.SelectedItem is ShapeEffectsPlanner.ResolvedShapeEffectOption choice
                 ? choice.Description
                 : string.Empty;
         }
@@ -420,7 +415,10 @@ public sealed partial class MainWindow
         ApplyDrawingButtonChrome(cancel, width: 80);
         AutomationProperties.SetAutomationId(cancel, "ShapeEffectsCancelButton");
         cancel.Click += (_, _) => dialog.Close((DrawingShapeEffectPreset?)null);
-        ok.Click += (_, _) => dialog.Close(effectBox.SelectedItem is ShapeEffectsChoice choice ? (DrawingShapeEffectPreset?)choice.Preset : null);
+        ok.Click += (_, _) => dialog.Close(
+            effectBox.SelectedItem is ShapeEffectsPlanner.ResolvedShapeEffectOption choice
+                ? (DrawingShapeEffectPreset?)choice.Preset
+                : null);
 
         var content = new StackPanel
         {
@@ -464,14 +462,6 @@ public sealed partial class MainWindow
                 ? UiText.Get("ShapeEffects_Cleared")
                 : UiText.Format("ShapeEffects_Applied", ShapeEffectPresetLabel(normalized)),
             UiText.Get("InsertLoc_ShapeEffectsLabel"));
-    }
-
-    private sealed record ShapeEffectsChoice(
-        DrawingShapeEffectPreset Preset,
-        string Label,
-        string Description)
-    {
-        public override string ToString() => Label;
     }
 
     // -------------------------------------------------------------------------------------------------------

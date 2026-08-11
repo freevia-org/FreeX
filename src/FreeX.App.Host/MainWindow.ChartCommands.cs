@@ -681,7 +681,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions());
+        ApplyChartLayoutDialogResult(caption, chart, ChartTrendlinePlanner.Plan(dialog.Result));
     }
 
     private void ChartTrendlineTypeBtn_Click(object sender, RoutedEventArgs e)
@@ -741,7 +741,7 @@ public partial class MainWindow
         if (dialog.ShowDialog() != true)
             return;
 
-        if (!ApplyChartLayoutDialogResult(caption, chart, dialog.Result.ToOptions()))
+        if (!ApplyChartLayoutDialogResult(caption, chart, ChartErrorBarsPlanner.Plan(dialog.Result)))
             return;
 
         UpdateViewport();

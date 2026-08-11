@@ -10,6 +10,7 @@ using System.ComponentModel;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.Ribbon;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Sparklines;
 using FreeX.App.Services;
 using FreeX.App.UI;
@@ -246,8 +247,8 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private GridResizePreviewSnapshot? _rowResizeSnapshot;
     private Action<CommandOutcome>? _repeatPostAction;
     private string? _pivotFieldMenuContextCaption;
-    private PivotFieldDropZone? _pivotFieldMenuContextZone;
-    private PivotFieldDropZone? _pivotFieldDragSourceZone;
+    private PivotFieldBucket? _pivotFieldMenuContextZone;
+    private PivotFieldBucket? _pivotFieldDragSourceZone;
     private bool _pivotFieldDragRemoveCueActive;
     private IReadOnlyDictionary<(uint Row, uint Col), PivotHeaderDropdownTarget> _pivotHeaderDropdownTargets =
         new Dictionary<(uint Row, uint Col), PivotHeaderDropdownTarget>();

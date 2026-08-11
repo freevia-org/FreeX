@@ -19,7 +19,7 @@ public sealed class PivotAdvancedWorkflowsScreenshotTourTests
 
         tourSource.Should().Contain("EnsurePivotAdvancedWorkflowsTourContext");
         tourSource.Should().Contain("new AddPivotTableCommand(");
-        tourSource.Should().Contain("MoveSelectedPivotField(PivotFieldDropZone.Rows)");
+        tourSource.Should().Contain("MoveSelectedPivotField(PivotFieldBucket.Rows)");
         tourSource.Should().Contain("new PivotLabelFilterDialog(0)");
         tourSource.Should().Contain("new PivotValueFilterDialog(0)");
         tourSource.Should().Contain("new ConfigurePivotTableViewCommand(");

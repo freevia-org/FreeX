@@ -62,8 +62,8 @@ public sealed partial class SymbolPickerDialogSourceTests
     {
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("AutomationProperties.NameProperty, new Binding(nameof(SymbolCatalogEntry.AutomationName))");
+        source.Should().Contain("Converter = SymbolAutomationNameConverter.Instance");
         source.Should().Contain("private static string CreateSymbolAutomationName(string value)");
-        source.Should().Contain("AutomationProperties.NameProperty, new Binding(nameof(SpecialCharacter.AutomationName))");
+        source.Should().Contain("Converter = SpecialCharacterAutomationNameConverter.Instance");
     }
 }

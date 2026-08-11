@@ -271,9 +271,24 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         remainingDialogsSource.Should().Contain("ChartMovePlanner.GetTargetNameField()");
         pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.Read(chart!)");
         pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.CreateResult(");
-        pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.GetBlankDisplayChoices()");
+        pivotOptionsSource.Should().Contain("PivotChartOptionsPlanner.GetResolvedBlankDisplayChoices(UiText.Get)");
+        pivotOptionsSource.Should().NotContain("PivotChartBlankDisplayOption");
         pivotOptionsSource.Should().Contain("PivotChartOptionsDialogFieldId.ShowHiddenData");
         pivotOptionsSource.Should().Contain("PivotChartOptionsDialogFieldId.BlankDisplayMode");
+    }
+
+    [Fact]
+    public void Dialogs_ConsumeCanonicalFormatAndShapeEffectPlans()
+    {
+        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var drawingSource = File.ReadAllText(RepoFile(
+            "src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
+
+        mainSource.Should().Contain("Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogAsync(");
+        mainSource.Should().NotContain("internal sealed record FormatCellsDialogResult(");
+        drawingSource.Should().Contain("ShapeEffectsPlanner.CreateResolvedPlan(");
+        drawingSource.Should().Contain("ShapeEffectsPlanner.ResolvedShapeEffectOption");
+        drawingSource.Should().NotContain("record ShapeEffectsChoice");
     }
 
     [Fact]

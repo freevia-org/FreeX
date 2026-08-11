@@ -14,36 +14,8 @@ using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Ribbon;
 
-internal enum AvaloniaRibbonKeyTipRouteKind
-{
-    RibbonTab,
-    Backstage,
-    BackstagePane,
-    BackstageCommand,
-    QuickAccessToolbar,
-    RibbonCommand,
-    Scope,
-}
-
-internal sealed record AvaloniaRibbonKeyTipRoute(
-    string Input,
-    string RouteName,
-    AvaloniaRibbonKeyTipRouteKind Kind,
-    string? TabKeyTip = null,
-    RibbonCommandId? CommandId = null,
-    FreeXBackstagePaneId? BackstagePane = null,
-    FreeXBackstageCommandId? BackstageCommand = null,
-    int QuickAccessIndex = -1);
-
-internal readonly record struct AvaloniaRibbonKeyTipMatch(
-    AvaloniaRibbonKeyTipRoute? ExactRoute,
-    bool HasLongerRoute)
-{
-    public bool IsMatch => ExactRoute is not null || HasLongerRoute;
-}
-
 /// <summary>
-/// Adapts renderer-neutral key-tip routes to the Avalonia shell's existing route contract. Input remains
+/// Provides the canonical renderer-neutral key-tip catalog to the Avalonia shell. Input remains
 /// character-by-character while the window retains its native state machine and control activation.
 /// </summary>
 internal static class AvaloniaRibbonKeyTipRoutes
@@ -51,41 +23,10 @@ internal static class AvaloniaRibbonKeyTipRoutes
     private static readonly Lazy<FreeXRibbonKeyTipRouteCatalog> Routes =
         new(() => FreeXRibbonKeyTipRoutePlanner.Build(AvaloniaRibbonComposition.BuildDefinition()));
 
-    internal static AvaloniaRibbonKeyTipMatch Match(string input)
-    {
-        var match = Routes.Value.Match(input);
-        return new AvaloniaRibbonKeyTipMatch(
-            match.ExactRoute is null ? null : Convert(match.ExactRoute),
-            match.HasLongerRoute);
-    }
+    internal static FreeXRibbonKeyTipMatch Match(string input) => Routes.Value.Match(input);
 
-    internal static bool TryResolveExact(string input, out AvaloniaRibbonKeyTipRoute route)
-    {
-        route = Match(input).ExactRoute!;
-        return route is not null;
-    }
-
-    private static AvaloniaRibbonKeyTipRoute Convert(FreeXRibbonKeyTipRoute route) =>
-        new(
-            route.Input,
-            route.RouteName,
-            route.Kind switch
-            {
-                FreeXRibbonKeyTipRouteKind.RibbonTab => AvaloniaRibbonKeyTipRouteKind.RibbonTab,
-                FreeXRibbonKeyTipRouteKind.Backstage => AvaloniaRibbonKeyTipRouteKind.Backstage,
-                FreeXRibbonKeyTipRouteKind.BackstagePane => AvaloniaRibbonKeyTipRouteKind.BackstagePane,
-                FreeXRibbonKeyTipRouteKind.BackstageCommand => AvaloniaRibbonKeyTipRouteKind.BackstageCommand,
-                FreeXRibbonKeyTipRouteKind.QuickAccessToolbar => AvaloniaRibbonKeyTipRouteKind.QuickAccessToolbar,
-                FreeXRibbonKeyTipRouteKind.RibbonCommand => AvaloniaRibbonKeyTipRouteKind.RibbonCommand,
-                FreeXRibbonKeyTipRouteKind.Scope => AvaloniaRibbonKeyTipRouteKind.Scope,
-                _ => throw new ArgumentOutOfRangeException(nameof(route))
-            },
-            route.TabKeyTip,
-            route.CommandId,
-            route.BackstagePane,
-            route.BackstageCommand,
-            route.QuickAccessIndex);
-
+    internal static bool TryResolveExact(string input, out FreeXRibbonKeyTipRoute route) =>
+        Routes.Value.TryResolveExact(input, out route);
 }
 
 /// <summary>

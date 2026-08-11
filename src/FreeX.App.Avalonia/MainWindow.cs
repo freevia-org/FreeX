@@ -241,11 +241,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         public override string ToString() => Label;
     }
-    internal sealed record FormatCellsDialogResult(
-        FormatCellsCompactRequest Request,
-        CellBorderPreset? BorderPreset,
-        BorderStyle BorderStyle,
-        CellColor? BorderColor);
     internal sealed record FormatCellsNullableChoice<T>(string Label, T? Value)
         where T : struct
     {
@@ -16393,17 +16388,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshShell(UiText.Format("MainLoc_FormattedX", rangeReference));
     }
 
-    internal Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
+    internal Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogAsync(
         Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
         int initialTabIndex = 0) =>
         ShowFormatCellsInputDialogCoreAsync(launchSmokeProbe, initialTabIndex, numberFormatOverride: null);
 
-    internal Task<FormatCellsDialogResult?> ShowPivotNumberFormatInputDialogAsync(
+    internal Task<FormatCellsCompactDialogPlan?> ShowPivotNumberFormatInputDialogAsync(
         string? currentNumberFormat,
         Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null) =>
         ShowFormatCellsInputDialogCoreAsync(launchSmokeProbe, initialTabIndex: 0, currentNumberFormat);
 
-    private async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogCoreAsync(
+    private async Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogCoreAsync(
         Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
         int initialTabIndex = 0,
         string? numberFormatOverride = null)
@@ -16412,7 +16407,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         const double formatCellsDefaultDialogHeight = 540;
         const double formatCellsBorderDialogHeight = 596.5;
 
-        FormatCellsDialogResult? result = null;
+        FormatCellsCompactDialogPlan? result = null;
         var currentNumberFormat = numberFormatOverride ?? _session.SelectedRangeStartNumberFormat;
         var currentHorizontalAlignment = _session.SelectedRangeStartHorizontalAlignment;
         var currentVerticalAlignment = _session.SelectedRangeStartVerticalAlignment;
@@ -17431,11 +17426,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            result = new FormatCellsDialogResult(
-                plan!.Request,
-                plan.BorderPreset,
-                plan.BorderStyle,
-                plan.BorderColor);
+            result = plan;
             dialog.Close();
         }
 

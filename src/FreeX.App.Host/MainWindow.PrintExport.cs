@@ -224,7 +224,7 @@ public partial class MainWindow
             if (!ExportPlanner.TryValidatePageRange(effectiveOptions.PageRange, document.Pages.Count, out var pageRangeError, WpfExportPlannerTextResolver.Instance))
                 throw new InvalidOperationException(pageRangeError);
 
-            var properties = PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions);
+            var properties = PdfDocumentExporter.CreateProperties(_workbook, effectiveOptions);
             var bookmarks = CreatePdfBookmarks(effectiveOptions);
 
             // Render the PDF bytes on the UI thread (WPF visual tree access), then flush to disk on a
@@ -345,7 +345,9 @@ public partial class MainWindow
                     System.IO.FileMode.Create,
                     System.IO.FileAccess.ReadWrite))
                 {
-                    XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions));
+                    XpsPackagePropertiesAdapter.Apply(
+                        pkg,
+                        ExportDocumentPropertiesPlanner.FromWorkbook(_workbook, effectiveOptions));
 
                     using var xpsDoc = new System.Windows.Xps.Packaging.XpsDocument(pkg);
 

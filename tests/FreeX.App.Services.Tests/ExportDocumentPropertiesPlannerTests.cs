@@ -61,16 +61,16 @@ public sealed class ExportDocumentPropertiesPlannerTests
     [Fact]
     public void NativeExportAdapters_DelegateMetadataOwnershipToPlanner()
     {
-        var pdf = Read("src", "FreeX.App.Host", "PdfDocumentProperties.cs");
         var pdfExporter = Read("src", "FreeX.App.Host", "PdfDocumentExporter.cs");
-        var xps = Read("src", "FreeX.App.Host", "XpsDocumentProperties.cs");
+        var xps = Read("src", "FreeX.App.Host", "XpsPackagePropertiesAdapter.cs");
 
-        pdf.Should().Contain("ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options)");
-        xps.Should().Contain("ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options)");
+        pdfExporter.Should().Contain("ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options)");
+        pdfExporter.Should().Contain("SharedPdf.PdfDocumentProperties?");
+        xps.Should().Contain("ExportDocumentProperties? properties");
         xps.Should().Contain("ExportDocumentPropertiesPlanner.Normalize(properties.Title)");
         pdfExporter.Should().Contain("ExportDocumentPropertiesPlanner.Normalize(properties?.Title)");
 
-        foreach (var adapter in new[] { pdf, xps })
+        foreach (var adapter in new[] { pdfExporter, xps })
         {
             adapter.Should().NotContain(ExportDocumentPropertiesPlanner.DefaultSubject);
             adapter.Should().NotContain(ExportDocumentPropertiesPlanner.DefaultKeywords);
@@ -79,6 +79,12 @@ public sealed class ExportDocumentPropertiesPlannerTests
         }
 
         pdfExporter.Should().NotContain("private static string? NormalizeProperty(");
+        var hostDirectory = Path.GetDirectoryName(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Host", "PdfDocumentExporter.cs"))!;
+        File.Exists(Path.Combine(hostDirectory, "PdfDocumentProperties.cs"))
+            .Should().BeFalse();
+        File.Exists(Path.Combine(hostDirectory, "XpsDocumentProperties.cs"))
+            .Should().BeFalse();
     }
 
     private static string Read(params string[] parts) =>

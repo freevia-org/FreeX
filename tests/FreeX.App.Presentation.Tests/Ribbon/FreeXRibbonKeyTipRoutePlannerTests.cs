@@ -103,6 +103,10 @@ public sealed class FreeXRibbonKeyTipRoutePlannerTests
             + ReadSource("src", "FreeX.App.Host", "MainWindow.KeyTips.cs");
 
         avalonia.Should().Contain("FreeXRibbonKeyTipRoutePlanner.Build");
+        avalonia.Should().Contain("FreeXRibbonKeyTipMatch Match");
+        avalonia.Should().NotContain("AvaloniaRibbonKeyTipRouteKind");
+        avalonia.Should().NotContain("AvaloniaRibbonKeyTipRoute(");
+        avalonia.Should().NotContain("AvaloniaRibbonKeyTipMatch(");
         avalonia.Should().NotContain("ContextualTabInputs");
         avalonia.Should().NotContain("new(\"NCH\"");
         wpf.Should().Contain("FreeXRibbonKeyTipRoutePlanner.ResolveTopLevel");

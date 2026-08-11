@@ -674,7 +674,7 @@ public sealed partial class MainWindowSourceHygieneTests
         exportMethod.Should().NotContain("MessageBox.Show(");
         exportMethod.Should().NotContain("new Microsoft.Win32.SaveFileDialog");
 
-        exportPdfMethod.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions)");
+        exportPdfMethod.Should().Contain("PdfDocumentExporter.CreateProperties(_workbook, effectiveOptions)");
         exportPdfMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportPdfSavedFormat\", optionSummary, pdfPath)");
         exportPdfMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportPdfTitle\")");
         exportPdfMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportPdfFailed\", ex.Message)");
@@ -682,7 +682,8 @@ public sealed partial class MainWindowSourceHygieneTests
         exportPdfMethod.Should().Contain("ShowOwnedMessage(");
         exportPdfMethod.Should().NotContain("MessageBox.Show(");
 
-        exportXpsMethod.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions))");
+        exportXpsMethod.Should().Contain("XpsPackagePropertiesAdapter.Apply(");
+        exportXpsMethod.Should().Contain("ExportDocumentPropertiesPlanner.FromWorkbook(_workbook, effectiveOptions)");
         exportXpsMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportXpsSavedFormat\", xpsPath)");
         exportXpsMethod.Should().Contain("UiText.Format(\"MainWindowMessage_ExportXpsSavedWithOptionsFormat\", optionSummary, xpsPath)");
         exportXpsMethod.Should().Contain("UiText.Get(\"MainWindowMessage_ExportXpsTitle\")");

@@ -149,13 +149,3 @@ public partial class FormatCellsDialog
             _ => 1
         };
 }
-
-public sealed record FormatCellsBorderSelection(
-    bool Clear,
-    CellBorder? Outline,
-    CellBorder? Inside)
-{
-    public static FormatCellsBorderSelection None { get; } = new(false, null, null);
-
-    public bool HasRangeOperations => Clear || Outline is not null || Inside is not null;
-}

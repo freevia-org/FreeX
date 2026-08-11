@@ -645,7 +645,7 @@ public partial class MainWindow
     private void ApplyFormatCellsDialogResult(
         GridRange range,
         StyleDiff diff,
-        FormatCellsBorderSelection borderSelection,
+        FormatCellsDialogBorderSelection borderSelection,
         bool? mergeCells,
         MergeCellContentResolution mergeContentResolution = MergeCellContentResolution.KeepFirstCell)
     {

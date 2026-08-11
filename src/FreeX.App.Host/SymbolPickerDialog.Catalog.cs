@@ -9,33 +9,22 @@ public sealed partial class SymbolPickerDialog
     public static IReadOnlyList<string> GetSymbolsForSubset(string subset) =>
         SymbolPickerCatalogPlanner.GetSymbolsForSubset(subset);
 
-    public static IReadOnlyList<SymbolCatalogEntry> GetSymbolEntriesForSubset(string subset) =>
-        SymbolPickerCatalogPlanner.GetSymbolEntriesForSubset(subset)
-            .Select(SymbolCatalogEntry.FromPresentation)
-            .ToArray();
+    public static IReadOnlyList<SymbolPickerCatalogEntry> GetSymbolEntriesForSubset(string subset) =>
+        SymbolPickerCatalogPlanner.GetSymbolEntriesForSubset(subset);
 
-    public static IReadOnlyList<SymbolCatalogEntry> SearchSymbolEntries(string searchText) =>
-        SymbolPickerCatalogPlanner.SearchSymbolEntries(searchText)
-            .Select(SymbolCatalogEntry.FromPresentation)
-            .ToArray();
+    public static IReadOnlyList<SymbolPickerCatalogEntry> SearchSymbolEntries(string searchText) =>
+        SymbolPickerCatalogPlanner.SearchSymbolEntries(searchText);
 
-    public static SymbolCatalogEntry CreateSymbolEntry(string symbol, string fallbackSubset) =>
-        SymbolCatalogEntry.FromPresentation(SymbolPickerCatalogPlanner.CreateSymbolEntry(symbol, fallbackSubset));
+    public static SymbolPickerCatalogEntry CreateSymbolEntry(string symbol, string fallbackSubset) =>
+        SymbolPickerCatalogPlanner.CreateSymbolEntry(symbol, fallbackSubset);
 
-    public static SymbolCatalogEntry? FindSymbolEntry(string symbol)
-    {
-        var entry = SymbolPickerCatalogPlanner.FindSymbolEntry(symbol);
-        return entry is null
-            ? null
-            : SymbolCatalogEntry.FromPresentation(entry.Value);
-    }
+    public static SymbolPickerCatalogEntry? FindSymbolEntry(string symbol) =>
+        SymbolPickerCatalogPlanner.FindSymbolEntry(symbol);
 
     public static IReadOnlyList<string> GetSubsetNames() => SymbolPickerCatalogPlanner.GetSubsetNames();
 
-    public static IReadOnlyList<SpecialCharacter> GetSpecialCharacters() =>
-        SymbolPickerCatalogPlanner.GetSpecialCharacters()
-            .Select(SpecialCharacter.FromPresentation)
-            .ToArray();
+    public static IReadOnlyList<SymbolPickerSpecialCharacter> GetSpecialCharacters() =>
+        SymbolPickerCatalogPlanner.GetSpecialCharacters();
 
     public static bool TryParseCharacterCode(string text, out string symbol) =>
         SymbolPickerCatalogPlanner.TryParseCharacterCode(text, out symbol);

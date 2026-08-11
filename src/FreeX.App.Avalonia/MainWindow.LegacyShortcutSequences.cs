@@ -6,6 +6,7 @@ using Free.Shared.Ribbon.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.KeyTips;
+using FreeX.App.Presentation.Ribbon;
 
 namespace FreeX.App.Avalonia;
 
@@ -301,33 +302,33 @@ public sealed partial class MainWindow
         return true;
     }
 
-    private void ExecuteRibbonKeyTipRoute(AvaloniaRibbonKeyTipRoute route)
+    private void ExecuteRibbonKeyTipRoute(FreeXRibbonKeyTipRoute route)
     {
         switch (route.Kind)
         {
-            case AvaloniaRibbonKeyTipRouteKind.RibbonTab:
+            case FreeXRibbonKeyTipRouteKind.RibbonTab:
                 if (_ribbonControl is not null && route.TabKeyTip is { } keyTip)
                     AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, keyTip);
                 break;
-            case AvaloniaRibbonKeyTipRouteKind.Backstage:
+            case FreeXRibbonKeyTipRouteKind.Backstage:
                 ShowBackstageOverlay();
                 break;
-            case AvaloniaRibbonKeyTipRouteKind.BackstagePane:
+            case FreeXRibbonKeyTipRouteKind.BackstagePane:
                 if (route.BackstagePane is { } pane)
                     TryActivateBackstagePane(pane);
                 break;
-            case AvaloniaRibbonKeyTipRouteKind.BackstageCommand:
+            case FreeXRibbonKeyTipRouteKind.BackstageCommand:
                 if (route.BackstageCommand is { } command)
                     TryActivateBackstageCommand(command);
                 break;
-            case AvaloniaRibbonKeyTipRouteKind.QuickAccessToolbar:
+            case FreeXRibbonKeyTipRouteKind.QuickAccessToolbar:
                 ExecuteQuickAccessKeyTip(route.QuickAccessIndex);
                 break;
-            case AvaloniaRibbonKeyTipRouteKind.RibbonCommand:
+            case FreeXRibbonKeyTipRouteKind.RibbonCommand:
                 if (_ribbonControl is not null)
                     AvaloniaRibbonRenderer.TryActivateKeyTip(_ribbonControl, route.Input);
                 break;
-            case AvaloniaRibbonKeyTipRouteKind.Scope:
+            case FreeXRibbonKeyTipRouteKind.Scope:
                 if (_ribbonControl is not null)
                     AvaloniaRibbonRenderer.TryActivateKeyTip(_ribbonControl, route.Input);
                 break;

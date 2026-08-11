@@ -17,7 +17,7 @@ public sealed class MainWindowPivotHeaderDropdownSourceTests
         viewportSource.Should().Contain("PivotGridAdornmentPlanner.BuildHeaderTargets(_workbook, sheet)");
         viewportSource.Should().Contain("SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets");
         handlerSource.Should().Contain("_pivotFieldMenuContextCaption = target.MenuTarget.FieldCaption;");
-        handlerSource.Should().Contain("PivotHeaderArea.Page => PivotFieldDropZone.Filters");
+        handlerSource.Should().Contain("PivotHeaderArea.Page => PivotFieldBucket.Filters");
         handlerSource.Should().Contain("SetActiveCell(headerCell);");
         handlerSource.Should().Contain("CreatePivotFieldContextMenu();");
         pivotSource.Should().Contain("return _pivotFieldMenuContextCaption;");

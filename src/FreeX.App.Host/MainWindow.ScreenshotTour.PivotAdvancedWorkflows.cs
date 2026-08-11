@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -209,7 +210,7 @@ public partial class MainWindow
     private PivotAdvancedWorkflowsTourContext SubmitPivotAdvancedFieldLayoutMutation(PivotAdvancedWorkflowsTourContext context)
     {
         PivotAvailableFieldsList.SelectedItem = _pivotFieldListAvailableItems.First(item => item.Caption == "Channel");
-        MoveSelectedPivotField(PivotFieldDropZone.Rows);
+        MoveSelectedPivotField(PivotFieldBucket.Rows);
         var pivotTable = ResolvePivotAdvancedWorkflowsPivotTable(context.Sheet);
         RefreshPivotFieldListPane();
         return CreatePivotAdvancedWorkflowsContext(context.Sheet, pivotTable, context.SourceRange, context.SavedWorkbookPath, context.SavedWorkbookBytes, "layout-mutated");
@@ -662,7 +663,7 @@ public partial class MainWindow
             Captures: captures,
             SubmittedMutations:
             [
-                "MoveSelectedPivotField(PivotFieldDropZone.Rows) exercises the production model-equivalent field layout mutation path for Channel.",
+                "MoveSelectedPivotField(PivotFieldBucket.Rows) exercises the production model-equivalent field layout mutation path for Channel.",
                 "ConfigurePivotTableViewCommand applies submitted label and value filters plus label sort.",
                 "ConfigurePivotTableLayoutCommand applies the submitted Value Field Settings result for Avg Sales % Grand Total.",
                 "ClearPivotTableViewCommand, ChangePivotTableSourceCommand, RefreshPivotTableCommand, and PivotTable selection cover clear/select/refresh/change-source states.",

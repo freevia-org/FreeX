@@ -355,7 +355,7 @@ public partial class MainWindow
         PdfDocumentExporter.Save(
             printDocument,
             request.Path,
-            PdfDocumentProperties.FromWorkbook(_workbook, options),
+            PdfDocumentExporter.CreateProperties(_workbook, options),
             options.PageRange,
             options.Quality,
             CreatePdfBookmarks(options),

@@ -71,14 +71,12 @@ public sealed partial class MainWindow
         var roundedCorners = MakeCheck(PivotChartOptionsDialogFieldId.RoundedCorners, current.RoundedCorners);
         var showHiddenData = MakeCheck(PivotChartOptionsDialogFieldId.ShowHiddenData, current.ShowHiddenData);
 
-        var blankChoices = PivotChartOptionsPlanner.GetBlankDisplayChoices()
-            .Select(choice => new PivotChartBlankDisplayOption(UiText.Get(choice.LabelResourceKey), choice.Mode))
-            .ToList();
+        var blankChoices = PivotChartOptionsPlanner.GetResolvedBlankDisplayChoices(UiText.Get);
         var blankDisplayBox = new ComboBox
         {
             Width = 260,
             ItemsSource = blankChoices,
-            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(PivotChartBlankDisplayOption.Label)),
+            DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(PivotChartOptionsResolvedBlankDisplayChoice.Label)),
         };
         ApplyPivotComboBoxChrome(blankDisplayBox);
         ApplyFieldAutomation(blankDisplayBox, PivotChartOptionsDialogFieldId.BlankDisplayMode);
@@ -155,7 +153,7 @@ public sealed partial class MainWindow
         if (!TryResolveActivePivotChart(UiText.Get("PivotChart_OptionsInsertFirst"), out chart))
             return;
 
-        var blankDisplayMode = blankDisplayBox.SelectedItem is PivotChartBlankDisplayOption pickedBlankDisplay
+        var blankDisplayMode = blankDisplayBox.SelectedItem is PivotChartOptionsResolvedBlankDisplayChoice pickedBlankDisplay
             ? pickedBlankDisplay.Mode
             : current.BlankDisplayMode;
         var input = PivotChartOptionsPlanner.CreateResult(
@@ -206,8 +204,6 @@ public sealed partial class MainWindow
             AutomationProperties.SetAutomationId(control, descriptor.AutomationId);
         }
     }
-
-    private sealed record PivotChartBlankDisplayOption(string Label, ChartBlankDisplayMode Mode);
 
     /// <summary>
     /// Resolves the active pivot and its bound PivotChart, reporting an honest status (and returning false)

@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using FluentAssertions;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -47,7 +48,7 @@ public sealed class FormatCellsDialogNegativeSymbolSeedTests
     public async Task FormatCells_NoEditOk_AfterBrowsingToAnotherCategoryAndBack_StillPreservesNegativeStyle()
     {
         const string currencyRedParens = "$#,##0.00;[Red]($#,##0.00)";
-        MainWindow.FormatCellsDialogResult? result = null;
+        FormatCellsCompactDialogPlan? result = null;
 
         await Session.Dispatch(async () =>
         {
@@ -90,7 +91,7 @@ public sealed class FormatCellsDialogNegativeSymbolSeedTests
 
     private static async Task AssertNoEditOkRoundTripsFormat(string originalFormat)
     {
-        MainWindow.FormatCellsDialogResult? result = null;
+        FormatCellsCompactDialogPlan? result = null;
 
         await Session.Dispatch(async () =>
         {

@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FluentAssertions;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -13,7 +14,7 @@ public sealed partial class ObjectDialogTests
     {
         ObjectSizeDialog.TryParseSize("320 x 180", out var size).Should().BeTrue();
 
-        size.Should().Be(new ObjectSizeDialogResult(320, 180));
+        size.Should().Be(new ObjectSizeDialogSize(320, 180));
     }
 
     [Theory]
@@ -25,7 +26,7 @@ public sealed partial class ObjectDialogTests
     {
         ObjectSizeDialog.TryParseSize(input, out var size).Should().BeFalse();
 
-        size.Should().Be(new ObjectSizeDialogResult(0, 0));
+        size.Should().Be(default(ObjectSizeDialogSize));
     }
 
     [Fact]
@@ -34,7 +35,7 @@ public sealed partial class ObjectDialogTests
         var source = ReadObjectDialogSources();
         var objectSizeSource = source[
             source.IndexOf("public sealed class ObjectSizeDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record RotationDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed class RotationDialog", StringComparison.Ordinal)];
 
         objectSizeSource.Should().Contain("_widthBox");
         objectSizeSource.Should().Contain("_heightBox");
@@ -50,7 +51,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ObjectSizeDialog_SizeControlsExposeAutomationMetadata()
     {
-        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class RotationDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_heightBox, UiText.Get(\"ObjectSizing_ObjectHeight\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_heightBox, \"ObjectSizeHeightBox\");");
@@ -77,7 +78,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ObjectSizeDialogOpenedFromKeyboard_FocusesFirstSizeInput()
     {
-        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class RotationDialog");
 
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         source.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -87,7 +88,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ObjectSizeDialogInvalidSize_ShowsOwnedWarningAndRefocusesInvalidSizeInput()
     {
-        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class RotationDialog");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("UiText.Get(\"ObjectSizing_EnterPositiveWidthAndHeightValues\")");
@@ -104,7 +105,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void ObjectSizeDialog_RoutesParsingAndAspectMathThroughSharedPlanner()
     {
-        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed record RotationDialogResult");
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class ObjectSizeDialog", "public sealed class RotationDialog");
 
         source.Should().Contain("ObjectSizeDialogPlanner.CreateState(");
         source.Should().Contain("ObjectSizeDialogPlanner.TryCreateDelimitedSize(input");
@@ -114,6 +115,7 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("ObjectSizeDialogPlanner.SyncWidthFromHeight(");
         source.Should().Contain("ObjectSizeDialogPlanner.FormatSize(value");
         source.Should().NotContain("DrawingInputParser.TryParseSize(input");
+        source.Should().NotContain("ObjectSizeDialogResult");
     }
 
     [Fact]
@@ -121,7 +123,7 @@ public sealed partial class ObjectDialogTests
     {
         RotationDialog.TryParseRotation("45.5", out var rotation).Should().BeTrue();
 
-        rotation.Should().Be(new RotationDialogResult(45.5));
+        rotation.Should().Be(new FormatPicturePlanner.RotationResult(45.5));
     }
 
     [Theory]
@@ -132,7 +134,7 @@ public sealed partial class ObjectDialogTests
     {
         RotationDialog.TryParseRotation(input, out var rotation).Should().BeTrue();
 
-        rotation.Should().Be(new RotationDialogResult(expectedDegrees));
+        rotation.Should().Be(new FormatPicturePlanner.RotationResult(expectedDegrees));
     }
 
     [Theory]
@@ -142,13 +144,13 @@ public sealed partial class ObjectDialogTests
     {
         RotationDialog.TryParseRotation(input, out var rotation).Should().BeFalse();
 
-        rotation.Should().Be(new RotationDialogResult(0));
+        rotation.Should().Be(new FormatPicturePlanner.RotationResult(0));
     }
 
     [Fact]
     public void RotationDialogOpenedFromKeyboard_FocusesDegreesInput()
     {
-        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed class PictureCropDialog");
 
         source.Should().Contain("ObjectSizeDialog.CreateSingleInputContent(UiText.Get(\"ObjectSizing_Degrees\"), _rotationBox, Accept)");
         source.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
@@ -160,7 +162,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void RotationDialog_DegreesInputExposesAutomationMetadata()
     {
-        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed class PictureCropDialog");
 
         source.Should().Contain("AutomationProperties.SetName(_rotationBox, UiText.Get(\"ObjectSizing_RotationDegrees\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_rotationBox, \"RotationDegreesBox\");");
@@ -170,7 +172,7 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void RotationDialogInvalidDegrees_ShowsOwnedWarningAndRefocusesInput()
     {
-        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed class PictureCropDialog");
 
         source.Should().Contain("DialogMessageHelper.ShowWarning(this,");
         source.Should().Contain("UiText.Get(\"ObjectSizing_EnterANumericRotationValue\")");
@@ -182,11 +184,12 @@ public sealed partial class ObjectDialogTests
     [Fact]
     public void RotationDialog_RoutesParsingThroughSharedPlanner()
     {
-        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed record PictureCropDialogResult");
+        var source = ReadClassSource("ObjectSizingDialogs.cs", "public sealed class RotationDialog", "public sealed class PictureCropDialog");
 
         source.Should().Contain("FormatPicturePlanner.TryCreateRotationResult(input");
         source.Should().Contain("FormatPicturePlanner.NormalizeRotationDegrees(value)");
         source.Should().NotContain("DrawingInputParser.TryParseRotationDegrees(input");
+        source.Should().NotContain("RotationDialogResult");
     }
 
     [Fact]
@@ -202,7 +205,9 @@ public sealed partial class ObjectDialogTests
     {
         PictureCropDialog.TryCreateResult("10, 5, 0, 20", out var result, out _).Should().BeTrue();
 
-        result.Should().Be(new PictureCropDialogResult(0.10, 0.05, 0, 0.20));
+        result.Should().Be(new PictureCropDialogPlanner.CropResult(0.10, 0.05, 0, 0.20));
+
+        ReadObjectDialogSources().Should().NotContain("PictureCropDialogResult");
     }
 
     [Fact]

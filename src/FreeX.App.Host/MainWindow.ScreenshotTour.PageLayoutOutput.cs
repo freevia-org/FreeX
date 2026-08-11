@@ -352,7 +352,7 @@ public partial class MainWindow
         PdfDocumentExporter.Save(
             printDocument,
             pdfPath,
-            PdfDocumentProperties.FromWorkbook(_workbook, exportOptions),
+            PdfDocumentExporter.CreateProperties(_workbook, exportOptions),
             pageRange: null,
             exportOptions.Quality,
             CreatePdfBookmarks(exportOptions),

@@ -13,7 +13,7 @@ namespace FreeX.App.Host.Tests;
 public sealed partial class ChartDialogTests
 {
     [Fact]
-    public void ChartTrendlineOptionsDialogResult_BuildsLayoutOptions()
+    public void ChartTrendlineOptionsDialog_ReturnsCanonicalInputThatBuildsLayoutOptions()
     {
         var result = ChartTrendlineOptionsDialog.CreateResult(
             showTrendline: true,
@@ -26,7 +26,7 @@ public sealed partial class ChartDialogTests
             thickness: 2.25,
             dashStyle: ChartLineDashStyle.Dot);
 
-        result.ToOptions().Should().Be(new ChartLayoutOptions(
+        ChartTrendlinePlanner.Plan(result).Should().Be(new ChartLayoutOptions(
             ShowLinearTrendline: true,
             TrendlineType: ChartTrendlineType.Polynomial,
             TrendlinePeriod: 4,
@@ -39,12 +39,13 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartTrendlineOptionsDialogResult_DelegatesOptionsToSharedPlanner()
+    public void ChartTrendlineOptionsDialog_UsesCanonicalInputWithoutRendererResultFacade()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
+        var commands = DialogSourceTestSupport.ReadHostSources("MainWindow.ChartCommands.cs");
 
-        source.Should().Contain("public ChartTrendlineInput ToInput()");
-        source.Should().Contain("ChartTrendlinePlanner.Plan(ToInput())");
+        source.Should().Contain("public ChartTrendlineInput Result");
+        source.Should().NotContain("ChartTrendlineOptionsDialogResult");
         source.Should().Contain("ChartTrendlinePlanner.Read(chart)");
         source.Should().Contain("ChartTrendlinePlanner.Normalize(new ChartTrendlineInput(");
         source.Should().Contain("ChartTrendlinePlanner.GetTypeChoices()");
@@ -58,6 +59,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("TryReadOptionalColor(");
         source.Should().NotContain("TryReadClampedDouble(");
         source.Should().NotContain("int.TryParse(");
+        commands.Should().Contain("ChartTrendlinePlanner.Plan(dialog.Result)");
     }
 
     [Fact]
@@ -76,17 +78,18 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartTrendlineOptionsDialog.cs");
 
-        source.Should().Contain("ChartTrendlineDialogParseIssue.Order => (UiText.Get(\"ChartTrendline_InvalidOrderMessage\"), _orderBox)");
-        source.Should().Contain("ChartTrendlineDialogParseIssue.Color => (UiText.Get(\"ChartDialog_InvalidOptionalColorMessage\"), _colorBox)");
-        source.Should().Contain("ChartTrendlineDialogParseIssue.Thickness => (UiText.Get(\"ChartTrendline_InvalidWidthMessage\"), _thicknessBox)");
-        source.Should().Contain("_ => (UiText.Get(\"ChartTrendline_InvalidPeriodMessage\"), _periodBox)");
+        source.Should().Contain("ChartValidationPresentationPlanner.Describe(issue)");
+        source.Should().Contain("ChartTrendlineDialogFieldId.Order => _orderBox");
+        source.Should().Contain("ChartTrendlineDialogFieldId.LineColor => _colorBox");
+        source.Should().Contain("ChartTrendlineDialogFieldId.LineThickness => _thicknessBox");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartTrendlineDialogParseIssue issue)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowInvalidInputWarning(string message, TextBox target)");
     }
 
     [Fact]
-    public void ChartErrorBarsDialogResult_BuildsLayoutOptions()
+    public void ChartErrorBarsDialog_ReturnsCanonicalInputThatBuildsLayoutOptions()
     {
         var result = ChartErrorBarsDialog.CreateResult(
             showErrorBars: true,
@@ -95,7 +98,7 @@ public sealed partial class ChartDialogTests
             value: 7.5,
             endCaps: false);
 
-        result.ToOptions().Should().Be(new ChartLayoutOptions(
+        ChartErrorBarsPlanner.Plan(result).Should().Be(new ChartLayoutOptions(
             ShowErrorBars: true,
             ErrorBarKind: ChartErrorBarKind.FixedValue,
             ErrorBarDirection: ChartErrorBarDirection.Minus,
@@ -104,12 +107,13 @@ public sealed partial class ChartDialogTests
     }
 
     [Fact]
-    public void ChartErrorBarsDialogResult_DelegatesOptionsAndDefaultsToSharedPlanner()
+    public void ChartErrorBarsDialog_UsesCanonicalInputWithoutRendererResultFacade()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
+        var commands = DialogSourceTestSupport.ReadHostSources("MainWindow.ChartCommands.cs");
 
-        source.Should().Contain("public ChartErrorBarsInput ToInput()");
-        source.Should().Contain("ChartErrorBarsPlanner.Plan(ToInput())");
+        source.Should().Contain("public ChartErrorBarsInput Result");
+        source.Should().NotContain("ChartErrorBarsDialogResult");
         source.Should().Contain("ChartErrorBarsPlanner.Read(chart)");
         source.Should().Contain("ChartErrorBarsPlanner.Normalize(new ChartErrorBarsInput(");
         source.Should().Contain("ChartErrorBarsPlanner.GetKindChoices()");
@@ -120,6 +124,7 @@ public sealed partial class ChartDialogTests
         source.Should().NotContain("Enum.IsDefined");
         source.Should().NotContain("Math.Clamp");
         source.Should().NotContain("TryReadClampedDouble(");
+        commands.Should().Contain("ChartErrorBarsPlanner.Plan(dialog.Result)");
     }
 
     [Fact]
@@ -136,7 +141,7 @@ public sealed partial class ChartDialogTests
 
         ChartErrorBarsDialog.FromChart(chart)
             .Should()
-            .Be(new ChartErrorBarsDialogResult(
+            .Be(new ChartErrorBarsInput(
                 true,
                 ChartErrorBarKind.Percentage,
                 ChartErrorBarDirection.Plus,
@@ -169,7 +174,8 @@ public sealed partial class ChartDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ChartErrorBarsDialog.cs");
 
-        source.Should().Contain("ChartErrorBarsParseIssue.Value => (UiText.Get(\"ChartErrorBars_InvalidValueMessage\"), _valueBox)");
+        source.Should().Contain("ChartValidationPresentationPlanner.Describe(issue)");
+        source.Should().Contain("presentation.Message.Resolve(UiText.Get, UiText.Format)");
         source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, message, Title, target);");
         source.Should().Contain("private void ShowPlannerParseWarning(ChartErrorBarsParseIssue issue)");
         source.Should().Contain("private bool ShowInvalidInputWarning(string message, TextBox target)");

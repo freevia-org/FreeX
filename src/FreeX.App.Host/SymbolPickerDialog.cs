@@ -11,27 +11,6 @@ public sealed partial class SymbolPickerDialog : Window
     public char SelectedChar { get; private set; }
     public string SelectedSymbol { get; private set; } = "";
 
-    public readonly record struct SymbolCatalogEntry(string Symbol, string Name, string Subset, string CodeText)
-    {
-        internal static SymbolCatalogEntry FromPresentation(SymbolPickerCatalogEntry entry) =>
-            new(entry.Symbol, entry.Name, entry.Subset, entry.CodeText);
-
-        public string AutomationName => CreateSymbolAutomationName(Symbol);
-        public string SearchText => $"{Symbol} {Name} {Subset} U+{CodeText}";
-        public string ToolTipText => $"{Name} (U+{CodeText})";
-    }
-
-    public readonly record struct SpecialCharacter(string Name, string Symbol, string Shortcut = "")
-    {
-        internal static SpecialCharacter FromPresentation(SymbolPickerSpecialCharacter special) =>
-            new(special.Name, special.Symbol, special.Shortcut);
-
-        public string CodeText => SymbolPickerCatalogPlanner.FormatCodeText(Symbol);
-        public string DisplaySymbol => SymbolPickerCatalogPlanner.CreateDisplaySymbol(Symbol);
-        public string AutomationName => UiText.Format("SymbolPicker_SpecialCharacterAutomationNameFormat", Name, CreateSymbolAutomationName(Symbol));
-        public string SearchText => $"{Name} {Symbol} {DisplaySymbol} {Shortcut} U+{CodeText}";
-    }
-
     public SymbolPickerDialog()
     {
         Title = UiText.Get("SymbolPicker_Symbol");

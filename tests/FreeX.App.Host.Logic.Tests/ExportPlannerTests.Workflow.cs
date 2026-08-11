@@ -33,8 +33,9 @@ public partial class ExportPlannerTests
         printExport.Should().Contain("WpfExportDescriptionPlanner.DescribeRequest(effectiveRequest)");
         printExport.Should().Contain("using (var pkg = System.IO.Packaging.Package.Open(");
         printExport.Should().Contain("ResolveExportRange(options)");
-        printExport.Should().Contain("PdfDocumentProperties.FromWorkbook(_workbook, effectiveOptions)");
-        printExport.Should().Contain("XpsDocumentProperties.ApplyToPackage(pkg, XpsDocumentProperties.FromWorkbook(_workbook, effectiveOptions))");
+        printExport.Should().Contain("PdfDocumentExporter.CreateProperties(_workbook, effectiveOptions)");
+        printExport.Should().Contain("XpsPackagePropertiesAdapter.Apply(");
+        printExport.Should().Contain("ExportDocumentPropertiesPlanner.FromWorkbook(_workbook, effectiveOptions)");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(effectiveOptions.PageRange, document.Pages.Count");
         printExport.Should().Contain("WpfExportPlannerTextResolver.Instance");
         printExport.Should().Contain("ExportPlanner.TryValidatePageRange(options.PageRange, paginator.PageCount");

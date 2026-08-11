@@ -378,7 +378,7 @@ public sealed partial class MainWindowSourceHygieneTests
         mainSource.Should().NotContain("private void PivotFieldListBtn_Click(");
         mainSource.Should().NotContain("private void MovePivotFieldToZone(");
         mainSource.Should().NotContain("private void ApplyPivotFieldListLayout(");
-        mainSource.Should().NotContain("private enum PivotFieldDropZone");
+        mainSource.Should().NotContain("private enum PivotFieldBucket");
 
         pivotSource.Should().Contain("private void PivotTableBtn_Click(");
         pivotSource.Should().Contain("private void RefreshPivotTableBtn_Click(");
@@ -387,7 +387,9 @@ public sealed partial class MainWindowSourceHygieneTests
         pivotSource.Should().Contain("private void PivotFieldListBtn_Click(");
         pivotSource.Should().Contain("private void MovePivotFieldToZone(");
         pivotSource.Should().Contain("private void ApplyPivotFieldListLayout(");
-        pivotSource.Should().Contain("private enum PivotFieldDropZone");
+        pivotSource.Should().NotContain("private enum PivotFieldBucket");
+        pivotSource.Should().NotContain("ToPivotFieldBucket");
+        pivotSource.Should().Contain("PivotFieldBucket targetZone");
         pivotSource.Should().Contain("PivotUiPlanner");
         pivotSource.Should().Contain("PivotApplication");
         pivotSource.Should().Contain("SlicerTimelineSourceSession");

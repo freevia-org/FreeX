@@ -45,7 +45,7 @@ internal static class PdfDocumentExporter
     public static void Save(
         FixedDocument document,
         string path,
-        PdfDocumentProperties? properties = null,
+        SharedPdf.PdfDocumentProperties? properties = null,
         string pdfLanguage = ExportPlanner.DefaultPdfLanguage)
     {
         ArgumentNullException.ThrowIfNull(document);
@@ -57,7 +57,7 @@ internal static class PdfDocumentExporter
     public static void Save(
         FixedDocument document,
         string path,
-        PdfDocumentProperties? properties,
+        SharedPdf.PdfDocumentProperties? properties,
         ExportPageRange? pageRange,
         ExportQuality quality = ExportQuality.Standard,
         IReadOnlyList<PdfBookmark>? bookmarks = null,
@@ -85,7 +85,7 @@ internal static class PdfDocumentExporter
     /// </summary>
     public static byte[] RenderToBytes(
         FixedDocument document,
-        PdfDocumentProperties? properties,
+        SharedPdf.PdfDocumentProperties? properties,
         ExportPageRange? pageRange,
         ExportQuality quality = ExportQuality.Standard,
         IReadOnlyList<PdfBookmark>? bookmarks = null,
@@ -114,7 +114,7 @@ internal static class PdfDocumentExporter
     private static void SavePages(
         FixedDocument document,
         string path,
-        PdfDocumentProperties? properties,
+        SharedPdf.PdfDocumentProperties? properties,
         int firstPageIndex,
         int lastPageIndexInclusive,
         double dpi = StandardDpi,
@@ -138,7 +138,7 @@ internal static class PdfDocumentExporter
     private static void BuildPages(
         FixedDocument document,
         Stream outputStream,
-        PdfDocumentProperties? properties,
+        SharedPdf.PdfDocumentProperties? properties,
         int firstPageIndex,
         int lastPageIndexInclusive,
         double dpi = StandardDpi,
@@ -174,7 +174,7 @@ internal static class PdfDocumentExporter
             exportPages.Add(new ExportPage(fixedPage, internalLinks));
         }
 
-        var rasterDocument = new SharedPdf.PdfRasterDocument(rasterPages, BuildProperties(properties));
+        var rasterDocument = new SharedPdf.PdfRasterDocument(rasterPages, WithDefaultCreator(properties));
         var normalizedTitle = ExportDocumentPropertiesPlanner.Normalize(properties?.Title);
 
         WpfRasterPdfWriter.Write(
@@ -187,13 +187,25 @@ internal static class PdfDocumentExporter
             uncompressedContent: includeSelectableText);
     }
 
-    private static SharedPdf.PdfDocumentProperties BuildProperties(PdfDocumentProperties? properties) =>
-        new(
-            Title: properties?.Title,
-            Author: properties?.Author,
-            Subject: properties?.Subject,
-            Keywords: properties?.Keywords,
-            Creator: "FreeX");
+    internal static SharedPdf.PdfDocumentProperties? CreateProperties(Workbook workbook, ExportOptions options)
+    {
+        if (ExportDocumentPropertiesPlanner.FromWorkbook(workbook, options) is not { } properties)
+            return null;
+
+        return new SharedPdf.PdfDocumentProperties(
+            properties.Title,
+            properties.Creator,
+            properties.Subject,
+            properties.Keywords,
+            ExportDocumentPropertiesPlanner.DefaultCreator);
+    }
+
+    private static SharedPdf.PdfDocumentProperties WithDefaultCreator(
+        SharedPdf.PdfDocumentProperties? properties) =>
+        (properties ?? new SharedPdf.PdfDocumentProperties()) with
+        {
+            Creator = ExportDocumentPropertiesPlanner.DefaultCreator,
+        };
 
     private static void ConfigureDocument(
         PdfDocument pdf,

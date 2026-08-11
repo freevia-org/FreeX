@@ -70,11 +70,9 @@ public sealed class PivotChartOptionsDialog : Window
         _showHiddenDataBox.IsChecked = Result.ShowHiddenData;
         _showHiddenDataBox.Margin = new Thickness(0, 0, 0, 8);
         ApplyFieldAutomation(_showHiddenDataBox, PivotChartOptionsDialogFieldId.ShowHiddenData);
-        _blankDisplayBox.ItemsSource = PivotChartOptionsPlanner.GetBlankDisplayChoices()
-            .Select(choice => new BlankDisplayChoice(UiText.Get(choice.LabelResourceKey), choice.Mode))
-            .ToList();
-        _blankDisplayBox.DisplayMemberPath = nameof(BlankDisplayChoice.Label);
-        _blankDisplayBox.SelectedValuePath = nameof(BlankDisplayChoice.Mode);
+        _blankDisplayBox.ItemsSource = PivotChartOptionsPlanner.GetResolvedBlankDisplayChoices(UiText.Get);
+        _blankDisplayBox.DisplayMemberPath = nameof(PivotChartOptionsResolvedBlankDisplayChoice.Label);
+        _blankDisplayBox.SelectedValuePath = nameof(PivotChartOptionsResolvedBlankDisplayChoice.Mode);
         _blankDisplayBox.SelectedValue = Result.BlankDisplayMode;
         _blankDisplayBox.Margin = new Thickness(0, 0, 0, 16);
         ApplyFieldAutomation(_blankDisplayBox, PivotChartOptionsDialogFieldId.BlankDisplayMode);
@@ -128,8 +126,6 @@ public sealed class PivotChartOptionsDialog : Window
         _styleGallery.Focus();
         Keyboard.Focus(_styleGallery);
     }
-
-    private sealed record BlankDisplayChoice(string Label, ChartBlankDisplayMode Mode);
 
     private static string FieldLabel(PivotChartOptionsDialogFieldId fieldId) =>
         UiText.Get(PivotChartOptionsPlanner.GetDialogField(fieldId).LabelResourceKey);

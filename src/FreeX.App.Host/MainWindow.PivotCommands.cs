@@ -395,23 +395,23 @@ public partial class MainWindow
     }
 
     private void PivotFieldToRowsBtn_Click(object sender, RoutedEventArgs e) =>
-        MoveSelectedPivotField(PivotFieldDropZone.Rows);
+        MoveSelectedPivotField(PivotFieldBucket.Rows);
 
     private void PivotFieldToColumnsBtn_Click(object sender, RoutedEventArgs e) =>
-        MoveSelectedPivotField(PivotFieldDropZone.Columns);
+        MoveSelectedPivotField(PivotFieldBucket.Columns);
 
     private void PivotFieldToValuesBtn_Click(object sender, RoutedEventArgs e) =>
-        MoveSelectedPivotField(PivotFieldDropZone.Values);
+        MoveSelectedPivotField(PivotFieldBucket.Values);
 
     private void PivotFieldToFiltersBtn_Click(object sender, RoutedEventArgs e) =>
-        MoveSelectedPivotField(PivotFieldDropZone.Filters);
+        MoveSelectedPivotField(PivotFieldBucket.Filters);
 
     private void PivotFieldList_PreviewMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed ||
             sender is not ListBox list ||
             GetPivotFieldDragCaption(list, e.OriginalSource) is not { } caption ||
-            GetPivotFieldDropZone(list) is not { } sourceZone)
+            GetPivotFieldBucket(list) is not { } sourceZone)
         {
             return;
         }
@@ -449,8 +449,8 @@ public partial class MainWindow
         var payload = GetPivotFieldDragPayload(e);
         _pivotFieldDragRemoveCueActive =
             sender is ListBox targetList &&
-            GetPivotFieldDropZone(targetList) == PivotFieldDropZone.Available &&
-            payload?.SourceZone is not null and not PivotFieldDropZone.Available;
+            GetPivotFieldBucket(targetList) == PivotFieldBucket.Available &&
+            payload?.SourceZone is not null and not PivotFieldBucket.Available;
         e.Effects = HasPivotFieldDragData(e)
             ? DragDropEffects.Move
             : DragDropEffects.None;
@@ -462,7 +462,7 @@ public partial class MainWindow
         var payload = GetPivotFieldDragPayload(e);
         if (sender is not ListBox targetList ||
             GetPivotFieldDragCaption(e, payload) is not { } caption ||
-            GetPivotFieldDropZone(targetList) is not { } targetZone)
+            GetPivotFieldBucket(targetList) is not { } targetZone)
         {
             return;
         }
@@ -497,7 +497,7 @@ public partial class MainWindow
 
     private void PivotFieldList_GiveFeedback(object sender, GiveFeedbackEventArgs e)
     {
-        if (_pivotFieldDragSourceZone is not null and not PivotFieldDropZone.Available &&
+        if (_pivotFieldDragSourceZone is not null and not PivotFieldBucket.Available &&
             (_pivotFieldDragRemoveCueActive || e.Effects == DragDropEffects.None))
         {
             Mouse.SetCursor(Cursors.No);
@@ -572,10 +572,10 @@ public partial class MainWindow
     }
 
     private static bool IsBucketFieldDrag(DragEventArgs e) =>
-        GetPivotFieldDragPayload(e)?.SourceZone is PivotFieldDropZone.Rows
-            or PivotFieldDropZone.Columns
-            or PivotFieldDropZone.Values
-            or PivotFieldDropZone.Filters;
+        GetPivotFieldDragPayload(e)?.SourceZone is PivotFieldBucket.Rows
+            or PivotFieldBucket.Columns
+            or PivotFieldBucket.Values
+            or PivotFieldBucket.Filters;
 
     private void DropPivotFieldToRemoveZone(DragEventArgs e)
     {
@@ -588,7 +588,7 @@ public partial class MainWindow
             return;
         }
 
-        MovePivotFieldToZone(caption, PivotFieldDropZone.Available, -1, payload);
+        MovePivotFieldToZone(caption, PivotFieldBucket.Available, -1, payload);
         e.Effects = DragDropEffects.Move;
         e.Handled = true;
     }
@@ -631,13 +631,13 @@ public partial class MainWindow
                 return;
 
             var zone = PivotUiPlanner.IsNumericSourceField(sheet, pivotTable, sourceIndex.Value)
-                ? PivotFieldDropZone.Values
-                : PivotFieldDropZone.Rows;
+                ? PivotFieldBucket.Values
+                : PivotFieldBucket.Rows;
             MovePivotFieldToZone(caption, zone, -1);
             return;
         }
 
-        MovePivotFieldToZone(caption, PivotFieldDropZone.Available, -1);
+        MovePivotFieldToZone(caption, PivotFieldBucket.Available, -1);
     }
 
     private void PivotFieldRemoveBtn_Click(object sender, RoutedEventArgs e)
@@ -646,7 +646,7 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(selected))
             return;
 
-        MovePivotFieldToZone(selected, PivotFieldDropZone.Available, -1);
+        MovePivotFieldToZone(selected, PivotFieldBucket.Available, -1);
     }
 
     private void PivotFieldSortAscendingMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -710,7 +710,7 @@ public partial class MainWindow
             dataFields);
     }
 
-    private void MoveSelectedPivotField(PivotFieldDropZone zone)
+    private void MoveSelectedPivotField(PivotFieldBucket zone)
     {
         var selected = GetSelectedPivotFieldListItem();
         if (string.IsNullOrWhiteSpace(selected))
@@ -721,7 +721,7 @@ public partial class MainWindow
 
     private void MovePivotFieldToZone(
         string caption,
-        PivotFieldDropZone targetZone,
+        PivotFieldBucket targetZone,
         int insertIndex,
         PivotFieldDragPayload? payload = null)
     {
@@ -737,7 +737,7 @@ public partial class MainWindow
         var displayedLayout = GetDisplayedOrCurrentPivotLayout(pivotTable);
         PivotFieldBucket? sourceBucket = payload is null
             ? null
-            : ToPivotFieldBucket(payload.SourceZone);
+            : payload.SourceZone;
         var sourceIndex = PivotFieldLayoutPlanner.ResolveSourceFieldIndex(
             displayedLayout.Areas,
             headers,
@@ -760,7 +760,7 @@ public partial class MainWindow
             headers,
             new PivotFieldDropRequest(
                 sourceIndex.Value,
-                ToPivotFieldBucket(targetZone),
+                targetZone,
                 adjustedInsertIndex,
                 sourceBucket,
                 payload?.SourceIndex ?? -1),
@@ -1061,7 +1061,7 @@ public partial class MainWindow
             caption,
             PivotUiPlanner.FindSourceFieldIndex(headers, caption),
             PivotUiPlanner.FindDataFieldIndex(pivotTable, caption),
-            _pivotFieldMenuContextZone ?? GetSelectedPivotFieldDropZone());
+            _pivotFieldMenuContextZone ?? GetSelectedPivotFieldBucket());
     }
 
     private void ClearPivotFieldMenuContext()
@@ -1070,12 +1070,12 @@ public partial class MainWindow
         _pivotFieldMenuContextZone = null;
     }
 
-    private PivotFieldDropZone? GetSelectedPivotFieldDropZone()
+    private PivotFieldBucket? GetSelectedPivotFieldBucket()
     {
         foreach (var list in PivotFieldLists())
         {
             if (list.SelectedItem is not null &&
-                GetPivotFieldDropZone(list) is { } zone)
+                GetPivotFieldBucket(list) is { } zone)
             {
                 return zone;
             }
@@ -1087,7 +1087,7 @@ public partial class MainWindow
     private static int? ResolveValueFieldSettingsIndex(
         PivotTableModel pivotTable,
         string? caption,
-        PivotFieldDropZone? zone)
+        PivotFieldBucket? zone)
     {
         var dataFieldIndex = PivotUiPlanner.FindDataFieldIndex(pivotTable, caption);
         if (dataFieldIndex is not null)
@@ -1194,49 +1194,30 @@ public partial class MainWindow
             _currentSheetId,
             sheetId => _workbook.GetSheet(sheetId)?.Name);
 
-    private PivotFieldDropZone? GetPivotFieldDropZone(ListBox list)
+    private PivotFieldBucket? GetPivotFieldBucket(ListBox list)
     {
         if (ReferenceEquals(list, PivotRowsList))
-            return PivotFieldDropZone.Rows;
+            return PivotFieldBucket.Rows;
         if (ReferenceEquals(list, PivotColumnsList))
-            return PivotFieldDropZone.Columns;
+            return PivotFieldBucket.Columns;
         if (ReferenceEquals(list, PivotFiltersList))
-            return PivotFieldDropZone.Filters;
+            return PivotFieldBucket.Filters;
         if (ReferenceEquals(list, PivotValuesList))
-            return PivotFieldDropZone.Values;
+            return PivotFieldBucket.Values;
         if (ReferenceEquals(list, PivotAvailableFieldsList))
-            return PivotFieldDropZone.Available;
+            return PivotFieldBucket.Available;
         return null;
     }
 
-    private static PivotFieldBucket ToPivotFieldBucket(PivotFieldDropZone zone) =>
+    private static PivotHeaderArea? ToPivotHeaderArea(PivotFieldBucket? zone) =>
         zone switch
         {
-            PivotFieldDropZone.Rows => PivotFieldBucket.Rows,
-            PivotFieldDropZone.Columns => PivotFieldBucket.Columns,
-            PivotFieldDropZone.Values => PivotFieldBucket.Values,
-            PivotFieldDropZone.Filters => PivotFieldBucket.Filters,
-            _ => PivotFieldBucket.Available,
-        };
-
-    private static PivotHeaderArea? ToPivotHeaderArea(PivotFieldDropZone? zone) =>
-        zone switch
-        {
-            PivotFieldDropZone.Rows => PivotHeaderArea.Row,
-            PivotFieldDropZone.Columns => PivotHeaderArea.Column,
-            PivotFieldDropZone.Filters => PivotHeaderArea.Page,
-            PivotFieldDropZone.Values => PivotHeaderArea.Value,
+            PivotFieldBucket.Rows => PivotHeaderArea.Row,
+            PivotFieldBucket.Columns => PivotHeaderArea.Column,
+            PivotFieldBucket.Filters => PivotHeaderArea.Page,
+            PivotFieldBucket.Values => PivotHeaderArea.Value,
             _ => null
         };
-
-    private enum PivotFieldDropZone
-    {
-        Available,
-        Rows,
-        Columns,
-        Values,
-        Filters
-    }
 
     private sealed record PivotFieldMenuContext(
         Sheet Sheet,
@@ -1245,12 +1226,12 @@ public partial class MainWindow
         string? Caption,
         int? SourceFieldIndex,
         int? DataFieldIndex,
-        PivotFieldDropZone? Zone);
+        PivotFieldBucket? Zone);
 
     [Serializable]
     private sealed record PivotFieldDragPayload(
         string Caption,
-        PivotFieldDropZone SourceZone,
+        PivotFieldBucket SourceZone,
         int SourceIndex);
 
 }

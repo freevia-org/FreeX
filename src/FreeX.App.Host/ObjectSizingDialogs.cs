@@ -7,8 +7,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record ObjectSizeDialogResult(double Width, double Height);
-
 public sealed class ObjectSizeDialog : Window
 {
     private readonly TextBox _widthBox = new();
@@ -17,7 +15,7 @@ public sealed class ObjectSizeDialog : Window
     private readonly ObjectSizeDialogState _sizeState;
     private bool _updatingSize;
 
-    public ObjectSizeDialogResult Result { get; private set; }
+    public ObjectSizeDialogSize Result { get; private set; }
 
     public ObjectSizeDialog(double width, double height, string? title = null)
     {
@@ -27,7 +25,7 @@ public sealed class ObjectSizeDialog : Window
             ObjectSizeDialogField.Height,
             ObjectSizeDialogField.Height,
             CultureInfo.CurrentCulture);
-        Result = new ObjectSizeDialogResult(_sizeState.OriginalSize.Width, _sizeState.OriginalSize.Height);
+        Result = _sizeState.OriginalSize;
         Title = title ?? UiText.Get("ObjectSizing_ObjectSize");
         Width = 360;
         Height = 250;
@@ -51,16 +49,9 @@ public sealed class ObjectSizeDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static bool TryParseSize(string input, out ObjectSizeDialogResult result)
+    public static bool TryParseSize(string input, out ObjectSizeDialogSize result)
     {
-        result = new ObjectSizeDialogResult(0, 0);
-        if (!ObjectSizeDialogPlanner.TryCreateDelimitedSize(input, out var size, out _))
-        {
-            return false;
-        }
-
-        result = new ObjectSizeDialogResult(size.Width, size.Height);
-        return true;
+        return ObjectSizeDialogPlanner.TryCreateDelimitedSize(input, out result, out _);
     }
 
     internal static double CalculateLockedAspectHeight(double width, double originalWidth, double originalHeight) =>
@@ -91,7 +82,7 @@ public sealed class ObjectSizeDialog : Window
             return;
         }
 
-        Result = new ObjectSizeDialogResult(size.Width, size.Height);
+        Result = size;
         DialogResult = true;
     }
 
@@ -174,17 +165,15 @@ public sealed class ObjectSizeDialog : Window
     }
 }
 
-public sealed record RotationDialogResult(double Degrees);
-
 public sealed class RotationDialog : Window
 {
     private readonly TextBox _rotationBox = new();
 
-    public RotationDialogResult Result { get; private set; }
+    public FormatPicturePlanner.RotationResult Result { get; private set; }
 
     public RotationDialog(double degrees, string? title = null)
     {
-        Result = new RotationDialogResult(degrees);
+        Result = new FormatPicturePlanner.RotationResult(degrees);
         Title = title ?? UiText.Get("ObjectSizing_Rotation");
         Width = 300;
         Height = 150;
@@ -199,13 +188,13 @@ public sealed class RotationDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static bool TryParseRotation(string input, out RotationDialogResult result)
+    public static bool TryParseRotation(string input, out FormatPicturePlanner.RotationResult result)
     {
-        result = new RotationDialogResult(0);
+        result = new FormatPicturePlanner.RotationResult(0);
         if (!FormatPicturePlanner.TryCreateRotationResult(input, out var rotation) || rotation is null)
             return false;
 
-        result = new RotationDialogResult(rotation.Degrees);
+        result = rotation;
         return true;
     }
 
@@ -236,8 +225,6 @@ public sealed class RotationDialog : Window
     }
 }
 
-public sealed record PictureCropDialogResult(double Left, double Top, double Right, double Bottom);
-
 public sealed class PictureCropDialog : Window
 {
     private readonly TextBox _cropLeftBox = new();
@@ -245,11 +232,15 @@ public sealed class PictureCropDialog : Window
     private readonly TextBox _cropRightBox = new();
     private readonly TextBox _cropBottomBox = new();
 
-    public PictureCropDialogResult Result { get; private set; }
+    public PictureCropDialogPlanner.CropResult Result { get; private set; }
 
     public PictureCropDialog(PictureModel picture)
     {
-        Result = new PictureCropDialogResult(picture.CropLeft, picture.CropTop, picture.CropRight, picture.CropBottom);
+        Result = new PictureCropDialogPlanner.CropResult(
+            picture.CropLeft,
+            picture.CropTop,
+            picture.CropRight,
+            picture.CropBottom);
         Title = UiText.Get("ObjectSizing_CropPicture");
         Width = 420;
         Height = 280;
@@ -276,9 +267,9 @@ public sealed class PictureCropDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static bool TryCreateResult(string input, out PictureCropDialogResult result, out string? error)
+    public static bool TryCreateResult(string input, out PictureCropDialogPlanner.CropResult result, out string? error)
     {
-        result = new PictureCropDialogResult(0, 0, 0, 0);
+        result = new PictureCropDialogPlanner.CropResult(0, 0, 0, 0);
         error = null;
         if (!PictureCropDialogPlanner.TryCreateResult(input, out var crop, out _) || crop is null)
         {
@@ -286,7 +277,7 @@ public sealed class PictureCropDialog : Window
             return false;
         }
 
-        result = new PictureCropDialogResult(crop.Left, crop.Top, crop.Right, crop.Bottom);
+        result = crop;
         return true;
     }
 

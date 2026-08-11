@@ -3,6 +3,7 @@ using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -15,7 +16,7 @@ public sealed class PivotValueFieldSettingsNumberFormatInteractionTests
     [Fact]
     public async Task PivotNumberFormatDialog_AcceptedFormatReturnsNumberCodeWithoutApplyingWorksheetFormat()
     {
-        MainWindow.FormatCellsDialogResult? result = null;
+        FormatCellsCompactDialogPlan? result = null;
 
         await Session.Dispatch(async () =>
         {
@@ -46,7 +47,7 @@ public sealed class PivotValueFieldSettingsNumberFormatInteractionTests
     [Fact]
     public async Task PivotNumberFormatDialog_CancelReturnsNoFormatChange()
     {
-        MainWindow.FormatCellsDialogResult? result = null;
+        FormatCellsCompactDialogPlan? result = null;
 
         await Session.Dispatch(async () =>
         {

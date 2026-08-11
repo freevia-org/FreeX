@@ -222,6 +222,17 @@ public sealed class ChartWorkflowDescriptorPlannerTests
             .AutomationId.Should().Be("PivotChartOptionsBlankDisplayMode");
         PivotChartOptionsPlanner.GetBlankDisplayChoices().Select(choice => choice.Mode)
             .Should().Equal(ChartBlankDisplayMode.Gap, ChartBlankDisplayMode.Span, ChartBlankDisplayMode.Zero);
+        PivotChartOptionsPlanner.GetResolvedBlankDisplayChoices(key => $"resolved:{key}")
+            .Should().Equal(
+                new PivotChartOptionsResolvedBlankDisplayChoice(
+                    "resolved:PivotChartOptions_BlankDisplayGaps",
+                    ChartBlankDisplayMode.Gap),
+                new PivotChartOptionsResolvedBlankDisplayChoice(
+                    "resolved:PivotChartOptions_BlankDisplayConnectDataPoints",
+                    ChartBlankDisplayMode.Span),
+                new PivotChartOptionsResolvedBlankDisplayChoice(
+                    "resolved:PivotChartOptions_BlankDisplayZero",
+                    ChartBlankDisplayMode.Zero));
     }
 
     private static ChartModel Chart(ChartType type, uint endCol)

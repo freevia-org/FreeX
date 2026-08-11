@@ -42,6 +42,10 @@ public sealed record PivotChartOptionsBlankDisplayChoice(
     string LabelResourceKey,
     ChartBlankDisplayMode Mode);
 
+public sealed record PivotChartOptionsResolvedBlankDisplayChoice(
+    string Label,
+    ChartBlankDisplayMode Mode);
+
 /// <summary>
 /// Renderer-neutral planner for PivotChart Options. It projects the chart's current options into a
 /// portable input record, normalizes submitted style ids through <see cref="ChartStylePlanner"/>, and
@@ -146,6 +150,17 @@ public static class PivotChartOptionsPlanner
     }
 
     public static IReadOnlyList<PivotChartOptionsBlankDisplayChoice> GetBlankDisplayChoices() => BlankDisplayChoices;
+
+    public static IReadOnlyList<PivotChartOptionsResolvedBlankDisplayChoice> GetResolvedBlankDisplayChoices(
+        Func<string, string> resolveText)
+    {
+        ArgumentNullException.ThrowIfNull(resolveText);
+        return BlankDisplayChoices
+            .Select(choice => new PivotChartOptionsResolvedBlankDisplayChoice(
+                resolveText(choice.LabelResourceKey),
+                choice.Mode))
+            .ToArray();
+    }
 
     public static PivotChartOptionsInput Read(ChartModel chart) =>
         new(

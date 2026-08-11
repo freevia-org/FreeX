@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -42,7 +43,7 @@ public partial class MainWindow
 
             PivotFieldListDeferLayoutCheckBox.IsChecked = true;
             PivotAvailableFieldsList.SelectedItem = _pivotFieldListAvailableItems.First(item => item.Caption == "Channel");
-            MoveSelectedPivotField(PivotFieldDropZone.Rows);
+            MoveSelectedPivotField(PivotFieldBucket.Rows);
             PivotFieldListSearchBox.Text = "sales";
             PivotFieldListUpdateBtn.Focus();
             UpdateLayout();

@@ -11,7 +11,7 @@ namespace FreeX.App.Host;
 public partial class FormatCellsDialog : Window
 {
     public StyleDiff? ResultDiff { get; private set; }
-    public FormatCellsBorderSelection ResultBorderSelection { get; private set; } = FormatCellsBorderSelection.None;
+    public FormatCellsDialogBorderSelection ResultBorderSelection { get; private set; } = FormatCellsDialogBorderSelection.None;
     public bool? ResultMergeCells { get; private set; }
 
     private readonly CellStyle _current;
@@ -236,7 +236,7 @@ public partial class FormatCellsDialog : Window
         }
 
         ResultDiff = result!.Diff;
-        ResultBorderSelection = new FormatCellsBorderSelection(
+        ResultBorderSelection = new FormatCellsDialogBorderSelection(
             result.BorderSelection.Clear,
             result.BorderSelection.Outline,
             result.BorderSelection.Inside);

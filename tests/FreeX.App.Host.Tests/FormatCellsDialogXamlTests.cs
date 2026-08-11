@@ -219,6 +219,17 @@ public sealed partial class FormatCellsDialogXamlTests
     }
 
     [Fact]
+    public void FormatCellsDialog_UsesCanonicalBorderSelectionContract()
+    {
+        var dialogSource = DialogSourceTestSupport.ReadHostSources("FormatCellsDialog.xaml.cs");
+        var borderSource = DialogSourceTestSupport.ReadHostSources("FormatCellsDialog.Border.cs");
+
+        dialogSource.Should().Contain("FormatCellsDialogBorderSelection ResultBorderSelection");
+        dialogSource.Should().Contain("new FormatCellsDialogBorderSelection(");
+        borderSource.Should().NotContain("record FormatCellsBorderSelection");
+    }
+
+    [Fact]
     public void FormatCellsDialog_ExposesShrinkToFitAndMapsItIntoStyleDiff()
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FormatCellsDialog.xaml");

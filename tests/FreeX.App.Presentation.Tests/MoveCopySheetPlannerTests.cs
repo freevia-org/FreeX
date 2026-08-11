@@ -105,7 +105,9 @@ public sealed class MoveCopySheetPlannerTests
         source.Should().Contain("MoveCopySheetPlanner.BuildTargets(");
         source.Should().Contain("MoveCopySheetPlanner.InitialTargetIndex(");
         source.Should().Contain("MoveCopySheetPlanner.CreatePlan(");
+        source.Should().Contain("public MoveCopySheetPlan Result");
         source.Should().Contain("DisplayMemberPath = nameof(MoveCopySheetTarget.DisplayName)");
+        source.Should().NotContain("MoveOrCopySheetDialogResult");
         source.Should().NotContain("private static IEnumerable<MoveOrCopySheetTarget> BuildTargets");
         source.Should().NotContain("private sealed record MoveOrCopySheetTarget");
         source.Should().NotContain("Math.Clamp(insertBeforeIndex");

@@ -95,8 +95,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "ApplyPivotFieldListLayout");
             _movePivotFieldToZone = typeof(MainWindow).GetMethod("MovePivotFieldToZone", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "MovePivotFieldToZone");
-            _pivotFieldDropZoneType = typeof(MainWindow).GetNestedType("PivotFieldDropZone", BindingFlags.NonPublic)
-                ?? throw new MissingMemberException(nameof(MainWindow), "PivotFieldDropZone");
+            _pivotFieldDropZoneType = typeof(PivotFieldBucket);
             _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
                 ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
             _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)

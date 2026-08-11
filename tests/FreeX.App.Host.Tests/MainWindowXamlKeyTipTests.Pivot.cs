@@ -315,7 +315,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         source.Should().Contain("PivotFieldRemoveDropZone_DragOver");
         source.Should().Contain("PivotFieldListRemoveZone_DragOver");
         source.Should().Contain("Mouse.SetCursor(Cursors.No)");
-        source.Should().Contain("MovePivotFieldToZone(caption, PivotFieldDropZone.Available");
+        source.Should().Contain("MovePivotFieldToZone(caption, PivotFieldBucket.Available");
         xamlSource.Should().Contain("DragOver=\"PivotFieldRemoveDropZone_DragOver\"");
         xamlSource.Should().Contain("DragOver=\"PivotFieldListRemoveZone_DragOver\"");
     }

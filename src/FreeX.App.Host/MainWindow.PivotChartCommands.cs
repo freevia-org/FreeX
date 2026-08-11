@@ -148,7 +148,7 @@ public partial class MainWindow
         menu.IsOpen = true;
     }
 
-    private static PivotFieldDropZone? ResolvePivotChartFieldButtonZone(
+    private static PivotFieldBucket? ResolvePivotChartFieldButtonZone(
         PivotTableModel pivotTable,
         IReadOnlyList<string> headers,
         string fieldButton,
@@ -157,7 +157,7 @@ public partial class MainWindow
         if (string.Equals(fieldButton, "Values", StringComparison.OrdinalIgnoreCase) ||
             PivotUiPlanner.FindDataFieldIndex(pivotTable, caption) is not null)
         {
-            return PivotFieldDropZone.Values;
+            return PivotFieldBucket.Values;
         }
 
         var sourceIndex = PivotUiPlanner.FindSourceFieldIndex(headers, caption);
@@ -166,9 +166,9 @@ public partial class MainWindow
 
         return PivotUiPlanner.ResolvePivotChartFieldArea(pivotTable, sourceIndex.Value) switch
         {
-            PivotHeaderArea.Page => PivotFieldDropZone.Filters,
-            PivotHeaderArea.Column => PivotFieldDropZone.Columns,
-            _ => PivotFieldDropZone.Rows
+            PivotHeaderArea.Page => PivotFieldBucket.Filters,
+            PivotHeaderArea.Column => PivotFieldBucket.Columns,
+            _ => PivotFieldBucket.Rows
         };
     }
 

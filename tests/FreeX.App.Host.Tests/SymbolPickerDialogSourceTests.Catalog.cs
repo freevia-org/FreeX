@@ -79,8 +79,11 @@ public sealed partial class SymbolPickerDialogSourceTests
         source.Should().Contain("SymbolPickerCatalogPlanner.GetSubsetNames()");
         source.Should().Contain("SymbolPickerCatalogPlanner.PlanSymbolList(");
         source.Should().Contain("SymbolPickerCatalogPlanner.DefaultRecentSymbols");
-        source.Should().Contain("SymbolCatalogEntry.FromPresentation");
-        source.Should().Contain("SpecialCharacter.FromPresentation");
+        source.Should().Contain("ObservableCollection<SymbolPickerCatalogEntry>");
+        source.Should().Contain("IReadOnlyList<SymbolPickerSpecialCharacter> GetSpecialCharacters()");
+        source.Should().NotContain("record struct SymbolCatalogEntry");
+        source.Should().NotContain("record struct SpecialCharacter");
+        source.Should().NotContain("FromPresentation");
         source.Should().NotContain("FriendlySymbolNames");
         source.Should().NotContain("BuildSymbolsBySubset");
         source.Should().NotContain("UnicodeSubsetDefinition");
@@ -91,15 +94,15 @@ public sealed partial class SymbolPickerDialogSourceTests
     public void Dialog_OffersSpecialCharactersSurface()
     {
         SymbolPickerDialog.GetSpecialCharacters().Should().Contain([
-            new SymbolPickerDialog.SpecialCharacter("Em Dash", "\u2014"),
-            new SymbolPickerDialog.SpecialCharacter("Nonbreaking Space", "\u00a0"),
-            new SymbolPickerDialog.SpecialCharacter("Copyright", "\u00a9"),
-            new SymbolPickerDialog.SpecialCharacter("Registered", "\u00ae"),
-            new SymbolPickerDialog.SpecialCharacter("Trademark", "\u2122")]);
+            new SymbolPickerSpecialCharacter("Em Dash", "\u2014"),
+            new SymbolPickerSpecialCharacter("Nonbreaking Space", "\u00a0"),
+            new SymbolPickerSpecialCharacter("Copyright", "\u00a9"),
+            new SymbolPickerSpecialCharacter("Registered", "\u00ae"),
+            new SymbolPickerSpecialCharacter("Trademark", "\u2122")]);
         SymbolPickerDialog.GetSpecialCharacters().Should().Contain([
-            new SymbolPickerDialog.SpecialCharacter("Nonbreaking Hyphen", "\u2011"),
-            new SymbolPickerDialog.SpecialCharacter("Less-Than Or Equal", "\u2264"),
-            new SymbolPickerDialog.SpecialCharacter("Check Mark", "\u2713")]);
+            new SymbolPickerSpecialCharacter("Nonbreaking Hyphen", "\u2011"),
+            new SymbolPickerSpecialCharacter("Less-Than Or Equal", "\u2264"),
+            new SymbolPickerSpecialCharacter("Check Mark", "\u2713")]);
         SymbolPickerDialog.GetSpecialCharacters().Should().HaveCountGreaterThan(35);
 
         var source = ReadSymbolPickerDialogSources();

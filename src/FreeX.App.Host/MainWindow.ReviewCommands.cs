@@ -310,7 +310,7 @@ public partial class MainWindow
     private CommentListWindow ShowOrRefreshCommentListWindow(
         CommentListWindow? window,
         string title,
-        IReadOnlyList<CommentListWindowItem> items,
+        IReadOnlyList<CommentListRowPlan> items,
         Action<CommentListWindow?> setWindow)
     {
         if (window is null || !window.IsLoaded)

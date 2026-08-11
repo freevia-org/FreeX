@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls.Primitives;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -22,9 +23,9 @@ public partial class MainWindow
         _pivotFieldMenuContextCaption = target.MenuTarget.FieldCaption;
         _pivotFieldMenuContextZone = target.MenuTarget.Area switch
         {
-            PivotHeaderArea.Column => PivotFieldDropZone.Columns,
-            PivotHeaderArea.Page => PivotFieldDropZone.Filters,
-            _ => PivotFieldDropZone.Rows
+            PivotHeaderArea.Column => PivotFieldBucket.Columns,
+            PivotHeaderArea.Page => PivotFieldBucket.Filters,
+            _ => PivotFieldBucket.Rows
         };
         SetActiveCell(headerCell);
         RefreshPivotFieldListPane();
