@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using Free.Shared.Drawing;
@@ -1240,12 +1241,11 @@ public sealed class TextLayoutPlannerTests
 
         wpf.Should().Contain("TextLayoutPlanner.GetTextArea");
         wpf.Should().Contain("TextLayoutPlanner.PlanTableCellText");
-        wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
-        wpf.Should().Contain("TextLayoutPlanner.GetColumnLayout");
-        wpf.Should().Contain("TextLayoutPlanner.PlanColumns");
+        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
+        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
+        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
         wpf.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
         wpf.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
-        wpf.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         wpf.Should().Contain("TextLayoutPlanner.PlanTabStops");
         wpf.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         wpf.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
@@ -1264,14 +1264,13 @@ public sealed class TextLayoutPlannerTests
 
         avalonia.Should().Contain("TextLayoutPlanner.GetTextArea");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTableCellText");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
-        avalonia.Should().Contain("TextLayoutPlanner.GetColumnLayout");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanColumns");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
         avalonia.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
         avalonia.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
         wpf.Should().Contain("DrawTabLeaderWpf");
         avalonia.Should().Contain("DrawTabLeaderAvalonia");
-        avalonia.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTextOrientation");
         avalonia.Should().Contain("TextLayoutPlanner.PlanStackedVerticalText");
@@ -1290,7 +1289,132 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
-    public void WpfAndAvaloniaSlideCanvases_DelegateTextWrappingAndBaselinePlanning()
+    public void PlanMeasuredBodyText_OwnsAutoFitRemeasurementArtifactsAndRenderRoutes()
+    {
+        var requests = new List<TextParagraphMeasurementRequest>();
+        var text = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Normal,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[] { new ResolvedRun { Text = "Left\tRight", FontSizePt = 20 } }
+                },
+                new ResolvedParagraph()
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanMeasuredBodyText(
+            text,
+            new LayoutRect(0, 0, 100, 60),
+            request =>
+            {
+                requests.Add(request);
+                return new TextNativeMeasurement<string>(
+                    $"{request.ParagraphIndex}:{request.Paragraph.Runs[0].FontSizePt:F1}",
+                    HeightDip: 120);
+            });
+
+        requests.Should().HaveCount(2);
+        requests.Should().OnlyContain(request => !request.UseIdealMetrics);
+        plan.AutoFit.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        plan.RenderText.Paragraphs[0].Runs[0].FontSizePt.Should().Be(12);
+        plan.Artifacts.Should().ContainKey(0).WhoseValue.Should().Be("0:12.0");
+        plan.Artifacts.Should().NotContainKey(1);
+        plan.Layout.Paragraphs.Should().ContainSingle();
+        plan.Layout.Paragraphs[0].RenderRoute.Should().Be(TextParagraphRenderRoute.Tabs);
+    }
+
+    [Fact]
+    public void PlanMeasuredColumns_OwnsColumnCapacityRemeasurementAndFinalArtifacts()
+    {
+        var requests = new List<TextParagraphMeasurementRequest>();
+        var text = new ResolvedTextLayout
+        {
+            AutoFitKind = TextAutoFitKind.Normal,
+            ColumnCount = 2,
+            ColumnSpacingDip = 10,
+            InsetLeftDip = 0,
+            InsetRightDip = 0,
+            InsetTopDip = 0,
+            InsetBottomDip = 0,
+            Paragraphs = new[]
+            {
+                new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "Baseline", FontSizePt = 20, BaselineOffset = 1000 }
+                    }
+                }
+            }
+        };
+
+        var plan = TextLayoutPlanner.PlanMeasuredColumns(
+            text,
+            new LayoutRect(0, 0, 210, 50),
+            request =>
+            {
+                requests.Add(request);
+                return new TextNativeMeasurement<string>(
+                    request.Paragraph.Runs[0].FontSizePt.ToString("F1", CultureInfo.InvariantCulture),
+                    HeightDip: 160);
+            });
+
+        requests.Should().HaveCount(2);
+        requests.Should().OnlyContain(request =>
+            Math.Abs(request.MaxWidthDip - 100) < 0.001 && !request.UseIdealMetrics);
+        plan.AutoFit.Mode.Should().Be(TextAutoFitOverflowMode.RuntimeShrink);
+        plan.Artifacts[0].Should().Be("12.5");
+        plan.Layout.Paragraphs[0].RenderRoute.Should().Be(TextParagraphRenderRoute.Baseline);
+    }
+
+    [Fact]
+    public void PlanMeasuredContinuousColumnFlow_OwnsSplitMeasureAndPlacementLifecycle()
+    {
+        var phases = new List<TextColumnMeasurementPhase>();
+        var text = new ResolvedTextLayout
+        {
+            ColumnCount = 2,
+            ColumnSpacingDip = 10,
+            Wrap = true,
+            InsetLeftDip = 0,
+            InsetRightDip = 0,
+            InsetTopDip = 0,
+            InsetBottomDip = 0,
+            Paragraphs = new[] { Paragraph("one two three") }
+        };
+
+        var plan = TextLayoutPlanner.PlanMeasuredContinuousColumnFlow(
+            text,
+            new LayoutRect(0, 0, 80, 20),
+            request =>
+            {
+                phases.Add(request.Phase);
+                var value = request.Paragraph.Runs[0].Text;
+                return new TextNativeMeasurement<string>(
+                    $"{request.Phase}:{value}",
+                    HeightDip: 12,
+                    WidthDip: value.Length * 10);
+            },
+            _ => 0.5);
+
+        plan.IsApplicable.Should().BeTrue();
+        plan.Lines.Should().HaveCount(2);
+        plan.Lines.Select(line => line.Paragraph.Runs[0].Text)
+            .Should().Equal("one two", "three");
+        plan.Lines.Select(line => line.Placement.ColumnIndex).Should().Equal(0, 1);
+        plan.Lines.Should().OnlyContain(line =>
+            line.HorizontalScale == 0.5 &&
+            line.Artifact.StartsWith("Render:", StringComparison.Ordinal));
+        phases.Should().Contain(TextColumnMeasurementPhase.WrapProbe);
+        phases.Count(phase => phase == TextColumnMeasurementPhase.LineLayout).Should().Be(2);
+        phases.Count(phase => phase == TextColumnMeasurementPhase.Render).Should().Be(2);
+    }
+
+    [Fact]
+    public void WpfAndAvaloniaSlideCanvases_DelegateMeasuredTextOrchestrationAndKeepNativeDrawing()
     {
         var sources = new[]
         {
@@ -1300,9 +1424,13 @@ public sealed class TextLayoutPlannerTests
 
         foreach (var source in sources)
         {
-            source.Should().Contain("TextLayoutPlanner.SplitColumnText");
-            source.Should().Contain("TextLayoutPlanner.CloneParagraphWithText");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredColumns<FormattedText>");
+            source.Should().Contain("TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>");
+            source.Should().Contain("switch (placement.RenderRoute)");
             source.Should().Contain("TextLayoutPlanner.PlanBaselineLines");
+            source.Should().NotContain("TextLayoutPlanner.SplitColumnText(");
+            source.Should().NotContain("TextLayoutPlanner.CloneParagraphWithText(");
             source.Should().NotContain("private static IReadOnlyList<string> SplitColumnText");
             source.Should().NotContain("private static ResolvedParagraph CloneParagraphWithText");
             source.Should().NotContain("private static List<BaselineLine> BuildBaselineLines");
@@ -1410,14 +1538,14 @@ public sealed class TextLayoutPlannerTests
             "SlideCanvas.cs");
 
         wpf.Should().Contain("TextLayoutPlanner.GetTextArea");
-        wpf.Should().Contain("TextLayoutPlanner.PlanBodyText");
+        wpf.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
         wpf.Should().NotContain("InsetLeftPt");
         wpf.Should().NotContain("InsetTopPt");
         wpf.Should().NotContain("InsetRightPt");
         wpf.Should().NotContain("InsetBottomPt");
 
         avalonia.Should().Contain("TextLayoutPlanner.GetTextArea");
-        avalonia.Should().Contain("TextLayoutPlanner.PlanBodyText");
+        avalonia.Should().Contain("TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>");
         avalonia.Should().NotContain("InsetLeftPt");
         avalonia.Should().NotContain("InsetTopPt");
         avalonia.Should().NotContain("InsetRightPt");

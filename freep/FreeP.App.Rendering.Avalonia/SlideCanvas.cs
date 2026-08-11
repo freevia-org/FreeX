@@ -1360,55 +1360,30 @@ public sealed partial class SlideCanvas : Control
         if (TryRenderContinuousColumnFlow(dc, text, bounds))
             return;
 
-        var initialColumnLayout = TextLayoutPlanner.GetColumnLayout(text, bounds);
-        var initialMeasured = new List<TextParagraphMeasure>();
-
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var para = text.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(
-                para, initialColumnLayout.ColumnWidthDip, text.Wrap, text.AutoFitKind);
-            initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt));
-        }
-
-        var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(
+        var plan = TextLayoutPlanner.PlanMeasuredColumns<FormattedText>(
             text,
-            TextLayoutPlanner.GetAutoFitCapacityHeight(initialColumnLayout),
-            initialMeasured);
-        var renderText = TextLayoutPlanner.ApplyAutoFitPlan(text, autoFitPlan);
-        var columnLayout = TextLayoutPlanner.GetColumnLayout(renderText, bounds, autoFitPlan);
-        var formatted = new Dictionary<int, FormattedText>();
-        var measured = new List<TextParagraphMeasure>();
-
-        for (int i = 0; i < renderText.Paragraphs.Count; i++)
-        {
-            var para = renderText.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(
-                para, columnLayout.ColumnWidthDip, renderText.Wrap, renderText.AutoFitKind);
-            formatted[i] = ft;
-            measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt,
-                columnLayout.LineSpacingScale));
-        }
-
-        var plan = TextLayoutPlanner.PlanColumns(renderText, columnLayout, measured);
-        foreach (var placement in plan.Paragraphs)
+            bounds,
+            request =>
+            {
+                var formattedText = BuildFormattedText(
+                    request.Paragraph,
+                    request.MaxWidthDip,
+                    request.Text.Wrap,
+                    request.Text.AutoFitKind);
+                return new TextNativeMeasurement<FormattedText>(
+                    formattedText,
+                    formattedText.Height,
+                    formattedText.Width);
+            });
+        var renderText = plan.RenderText;
+        foreach (var placement in plan.Layout.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = formatted[placement.ParagraphIndex];
+            var ft = plan.Artifacts[placement.ParagraphIndex];
             if (placement.Bullet is { } bullet)
                 DrawBulletPlacementAvalonia(dc, bullet);
 
-            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
+            switch (placement.RenderRoute)
             {
                 case TextParagraphRenderRoute.Math:
                     RenderParaWithMath(dc, para, placement.X, placement.Y);
@@ -1436,52 +1411,28 @@ public sealed partial class SlideCanvas : Control
         ResolvedTextLayout text,
         LayoutRect bounds)
     {
-        if (text.AutoFitKind != TextAutoFitKind.None ||
-            text.HasStoredFontScale ||
-            text.Paragraphs.Any(para =>
-                para.Runs.Count != 1 ||
-                TextLayoutPlanner.PlanParagraphRenderRoute(para, text) != TextParagraphRenderRoute.Plain))
-        {
-            return false;
-        }
-
-        var layout = TextLayoutPlanner.GetColumnLayout(text, bounds);
-        var fragments = new Dictionary<(int ParagraphIndex, int LineIndex), ResolvedParagraph>();
-        var measures = new List<TextColumnLineMeasure>();
-
-        for (int paragraphIndex = 0; paragraphIndex < text.Paragraphs.Count; paragraphIndex++)
-        {
-            var paragraph = text.Paragraphs[paragraphIndex];
-            var run = paragraph.Runs[0];
-            var lines = TextLayoutPlanner.SplitColumnText(
-                run.Text,
-                layout.ColumnWidthDip,
-                text.Wrap,
-                candidate => BuildFormattedText(
-                    TextLayoutPlanner.CloneParagraphWithText(paragraph, run, candidate),
-                    0,
-                    false).Width);
-            for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+        var plan = TextLayoutPlanner.PlanMeasuredContinuousColumnFlow<FormattedText>(
+            text,
+            bounds,
+            request =>
             {
-                var fragment = TextLayoutPlanner.CloneParagraphWithText(paragraph, run, lines[lineIndex]);
-                var formatted = BuildFormattedText(fragment, layout.ColumnWidthDip, text.Wrap);
-                fragments[(paragraphIndex, lineIndex)] = fragment;
-                measures.Add(new TextColumnLineMeasure(
-                    paragraphIndex,
-                    lineIndex,
-                    formatted.Height,
-                    lineIndex == 0 ? TextLayoutPlanner.PointsToDip(paragraph.SpaceBeforePt) : 0,
-                    lineIndex == lines.Count - 1 ? TextLayoutPlanner.PointsToDip(paragraph.SpaceAfterPt) : 0,
-                    lineIndex == 0,
-                    lineIndex == lines.Count - 1));
-            }
-        }
+                var formattedText = BuildFormattedText(
+                    request.Paragraph,
+                    request.MaxWidthDip,
+                    request.Wrap);
+                return new TextNativeMeasurement<FormattedText>(
+                    formattedText,
+                    formattedText.Height,
+                    formattedText.Width);
+            });
+        if (!plan.IsApplicable)
+            return false;
 
-        foreach (var placement in TextLayoutPlanner.PlanColumnLines(text, layout, measures))
+        foreach (var line in plan.Lines)
         {
-            var fragment = fragments[(placement.ParagraphIndex, placement.LineIndex)];
-            var formatted = BuildFormattedText(fragment, placement.MaxWidthDip, text.Wrap);
-            if (placement.IsFirstLine && fragment.IndentDip > 0 && formatted.MaxTextWidth > 0)
+            var placement = line.Placement;
+            var formatted = line.Artifact;
+            if (placement.IsFirstLine && line.Paragraph.IndentDip > 0 && formatted.MaxTextWidth > 0)
                 formatted.MaxTextWidth = placement.MaxWidthDip;
             dc.DrawText(formatted, new Point(placement.X, placement.Y));
         }
@@ -1498,48 +1449,28 @@ public sealed partial class SlideCanvas : Control
             return;
         }
 
-        var area = TextLayoutPlanner.GetTextArea(text, bounds);
-        var initialMeasured = new List<TextParagraphMeasure>();
-        for (int i = 0; i < text.Paragraphs.Count; i++)
-        {
-            var para = text.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, text.Wrap, text.AutoFitKind);
-            initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt,
-                paragraphLineSpacingScale: TextLayoutPlanner.ResolveParagraphLineSpacingScale(para, ft.Height)));
-        }
-
-        var autoFitPlan = TextLayoutPlanner.PlanNormalAutoFitOverflow(text, area.Height, initialMeasured);
-        var renderText = TextLayoutPlanner.ApplyAutoFitPlan(text, autoFitPlan);
-        area = TextLayoutPlanner.GetTextArea(renderText, bounds);
-
-        var formatted = new Dictionary<int, FormattedText>();
-        var measured = new List<TextParagraphMeasure>();
-        for (int i = 0; i < renderText.Paragraphs.Count; i++)
-        {
-            var para = renderText.Paragraphs[i];
-            if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, renderText.Wrap, renderText.AutoFitKind);
-            formatted[i] = ft;
-            measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
-                i,
-                ft.Height,
-                para.SpaceBeforePt,
-                para.SpaceAfterPt,
-                paragraphLineSpacingScale: TextLayoutPlanner.ResolveParagraphLineSpacingScale(para, ft.Height)));
-        }
-
-        var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
+        var plan = TextLayoutPlanner.PlanMeasuredBodyText<FormattedText>(
+            text,
+            bounds,
+            request =>
+            {
+                var formattedText = BuildFormattedText(
+                    request.Paragraph,
+                    request.MaxWidthDip,
+                    request.Text.Wrap,
+                    request.Text.AutoFitKind);
+                return new TextNativeMeasurement<FormattedText>(
+                    formattedText,
+                    formattedText.Height,
+                    formattedText.Width);
+            });
+        var renderText = plan.RenderText;
         double importedAptosBodyOriginOffsetY =
             TextLayoutPlanner.ResolveImportedAptosBodyOriginOffsetY(renderText);
-        foreach (var placement in plan.Paragraphs)
+        foreach (var placement in plan.Layout.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
-            var ft = formatted[placement.ParagraphIndex];
+            var ft = plan.Artifacts[placement.ParagraphIndex];
             double placementY = placement.Y - importedAptosBodyOriginOffsetY;
 
             if (placement.Bullet is { } bullet)
@@ -1548,7 +1479,7 @@ public sealed partial class SlideCanvas : Control
                 DrawBulletPlacementAvalonia(dc, bullet);
             }
 
-            switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
+            switch (placement.RenderRoute)
             {
                 case TextParagraphRenderRoute.Math:
                     RenderParaWithMath(dc, para, placement.X, placementY);
