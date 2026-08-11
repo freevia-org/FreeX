@@ -7943,27 +7943,28 @@ public sealed partial class MainWindow : Window
 
     private bool TryHandleRibbonKeyTips(KeyEventArgs args)
     {
-        if (args.Key is Key.LeftAlt or Key.RightAlt ||
-            args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None)
+        var input = AvaloniaRibbonKeyTipInputPlanner.Resolve(
+            args.Key,
+            args.KeyModifiers,
+            _ribbonKeyTipsVisible);
+        if (input.Action == AvaloniaRibbonKeyTipInputAction.ToggleMode)
         {
             SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
             args.Handled = true;
             return true;
         }
 
-        if (!_ribbonKeyTipsVisible)
+        if (input.Action == AvaloniaRibbonKeyTipInputAction.Ignore)
             return false;
 
-        if (args.Key == Key.Escape)
+        if (input.Action == AvaloniaRibbonKeyTipInputAction.DismissMode)
         {
             SetRibbonKeyTipsVisible(false);
             args.Handled = true;
             return true;
         }
 
-        var token = AvaloniaKeyTipTokenFormatter.Format(args.Key);
-        if (token is null)
-            return false;
+        var token = input.Token!;
 
         if (_ribbonKeyTipTabId is null)
         {
