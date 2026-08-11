@@ -15,9 +15,11 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().Contain("Surface.Option(");
         source.Should().Contain("new FindReplaceDialogSession(");
         source.Should().Contain("SyncSessionInput()");
-        source.Should().Contain("_session.FindNext()");
-        source.Should().Contain("_session.ReplaceNext()");
-        source.Should().Contain("_session.ReplaceAll()");
+        source.Should().Contain("private FindReplaceDialogInput ReadInput()");
+        source.Should().Contain("_session.Execute(action, ReadInput())");
+        source.Should().NotContain("_session.FindNext()");
+        source.Should().NotContain("_session.ReplaceNext()");
+        source.Should().NotContain("_session.ReplaceAll()");
         source.Should().Contain("ApplyCompactCheckBox(_matchCase");
         source.Should().Contain("ApplyCompactCheckBox(_wholeWord");
         source.Should().Contain("ApplyCompactCheckBox(_useWildcards");

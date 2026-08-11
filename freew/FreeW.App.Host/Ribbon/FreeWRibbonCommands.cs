@@ -79,80 +79,7 @@ internal static class FreeWRibbonCommands
         };
 
     public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore) =>
-        Build(editor, stateStore, onPrintPreview: null);
-
-    /// <summary>Test seam for the WPF-authoritative Header/Footer prompt; production uses TextPrompt.</summary>
-    public static RibbonCommandRegistry Build(
-        DocumentView editor,
-        RibbonStateStore stateStore,
-        Func<bool, string, string?> askHeaderFooterText) =>
-        Build(
-            editor,
-            stateStore,
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            askHeaderFooterText: askHeaderFooterText);
-
-    public static RibbonCommandRegistry Build(DocumentView editor, RibbonStateStore stateStore, Action? onPrintPreview) =>
-        Build(editor, stateStore, onPrintPreview, onToggleNavPane: null, isNavPaneVisible: null);
-
-    public static RibbonCommandRegistry Build(
-        DocumentView editor,
-        RibbonStateStore stateStore,
-        Action? onPrintPreview,
-        Action? onToggleNavPane,
-        Func<bool>? isNavPaneVisible) =>
-        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
-            onToggleReadMode: null, isReadModeActive: null);
-
-    public static RibbonCommandRegistry Build(
-        DocumentView editor,
-        RibbonStateStore stateStore,
-        Action? onPrintPreview,
-        Action? onToggleNavPane,
-        Func<bool>? isNavPaneVisible,
-        Action? onToggleReadMode,
-        Func<bool>? isReadModeActive) =>
-        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
-            onToggleReadMode, isReadModeActive, onTogglePrintLayout: null, isPrintLayoutActive: null);
-
-    public static RibbonCommandRegistry Build(
-        DocumentView editor,
-        RibbonStateStore stateStore,
-        Action? onPrintPreview,
-        Action? onToggleNavPane,
-        Func<bool>? isNavPaneVisible,
-        Action? onToggleReadMode,
-        Func<bool>? isReadModeActive,
-        Action? onTogglePrintLayout,
-        Func<bool>? isPrintLayoutActive) =>
-        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
-            onToggleReadMode, isReadModeActive, onTogglePrintLayout, isPrintLayoutActive,
-            onToggleOutlineView: null, isOutlineViewActive: null);
-
-    public static RibbonCommandRegistry Build(
-        DocumentView editor,
-        RibbonStateStore stateStore,
-        Action? onPrintPreview,
-        Action? onToggleNavPane,
-        Func<bool>? isNavPaneVisible,
-        Action? onToggleReadMode,
-        Func<bool>? isReadModeActive,
-        Action? onTogglePrintLayout,
-        Func<bool>? isPrintLayoutActive,
-        Action? onToggleOutlineView,
-        Func<bool>? isOutlineViewActive) =>
-        Build(editor, stateStore, onPrintPreview, onToggleNavPane, isNavPaneVisible,
-            onToggleReadMode, isReadModeActive, onTogglePrintLayout, isPrintLayoutActive,
-            onToggleOutlineView, isOutlineViewActive, onZoomDialog: null);
+        BuildCore(editor, stateStore, hostPorts: null, FreeWWpfRibbonNativeExecutionPorts.Empty);
 
     public static RibbonCommandRegistry Build(
         DocumentView editor,
@@ -163,135 +90,61 @@ internal static class FreeWRibbonCommands
         ArgumentNullException.ThrowIfNull(hostPorts);
         nativePorts ??= FreeWWpfRibbonNativeExecutionPorts.Empty;
 
-        return Build(
-            editor,
-            stateStore,
-            onPrintPreview: hostPorts.OpenPrintPreview,
-            onToggleNavPane: hostPorts.ToggleNavigationPane,
-            isNavPaneVisible: hostPorts.IsNavigationPaneVisible,
-            onToggleReadMode: hostPorts.ToggleReadMode,
-            isReadModeActive: hostPorts.IsReadModeActive,
-            onTogglePrintLayout: hostPorts.SetPrintLayout,
-            isPrintLayoutActive: hostPorts.IsPrintLayoutActive,
-            onToggleOutlineView: hostPorts.SetOutlineView,
-            isOutlineViewActive: hostPorts.IsOutlineViewActive,
-            onZoomDialog: hostPorts.OpenZoomDialog,
-            onZoom100: () => hostPorts.ApplyZoom(1.0, 0),
-            onZoomOnePage: hostPorts.ZoomOnePage,
-            onZoomPageWidth: hostPorts.ZoomPageWidth,
-            onWebLayout: hostPorts.SetWebLayout,
-            isWebLayoutActive: hostPorts.IsWebLayoutActive,
-            onDraftView: hostPorts.SetDraftView,
-            isDraftViewActive: hostPorts.IsDraftViewActive,
-            onToggleRevealFormatting: hostPorts.ToggleRevealFormatting,
-            isRevealFormattingVisible: hostPorts.IsRevealFormattingVisible,
-            onToggleReviewingPane: hostPorts.ToggleReviewingPane,
-            isReviewingPaneVisible: hostPorts.IsReviewingPaneVisible,
-            onAcceptThisChange: hostPorts.AcceptThisChange,
-            onRejectThisChange: hostPorts.RejectThisChange,
-            onPreviousChange: hostPorts.PreviousChange,
-            onNextChange: hostPorts.NextChange,
-            onFindReplace: hostPorts.OpenFindReplaceDialog,
-            onToggleRuler: hostPorts.ToggleRuler,
-            isRulerVisible: hostPorts.IsRulerVisible,
-            onToggleMultiplePages: hostPorts.ToggleMultiplePages,
-            isMultiplePagesActive: hostPorts.IsMultiplePagesActive,
-            onToggleSideToSide: hostPorts.ToggleSideToSide,
-            isSideToSideActive: hostPorts.IsSideToSideActive,
-            onToggleSplitWindow: hostPorts.ToggleSplit,
-            isSplitWindowActive: hostPorts.IsSplitActive,
-            onHelpOnline: hostPorts.OpenHelpOnline,
-            onFeedback: hostPorts.OpenFeedback,
-            onCopyDiagnostics: hostPorts.CopyDiagnostics,
-            onCheckForUpdates: hostPorts.CheckForUpdates,
-            onAbout: hostPorts.OpenAbout,
-            onLegalNotices: hostPorts.OpenLegalNotices,
-            onToggleNotesPane: hostPorts.ToggleNotesPane,
-            isNotesPaneVisible: hostPorts.IsNotesPaneVisible,
-            onOpenHeaderFooterPane: hostPorts.OpenHeaderFooterPane,
-            onCloseHeaderFooterPane: hostPorts.CloseHeaderFooterPane,
-            onTogglePagedEditView: hostPorts.TogglePagedEditView,
-            isPagedEditViewActive: hostPorts.IsPagedEditViewActive,
-            onReadModeColumnWidth: hostPorts.ApplyReadModeColumnWidth,
-            onReadModePageColor: hostPorts.ApplyReadModePageColor,
-            onNewWindow: hostPorts.NewWindow,
-            onArrangeAll: hostPorts.ArrangeAll,
-            onToggleThesaurus: hostPorts.OpenThesaurus,
-            onToggleBalloons: hostPorts.ToggleReviewBalloons,
-            askHeaderFooterText: nativePorts.AskHeaderFooterText,
-            onOpenMailMergeErrorReport: hostPorts.OpenMailMergeErrorReport,
-            onPrintMailMergeDocument: hostPorts.PrintMailMergeDocument,
-            resolveFieldEditor: nativePorts.ResolveFieldEditor,
-            askFieldInstruction: nativePorts.AskFieldInstruction,
-            hostPorts: hostPorts);
+        return BuildCore(editor, stateStore, hostPorts, nativePorts);
     }
 
-    /// <summary>Compatibility seam for focused WPF command tests; production hosts use the ports overload.</summary>
-    public static RibbonCommandRegistry Build(
+    private static RibbonCommandRegistry BuildCore(
         DocumentView editor,
         RibbonStateStore stateStore,
-        Action? onPrintPreview = null,
-        Action? onToggleNavPane = null,
-        Func<bool>? isNavPaneVisible = null,
-        Action? onToggleReadMode = null,
-        Func<bool>? isReadModeActive = null,
-        Action? onTogglePrintLayout = null,
-        Func<bool>? isPrintLayoutActive = null,
-        Action? onToggleOutlineView = null,
-        Func<bool>? isOutlineViewActive = null,
-        Action? onZoomDialog = null,
-        Action? onZoom100 = null,
-        Action? onZoomOnePage = null,
-        Action? onZoomPageWidth = null,
-        Action? onWebLayout = null,
-        Func<bool>? isWebLayoutActive = null,
-        Action? onDraftView = null,
-        Func<bool>? isDraftViewActive = null,
-        Action? onToggleRevealFormatting = null,
-        Func<bool>? isRevealFormattingVisible = null,
-        Action? onToggleReviewingPane = null,
-        Func<bool>? isReviewingPaneVisible = null,
-        Action? onAcceptThisChange = null,
-        Action? onRejectThisChange = null,
-        Action? onPreviousChange = null,
-        Action? onNextChange = null,
-        Action? onFindReplace = null,
-        Action? onToggleRuler = null,
-        Func<bool>? isRulerVisible = null,
-        Action? onToggleMultiplePages = null,
-        Func<bool>? isMultiplePagesActive = null,
-        Action? onToggleSideToSide = null,
-        Func<bool>? isSideToSideActive = null,
-        Action? onToggleSplitWindow = null,
-        Func<bool>? isSplitWindowActive = null,
-        Action? onHelpOnline = null,
-        Action? onFeedback = null,
-        Action? onCopyDiagnostics = null,
-        Action? onCheckForUpdates = null,
-        Action? onAbout = null,
-        Action? onLegalNotices = null,
-        Action? onToggleNotesPane = null,
-        Func<bool>? isNotesPaneVisible = null,
-        Action<string>? onOpenHeaderFooterPane = null,
-        Action? onCloseHeaderFooterPane = null,
-        Action? onTogglePagedEditView = null,
-        Func<bool>? isPagedEditViewActive = null,
-        // Feature 4 — Read Mode options (column width / page color).
-        Action<string>? onReadModeColumnWidth = null,
-        Action<string>? onReadModePageColor = null,
-        // Feature 5 — New Window / Arrange All.
-        Action? onNewWindow = null,
-        Action? onArrangeAll = null,
-        // W25 — Local Thesaurus pane + Balloons review mode.
-        Action? onToggleThesaurus = null,
-        Action? onToggleBalloons = null,
-        Func<bool, string, string?>? askHeaderFooterText = null,
-        Action<TextDocument>? onOpenMailMergeErrorReport = null,
-        Action<TextDocument>? onPrintMailMergeDocument = null,
-        Func<DocumentView>? resolveFieldEditor = null,
-        Func<Window?, string?>? askFieldInstruction = null,
-        FreeWRibbonHostExecutionPorts? hostPorts = null)
+        FreeWRibbonHostExecutionPorts? hostPorts,
+        FreeWWpfRibbonNativeExecutionPorts nativePorts)
     {
+        var onPrintPreview = hostPorts?.OpenPrintPreview;
+        var onToggleNavPane = hostPorts?.ToggleNavigationPane;
+        var isNavPaneVisible = hostPorts?.IsNavigationPaneVisible;
+        var onToggleReadMode = hostPorts?.ToggleReadMode;
+        var isReadModeActive = hostPorts?.IsReadModeActive;
+        var onTogglePrintLayout = hostPorts?.SetPrintLayout;
+        var isPrintLayoutActive = hostPorts?.IsPrintLayoutActive;
+        var onToggleOutlineView = hostPorts?.SetOutlineView;
+        var isOutlineViewActive = hostPorts?.IsOutlineViewActive;
+        var onZoomDialog = hostPorts?.OpenZoomDialog;
+        Action? onZoom100 = hostPorts is null ? null : () => hostPorts.ApplyZoom(1.0, 0);
+        var onZoomOnePage = hostPorts?.ZoomOnePage;
+        var onZoomPageWidth = hostPorts?.ZoomPageWidth;
+        var onWebLayout = hostPorts?.SetWebLayout;
+        var isWebLayoutActive = hostPorts?.IsWebLayoutActive;
+        var onDraftView = hostPorts?.SetDraftView;
+        var isDraftViewActive = hostPorts?.IsDraftViewActive;
+        var onToggleRevealFormatting = hostPorts?.ToggleRevealFormatting;
+        var isRevealFormattingVisible = hostPorts?.IsRevealFormattingVisible;
+        var onToggleReviewingPane = hostPorts?.ToggleReviewingPane;
+        var isReviewingPaneVisible = hostPorts?.IsReviewingPaneVisible;
+        var onToggleRuler = hostPorts?.ToggleRuler;
+        var isRulerVisible = hostPorts?.IsRulerVisible;
+        var onToggleMultiplePages = hostPorts?.ToggleMultiplePages;
+        var isMultiplePagesActive = hostPorts?.IsMultiplePagesActive;
+        var onToggleSideToSide = hostPorts?.ToggleSideToSide;
+        var isSideToSideActive = hostPorts?.IsSideToSideActive;
+        var onToggleSplitWindow = hostPorts?.ToggleSplit;
+        var isSplitWindowActive = hostPorts?.IsSplitActive;
+        var onToggleNotesPane = hostPorts?.ToggleNotesPane;
+        var isNotesPaneVisible = hostPorts?.IsNotesPaneVisible;
+        var onOpenHeaderFooterPane = hostPorts?.OpenHeaderFooterPane;
+        var onCloseHeaderFooterPane = hostPorts?.CloseHeaderFooterPane;
+        var onTogglePagedEditView = hostPorts?.TogglePagedEditView;
+        var isPagedEditViewActive = hostPorts?.IsPagedEditViewActive;
+        var onReadModeColumnWidth = hostPorts?.ApplyReadModeColumnWidth;
+        var onReadModePageColor = hostPorts?.ApplyReadModePageColor;
+        var onNewWindow = hostPorts?.NewWindow;
+        var onArrangeAll = hostPorts?.ArrangeAll;
+        var onToggleBalloons = hostPorts?.ToggleReviewBalloons;
+        var askHeaderFooterText = nativePorts.AskHeaderFooterText;
+        var onOpenMailMergeErrorReport = hostPorts?.OpenMailMergeErrorReport;
+        var onPrintMailMergeDocument = hostPorts?.PrintMailMergeDocument;
+        var resolveFieldEditor = nativePorts.ResolveFieldEditor;
+        var askFieldInstruction = nativePorts.AskFieldInstruction;
+
         var registry = new FreeWRibbonCommandBindingPorts();
         if (hostPorts is not null)
         {
@@ -384,11 +237,6 @@ internal static class FreeWRibbonCommands
         Routed(FreeWRibbonCommandAction.Bullets, EditingCommands.ToggleBullets);
         Routed(FreeWRibbonCommandAction.Numbering, EditingCommands.ToggleNumbering);
         Routed(FreeWRibbonCommandAction.Select, ApplicationCommands.SelectAll);
-        if (hostPorts is null && onFindReplace is not null)
-        {
-            registry.Bind(FreeWRibbonCommandAction.Find, new ActionRibbonCommand(onFindReplace));
-            registry.Bind(FreeWRibbonCommandAction.Replace, new ActionRibbonCommand(onFindReplace));
-        }
         // Home > Paragraph: apply multilevel/legal outline numbering (1, 1.1, 1.1.1) to the selected
         // paragraph(s); the outline definition persists to word/numbering.xml. Tab/Shift+Tab demote
         // and promote the outline depth (ListLevel) of the selected list paragraphs.
@@ -931,18 +779,15 @@ internal static class FreeWRibbonCommands
 
         // Review tab — Proofing > Thesaurus (Shift+F7): opens the Thesaurus docked pane and looks up
         // synonyms for the selected/caret word in the bundled compact synonym dictionary (~3 000 headwords,
-        // Moby II derivative, public domain). The action callback supplied by the host toggles the pane
-        // and triggers a lookup; a no-op is registered when no host callback is wired (e.g. unit tests).
+        // Moby II derivative, public domain). Typed hosts register the pane action through the shared profile;
+        // the minimal editor-only registry retains its explicit unavailable fallback.
         if (hostPorts is null)
         {
-            if (onToggleThesaurus is not null)
-                registry.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(onToggleThesaurus));
-            else
-                registry.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(() =>
-                {
-                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                        "Thesaurus: no synonyms pane is wired. Host must supply onToggleThesaurus.", "Thesaurus");
-                }));
+            registry.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(() =>
+            {
+                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
+                    "Thesaurus: no synonyms pane is wired.", "Thesaurus");
+            }));
         }
 
         // Review tab — Show Markup > Show Revisions in Balloons: toggle the right-margin balloon overlay.
@@ -1042,14 +887,6 @@ internal static class FreeWRibbonCommands
                 FreeWRibbonCommandWorkflow.GetPrimaryCommandId(FreeWRibbonCommandAction.ReviewingPane),
                 reviewingPane));
         }
-        if (hostPorts is null && onAcceptThisChange is not null)
-            registry.Bind(FreeWRibbonCommandAction.AcceptThis, new ActionRibbonCommand(onAcceptThisChange));
-        if (hostPorts is null && onRejectThisChange is not null)
-            registry.Bind(FreeWRibbonCommandAction.RejectThis, new ActionRibbonCommand(onRejectThisChange));
-        if (hostPorts is null && onPreviousChange is not null)
-            registry.Bind(FreeWRibbonCommandAction.PreviousChange, new ActionRibbonCommand(onPreviousChange));
-        if (hostPorts is null && onNextChange is not null)
-            registry.Bind(FreeWRibbonCommandAction.NextChange, new ActionRibbonCommand(onNextChange));
 
         // Review tab — Protect: Mark as Final. A stateful toggle over Word's advisory read-only flag:
         // turning it on makes the editor read-only, shows the "Marked as Final" banner and persists the
@@ -1469,19 +1306,9 @@ internal static class FreeWRibbonCommands
             stateful.Add(("freew.gridlines", viewGridlines));
 
         if (hostPorts is null)
-        {
             FreeWRibbonHostExecutionProfile.RegisterSupportCommands(
                 registry,
-                FreeWRibbonHostExecutionPorts.Empty with
-                {
-                    OpenHelpOnline = onHelpOnline,
-                    OpenFeedback = onFeedback,
-                    CopyDiagnostics = onCopyDiagnostics,
-                    CheckForUpdates = onCheckForUpdates,
-                    OpenAbout = onAbout,
-                    OpenLegalNotices = onLegalNotices,
-                });
-        }
+                FreeWRibbonHostExecutionPorts.Empty);
 
         // Mailings tab — a simple mail merge. Field placeholders are the literal text «FieldName»
         // (ordinary run text, so they round-trip through docx as plain text). The four commands share a
@@ -5825,7 +5652,7 @@ internal static class FreeWRibbonCommands
         if (!execution.Success)
         {
             (showInfo ?? ((owner, message) =>
-                DialogMessageHelper.ShowInfo(owner, message, "Mail Merge")))(
+                DialogMessageHelper.ShowInfo(owner, message, MailMergeDialogMetadata.MailMergeTitle)))(
                 Window.GetWindow(editor),
                 execution.Message);
         }
@@ -5860,7 +5687,11 @@ internal static class FreeWRibbonCommands
         {
             var editor = resolveEditor();
             editor.Focus();
-            var name = TextPrompt.Ask(Window.GetWindow(editor), "Insert Merge Field", "Field name:", string.Empty);
+            var name = TextPrompt.Ask(
+                Window.GetWindow(editor),
+                MailMergeDialogMetadata.InsertMergeFieldTitle,
+                MailMergeDialogMetadata.FieldNameLabel,
+                string.Empty);
             if (string.IsNullOrWhiteSpace(name))
                 return; // cancelled or blank — nothing to insert
 
@@ -5889,7 +5720,7 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     validation.Message,
-                    "Mail Merge");
+                    MailMergeDialogMetadata.MailMergeTitle);
                 return;
             }
 
@@ -5915,7 +5746,7 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     validation.Message,
-                    "Mail Merge");
+                    MailMergeDialogMetadata.MailMergeTitle);
                 return;
             }
 
@@ -5939,7 +5770,7 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     validation.Message,
-                    "Mail Merge");
+                    MailMergeDialogMetadata.MailMergeTitle);
                 return;
             }
 
@@ -6374,7 +6205,7 @@ internal static class FreeWRibbonCommands
             DialogMessageHelper.ShowInfo(
                 Window.GetWindow(editor),
                 transition.Message,
-                "Mail Merge");
+                MailMergeDialogMetadata.MailMergeTitle);
             editor.Focus();
         }
     }
@@ -6438,9 +6269,16 @@ internal static class FreeWRibbonCommands
         Action<Window?, string>? showInfo = null) : IRibbonCommand
     {
         private readonly Func<Window?, string?> _ask = ask ??
-            (owner => TextPrompt.Ask(owner, "Find Recipient", "Find:", string.Empty));
+            (owner => TextPrompt.Ask(
+                owner,
+                MailMergeDialogMetadata.FindRecipientTitle,
+                MailMergeDialogMetadata.FindLabel,
+                string.Empty));
         private readonly Action<Window?, string> _showInfo = showInfo ??
-            ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+            ((owner, message) => DialogMessageHelper.ShowInfo(
+                owner,
+                message,
+                MailMergeDialogMetadata.MailMergeTitle));
 
         public void Execute(RibbonCommandContext context)
         {
@@ -6475,7 +6313,10 @@ internal static class FreeWRibbonCommands
     {
         private readonly Func<Window?, MailMergeCheckForErrorsMode?> _ask = ask ?? MailMergeCheckForErrorsDialog.Ask;
         private readonly Action<Window?, string> _showInfo = showInfo ??
-            ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+            ((owner, message) => DialogMessageHelper.ShowInfo(
+                owner,
+                message,
+                MailMergeDialogMetadata.MailMergeTitle));
         private readonly Action<RibbonCommandContext> _completeMerge = completeMerge ??
             (context => new FinishMergeCommand(
                 editor,
@@ -6537,7 +6378,7 @@ internal static class FreeWRibbonCommands
             MailMergeCheckForErrorsMode? result = null;
             var dialog = new Window
             {
-                Title = "Check for Errors",
+                Title = MailMergeDialogMetadata.CheckForErrorsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -6547,14 +6388,14 @@ internal static class FreeWRibbonCommands
 
             var ok = new System.Windows.Controls.Button
             {
-                Content = "OK",
+                Content = MailMergeDialogMetadata.OkLabel,
                 IsDefault = true,
                 MinWidth = 72,
                 Margin = new Thickness(0, 0, 8, 0)
             };
             var cancel = new System.Windows.Controls.Button
             {
-                Content = "Cancel",
+                Content = MailMergeDialogMetadata.CancelLabel,
                 IsCancel = true,
                 MinWidth = 72
             };
@@ -6575,7 +6416,7 @@ internal static class FreeWRibbonCommands
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = "How should errors be checked?",
+                Text = MailMergeDialogMetadata.CheckForErrorsLabel,
                 Margin = new Thickness(0, 0, 0, 4)
             });
             panel.Children.Add(combo);
@@ -6603,7 +6444,10 @@ internal static class FreeWRibbonCommands
     {
         private readonly Func<Window?, int, int, MailMergeFinishPlan?> _ask = ask ?? MailMergeFinishDialog.Ask;
         private readonly Action<Window?, string> _showInfo = showInfo ??
-            ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+            ((owner, message) => DialogMessageHelper.ShowInfo(
+                owner,
+                message,
+                MailMergeDialogMetadata.MailMergeTitle));
         private readonly Func<Window?, string, string, string, string?> _askInteractivePrompt =
             askInteractivePrompt ?? MergeRulePromptDialog.AskPrompt;
 
@@ -6700,7 +6544,7 @@ internal static class FreeWRibbonCommands
             MailMergeFinishPlan? result = null;
             var dialog = new Window
             {
-                Title = "Merge",
+                Title = MailMergeDialogMetadata.FinishAndMergeTitle,
                 Owner = owner,
                 Width = 440,
                 Height = 320,
@@ -6758,27 +6602,27 @@ internal static class FreeWRibbonCommands
             };
             range.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = "From",
+                Text = MailMergeDialogMetadata.FromLabel,
                 VerticalAlignment = VerticalAlignment.Center
             });
             range.Children.Add(from);
             range.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = "To",
+                Text = MailMergeDialogMetadata.ToLabel,
                 VerticalAlignment = VerticalAlignment.Center
             });
             range.Children.Add(to);
 
             var ok = new System.Windows.Controls.Button
             {
-                Content = "OK",
+                Content = MailMergeDialogMetadata.OkLabel,
                 IsDefault = true,
                 MinWidth = 72,
                 Margin = new Thickness(0, 0, 8, 0)
             };
             var cancel = new System.Windows.Controls.Button
             {
-                Content = "Cancel",
+                Content = MailMergeDialogMetadata.CancelLabel,
                 IsCancel = true,
                 MinWidth = 72
             };
@@ -6828,9 +6672,9 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Merge to" });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.MergeToLabel });
             panel.Children.Add(destination);
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Records to merge" });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.RecordsToMergeLabel });
             panel.Children.Add(scope);
             panel.Children.Add(range);
             panel.Children.Add(buttons);
@@ -6857,7 +6701,7 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     validation.Message,
-                    "Mail Merge");
+                    MailMergeDialogMetadata.MailMergeTitle);
                 return;
             }
 
@@ -6877,14 +6721,14 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     owner,
                     launch.Message,
-                    "Mail Merge");
+                    MailMergeDialogMetadata.MailMergeTitle);
                 return;
             }
 
             DialogMessageHelper.ShowInfo(
                 owner,
                 launch.Message,
-                "Mail Merge");
+                MailMergeDialogMetadata.MailMergeTitle);
             editor.Focus();
         }
     }
@@ -6901,7 +6745,7 @@ internal static class FreeWRibbonCommands
             MailMergeEmailDeliveryIntent? result = null;
             var dialog = new Window
             {
-                Title = "Send E-mail Messages",
+                Title = MailMergeDialogMetadata.SendEmailTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -6930,12 +6774,17 @@ internal static class FreeWRibbonCommands
 
             var ok = new System.Windows.Controls.Button
             {
-                Content = "OK",
+                Content = MailMergeDialogMetadata.OkLabel,
                 IsDefault = true,
                 MinWidth = 72,
                 Margin = new Thickness(0, 0, 8, 0)
             };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var cancel = new System.Windows.Controls.Button
+            {
+                Content = MailMergeDialogMetadata.CancelLabel,
+                IsCancel = true,
+                MinWidth = 72
+            };
 
             MailMergeEmailDeliveryIntent CurrentIntent() =>
                 MailMergeEmailDeliveryPlanner.CreateIntent(
@@ -6952,7 +6801,7 @@ internal static class FreeWRibbonCommands
                 var plan = MailMerge.CreateEmailDeliveryPlan(data, CurrentIntent());
                 var messages = MailMergeEmailDeliveryPlanner.GetValidationMessages(plan);
                 validation.Text = messages.Count == 0
-                    ? "Ready to prepare an e-mail merge plan. No messages will be sent."
+                    ? MailMergeDialogMetadata.ReadyEmailMessage
                     : string.Join(Environment.NewLine, messages);
                 ok.IsEnabled = plan.Errors.Count == 0;
             }
@@ -6975,12 +6824,12 @@ internal static class FreeWRibbonCommands
             for (var i = 0; i < 7; i++)
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            AddRow(grid, 0, "To field:", toCombo);
-            AddRow(grid, 1, "Subject:", subjectBox);
-            AddRow(grid, 2, "Output:", outputCombo);
-            AddRow(grid, 3, "Body format:", bodyCombo);
-            AddRow(grid, 4, "Send records:", scopeCombo);
-            AddRow(grid, 5, "Validation:", validation);
+            AddRow(grid, 0, MailMergeDialogMetadata.ToFieldLabel, toCombo);
+            AddRow(grid, 1, MailMergeDialogMetadata.SubjectLabel, subjectBox);
+            AddRow(grid, 2, MailMergeDialogMetadata.OutputLabel, outputCombo);
+            AddRow(grid, 3, MailMergeDialogMetadata.BodyFormatLabel, bodyCombo);
+            AddRow(grid, 4, MailMergeDialogMetadata.SendRecordsLabel, scopeCombo);
+            AddRow(grid, 5, MailMergeDialogMetadata.ValidationLabel, validation);
 
             var buttons = new System.Windows.Controls.StackPanel
             {
@@ -7043,7 +6892,7 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     validation.Message,
-                    "Mail Merge");
+                    MailMergeDialogMetadata.MailMergeTitle);
                 return;
             }
 
@@ -7058,7 +6907,7 @@ internal static class FreeWRibbonCommands
             DialogMessageHelper.ShowInfo(
                 Window.GetWindow(editor),
                 transition.Message,
-                "Mail Merge");
+                MailMergeDialogMetadata.MailMergeTitle);
             editor.Focus();
         }
     }
@@ -7211,9 +7060,7 @@ internal static class FreeWRibbonCommands
     {
         public static string? Ask(Window? owner, IReadOnlyList<string> fields, string seed)
         {
-            var hint = fields.Count > 0
-                ? "Fields in this document: " + string.Join(", ", fields)
-                : "Tip: the first line is the header row of field names.";
+            var hint = MailMergeDialogMetadata.FormatFieldsHint(fields);
 
             var box = new System.Windows.Controls.TextBox
             {
@@ -7232,7 +7079,7 @@ internal static class FreeWRibbonCommands
             string? result = null;
             var dialog = new Window
             {
-                Title = "Mail Merge Data",
+                Title = MailMergeDialogMetadata.MergeDataTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -7240,8 +7087,8 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.OkLabel, IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
 
             var buttons = new System.Windows.Controls.StackPanel
@@ -7253,7 +7100,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Paste or type CSV (first line = field names):", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.MergeDataPrompt, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(box);
             panel.Children.Add(new System.Windows.Controls.TextBlock { Text = hint, Margin = new Thickness(0, 0, 0, 12), Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap });
             panel.Children.Add(buttons);
@@ -7311,8 +7158,8 @@ internal static class FreeWRibbonCommands
                 grid.Children.Add(combo);
             }
 
-            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok     = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.OkLabel,     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true, MinWidth = 72 };
 
             var buttonRow = new System.Windows.Controls.StackPanel
             {
@@ -7328,7 +7175,7 @@ internal static class FreeWRibbonCommands
 
             var dialog = new Window
             {
-                Title = "Match Fields",
+                Title = MailMergeDialogMetadata.MatchFieldsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -7367,7 +7214,7 @@ internal static class FreeWRibbonCommands
 
             var dialog = new Window
             {
-                Title = "Filter and Sort Recipients",
+                Title = MailMergeDialogMetadata.FilterSortRecipientsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -7383,15 +7230,15 @@ internal static class FreeWRibbonCommands
             if (data.Header.Count > 0)
                 sortColCombo.SelectedIndex = 0;
 
-            var ascRadio  = new System.Windows.Controls.RadioButton { Content = "Ascending",  IsChecked = true, Margin = new Thickness(0, 0, 8, 0) };
-            var descRadio = new System.Windows.Controls.RadioButton { Content = "Descending", Margin = new Thickness(0, 0, 0, 0) };
+            var ascRadio  = new System.Windows.Controls.RadioButton { Content = MailMergeDialogMetadata.AscendingLabel,  IsChecked = true, Margin = new Thickness(0, 0, 8, 0) };
+            var descRadio = new System.Windows.Controls.RadioButton { Content = MailMergeDialogMetadata.DescendingLabel, Margin = new Thickness(0, 0, 0, 0) };
 
             var sortPanel = new System.Windows.Controls.StackPanel
             {
                 Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Margin = new Thickness(0, 0, 0, 8)
             };
-            sortPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Sort by:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+            sortPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.SortByLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
             sortPanel.Children.Add(sortColCombo);
             sortPanel.Children.Add(ascRadio);
             sortPanel.Children.Add(descRadio);
@@ -7435,8 +7282,8 @@ internal static class FreeWRibbonCommands
             };
 
             // --- OK / Cancel ---
-            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
+            var ok     = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.OkLabel,     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true,  MinWidth = 72 };
 
             ok.Click += (_, _) =>
             {
@@ -7461,7 +7308,7 @@ internal static class FreeWRibbonCommands
             btnPanel.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Check recipients to include, then choose a sort order:", Margin = new Thickness(0, 0, 0, 8) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.FilterInstruction, Margin = new Thickness(0, 0, 0, 8) });
             panel.Children.Add(sortPanel);
             panel.Children.Add(scroll);
             panel.Children.Add(btnPanel);
@@ -7480,15 +7327,15 @@ internal static class FreeWRibbonCommands
         {
             EnvelopeSetupResult? result = null;
 
-            var sizes = MailingsEnvelopeLabelPlanner.GetEnvelopeSizes();
+            var plan = MailingsEnvelopeLabelPlanner.CreateEnvelopeDialogPlan();
             var combo = new System.Windows.Controls.ComboBox { MinWidth = 260, Margin = new Thickness(0, 0, 0, 12) };
-            foreach (var s in sizes)
+            foreach (var s in plan.Sizes)
                 combo.Items.Add(s.Name);
-            combo.SelectedIndex = MailingsEnvelopeLabelPlanner.DefaultEnvelopeIndex;
+            combo.SelectedIndex = plan.SelectedIndex;
 
             var dialog = new Window
             {
-                Title = "Envelopes",
+                Title = MailMergeDialogMetadata.EnvelopesTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -7496,8 +7343,8 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.OkLabel, IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
                 result = MailingsEnvelopeLabelPlanner.PlanEnvelope(combo.SelectedIndex);
@@ -7514,7 +7361,7 @@ internal static class FreeWRibbonCommands
 
             var note = new System.Windows.Controls.TextBlock
             {
-                Text = "Page orientation is set to Landscape. Narrow margins are applied automatically.",
+                Text = plan.Note,
                 Foreground = Brushes.Gray,
                 TextWrapping = TextWrapping.Wrap,
                 MaxWidth = 300,
@@ -7522,7 +7369,7 @@ internal static class FreeWRibbonCommands
             };
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 320 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Envelope size:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.EnvelopeSizeLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(combo);
             panel.Children.Add(note);
             panel.Children.Add(btnPanel);
@@ -7541,34 +7388,37 @@ internal static class FreeWRibbonCommands
         {
             LabelSetupResult? result = null;
 
-            var presets = MailingsEnvelopeLabelPlanner.GetLabelPresets();
+            var plan = MailingsEnvelopeLabelPlanner.CreateLabelDialogPlan();
             var combo = new System.Windows.Controls.ComboBox { MinWidth = 280, Margin = new Thickness(0, 0, 0, 8) };
-            foreach (var p in presets)
+            foreach (var p in plan.Presets)
                 combo.Items.Add(p.Name);
-            combo.SelectedIndex = MailingsEnvelopeLabelPlanner.DefaultLabelIndex;
+            combo.SelectedIndex = plan.SelectedIndex;
 
             // Custom rows/columns spinners (shown only when "Custom" is selected).
-            var rowsBox = new System.Windows.Controls.TextBox { Text = "10", MinWidth = 50, Margin = new Thickness(4, 0, 12, 0) };
-            var colsBox = new System.Windows.Controls.TextBox { Text = "3",  MinWidth = 50 };
+            var rowsBox = new System.Windows.Controls.TextBox { Text = plan.CustomRowsText, MinWidth = 50, Margin = new Thickness(4, 0, 12, 0) };
+            var colsBox = new System.Windows.Controls.TextBox { Text = plan.CustomColumnsText, MinWidth = 50 };
             var customPanel = new System.Windows.Controls.StackPanel
             {
                 Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Margin = new Thickness(0, 0, 0, 8),
-                Visibility = Visibility.Collapsed
+                Visibility = plan.ShowCustomGrid ? Visibility.Visible : Visibility.Collapsed
             };
-            customPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Rows:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+            customPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.RowsLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
             customPanel.Children.Add(rowsBox);
-            customPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Columns:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
+            customPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.ColumnsLabel, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) });
             customPanel.Children.Add(colsBox);
 
             combo.SelectionChanged += (_, _) =>
-                customPanel.Visibility = combo.SelectedIndex == MailingsEnvelopeLabelPlanner.CustomLabelPresetIndex
+                customPanel.Visibility = MailingsEnvelopeLabelPlanner.CreateLabelDialogPlan(
+                        combo.SelectedIndex,
+                        rowsBox.Text,
+                        colsBox.Text).ShowCustomGrid
                     ? Visibility.Visible
                     : Visibility.Collapsed;
 
             var dialog = new Window
             {
-                Title = "Labels",
+                Title = MailMergeDialogMetadata.LabelsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -7576,14 +7426,14 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok     = new System.Windows.Controls.Button { Content = "OK",     IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true,  MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.OkLabel, IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                var plan = MailingsEnvelopeLabelPlanner.PlanLabel(combo.SelectedIndex, rowsBox.Text, colsBox.Text);
-                if (plan.Result is not { } label)
+                var labelPlan = MailingsEnvelopeLabelPlanner.PlanLabel(combo.SelectedIndex, rowsBox.Text, colsBox.Text);
+                if (labelPlan.Result is not { } label)
                 {
-                    DialogMessageHelper.ShowError(dialog, "Enter valid positive integers for rows and columns.");
+                    DialogMessageHelper.ShowError(dialog, MailMergeDialogMetadata.InvalidLabelGridMessage);
                     return;
                 }
 
@@ -7600,7 +7450,7 @@ internal static class FreeWRibbonCommands
             btnPanel.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 340 };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Label product:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = MailMergeDialogMetadata.LabelProductLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(combo);
             panel.Children.Add(customPanel);
             panel.Children.Add(btnPanel);

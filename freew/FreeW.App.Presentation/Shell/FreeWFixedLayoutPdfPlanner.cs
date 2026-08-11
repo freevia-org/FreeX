@@ -1,10 +1,10 @@
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Pdf;
-using FreeW.App.Presentation.Shell;
 
-namespace FreeW.App.Avalonia.Pdf;
+namespace FreeW.App.Presentation.Shell;
 
-internal static class PrintPdfContentPlanner
+/// <summary>Applies renderer-neutral print range and orientation policy to fixed-layout PDF content.</summary>
+public static class FreeWFixedLayoutPdfPlanner
 {
     public static PdfContentDocument Apply(PdfContentDocument document, PrintSelection selection)
     {

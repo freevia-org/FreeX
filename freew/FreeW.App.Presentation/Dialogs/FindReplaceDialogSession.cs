@@ -23,6 +23,13 @@ public sealed record FindReplaceDialogState(
     bool WholeWordEnabled,
     string StatusText);
 
+public readonly record struct FindReplaceDialogInput(
+    string? Query,
+    string? Replacement,
+    bool MatchCase,
+    bool WholeWord,
+    bool UseWildcards);
+
 public sealed record FindReplaceTextInsertionPlan(
     string Text,
     int CaretIndex);
@@ -74,6 +81,28 @@ public sealed class FindReplaceDialogSession
             wholeWord,
             useWildcards));
         return BuildState();
+    }
+
+    public FindReplaceDialogState SetInput(FindReplaceDialogInput input) =>
+        SetInput(
+            input.Query,
+            input.Replacement,
+            input.MatchCase,
+            input.WholeWord,
+            input.UseWildcards);
+
+    public FindReplaceDialogState Execute(
+        FindReplaceDialogActionKind action,
+        FindReplaceDialogInput input)
+    {
+        SetInput(input);
+        return action switch
+        {
+            FindReplaceDialogActionKind.FindNext => FindNext(),
+            FindReplaceDialogActionKind.Replace => ReplaceNext(),
+            FindReplaceDialogActionKind.ReplaceAll => ReplaceAll(),
+            _ => throw new ArgumentOutOfRangeException(nameof(action), action, null),
+        };
     }
 
     public FindReplaceDialogState FindNext()

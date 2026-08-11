@@ -92,9 +92,9 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(specialButton);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, Surface.Metrics.ActionTopMargin, 0, 0) };
-        buttons.Children.Add(MakeButton(Surface.Actions[0], (_, _) => FindNext()));
-        buttons.Children.Add(MakeButton(Surface.Actions[1], (_, _) => Replace()));
-        buttons.Children.Add(MakeButton(Surface.Actions[2], (_, _) => ReplaceAll()));
+        buttons.Children.Add(MakeButton(Surface.Actions[0], (_, _) => Execute(Surface.Actions[0].Kind)));
+        buttons.Children.Add(MakeButton(Surface.Actions[1], (_, _) => Execute(Surface.Actions[1].Kind)));
+        buttons.Children.Add(MakeButton(Surface.Actions[2], (_, _) => Execute(Surface.Actions[2].Kind)));
         buttons.Children.Add(MakeButton(Surface.Actions[3], (_, _) => Close()));
         Grid.SetRow(buttons, 6);
         Grid.SetColumn(buttons, 1);
@@ -250,26 +250,14 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private static Button MakeButton(FindReplaceDialogActionSpec action, RoutedEventHandler onClick) =>
         MakeButton(action.Label, onClick, action.AutomationId);
 
-    private void FindNext()
-    {
-        SyncSessionInput();
-        _status.Text = _session.FindNext().StatusText;
-    }
-
-    private void Replace()
-    {
-        SyncSessionInput();
-        _status.Text = _session.ReplaceNext().StatusText;
-    }
-
-    private void ReplaceAll()
-    {
-        SyncSessionInput();
-        _status.Text = _session.ReplaceAll().StatusText;
-    }
+    private void Execute(FindReplaceDialogActionKind action) =>
+        _status.Text = _session.Execute(action, ReadInput()).StatusText;
 
     private FindReplaceDialogState SyncSessionInput() =>
-        _session.SetInput(
+        _session.SetInput(ReadInput());
+
+    private FindReplaceDialogInput ReadInput() =>
+        new(
             _findBox.Text,
             _replaceBox.Text,
             _matchCase.IsChecked == true,

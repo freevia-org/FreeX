@@ -22,22 +22,14 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             bodyEditor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            resolveFieldEditor: () =>
-            {
-                resolverCalls++;
-                return storyEditor;
-            },
-            askFieldInstruction: _ => " TITLE ");
+            FreeWRibbonHostExecutionPorts.Empty,
+            new FreeWWpfRibbonNativeExecutionPorts(
+                ResolveFieldEditor: () =>
+                {
+                    resolverCalls++;
+                    return storyEditor;
+                },
+                AskFieldInstruction: _ => " TITLE "));
 
         registry.TryGet("freew.field", out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
@@ -63,17 +55,9 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             bodyEditor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            resolveFieldEditor: () => storyEditor);
+            FreeWRibbonHostExecutionPorts.Empty,
+            new FreeWWpfRibbonNativeExecutionPorts(
+                ResolveFieldEditor: () => storyEditor));
 
         foreach (var commandId in new[]
                  {
@@ -154,22 +138,15 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onHelpOnline: () => { },
-            onFeedback: () => { },
-            onCopyDiagnostics: () => { },
-            onCheckForUpdates: () => { },
-            onAbout: () => { },
-            onLegalNotices: () => { });
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenHelpOnline = () => { },
+                OpenFeedback = () => { },
+                CopyDiagnostics = () => { },
+                CheckForUpdates = () => { },
+                OpenAbout = () => { },
+                OpenLegalNotices = () => { },
+            });
 
         help.Should().NotBeNull();
         help!.Groups.Select(group => group.Id)
@@ -216,7 +193,10 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: () => invoked = true);
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenPrintPreview = () => invoked = true,
+            });
 
         registry.TryGet("freew.print-preview", out var command)
             .Should()
@@ -751,17 +731,10 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onFindReplace: () => { });
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenFindReplaceDialog = () => { },
+            });
 
         CommandIds(editing!)
             .Should()
@@ -806,18 +779,11 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onToggleRevealFormatting: () => { },
-            isRevealFormattingVisible: () => false);
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleRevealFormatting = () => { },
+                IsRevealFormattingVisible = () => false,
+            });
 
         paragraph.Should().NotBeNull();
         formatting.Should().NotBeNull();
@@ -944,22 +910,15 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onToggleReviewingPane: () => { },
-            isReviewingPaneVisible: () => false,
-            onAcceptThisChange: () => { },
-            onRejectThisChange: () => { },
-            onPreviousChange: () => { },
-            onNextChange: () => { });
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleReviewingPane = () => { },
+                IsReviewingPaneVisible = () => false,
+                AcceptThisChange = () => { },
+                RejectThisChange = () => { },
+                PreviousChange = () => { },
+                NextChange = () => { },
+            });
 
         review.Should().NotBeNull();
         review!.Groups.Select(group => group.Id)
@@ -1006,26 +965,19 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onToggleReviewingPane: () =>
+            FreeWRibbonHostExecutionPorts.Empty with
             {
-                reviewingPaneVisible = !reviewingPaneVisible;
-                calls.Add("reviewing-pane");
-            },
-            isReviewingPaneVisible: () => reviewingPaneVisible,
-            onAcceptThisChange: () => calls.Add("accept-this"),
-            onRejectThisChange: () => calls.Add("reject-this"),
-            onPreviousChange: () => calls.Add("previous-change"),
-            onNextChange: () => calls.Add("next-change"));
+                ToggleReviewingPane = () =>
+                {
+                    reviewingPaneVisible = !reviewingPaneVisible;
+                    calls.Add("reviewing-pane");
+                },
+                IsReviewingPaneVisible = () => reviewingPaneVisible,
+                AcceptThisChange = () => calls.Add("accept-this"),
+                RejectThisChange = () => calls.Add("reject-this"),
+                PreviousChange = () => calls.Add("previous-change"),
+                NextChange = () => calls.Add("next-change"),
+            });
 
         registry.TryGet("freew.track-changes", out var trackChanges).Should().BeTrue();
         var trackChangesState = trackChanges.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
@@ -1629,18 +1581,13 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: () => { },
-            isNavPaneVisible: () => false,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onToggleRuler: () => { },
-            isRulerVisible: () => true);
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleNavigationPane = () => { },
+                IsNavigationPaneVisible = () => false,
+                ToggleRuler = () => { },
+                IsRulerVisible = () => true,
+            });
 
         show.Should().NotBeNull();
         CommandIds(show!)
@@ -1666,19 +1613,13 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: () => { },
-            onZoom100: () => { },
-            onZoomOnePage: () => { },
-            onZoomPageWidth: () => { });
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenZoomDialog = () => { },
+                ApplyZoom = (_, _) => { },
+                ZoomOnePage = () => { },
+                ZoomPageWidth = () => { },
+            });
 
         zoom.Should().NotBeNull();
         CommandIds(zoom!)
@@ -3066,11 +3007,13 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            askHeaderFooterText: (footer, seed) =>
-            {
-                prompts.Add((footer, seed));
-                return footer ? null : "Header from prompt";
-            });
+            FreeWRibbonHostExecutionPorts.Empty,
+            new FreeWWpfRibbonNativeExecutionPorts(
+                AskHeaderFooterText: (footer, seed) =>
+                {
+                    prompts.Add((footer, seed));
+                    return footer ? null : "Header from prompt";
+                }));
 
         registry.TryGet("freew.header", out var header).Should().BeTrue();
         header!.Execute(RibbonCommandContext.Empty);
@@ -3101,18 +3044,11 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onToggleNotesPane: () => { paneVisible = !paneVisible; },
-            isNotesPaneVisible: () => paneVisible);
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleNotesPane = () => { paneVisible = !paneVisible; },
+                IsNotesPaneVisible = () => paneVisible,
+            });
 
         registry.TryGet("freew.show-notes", out var cmd).Should().BeTrue("freew.show-notes must be registered");
         var stateful = cmd as IRibbonStatefulCommand;
@@ -3155,18 +3091,11 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onOpenHeaderFooterPane: slot => { openedSlot = slot; },
-            onCloseHeaderFooterPane: () => { });
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenHeaderFooterPane = slot => { openedSlot = slot; },
+                CloseHeaderFooterPane = () => { },
+            });
 
         registry.TryGet("freew.hf-edit-header", out var cmd).Should().BeTrue();
         cmd!.Execute(RibbonCommandContext.Empty);
@@ -3183,18 +3112,11 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onOpenHeaderFooterPane: _ => { },
-            onCloseHeaderFooterPane: () => { closeCalled = true; });
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                OpenHeaderFooterPane = _ => { },
+                CloseHeaderFooterPane = () => { closeCalled = true; },
+            });
 
         registry.TryGet("freew.hf-close", out var cmd).Should().BeTrue();
         cmd!.Execute(RibbonCommandContext.Empty);
@@ -3429,17 +3351,10 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             new DocumentView(),
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onReadModeColumnWidth: token => received.Add(token));
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ApplyReadModeColumnWidth = token => received.Add(token),
+            });
 
         registry.TryGet("freew.read-mode-column-narrow", out var narrow).Should().BeTrue();
         narrow!.Execute(RibbonCommandContext.Empty);
@@ -3460,18 +3375,11 @@ public sealed class FreeWRibbonParityTests
         var registry = FreeWRibbonCommands.Build(
             new DocumentView(),
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onNewWindow:   () => newWindowCalled = true,
-            onArrangeAll: () => arrangeAllCalled = true);
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                NewWindow = () => newWindowCalled = true,
+                ArrangeAll = () => arrangeAllCalled = true,
+            });
 
         registry.TryGet("freew.new-window",  out var nw).Should().BeTrue();
         registry.TryGet("freew.arrange-all", out var aa).Should().BeTrue();

@@ -479,6 +479,10 @@ public sealed class FreeWRibbonCommandWorkflowTests
         avalonia.Should().Contain(
             "FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);");
         wpf.Should().Contain("FreeWRibbonHostExecutionPorts hostPorts");
+        wpf.Should().Contain("private static RibbonCommandRegistry BuildCore(");
+        wpf.Should().Contain("FreeWWpfRibbonNativeExecutionPorts nativePorts");
+        wpf.Should().NotContain("Action? onPrintPreview");
+        wpf.Should().NotContain("Compatibility seam for focused WPF command tests");
         wpf.Should().Contain("FreeWRibbonHostExecutionProfile.Register(");
         wpf.Should().Contain("registerFileAdapterCommands: true");
         wpf.Should().Contain("Routed(FreeWRibbonCommandAction.Cut, ApplicationCommands.Cut);");

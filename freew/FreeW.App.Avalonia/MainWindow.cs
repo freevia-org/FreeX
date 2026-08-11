@@ -3200,13 +3200,14 @@ public sealed partial class MainWindow : Window
         _scroller.Offset = new Vector(horizontal, target);
     }
 
-    private async Task CopyAsync()
+    private async Task<FreeWClipboardTransferResult> CopyAsync()
     {
-        var text = _editor.SelectedText;
-        if (text.Length == 0)
-            return;
-        var result = await _platformClipboard.WriteAsync(new PlatformClipboardContent(Text: text));
-        ThrowClipboardWriteFailure(result);
+        var result = await FreeWClipboardApplicationWorkflow.WriteSelectionAsync(
+            _platformClipboard,
+            _editor.SelectedText);
+        if (result.Status is FreeWClipboardTransferStatus.Unsupported or FreeWClipboardTransferStatus.Failed)
+            ApplyClipboardFeedback(result);
+        return result;
     }
 
     // Guarded: this is an `async void` handler wired to the editor's right-click menu, and its
@@ -3259,38 +3260,35 @@ public sealed partial class MainWindow : Window
 
     private async Task CutAsync()
     {
-        await CopyAsync();
-        _editor.TryDeleteSelection();
+        var copy = await CopyAsync();
+        if (copy.CanCommitCut)
+            _editor.TryDeleteSelection();
     }
 
     private async Task PasteAsync()
     {
-        var text = ReadClipboardText(await _platformClipboard.ReadTextAsync());
-        if (!_editor.PastePlainText(text))
-            _status.Text = "Clipboard does not contain text.";
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard);
+        ApplyClipboardText(transfer, DocumentPasteTextKind.TextOnly);
     }
 
     private async Task PastePlainTextAsync()
     {
-        var text = await TryGetClipboardTextAsync();
-        if (!_editor.PastePlainText(text))
-            _status.Text = "Clipboard does not contain text.";
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard);
+        ApplyClipboardText(transfer, DocumentPasteTextKind.TextOnly);
     }
 
     private async Task PasteMergeFormattingAsync()
     {
-        var text = await TryGetClipboardTextAsync();
-        if (!_editor.PasteMergeFormatting(text))
-            _status.Text = "Clipboard does not contain text.";
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard);
+        ApplyClipboardText(transfer, DocumentPasteTextKind.MergeFormatting);
     }
 
     private async Task OpenPasteSpecialAsync()
     {
-        var text = await TryGetClipboardTextAsync();
-        var source = await TryGetClipboardRtfDocumentAsync();
-        if (PasteText.Normalize(text).Length == 0 && source is null)
+        var transfer = await FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(_platformClipboard);
+        if (!transfer.IsSuccess || transfer.Payload is null)
         {
-            _status.Text = "Clipboard does not contain text.";
+            ApplyClipboardFeedback(transfer);
             return;
         }
 
@@ -3298,51 +3296,38 @@ public sealed partial class MainWindow : Window
         if (option is null)
             return;
 
-        var pasted = option.Value switch
-        {
-            PasteSpecialOption.KeepTextOnly => _editor.PastePlainText(text),
-            PasteSpecialOption.KeepSourceFormatting when source is not null =>
-                _editor.PasteKeepSourceFormatting(source) || _editor.PasteMergeFormatting(text),
-            _ => _editor.PasteMergeFormatting(text),
-        };
+        var plan = FreeWClipboardApplicationWorkflow.PlanPaste(transfer.Payload, option.Value);
+        var pasted = plan.RichDocument is not null
+            ? _editor.PasteKeepSourceFormatting(plan.RichDocument) || _editor.PasteMergeFormatting(plan.Text)
+            : plan.TextKind == DocumentPasteTextKind.TextOnly
+                ? _editor.PastePlainText(plan.Text)
+                : _editor.PasteMergeFormatting(plan.Text);
         if (!pasted)
-            _status.Text = "Clipboard does not contain text.";
+            _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
     }
 
-    private async Task<string?> TryGetClipboardTextAsync()
+    private bool ApplyClipboardText(
+        FreeWClipboardTransferResult transfer,
+        DocumentPasteTextKind kind)
     {
-        return ReadClipboardText(await _platformClipboard.ReadTextAsync());
-    }
-
-    private async Task<TextDocument?> TryGetClipboardRtfDocumentAsync()
-    {
-        var format = new PlatformClipboardFormat(
-            "Rich Text Format",
-            PlatformClipboardDataKind.Text);
-        var result = await _platformClipboard.ReadCustomAsync(format);
-        var rtf = result.Status == PlatformClipboardReadStatus.Success
-            ? result.Value?.Text
-            : null;
-        return RtfClipboardDocumentParser.TryParse(rtf, out var document) ? document : null;
-    }
-
-    private static string? ReadClipboardText(PlatformClipboardReadResult<string> result) =>
-        result.Status switch
+        if (!transfer.IsSuccess || transfer.Payload is null)
         {
-            PlatformClipboardReadStatus.Success => result.Value,
-            PlatformClipboardReadStatus.Unavailable or PlatformClipboardReadStatus.Empty => null,
-            PlatformClipboardReadStatus.Unsupported => throw new NotSupportedException(result.ErrorMessage),
-            PlatformClipboardReadStatus.Failed => throw new InvalidOperationException(result.ErrorMessage),
-            _ => null,
-        };
+            ApplyClipboardFeedback(transfer);
+            return false;
+        }
 
-    private static void ThrowClipboardWriteFailure(PlatformClipboardWriteResult result)
+        var pasted = kind == DocumentPasteTextKind.TextOnly
+            ? _editor.PastePlainText(transfer.Payload.Text)
+            : _editor.PasteMergeFormatting(transfer.Payload.Text);
+        if (!pasted)
+            _status.Text = FreeWClipboardApplicationWorkflow.EmptyClipboardMessage;
+        return pasted;
+    }
+
+    private void ApplyClipboardFeedback(FreeWClipboardTransferResult result)
     {
-        if (result.Status is PlatformClipboardWriteStatus.Success or PlatformClipboardWriteStatus.Unavailable)
-            return;
-        if (result.Status == PlatformClipboardWriteStatus.Unsupported)
-            throw new NotSupportedException(result.ErrorMessage);
-        throw new InvalidOperationException(result.ErrorMessage);
+        if (!string.IsNullOrWhiteSpace(result.FeedbackMessage))
+            _status.Text = result.FeedbackMessage;
     }
 
     private async Task OpenAsync()

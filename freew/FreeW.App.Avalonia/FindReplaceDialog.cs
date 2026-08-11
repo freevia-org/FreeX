@@ -149,9 +149,9 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         // --- Action buttons ---------------------------------------------------
         var actionButtons = new[]
         {
-            MakeButton(Surface.Actions[0], (_, _) => FindNext()),
-            MakeButton(Surface.Actions[1], (_, _) => Replace()),
-            MakeButton(Surface.Actions[2], (_, _) => ReplaceAll()),
+            MakeButton(Surface.Actions[0], (_, _) => Execute(Surface.Actions[0].Kind)),
+            MakeButton(Surface.Actions[1], (_, _) => Execute(Surface.Actions[1].Kind)),
+            MakeButton(Surface.Actions[2], (_, _) => Execute(Surface.Actions[2].Kind)),
             MakeButton(Surface.Actions[3], (_, _) => Close()),
         };
         var btnRow = AvaloniaCompactDialogChrome.CreateActionRow(
@@ -176,7 +176,11 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         // Keyboard: Enter = Find Next in find box, Escape = close dialog.
         _findBox.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter) { FindNext(); e.Handled = true; }
+            if (e.Key == Key.Enter)
+            {
+                Execute(FindReplaceDialogActionKind.FindNext);
+                e.Handled = true;
+            }
             else if (e.Key == Key.Escape) { Close(); e.Handled = true; }
         };
         _replaceBox.KeyDown += (_, e) =>
@@ -294,26 +298,14 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
     // ── Find / Replace logic ──────────────────────────────────────────────────
 
-    private void FindNext()
-    {
-        SyncSessionInput();
-        _status.Text = _session.FindNext().StatusText;
-    }
-
-    private void Replace()
-    {
-        SyncSessionInput();
-        _status.Text = _session.ReplaceNext().StatusText;
-    }
-
-    private void ReplaceAll()
-    {
-        SyncSessionInput();
-        _status.Text = _session.ReplaceAll().StatusText;
-    }
+    private void Execute(FindReplaceDialogActionKind action) =>
+        _status.Text = _session.Execute(action, ReadInput()).StatusText;
 
     private FindReplaceDialogState SyncSessionInput() =>
-        _session.SetInput(
+        _session.SetInput(ReadInput());
+
+    private FindReplaceDialogInput ReadInput() =>
+        new(
             _findBox.Text,
             _replaceBox.Text,
             _matchCase.IsChecked == true,

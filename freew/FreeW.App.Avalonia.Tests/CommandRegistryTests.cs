@@ -793,7 +793,8 @@ public sealed class CommandRegistryTests
         methodEnd.Should().BeGreaterThan(methodStart);
         var method = source[methodStart..methodEnd];
 
-        method.Should().Contain("_editor.PastePlainText(text)");
+        method.Should().Contain("FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard)");
+        method.Should().Contain("ApplyClipboardText(transfer, DocumentPasteTextKind.TextOnly)");
         method.Should().NotContain("_editor.InsertText(");
     }
 

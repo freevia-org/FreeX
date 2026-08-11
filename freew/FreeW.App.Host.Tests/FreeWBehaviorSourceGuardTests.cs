@@ -47,9 +47,11 @@ public sealed class FreeWBehaviorSourceGuardTests
         {
             source.Should().Contain("new FindReplaceDialogSession(");
             source.Should().Contain("SyncSessionInput()");
-            source.Should().Contain("_session.FindNext()");
-            source.Should().Contain("_session.ReplaceNext()");
-            source.Should().Contain("_session.ReplaceAll()");
+            source.Should().Contain("private FindReplaceDialogInput ReadInput()");
+            source.Should().Contain("_session.Execute(action, ReadInput())");
+            source.Should().NotContain("_session.FindNext()");
+            source.Should().NotContain("_session.ReplaceNext()");
+            source.Should().NotContain("_session.ReplaceAll()");
             source.Should().NotContain("FindReplaceDialogPlanner.TryCreateSearchRequest(");
             source.Should().NotContain("FindReplaceDialogPlanner.TryCreateReplaceRequest(");
             source.Should().NotContain("FindReplaceDialogPlanner.BuildFindStatus(");
@@ -71,6 +73,7 @@ public sealed class FreeWBehaviorSourceGuardTests
 
         var session = ReadSource("freew", "FreeW.App.Presentation", "Dialogs", "FindReplaceDialogSession.cs");
         session.Should().Contain("IFindReplaceDialogCommandHost");
+        session.Should().Contain("public FindReplaceDialogState Execute(");
         session.Should().Contain("FindReplaceDialogPlanner.TryCreateSearchRequest(");
         session.Should().Contain("FindReplaceDialogPlanner.TryCreateReplaceRequest(");
 

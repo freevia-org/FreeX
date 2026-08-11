@@ -1,10 +1,10 @@
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Pdf;
-using FreeW.App.Avalonia.Pdf;
+using FreeW.App.Presentation.Shell;
 
-namespace FreeW.App.Avalonia.Tests.Printing;
+namespace FreeW.App.Presentation.Tests;
 
-public sealed class PrintPdfContentPlannerTests
+public sealed class FreeWFixedLayoutPdfPlannerTests
 {
     [Fact]
     public void Apply_SelectsRequestedPages_AndRotatesOnlyOrientationMismatches()
@@ -21,7 +21,7 @@ public sealed class PrintPdfContentPlannerTests
             ],
             properties);
 
-        var result = PrintPdfContentPlanner.Apply(
+        var result = FreeWFixedLayoutPdfPlanner.Apply(
             document,
             new PrintSelection(
                 PageRange: PrintPageRange.Between(2, 3),
@@ -47,12 +47,12 @@ public sealed class PrintPdfContentPlannerTests
         var document = new PdfContentDocument(
             [new PdfContentPage(600, 800, []), new PdfContentPage(600, 800, [])]);
 
-        PrintPdfContentPlanner.Apply(
+        FreeWFixedLayoutPdfPlanner.Apply(
                 document,
                 new PrintSelection(PageRange: PrintPageRange.Between(2, 9)))
             .Pages.Should().ContainSingle().Which.Should().BeSameAs(document.Pages[1]);
 
-        PrintPdfContentPlanner.Apply(
+        FreeWFixedLayoutPdfPlanner.Apply(
                 document,
                 new PrintSelection(PageRange: PrintPageRange.Single(3)))
             .Pages.Should().ContainSingle().Which.Should().BeSameAs(document.Pages[1]);

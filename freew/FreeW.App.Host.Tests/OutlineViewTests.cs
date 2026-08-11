@@ -2,6 +2,7 @@ using System.IO;
 using System.Linq;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using Xunit;
@@ -151,9 +152,13 @@ public sealed class OutlineViewTests
         var active = false;
 
         var registry = FreeWRibbonCommands.Build(
-            view, store, onPrintPreview: null, onToggleNavPane: null, isNavPaneVisible: null,
-            onToggleReadMode: null, isReadModeActive: null, onTogglePrintLayout: null, isPrintLayoutActive: null,
-            onToggleOutlineView: () => active = !active, isOutlineViewActive: () => active);
+            view,
+            store,
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                SetOutlineView = () => active = !active,
+                IsOutlineViewActive = () => active,
+            });
 
         registry.TryGet("freew.outline-view", out var command).Should().BeTrue();
         var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;

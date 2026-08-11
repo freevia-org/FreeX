@@ -66,6 +66,28 @@ public sealed class FindReplaceDialogSessionTests
     }
 
     [Fact]
+    public void Execute_AppliesTheInputSchemaAndDispatchesTheSharedAction()
+    {
+        var host = new RecordingCommandHost { ReplaceResult = true };
+        var session = new FindReplaceDialogSession(host);
+
+        var state = session.Execute(
+            FindReplaceDialogActionKind.Replace,
+            new FindReplaceDialogInput(
+                "f*x",
+                "wolf",
+                MatchCase: true,
+                WholeWord: true,
+                UseWildcards: true));
+
+        state.Options.WholeWord.Should().BeFalse();
+        host.ReplaceRequest.Should().Be(new FindReplaceReplaceRequest(
+            "f*x",
+            "wolf",
+            new FindReplaceSearchOptions(MatchCase: true, WholeWord: false, UseWildcards: true)));
+    }
+
+    [Fact]
     public void ReplaceAll_ComposesSelectionAwareStatusFromHostResult()
     {
         var host = new RecordingCommandHost

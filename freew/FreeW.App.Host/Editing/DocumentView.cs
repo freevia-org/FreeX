@@ -1574,18 +1574,12 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void PasteKeepSourceFormatting()
     {
-        var read = _platformClipboard.ReadCustomAsync(new PlatformClipboardFormat(
-                DataFormats.Rtf,
-                PlatformClipboardDataKind.Text))
+        var transfer = FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(_platformClipboard)
             .AsTask()
             .GetAwaiter()
             .GetResult();
-        var rtf = read.Status == PlatformClipboardReadStatus.Success
-            ? read.Value?.Text
-            : null;
 
-        if (RtfClipboardDocumentParser.TryParse(rtf, out var source)
-            && source is not null
+        if (transfer.Payload?.RichDocument is { } source
             && PasteKeepSourceFormatting(source))
         {
             return;
@@ -14539,11 +14533,14 @@ public sealed class DocumentView : RichTextBox
     // share one implementation.
     private void PasteFromClipboard(DocumentPasteTextKind kind)
     {
-        var read = _platformClipboard.ReadTextAsync().AsTask().GetAwaiter().GetResult();
-        if (read.Status != PlatformClipboardReadStatus.Success || read.Value is not { } raw)
+        var transfer = FreeWClipboardApplicationWorkflow.ReadTextAsync(_platformClipboard)
+            .AsTask()
+            .GetAwaiter()
+            .GetResult();
+        if (!transfer.IsSuccess || transfer.Payload is not { } payload)
             return;
 
-        var plan = _editingSession.Interaction.PlanPasteText(raw, kind);
+        var plan = _editingSession.Interaction.PlanPasteText(payload.Text, kind);
         if (!plan.HasText)
             return;
 

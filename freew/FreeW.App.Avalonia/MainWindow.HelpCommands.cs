@@ -11,13 +11,13 @@ public sealed partial class MainWindow
     private async Task OpenExternalHelpLinkAsync(string url, string title)
     {
         var result = await OpenExternalUriAsync(url);
-        if (result == ExternalUriLaunchResult.Launched)
+        if (FreeWSupportCommandFeedbackPlanner.PlanExternalUriLaunch(result, title, url) is not { } feedback)
             return;
 
         await FreeWInfoDialog.ShowAsync(
             this,
-            FreeWApplicationFrameTextCatalog.FormatExternalLinkFailure(title, url),
-            title);
+            feedback.Message,
+            feedback.Title);
         _editor.Focus();
     }
 
@@ -33,27 +33,8 @@ public sealed partial class MainWindow
             optionsPath);
         var write = await _platformClipboard.WriteAsync(
             new PlatformClipboardContent(Text: diagnosticsText));
-        if (write.Status == PlatformClipboardWriteStatus.Unavailable)
-        {
-            await ShowHelpMessageAsync(
-                FreeWApplicationFrameTextCatalog.ClipboardUnavailableMessage,
-                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
-            return;
-        }
-
-        if (write.IsSuccess)
-        {
-            await ShowHelpMessageAsync(
-                FreeWApplicationFrameTextCatalog.DiagnosticsCopiedMessage,
-                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
-        }
-        else
-        {
-            await ShowHelpMessageAsync(
-                FreeWApplicationFrameTextCatalog.FormatClipboardFailure(
-                    write.ErrorMessage ?? "Clipboard write failed."),
-                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
-        }
+        var feedback = FreeWSupportCommandFeedbackPlanner.PlanDiagnosticsCopy(write);
+        await ShowHelpMessageAsync(feedback.Message, feedback.Title);
     }
 
     private async Task ShowHelpMessageAsync(string message, string title)

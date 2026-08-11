@@ -1,5 +1,6 @@
 using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Tests;
@@ -41,17 +42,10 @@ public sealed class RulerCommandTests
         return FreeWRibbonCommands.Build(
             editor,
             new RibbonStateStore(),
-            onPrintPreview: null,
-            onToggleNavPane: null,
-            isNavPaneVisible: null,
-            onToggleReadMode: null,
-            isReadModeActive: null,
-            onTogglePrintLayout: null,
-            isPrintLayoutActive: null,
-            onToggleOutlineView: null,
-            isOutlineViewActive: null,
-            onZoomDialog: null,
-            onToggleRuler: toggle,
-            isRulerVisible: isVisible);
+            FreeWRibbonHostExecutionPorts.Empty with
+            {
+                ToggleRuler = toggle,
+                IsRulerVisible = isVisible,
+            });
     }
 }

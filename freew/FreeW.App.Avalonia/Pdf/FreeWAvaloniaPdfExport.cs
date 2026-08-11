@@ -2,6 +2,7 @@ using FreeW.App.Avalonia.Editing;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia.Pdf;
 
@@ -43,7 +44,7 @@ public static class FreeWAvaloniaPdfExport
         if (!stream.CanWrite)
             throw new ArgumentException("PDF export requires a writable stream.", nameof(stream));
 
-        return Write(PrintPdfContentPlanner.Apply(view.BuildPdfContent(), selection), stream);
+        return Write(FreeWFixedLayoutPdfPlanner.Apply(view.BuildPdfContent(), selection), stream);
     }
 
     public static FreeWAvaloniaPdfExportResult Save(DocumentView view, string path)

@@ -946,14 +946,10 @@ public sealed class MainWindow : Window
     private void OpenExternalHelpLink(string url, string title)
     {
         var result = DesktopExternalUriLauncher.Open(url);
-
-        if (result == ExternalUriLaunchResult.Launched)
+        if (FreeWSupportCommandFeedbackPlanner.PlanExternalUriLaunch(result, title, url) is not { } feedback)
             return;
 
-        DialogMessageHelper.ShowWarning(
-            this,
-            FreeWApplicationFrameTextCatalog.FormatExternalLinkFailure(title, url),
-            title);
+        PresentCommandFeedback(feedback);
     }
 
     private void CopyDiagnostics()
@@ -968,20 +964,21 @@ public sealed class MainWindow : Window
                 .AsTask()
                 .GetAwaiter()
                 .GetResult();
-            if (!result.IsSuccess)
-                throw new System.Runtime.InteropServices.COMException(result.ErrorMessage);
-            DialogMessageHelper.ShowInfo(
-                this,
-                FreeWApplicationFrameTextCatalog.DiagnosticsCopiedMessage,
-                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
+            PresentCommandFeedback(FreeWSupportCommandFeedbackPlanner.PlanDiagnosticsCopy(result));
         }
         catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or System.Threading.ThreadStateException)
         {
-            DialogMessageHelper.ShowWarning(
-                this,
-                FreeWApplicationFrameTextCatalog.FormatClipboardFailure(ex.Message),
-                FreeWApplicationFrameTextCatalog.CopyDiagnosticsTitle);
+            PresentCommandFeedback(FreeWSupportCommandFeedbackPlanner.PlanDiagnosticsCopy(
+                PlatformClipboardWriteResult.Failed(ex.Message)));
         }
+    }
+
+    private void PresentCommandFeedback(FreeWCommandFeedbackPlan feedback)
+    {
+        if (feedback.Tone == FreeWCommandFeedbackTone.Information)
+            DialogMessageHelper.ShowInfo(this, feedback.Message, feedback.Title);
+        else
+            DialogMessageHelper.ShowWarning(this, feedback.Message, feedback.Title);
     }
 
     private void ShowAboutDialog()
