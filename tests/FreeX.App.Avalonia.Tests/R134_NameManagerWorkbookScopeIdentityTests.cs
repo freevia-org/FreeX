@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using System.Linq;
 using FluentAssertions;
 using FreeX.App.Presentation.DefinedNames;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using Xunit;
 
@@ -121,11 +119,4 @@ public sealed class R134_NameManagerWorkbookScopeIdentityTests
     private static GridRange Cell(Sheet sheet, uint row, uint col) =>
         new(new CellAddress(sheet.Id, row, col), new CellAddress(sheet.Id, row, col));
 
-    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
-    {
-        public Workbook Workbook { get; } = workbook;
-
-        public Sheet GetSheet(SheetId sheetId) =>
-            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
-    }
 }

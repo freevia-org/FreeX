@@ -407,7 +407,8 @@ public sealed class OpcSharedHelperTests
         pptxWriterSource.Should().Contain("OpcMediaTypes.MergePreservedContentTypes");
         pptxWriterSource.Should().Contain("OpcXml.TryLoadXml(bytes)");
         pptxWriterSource.Should().Contain("OpcMediaTypes.GetDrawingMediaExtension");
-        pptxWriterSource.Should().Contain("OpcMediaTypes.GetAudioVideoExtension");
+        pptxWriterSource.Should().Contain("OpcMediaTypes.GetMediaFileExtension")
+            .And.Contain("OpcMediaExtensionProfile.PresentationPackageMediaPart");
         pptxWriterSource.Should().NotContain("private static string ContentTypeToExtension(");
     }
 

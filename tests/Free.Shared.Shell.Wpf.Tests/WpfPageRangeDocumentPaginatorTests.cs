@@ -159,16 +159,6 @@ public sealed class WpfPageRangeDocumentPaginatorTests
         }
     }
 
-    private static string RepositoryFile(params string[] parts)
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return Path.Combine([directory.FullName, .. parts]);
-        }
-
-        throw new DirectoryNotFoundException("Could not locate the FreeX repository root.");
-    }
+    private static string RepositoryFile(params string[] parts) =>
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile("FreeX.slnx", parts);
 }
