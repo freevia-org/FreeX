@@ -58,6 +58,76 @@ public static class ComplexFieldDisplayPlanner
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Only DATE and TIME fields are temporal."),
     };
 
+    /// <summary>
+    /// Resolves the live value shared by simple and complex fields. Pagination remains a renderer input;
+    /// document properties, file name, time and fallback semantics are toolkit-neutral.
+    /// </summary>
+    public static string ResolveLiveValue(
+        RunFieldKind kind,
+        string fallback,
+        TextDocument document,
+        string? fileName,
+        DateTime now,
+        CultureInfo culture,
+        string? pageNumberText,
+        int? pageCount)
+    {
+        ArgumentNullException.ThrowIfNull(fallback);
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(culture);
+
+        return kind switch
+        {
+            RunFieldKind.Date => now.ToString("d", culture),
+            RunFieldKind.Time => now.ToString("t", culture),
+            RunFieldKind.Author => PreferLiveValue(document.Properties.Author, fallback),
+            RunFieldKind.FileName => PreferLiveValue(fileName, fallback),
+            RunFieldKind.Title => PreferLiveValue(document.Properties.Title, fallback),
+            RunFieldKind.Subject => PreferLiveValue(document.Properties.Subject, fallback),
+            RunFieldKind.Keywords => PreferLiveValue(document.Properties.Keywords, fallback),
+            RunFieldKind.DocComments => PreferLiveValue(document.Properties.Comments, fallback),
+            RunFieldKind.PageNumber => PreferLiveValue(pageNumberText, fallback),
+            RunFieldKind.NumPages when pageCount is > 0 => pageCount.Value.ToString(CultureInfo.InvariantCulture),
+            _ => fallback,
+        };
+    }
+
+    public static string ResolveComplexFieldValue(
+        Run run,
+        TextDocument document,
+        string? fileName,
+        DateTime now,
+        CultureInfo culture,
+        string? pageNumberText,
+        int? pageCount,
+        int sectionOrdinal = 0,
+        int sectionPageCount = 0,
+        string? cachedResult = null)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(document);
+        var field = run.ComplexField ?? throw new ArgumentException("Run does not contain a complex field.", nameof(run));
+        var fallback = ResolveLiveValue(
+            ResolveLiveKind(field.Keyword),
+            cachedResult ?? run.Text,
+            document,
+            fileName,
+            now,
+            culture,
+            pageNumberText,
+            pageCount);
+        fallback = ResolvePageSectionField(field, fallback, sectionOrdinal, sectionPageCount);
+        return ApplyTemporalPicture(
+            field,
+            now,
+            (run.Formatting ?? document.DefaultRun).LanguageTag,
+            culture,
+            fallback);
+    }
+
+    private static string PreferLiveValue(string? value, string fallback) =>
+        string.IsNullOrEmpty(value) ? fallback : value;
+
     public static string ApplyTemporalPicture(
         ComplexField field,
         DateTime value,

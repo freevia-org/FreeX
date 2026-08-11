@@ -541,6 +541,13 @@ public sealed class DocumentView : Control
     }
 
     public TextDocument Document => _doc;
+
+    /// <summary>
+    /// Current file name without its path, supplied by the shell for live FILENAME fields. Unsaved
+    /// documents leave this null so imported cached results remain visible.
+    /// </summary>
+    public string? CurrentFileName { get; set; }
+
     public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
 
     /// <summary>Whether WPF-compatible AutoCorrect and AutoFormat-As-You-Type rules run during text input.</summary>
@@ -4129,7 +4136,11 @@ public sealed class DocumentView : Control
             _viewDepthLayout.PageFlow is DocumentViewDepthPageFlow.SideToSideHorizontal
                 or DocumentViewDepthPageFlow.MultiplePagesGrid)
         {
-            var printView = new DocumentView { ViewMode = DocumentViewMode.PrintLayout };
+            var printView = new DocumentView
+            {
+                ViewMode = DocumentViewMode.PrintLayout,
+                CurrentFileName = CurrentFileName,
+            };
             printView.LoadDocument(_doc);
             return printView.BuildPdfContent();
         }
@@ -9065,27 +9076,29 @@ public sealed class DocumentView : Control
         int sectionPageCount)
     {
         if (run.FieldKind != RunFieldKind.None)
-            return ResolveLiveField(run.FieldKind, run.Text, pageNumberText, pageCount);
+            return ComplexFieldDisplayPlanner.ResolveLiveValue(
+                run.FieldKind,
+                run.Text,
+                _doc,
+                CurrentFileName,
+                DateTime.Now,
+                CultureInfo.CurrentCulture,
+                pageNumberText,
+                pageCount);
 
         // Complex fields: inspect the instruction keyword.
         if (run.ComplexField is { } cf)
         {
-            var resolved = ResolveLiveField(
-                ComplexFieldDisplayPlanner.ResolveLiveKind(cf.Keyword),
-                run.Text,
+            var resolved = ComplexFieldDisplayPlanner.ResolveComplexFieldValue(
+                run,
+                _doc,
+                CurrentFileName,
+                DateTime.Now,
+                CultureInfo.CurrentCulture,
                 pageNumberText,
-                pageCount);
-            resolved = ComplexFieldDisplayPlanner.ResolvePageSectionField(
-                cf,
-                resolved,
+                pageCount,
                 sectionOrdinal,
                 sectionPageCount);
-            resolved = ComplexFieldDisplayPlanner.ApplyTemporalPicture(
-                cf,
-                DateTime.Now,
-                run.Formatting.LanguageTag,
-                CultureInfo.CurrentCulture,
-                resolved);
             return ComplexFieldDisplayPlanner.Build(cf, resolved, _doc).Text;
         }
 
@@ -23679,12 +23692,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public void UpdateFields()
     {
-        var fieldParagraphs = DocumentFieldStories.Enumerate(_doc).ToList();
-        var crossReferencePageResolver = fieldParagraphs
-            .Select(item => item.Paragraph)
-            .SelectMany(paragraph => paragraph.Runs)
-            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
-                || run.ComplexField?.ContainsKeyword("PAGEREF") == true)
+        var crossReferencePageResolver = DocumentFieldUpdateCoordinator.RequiresPageResolver(_doc)
                 ? BuildCrossReferencePageResolver()
                 : null;
         var crossReferencePageTextResolver = crossReferencePageResolver is null
@@ -23692,53 +23700,16 @@ public sealed class DocumentView : Control
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
                 _doc,
                 crossReferencePageResolver);
-        foreach (var storyParagraph in fieldParagraphs)
-        {
-            var b = storyParagraph.BodyBlockIndex;
-            var paragraph = storyParagraph.Paragraph;
-            for (var r = 0; r < paragraph.Runs.Count; r++)
-            {
-                var run = paragraph.Runs[r];
-                if (run.CrossReference is { } crossReference)
-                {
-                    var resolved = CrossReferences.ResolveField(
-                        _doc,
-                        crossReference,
-                        run.Text,
-                        b,
-                        crossReferencePageResolver,
-                        crossReferencePageTextResolver,
-                        sourceRunIndex: r);
-                    if (!string.IsNullOrEmpty(resolved))
-                        run.Text = resolved;
-                }
-                else if (run.ComplexField is { } complexField)
-                {
-                    if (complexField.IsLocked)
-                        continue;
-
-                    var canRecompute = DocumentFieldStories.CanRecomputeComplexField(
-                        storyParagraph.StoryKind,
-                        complexField);
-                    var resolved = canRecompute
-                        ? ComplexFieldEngine.Recompute(
-                            _doc,
-                            b,
-                            run,
-                            crossReferencePageResolver,
-                            crossReferencePageTextResolver)
-                        : ResolveComplexField(run, run.Text);
-                    if (canRecompute || !string.IsNullOrEmpty(resolved))
-                        run.Text = resolved;
-                }
-                else if (run.FieldKind != RunFieldKind.None)
-                {
-                    var resolved = ResolveDocumentField(run.FieldKind);
-                    if (!string.IsNullOrEmpty(resolved))
-                        run.Text = resolved;
-                }
-            }
-        }
+        DocumentFieldUpdateCoordinator.Update(
+            _doc,
+            _doc,
+            CurrentFileName,
+            DateTime.Now,
+            CultureInfo.CurrentCulture,
+            ResolvePageNumberFieldText(),
+            pageCount: 1,
+            crossReferencePageResolver: crossReferencePageResolver,
+            crossReferencePageTextResolver: crossReferencePageTextResolver);
 
         var refreshedGeneratedRegion = false;
         if (_doc.Blocks.Any(TableOfContents.IsTocParagraph))
@@ -23831,46 +23802,29 @@ public sealed class DocumentView : Control
 
     private string ResolveComplexField(Run run, string fallback)
     {
-        var field = run.ComplexField!;
-        var resolved = ResolveLiveField(
-            ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
-            fallback,
-            ResolvePageNumberFieldText(),
-            pageCount: 1);
-        return ComplexFieldDisplayPlanner.ApplyTemporalPicture(
-            field,
+        return ComplexFieldDisplayPlanner.ResolveComplexFieldValue(
+            run,
+            _doc,
+            CurrentFileName,
             DateTime.Now,
-            run.Formatting.LanguageTag,
             CultureInfo.CurrentCulture,
-            resolved);
+            ResolvePageNumberFieldText(),
+            pageCount: 1,
+            cachedResult: fallback);
     }
 
     // Resolve a document-property / date field's cached display text (page-independent fields only).
     // Page/NumPages resolve to "1" as a sensible placeholder; the renderer recomputes paginated fields.
     private string ResolveDocumentField(RunFieldKind kind) =>
-        ResolveLiveField(kind, string.Empty, ResolvePageNumberFieldText(), pageCount: 1);
-
-    private string ResolveLiveField(
-        RunFieldKind kind,
-        string fallback,
-        string pageNumberText,
-        int pageCount) => kind switch
-    {
-        RunFieldKind.Date or RunFieldKind.Time =>
-            ComplexFieldDisplayPlanner.FormatInvariantTemporalValue(kind, DateTime.Now),
-        RunFieldKind.Author => PreferLiveValue(_doc.Properties.Author, fallback),
-        RunFieldKind.Title => PreferLiveValue(_doc.Properties.Title, fallback),
-        RunFieldKind.Subject => PreferLiveValue(_doc.Properties.Subject, fallback),
-        RunFieldKind.Keywords => PreferLiveValue(_doc.Properties.Keywords, fallback),
-        RunFieldKind.DocComments => PreferLiveValue(_doc.Properties.Comments, fallback),
-        RunFieldKind.FileName => fallback,
-        RunFieldKind.PageNumber => pageNumberText,
-        RunFieldKind.NumPages => pageCount.ToString(CultureInfo.InvariantCulture),
-        _ => fallback,
-    };
-
-    private static string PreferLiveValue(string? value, string fallback) =>
-        string.IsNullOrEmpty(value) ? fallback : value;
+        ComplexFieldDisplayPlanner.ResolveLiveValue(
+            kind,
+            string.Empty,
+            _doc,
+            CurrentFileName,
+            DateTime.Now,
+            CultureInfo.CurrentCulture,
+            ResolvePageNumberFieldText(),
+            pageCount: 1);
 
     private string ResolvePageNumberFieldText()
     {

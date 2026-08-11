@@ -236,7 +236,7 @@ public sealed partial class MainWindow : Window
                 Separator: " \u2014 ",
                 ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
             maxRecentEntries: () => _options.RecentFilesCap,
-            onChanged: UpdateStatus,
+            onChanged: OnFileWorkflowChanged,
             saveAsync: SaveAsync,
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
@@ -4383,6 +4383,12 @@ public sealed partial class MainWindow : Window
     private void MarkDocumentSavedWithPath(string path)
     {
         _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
+    }
+
+    private void OnFileWorkflowChanged()
+    {
+        _editor.CurrentFileName = _fileWorkflow.CurrentFileName;
+        UpdateStatus();
     }
 
     private void UpdateStatus()

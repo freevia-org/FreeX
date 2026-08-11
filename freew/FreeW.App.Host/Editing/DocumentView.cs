@@ -12657,25 +12657,20 @@ public sealed class DocumentView : RichTextBox
         // In PagedEdit mode, PAGE and NUMPAGES are resolved to the actual page-box page number / page
         // count injected by PaginatedEditorPanel just before LoadModel on the h/f sub-editor.  The
         // thread-static fields are zero outside that narrow window, so ordinary renders are unaffected.
-        if (kind == RunFieldKind.PageNumber && _renderHfPageNumber > 0)
-            return _renderHfPageNumberText
-                ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (kind == RunFieldKind.NumPages && _renderHfPageCount > 0)
-            return _renderHfPageCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (kind == RunFieldKind.PageNumber)
-            return ResolvePageNumberFieldText(document);
-        return kind switch
-        {
-            RunFieldKind.Date => DateTime.Now.ToString("d", culture),
-            RunFieldKind.Time => DateTime.Now.ToString("t", culture),
-            RunFieldKind.Author => document.Properties.Author is { Length: > 0 } author ? author : cached,
-            RunFieldKind.FileName => fileName is { Length: > 0 } name ? name : cached,
-            RunFieldKind.Title => document.Properties.Title is { Length: > 0 } title ? title : cached,
-            RunFieldKind.Subject => document.Properties.Subject is { Length: > 0 } subject ? subject : cached,
-            RunFieldKind.Keywords => document.Properties.Keywords is { Length: > 0 } keywords ? keywords : cached,
-            RunFieldKind.DocComments => document.Properties.Comments is { Length: > 0 } comments ? comments : cached,
-            _ => cached
-        };
+        var pageNumberText = _renderHfPageNumber > 0
+            ? _renderHfPageNumberText
+                ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : ResolvePageNumberFieldText(document);
+        int? pageCount = _renderHfPageCount > 0 ? _renderHfPageCount : null;
+        return ComplexFieldDisplayPlanner.ResolveLiveValue(
+            kind,
+            cached,
+            document,
+            fileName,
+            DateTime.Now,
+            culture,
+            pageNumberText,
+            pageCount);
     }
 
     private static string ResolvePageNumberFieldText(TextDocument document)
@@ -12792,23 +12787,21 @@ public sealed class DocumentView : RichTextBox
 
     private static string ResolveComplexFieldText(ModelRun run, TextDocument document, string? fileName)
     {
-        var field = run.ComplexField!;
-        var fallback = ResolveFieldText(
-            ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
-            run.Text,
+        var pageNumberText = _renderHfPageNumber > 0
+            ? _renderHfPageNumberText
+                ?? _renderHfPageNumber.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : ResolvePageNumberFieldText(document);
+        int? pageCount = _renderHfPageCount > 0 ? _renderHfPageCount : null;
+        return ComplexFieldDisplayPlanner.ResolveComplexFieldValue(
+            run,
             document,
-            fileName);
-        fallback = ComplexFieldDisplayPlanner.ResolvePageSectionField(
-            field,
-            fallback,
+            fileName,
+            DateTime.Now,
+            System.Globalization.CultureInfo.CurrentCulture,
+            pageNumberText,
+            pageCount,
             _renderHfSectionOrdinal,
             _renderHfSectionPageCount);
-        return ComplexFieldDisplayPlanner.ApplyTemporalPicture(
-            field,
-            DateTime.Now,
-            (run.Formatting ?? document.DefaultRun).LanguageTag,
-            System.Globalization.CultureInfo.CurrentCulture,
-            fallback);
     }
 
     /// <summary>
@@ -13336,12 +13329,7 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var fieldDocument = FieldEvaluationDocument ?? _model;
         var fieldFileName = FieldEvaluationDocument is null ? CurrentFileName : FieldEvaluationFileName;
-        var fieldParagraphs = DocumentFieldStories.Enumerate(_model).ToList();
-        var crossReferencePageResolver = fieldParagraphs
-            .Select(item => item.Paragraph)
-            .SelectMany(paragraph => paragraph.Runs)
-            .Any(run => run.CrossReference?.Kind == CrossRefFieldKind.PageRef
-                || run.ComplexField?.ContainsKeyword("PAGEREF") == true)
+        var crossReferencePageResolver = DocumentFieldUpdateCoordinator.RequiresPageResolver(_model)
                 ? BuildCrossReferencePageResolver()
                 : null;
         var crossReferencePageTextResolver = crossReferencePageResolver is null
@@ -13349,55 +13337,16 @@ public sealed class DocumentView : RichTextBox
             : PageNumberFormatDialogPlanner.BuildBlockPageReferenceResolver(
                 _model,
                 crossReferencePageResolver);
-        foreach (var storyParagraph in fieldParagraphs)
-        {
-            var b = storyParagraph.BodyBlockIndex;
-            var paragraph = storyParagraph.Paragraph;
-            for (var i = 0; i < paragraph.Runs.Count; i++)
-            {
-                var r = paragraph.Runs[i];
-                if (r.CrossReference is { } crossReference)
-                {
-                    var resolved = CrossReferences.ResolveField(
-                        _model,
-                        crossReference,
-                        r.Text,
-                        b,
-                        crossReferencePageResolver,
-                        crossReferencePageTextResolver,
-                        sourceRunIndex: i);
-                    if (resolved.Length > 0)
-                        r.Text = resolved;
-                }
-                else if (r.ComplexField is { } cf)
-                {
-                    if (cf.IsLocked)
-                        continue;
-
-                    // REF/PAGEREF/SEQ re-evaluate against current bookmarks/sequences; the rest reuse the
-                    // live DATE/AUTHOR/… resolver (PAGE/NUMPAGES keep their cached value here).
-                    var canRecompute = DocumentFieldStories.CanRecomputeComplexField(
-                        storyParagraph.StoryKind,
-                        cf);
-                    var resolved = canRecompute
-                        ? ComplexFieldEngine.Recompute(
-                            fieldDocument,
-                            b,
-                            r,
-                            crossReferencePageResolver,
-                            crossReferencePageTextResolver)
-                        : ResolveComplexFieldText(r, fieldDocument, fieldFileName);
-                    if (canRecompute || resolved.Length > 0)
-                        r.Text = resolved;
-                }
-                else if (r.FieldKind != RunFieldKind.None)
-                {
-                    var resolved = ResolveFieldText(r.FieldKind, r.Text, fieldDocument, fieldFileName);
-                    if (resolved.Length > 0)
-                        r.Text = resolved;
-                }
-            }
-        }
+        DocumentFieldUpdateCoordinator.Update(
+            _model,
+            fieldDocument,
+            fieldFileName,
+            DateTime.Now,
+            System.Globalization.CultureInfo.CurrentCulture,
+            ResolvePageNumberFieldText(fieldDocument),
+            pageCount: null,
+            crossReferencePageResolver: crossReferencePageResolver,
+            crossReferencePageTextResolver: crossReferencePageTextResolver);
 
         // "Update entire table": regenerate inserted generated-reference regions from current document
         // state. Keep TOC and bibliography independent so a document containing both updates both in one
