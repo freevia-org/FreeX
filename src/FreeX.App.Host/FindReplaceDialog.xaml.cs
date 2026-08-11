@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -63,6 +64,7 @@ public sealed partial class FindReplaceDialog : Window
                     IsNoOp: outcome.IsNoOp);
             });
         InitializeComponent();
+        ApplySharedDialogSchema();
         if (replaceMode)
         {
             FindReplaceTabs.SelectedItem = ReplaceTab;
@@ -140,8 +142,11 @@ public sealed partial class FindReplaceDialog : Window
             _navigateTo(row.Address);
     }
 
-    private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) => OptionsExpander.Header = UiText.Get("FindReplace_OptionsExpanded");
-    private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) => OptionsExpander.Header = UiText.Get("FindReplace_Options");
+    private void OptionsExpander_Expanded(object sender, RoutedEventArgs e) =>
+        OptionsExpander.Header = DialogText(FindReplaceDialogText.OptionsExpanded);
+
+    private void OptionsExpander_Collapsed(object sender, RoutedEventArgs e) =>
+        OptionsExpander.Header = DialogText(FindReplaceDialogText.Options);
     private void FindFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _findFormatDiff, FindFormatButton, ReplaceFindFormatButton);
     private void ReplaceWithFormatButton_Click(object sender, RoutedEventArgs e) => PickFormat(ref _replaceFormatDiff, ReplaceWithFormatButton);
     private void ChooseFindFormatFromCellButton_Click(object sender, RoutedEventArgs e) => PickFormatFromCell(ref _findFormatDiff);
@@ -199,11 +204,11 @@ public sealed partial class FindReplaceDialog : Window
         UpdateResultsGrid();
         if (!result.Success)
         {
-            SetStatusText(UiText.Get("FindReplace_NoMatchesFound"));
+            SetStatusText(DialogText(FindReplaceDialogText.NoMatchesFound));
             _currentIndex = -1;
             return;
         }
-        SetStatusText(UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count));
+        SetStatusText(DialogText(FindReplaceDialogText.MatchStatus, _currentIndex + 1, _results.Count));
     }
 
     private void FindAll()
@@ -222,8 +227,8 @@ public sealed partial class FindReplaceDialog : Window
 
         UpdateResultsGrid();
         SetStatusText(_results.Count == 0
-            ? UiText.Get("FindReplace_NoMatchesFound")
-            : UiText.Format("FindReplace_CellsFoundStatus", _results.Count));
+            ? DialogText(FindReplaceDialogText.NoMatchesFound)
+            : DialogText(FindReplaceDialogText.CellsFoundStatus, _results.Count));
     }
 
     private void ReplaceAll_Click(object sender, RoutedEventArgs e)
@@ -247,8 +252,8 @@ public sealed partial class FindReplaceDialog : Window
             _onWorkbookChanged();
 
         SetStatusText(result.ReplacedCount == 0
-            ? UiText.Get("FindReplace_NoMatchesFound")
-            : UiText.Format("FindReplace_ReplacedCellsStatus", result.ReplacedCount));
+            ? DialogText(FindReplaceDialogText.NoMatchesFound)
+            : DialogText(FindReplaceDialogText.ReplacedCellsStatus, result.ReplacedCount));
         _results = result.CurrentMatches;
         _currentIndex = -1;
         UpdateResultsGrid();
@@ -279,15 +284,15 @@ public sealed partial class FindReplaceDialog : Window
         if (result.ReplacedCount == 0)
         {
             SetStatusText(_results.Count == 0
-                ? UiText.Get("FindReplace_NoMatchesFound")
-                : UiText.Get("FindReplace_NoReplaceableMatchFound"));
+                ? DialogText(FindReplaceDialogText.NoMatchesFound)
+                : DialogText(FindReplaceDialogText.NoReplaceableMatchFound));
             return;
         }
 
-        SetStatusText(UiText.Get("FindReplace_ReplacedOneCell"));
+        SetStatusText(DialogText(FindReplaceDialogText.ReplacedOneCell));
         _onWorkbookChanged();
         if (_currentIndex >= 0)
-            SetStatusText(UiText.Format("FindReplace_MatchStatus", _currentIndex + 1, _results.Count));
+            SetStatusText(DialogText(FindReplaceDialogText.MatchStatus, _currentIndex + 1, _results.Count));
     }
 
     private bool ShowReplaceFailureWarning(string? errorMessage)
@@ -304,7 +309,11 @@ public sealed partial class FindReplaceDialog : Window
 
     private bool ShowBlankSearchWarning()
     {
-        DialogFocus.ShowWarningAndFocus(this, UiText.Get("FindReplace_FindWhatRequired"), Title, ResolveSearchBox());
+        DialogFocus.ShowWarningAndFocus(
+            this,
+            DialogText(FindReplaceDialogText.FindWhatRequired),
+            Title,
+            ResolveSearchBox());
         return true;
     }
 
@@ -337,34 +346,36 @@ public sealed partial class FindReplaceDialog : Window
             : _getActiveSelectionCell();
         if (address is null)
         {
-            SetStatusText(UiText.Get("FindReplace_SelectFormatSourceStatus"));
+            SetStatusText(DialogText(FindReplaceDialogText.SelectFormatSourceStatus));
             return;
         }
 
         var diff = FindReplaceDialogPlanner.CreateFormatDiffFromCell(_getWorkbook(), address.Value);
         if (diff is null)
         {
-            SetStatusText(UiText.Get("FindReplace_NoCellFormatFoundStatus"));
+            SetStatusText(DialogText(FindReplaceDialogText.NoCellFormatFoundStatus));
             return;
         }
 
         target = diff;
         SetStatusText(FindResultsGrid.SelectedItem is FindResultRow
-            ? UiText.Get("FindReplace_FormatChosenFromResultStatus")
-            : UiText.Get("FindReplace_FormatChosenFromWorksheetStatus"));
+            ? DialogText(FindReplaceDialogText.FormatChosenFromResultStatus)
+            : DialogText(FindReplaceDialogText.FormatChosenFromWorksheetStatus));
         UpdateFormatStateButtons();
     }
 
     private void UpdateFormatStateButtons()
     {
-        SetFormatState(_findFormatDiff is not null, UiText.Get("FindReplace_FindFormatSetToolTip"), FindFormatButton, FindClearFormatButton);
-        SetFormatState(_findFormatDiff is not null, UiText.Get("FindReplace_FindFormatSetToolTip"), ReplaceFindFormatButton, ReplaceFindClearFormatButton);
-        SetFormatState(_replaceFormatDiff is not null, UiText.Get("FindReplace_ReplaceFormatSetToolTip"), ReplaceWithFormatButton, ReplaceWithClearFormatButton);
+        SetFormatState(_findFormatDiff is not null, DialogText(FindReplaceDialogText.FindFormatSetToolTip), FindFormatButton, FindClearFormatButton);
+        SetFormatState(_findFormatDiff is not null, DialogText(FindReplaceDialogText.FindFormatSetToolTip), ReplaceFindFormatButton, ReplaceFindClearFormatButton);
+        SetFormatState(_replaceFormatDiff is not null, DialogText(FindReplaceDialogText.ReplaceFormatSetToolTip), ReplaceWithFormatButton, ReplaceWithClearFormatButton);
     }
 
     private static void SetFormatState(bool isSet, string toolTip, Button formatButton, Button clearButton)
     {
-        formatButton.Content = isSet ? UiText.Get("FindReplace_FormatSetButton") : UiText.Get("FindReplace_Format");
+        formatButton.Content = isSet
+            ? DialogText(FindReplaceDialogText.FormatSetButton)
+            : DialogText(FindReplaceDialogText.Format);
         formatButton.ToolTip = isSet ? toolTip : null;
         clearButton.Visibility = isSet ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -405,4 +416,61 @@ public sealed partial class FindReplaceDialog : Window
         {
         }
     }
+
+    private void ApplySharedDialogSchema()
+    {
+        Title = DialogText(FindReplaceDialogText.Title);
+        FindTab.Header = DialogText(FindReplaceDialogText.Find);
+        ReplaceTab.Header = DialogText(FindReplaceDialogText.Replace);
+        FindWhatLabel.Content = DialogText(FindReplaceDialogText.FindWhat);
+        ReplaceFindWhatLabel.Content = DialogText(FindReplaceDialogText.FindWhat);
+        ReplaceWithLabel.Content = DialogText(FindReplaceDialogText.ReplaceWith);
+
+        foreach (var button in new[] { FindFormatButton, ReplaceFindFormatButton, ReplaceWithFormatButton })
+            button.Content = DialogText(FindReplaceDialogText.Format);
+        foreach (var button in new[] { FindClearFormatButton, ReplaceFindClearFormatButton, ReplaceWithClearFormatButton })
+            button.Content = DialogText(FindReplaceDialogText.Clear);
+        foreach (var button in new[] { FindChooseFormatFromCellButton, ReplaceFindChooseFormatFromCellButton, ReplaceWithChooseFormatFromCellButton })
+            button.Content = DialogText(FindReplaceDialogText.ChooseFromCell);
+
+        OptionsExpander.Header = DialogText(FindReplaceDialogText.Options);
+        WithinLabel.Content = DialogText(FindReplaceDialogText.Within);
+        SearchLabel.Content = DialogText(FindReplaceDialogText.Search);
+        LookInLabel.Content = DialogText(FindReplaceDialogText.LookIn);
+        WithinCombo.ItemsSource = FindReplaceDialogSchema.WithinChoices
+            .Select(choice => DialogText(choice.Text))
+            .ToArray();
+        SearchCombo.ItemsSource = FindReplaceDialogSchema.SearchChoices
+            .Select(choice => DialogText(choice.Text))
+            .ToArray();
+        LookInCombo.ItemsSource = FindReplaceDialogSchema.LookInChoices
+            .Select(choice => DialogText(choice.Text))
+            .ToArray();
+        WithinCombo.SelectedIndex = 0;
+        SearchCombo.SelectedIndex = 0;
+        LookInCombo.SelectedIndex = 0;
+        MatchCaseBox.Content = DialogText(FindReplaceDialogText.MatchCase);
+        MatchEntireBox.Content = DialogText(FindReplaceDialogText.MatchEntireCellContents);
+
+        var resultHeaders = new[]
+        {
+            FindReplaceDialogText.Book,
+            FindReplaceDialogText.Sheet,
+            FindReplaceDialogText.Name,
+            FindReplaceDialogText.Cell,
+            FindReplaceDialogText.Value,
+            FindReplaceDialogText.Formula,
+        };
+        for (var index = 0; index < resultHeaders.Length; index++)
+            FindResultsGrid.Columns[index].Header = DialogText(resultHeaders[index]);
+
+        FindAllBtn.Content = DialogText(FindReplaceDialogText.FindAll);
+        FindNextBtn.Content = DialogText(FindReplaceDialogText.FindNext);
+        ReplaceBtn.Content = DialogText(FindReplaceDialogText.Replace);
+        ReplaceAllBtn.Content = DialogText(FindReplaceDialogText.ReplaceAll);
+        CloseBtn.Content = DialogText(FindReplaceDialogText.Close);
+    }
+
+    private static string DialogText(FindReplaceDialogText text, params object?[] arguments) =>
+        FindReplaceDialogSchema.Resolve(text, UiText.Get, UiText.Format, arguments: arguments);
 }

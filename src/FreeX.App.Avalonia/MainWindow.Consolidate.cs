@@ -238,18 +238,19 @@ public sealed partial class MainWindow
                 UseLeftColumnLabels = leftColumnBox.IsChecked == true,
             };
 
-            if (!ConsolidateDialogPlanner.TryPlanApply(
-                    _session.Workbook,
-                    references,
-                    destinationBox.Text?.Trim() ?? string.Empty,
-                    TryParseConsolidateReference,
-                    options,
-                    out var plan,
-                    out var issue))
+            var plan = ConsolidateApplicationWorkflow.Plan(
+                _session.Workbook,
+                references,
+                destinationBox.Text?.Trim() ?? string.Empty,
+                TryParseConsolidateReference,
+                options,
+                createLinksBox.IsChecked == true,
+                overwriteConfirmed);
+            if (plan.Disposition == ConsolidateApplicationDisposition.Invalid)
             {
                 warningText.Text = ConsolidateDialogPlanner
                     .DescribeIssue(
-                        issue,
+                        plan.Issue,
                         ConsolidateDialogMessageContext.FinalValidation,
                         ConsolidateDialogTextProfile.Avalonia)
                     .Message
@@ -258,16 +259,35 @@ public sealed partial class MainWindow
                 return;
             }
 
-            if (plan.OverwriteTargets.Count > 0 && !overwriteConfirmed)
+            if (plan.Disposition == ConsolidateApplicationDisposition.ConfirmOverwrite)
             {
                 overwriteConfirmed = true;
-                warningText.Text = UiText.Format("TableLoc_ConsolidateOverwriteWarning", plan.OverwriteTargets.Count);
+                warningText.Text = ConsolidateApplicationWorkflow
+                    .DescribeOverwriteConfirmation(plan)
+                    .Resolve(UiText.Get, UiText.Format);
                 warningText.IsVisible = true;
                 return;
             }
 
-            if (!ApplyConsolidatePlan(plan, createLinksBox.IsChecked == true))
+            var outcome = ConsolidateApplicationWorkflow.Execute(
+                plan,
+                commandFactory =>
+                {
+                    var result = _session.ExecuteReviewCommand(commandFactory());
+                    return new ConsolidateCommandAdapterResult(result.Success, result.ErrorMessage);
+                });
+            if (!outcome.Success)
+            {
+                ShowEditIssue(ConsolidateApplicationWorkflow
+                    .DescribeFailure(outcome)
+                    .Resolve(UiText.Get, UiText.Format));
                 return;
+            }
+
+            SelectCell(outcome.DestinationCell);
+            RefreshShell(ConsolidateApplicationWorkflow
+                .DescribeSuccess(outcome)
+                .Resolve(UiText.Get, UiText.Format));
 
             dialog.Close();
         };
@@ -405,28 +425,6 @@ public sealed partial class MainWindow
         ranges = [];
         invalidPart = text;
         return false;
-    }
-
-    /// <summary>Applies the shared Consolidate command through the session command path and refreshes the shell.</summary>
-    private bool ApplyConsolidatePlan(ConsolidateApplyPlan plan, bool createLinksToSourceData)
-    {
-        var command = new ConsolidateCommand(
-            plan.SourceRanges,
-            plan.DestinationCell,
-            plan.Options.Function,
-            plan.Options.UseTopRowLabels,
-            plan.Options.UseLeftColumnLabels,
-            createLinksToSourceData);
-        var result = _session.ExecuteReviewCommand(command);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ConsolidateFailed"));
-            return false;
-        }
-
-        SelectCell(plan.DestinationCell);
-        RefreshShell(UiText.Format("TableLoc_ConsolidatedInto", FormatCellReference(plan.DestinationCell)));
-        return true;
     }
 
     // ── Shared data-operations dialog chrome helpers ───────────────────────────

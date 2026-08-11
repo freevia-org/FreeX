@@ -320,7 +320,6 @@ public static class ConsolidateDialogPlanner
         }
 
         var ranges = new List<GridRange>(sourceReferences.Count);
-        var sources = new List<ConsolidateSource>(sourceReferences.Count);
         foreach (var reference in sourceReferences)
         {
             if (!parseReference(reference, out var sourceRange))
@@ -329,15 +328,13 @@ public static class ConsolidateDialogPlanner
                 return false;
             }
 
-            var sheet = workbook.GetSheet(sourceRange.Start.Sheet);
-            if (sheet is null)
+            if (workbook.GetSheet(sourceRange.Start.Sheet) is null)
             {
                 issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.InvalidSourceRange, reference);
                 return false;
             }
 
             ranges.Add(sourceRange);
-            sources.Add(ConsolidateSource.FromGrid(ConsolidateApplyPlanner.ReadSource(sheet, sourceRange)));
         }
 
         if (!HaveSameSize(ranges))
@@ -353,7 +350,52 @@ public static class ConsolidateDialogPlanner
             return false;
         }
 
-        var destinationSheet = workbook.GetSheet(destinationRange.Start.Sheet);
+        return TryPlanApply(workbook, ranges, destinationRange.Start, options, out plan, out issue);
+    }
+
+    public static bool TryPlanApply(
+        Workbook workbook,
+        IReadOnlyList<GridRange> sourceRanges,
+        CellAddress destinationCell,
+        ConsolidateOptions options,
+        out ConsolidateApplyPlan plan,
+        out ConsolidateDialogIssue issue)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(sourceRanges);
+        ArgumentNullException.ThrowIfNull(options);
+
+        plan = default!;
+        issue = ConsolidateDialogIssue.None;
+
+        if (sourceRanges.Count == 0)
+        {
+            issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.NoSourceRanges);
+            return false;
+        }
+
+        if (!HaveSameSize(sourceRanges))
+        {
+            issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.MismatchedSourceSizes);
+            return false;
+        }
+
+        var ranges = new List<GridRange>(sourceRanges.Count);
+        var sources = new List<ConsolidateSource>(sourceRanges.Count);
+        foreach (var sourceRange in sourceRanges)
+        {
+            var sheet = workbook.GetSheet(sourceRange.Start.Sheet);
+            if (sheet is null)
+            {
+                issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.InvalidSourceRange);
+                return false;
+            }
+
+            ranges.Add(sourceRange);
+            sources.Add(ConsolidateSource.FromGrid(ConsolidateApplyPlanner.ReadSource(sheet, sourceRange)));
+        }
+
+        var destinationSheet = workbook.GetSheet(destinationCell.Sheet);
         if (destinationSheet is null)
         {
             issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.InvalidDestinationCell);
@@ -367,7 +409,7 @@ public static class ConsolidateDialogPlanner
             return false;
         }
 
-        var edits = ConsolidateApplyPlanner.MapToEdits(destinationSheet.Id, result, destinationRange.Start);
+        var edits = ConsolidateApplyPlanner.MapToEdits(destinationSheet.Id, result, destinationCell);
         if (edits.Count != result.Cells.Count)
         {
             issue = new ConsolidateDialogIssue(ConsolidateDialogIssueKind.OutsideWorksheetBounds);
@@ -375,7 +417,7 @@ public static class ConsolidateDialogPlanner
         }
 
         var overwrites = ConsolidateApplyPlanner.FindOverwriteTargets(destinationSheet, edits);
-        plan = new ConsolidateApplyPlan(ranges, destinationRange.Start, options, result, edits, overwrites);
+        plan = new ConsolidateApplyPlan(ranges, destinationCell, options, result, edits, overwrites);
         return true;
     }
 

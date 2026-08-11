@@ -483,13 +483,51 @@ public partial class MainWindow
             ResolveSheetIdByName) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        if (!TryExecuteRepeatableConsolidateCommand(dialog.Result, out var outcome))
+        var plan = ConsolidateApplicationWorkflow.Plan(_workbook, dialog.Result, overwriteConfirmed: false);
+        if (ShowConsolidateValidationIssue(plan))
             return;
 
-        SetActiveCell(dialog.Result.DestinationCell);
-        EnsureCellVisible(dialog.Result.DestinationCell);
+        if (plan.Disposition == ConsolidateApplicationDisposition.ConfirmOverwrite)
+        {
+            var choice = ShowOwnedMessage(
+                ConsolidateApplicationWorkflow
+                    .DescribeOverwriteConfirmation(plan)
+                    .Resolve(UiText.Get, UiText.Format),
+                UiText.Get("Consolidate_Consolidate"),
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Warning);
+            if (choice != MessageBoxResult.OK)
+                return;
+
+            plan = ConsolidateApplicationWorkflow.Plan(_workbook, dialog.Result, overwriteConfirmed: true);
+            if (ShowConsolidateValidationIssue(plan))
+                return;
+        }
+
+        if (!TryExecuteRepeatableConsolidateCommand(plan, out var outcome))
+            return;
+
+        SetActiveCell(outcome.DestinationCell);
+        EnsureCellVisible(outcome.DestinationCell);
         UpdateViewport();
         PruneCorrectedValidationCircles();
+    }
+
+    private bool ShowConsolidateValidationIssue(ConsolidateApplicationPlan plan)
+    {
+        if (plan.Disposition != ConsolidateApplicationDisposition.Invalid)
+            return false;
+
+        var presentation = ConsolidateDialogPlanner.DescribeIssue(
+            plan.Issue,
+            ConsolidateDialogMessageContext.FinalValidation,
+            ConsolidateDialogTextProfile.Wpf);
+        ShowOwnedMessage(
+            presentation.Message.Resolve(UiText.Get, UiText.Format),
+            UiText.Get("Consolidate_Consolidate"),
+            MessageBoxButton.OK,
+            MessageBoxImage.Warning);
+        return true;
     }
 
     private void CircleInvalidDataMenuItem_Click(object sender, RoutedEventArgs e)
@@ -731,28 +769,24 @@ public partial class MainWindow
     }
 
     private bool TryExecuteRepeatableConsolidateCommand(
-        ConsolidateDialogResult result,
-        out CommandOutcome outcome)
+        ConsolidateApplicationPlan plan,
+        out ConsolidateExecutionOutcome outcome)
     {
-        IWorkbookCommand CreateCommand() =>
-            new ConsolidateCommand(
-                result.SourceRanges,
-                result.DestinationCell,
-                result.Function,
-                result.UseTopRowLabels,
-                result.UseLeftColumnLabels,
-                result.CreateLinksToSourceData);
+        CommandOutcome? commandOutcome = null;
+        outcome = ConsolidateApplicationWorkflow.Execute(
+            plan,
+            commandFactory =>
+            {
+                var success = TryExecuteRepeatableCommand(commandFactory, "Consolidate", out var result);
+                commandOutcome = result;
+                return new ConsolidateCommandAdapterResult(success, result.ErrorMessage);
+            });
 
-        try
-        {
-            return TryExecuteRepeatableCommand(CreateCommand, "Consolidate", out outcome);
-        }
-        catch (Exception ex)
-        {
-            outcome = new CommandOutcome(false, ex.Message);
-        }
+        if (outcome.Success)
+            return true;
 
-        ShowCommandError(outcome, "Consolidate");
+        if (commandOutcome is null)
+            ShowCommandError(new CommandOutcome(false, outcome.ErrorMessage), "Consolidate");
         return false;
     }
 

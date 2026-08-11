@@ -51,6 +51,31 @@ public sealed class FreeXSynchronousPromptCatalogTests
         lossy.Icon.Should().Be(UserMessageIcon.Warning);
     }
 
+    [Theory]
+    [InlineData(null, null, "")]
+    [InlineData("", null, "")]
+    [InlineData(" 1.2.3 ", "1.2.3", " 1.2.3")]
+    public void UpdateReady_OwnsVersionNormalizationConfirmationAndApplyingStatus(
+        string? version,
+        string? expectedVersion,
+        string expectedSuffix)
+    {
+        var plan = FreeXSynchronousPromptCatalog.ForUpdateReady(version);
+
+        plan.Version.Should().Be(expectedVersion);
+        plan.Confirmation.Kind.Should().Be(FreeXSynchronousPromptKind.UpdateReady);
+        plan.Confirmation.Title.ResourceKey.Should().Be(FreeXSynchronousPromptCatalog.UpdateReadyTitleResourceKey);
+        plan.Confirmation.Message.ResourceKey.Should().Be(FreeXSynchronousPromptCatalog.UpdateReadyBodyResourceKey);
+        plan.Confirmation.Message.Arguments.Should().Equal(expectedSuffix);
+        plan.Confirmation.Buttons.Should().Be(UserMessageButtons.OkCancel);
+        plan.Confirmation.Icon.Should().Be(UserMessageIcon.Information);
+        plan.Confirmation.DismissedResult.Should().Be(UserMessageResult.Cancel);
+        plan.ApplyingStatus.ResourceKey.Should().Be(FreeXSynchronousPromptCatalog.UpdateApplyingStatusResourceKey);
+        plan.ApplyingStatus.Arguments.Should().Equal(expectedSuffix);
+        plan.ShouldApply(UserMessageResult.Ok).Should().BeTrue();
+        plan.ShouldApply(UserMessageResult.Cancel).Should().BeFalse();
+    }
+
     private static UserMessageRequest Resolve(FreeXSynchronousPromptDescriptor descriptor) =>
         descriptor.Resolve(
             key => key,

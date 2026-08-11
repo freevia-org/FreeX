@@ -30,8 +30,8 @@ public sealed class DialogVisualParitySourceTests
         source.Should().Contain("optionsHeader.Width = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth;");
         source.Should().Contain("optionsHeader.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left;");
         source.Should().Contain("optionsHeader.Background = Brushes.White;");
-        source.Should().Contain("? Fr(\"FindReplace_OptionsExpanded\", \"Options <<\")");
-        source.Should().Contain(": Fr(\"FindReplace_Options\", \"Options >>\")");
+        source.Should().Contain("? Fr(FindReplaceDialogText.OptionsExpanded)");
+        source.Should().Contain(": Fr(FindReplaceDialogText.Options)");
         source.Should().Contain("AutomationProperties.SetName(optionsHeader, optionsHeaderText.Text);");
         source.Should().Contain("dialog.Opened += (_, _) => resultsList.Background = Brush(242, 242, 242);");
     }

@@ -74,6 +74,7 @@ public sealed class FreeXPracticalResidualOwnershipTests
         var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var wpfEditing = Read("src", "FreeX.App.Host", "MainWindow.Editing.cs");
         var wpfBackstage = Read("src", "FreeX.App.Host", "MainWindow.Backstage.cs");
+        var wpfUpdate = Read("src", "FreeX.App.Host", "MainWindow.Update.cs");
         var wpfFormatting = Read("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
         var synchronousRealizer = Read(
             "shared",
@@ -86,6 +87,7 @@ public sealed class FreeXPracticalResidualOwnershipTests
         avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(");
         avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(");
         avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(");
+        avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForUpdateReady(");
         avalonia.Should().NotContain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
         avalonia.Should().NotContain("private UserMessageResult ShowDataValidationPromptDialog");
         synchronousRealizer.Should().Contain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
@@ -94,6 +96,9 @@ public sealed class FreeXPracticalResidualOwnershipTests
         wpfBackstage.Should().Contain("FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(");
         wpfBackstage.Should().Contain("FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(");
         wpfBackstage.Should().Contain("FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(");
+        wpfUpdate.Should().Contain("FreeXSynchronousPromptCatalog.ForUpdateReady(");
+        (avalonia + wpfUpdate).Should().NotContain("MainWindowMessage_UpdateReadyToInstallFormat");
+        (avalonia + wpfUpdate).Should().NotContain("MainLoc_RestartingToInstall");
 
         wpfFormatting.Should().Contain("MergeCellsContentWarningPlanner.Create(");
         avalonia.Should().Contain("MergeCellsContentWarningPlanner.Create(");

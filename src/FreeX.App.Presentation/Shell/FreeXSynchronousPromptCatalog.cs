@@ -11,6 +11,7 @@ public enum FreeXSynchronousPromptKind
     ReadOnlyRecommended,
     ExternallyModifiedFile,
     LossyFormatFeatureLoss,
+    UpdateReady,
 }
 
 /// <summary>Renderer-neutral text, buttons, severity, and dismissal policy for a synchronous prompt.</summary>
@@ -32,6 +33,14 @@ public sealed record FreeXSynchronousPromptDescriptor(
             Icon);
 }
 
+public sealed record UpdateReadyConfirmationPlan(
+    string? Version,
+    FreeXSynchronousPromptDescriptor Confirmation,
+    LocalizedTextDescriptor ApplyingStatus)
+{
+    public bool ShouldApply(UserMessageResult result) => result == UserMessageResult.Ok;
+}
+
 /// <summary>Canonical prompt policy shared by the WPF and Avalonia FreeX renderers.</summary>
 public static class FreeXSynchronousPromptCatalog
 {
@@ -41,6 +50,9 @@ public static class FreeXSynchronousPromptCatalog
     public const string ExternallyModifiedFileBodyResourceKey = "MainWindowMessage_ExternallyModifiedFileBody";
     public const string LossyFormatFeatureLossTitleResourceKey = "MainWindowMessage_LossyFormatFeatureLossTitle";
     public const string LossyFormatFeatureLossBodyResourceKey = "MainWindowMessage_LossyFormatFeatureLossBodyFormat";
+    public const string UpdateReadyTitleResourceKey = "MainWindowMessage_UpdateFreeXTitle";
+    public const string UpdateReadyBodyResourceKey = "MainWindowMessage_UpdateReadyToInstallFormat";
+    public const string UpdateApplyingStatusResourceKey = "MainLoc_RestartingToInstall";
 
     public static FreeXSynchronousPromptDescriptor ForDataValidation(
         string title,
@@ -89,4 +101,20 @@ public static class FreeXSynchronousPromptCatalog
             UserMessageButtons.YesNo,
             UserMessageIcon.Warning,
             UserMessageResult.No);
+
+    public static UpdateReadyConfirmationPlan ForUpdateReady(string? version)
+    {
+        var normalizedVersion = string.IsNullOrWhiteSpace(version) ? null : version.Trim();
+        var versionSuffix = normalizedVersion is null ? string.Empty : $" {normalizedVersion}";
+        return new UpdateReadyConfirmationPlan(
+            normalizedVersion,
+            new FreeXSynchronousPromptDescriptor(
+                FreeXSynchronousPromptKind.UpdateReady,
+                LocalizedTextDescriptor.Resource(UpdateReadyTitleResourceKey),
+                LocalizedTextDescriptor.Resource(UpdateReadyBodyResourceKey, versionSuffix),
+                UserMessageButtons.OkCancel,
+                UserMessageIcon.Information,
+                UserMessageResult.Cancel),
+            LocalizedTextDescriptor.Resource(UpdateApplyingStatusResourceKey, versionSuffix));
+    }
 }

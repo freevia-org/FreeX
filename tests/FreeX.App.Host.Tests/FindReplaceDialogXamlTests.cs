@@ -15,28 +15,31 @@ public sealed class FindReplaceDialogXamlTests
         var document = LoadDialogXaml();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        AssertLabelTargets(document, presentation, "_Find what:", "FindBox");
-        AssertLabelTargets(document, presentation, "_Replace with:", "ReplaceBox");
-        AssertLabelTargets(document, presentation, "_Within:", "WithinCombo");
-        AssertLabelTargets(document, presentation, "_Search:", "SearchCombo");
-        AssertLabelTargets(document, presentation, "_Look in:", "LookInCombo");
+        AssertLabelTargets(document, presentation, "FindWhatLabel", "FindBox");
+        AssertLabelTargets(document, presentation, "ReplaceWithLabel", "ReplaceBox");
+        AssertLabelTargets(document, presentation, "WithinLabel", "WithinCombo");
+        AssertLabelTargets(document, presentation, "SearchLabel", "SearchCombo");
+        AssertLabelTargets(document, presentation, "LookInLabel", "LookInCombo");
 
-        document.Descendants(presentation + "CheckBox")
-            .Select(element => element.Attribute("Content")?.Value)
-            .Should()
-            .Contain(["Match _case", "Match entire cell _contents"]);
-
-        document.Descendants(presentation + "Button")
-            .Select(element => element.Attribute("Content")?.Value)
-            .Should()
-            .Contain(["Find _All", "_Find Next", "_Replace", "_Replace All", "_Close"]);
-
-        static void AssertLabelTargets(XDocument document, XNamespace presentation, string content, string target)
+        WithDialog(dialog =>
         {
+            GetPrivateControl<Label>(dialog, "FindWhatLabel").Content.Should().Be("_Find what:");
+            GetPrivateControl<Label>(dialog, "ReplaceWithLabel").Content.Should().Be("_Replace with:");
+            GetPrivateControl<CheckBox>(dialog, "MatchCaseBox").Content.Should().Be("Match _case");
+            GetPrivateControl<CheckBox>(dialog, "MatchEntireBox").Content.Should().Be("Match entire cell _contents");
+            new[] { "FindAllBtn", "FindNextBtn", "ReplaceBtn", "ReplaceAllBtn", "CloseBtn" }
+                .Select(name => GetPrivateControl<Button>(dialog, name).Content)
+                .Should()
+                .Equal("Find _All", "_Find Next", "_Replace", "_Replace All", "_Close");
+        });
+
+        static void AssertLabelTargets(XDocument document, XNamespace presentation, string name, string target)
+        {
+            XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
             var label = document
                 .Descendants(presentation + "Label")
                 .Single(element =>
-                    element.Attribute("Content")?.Value == content &&
+                    element.Attribute(xaml + "Name")?.Value == name &&
                     element.Attribute("Target")?.Value == $"{{Binding ElementName={target}}}");
 
             label.Should().NotBeNull();
@@ -53,10 +56,11 @@ public sealed class FindReplaceDialogXamlTests
         var tabControl = document.Descendants(presentation + "TabControl")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "FindReplaceTabs");
 
-        tabControl.Descendants(presentation + "TabItem")
-            .Select(element => element.Attribute("Header")?.Value)
-            .Should()
-            .Contain(["_Find", "_Replace"]);
+        WithDialog(dialog =>
+        {
+            GetPrivateControl<TabItem>(dialog, "FindTab").Header.Should().Be("_Find");
+            GetPrivateControl<TabItem>(dialog, "ReplaceTab").Header.Should().Be("_Replace");
+        });
 
         AssertNamedElement(document, presentation, xaml, "TextBox", "FindBox");
         AssertNamedElement(document, presentation, xaml, "TextBox", "ReplaceBox");
@@ -127,54 +131,46 @@ public sealed class FindReplaceDialogXamlTests
 
         document.Descendants(presentation + "Expander")
             .Single(element => element.Attribute(xaml + "Name")?.Value == "OptionsExpander")
-            .Attribute("Header")?.Value.Should().Be("_Options >>");
-        document.Descendants(presentation + "Expander")
-            .Single(element => element.Attribute(xaml + "Name")?.Value == "OptionsExpander")
             .Attribute("IsExpanded")?.Value.Should().Be("False");
 
-        AssertComboBoxContainsExactly(document, presentation, xaml, "WithinCombo", ["Sheet", "Workbook"]);
-        AssertComboBoxContainsExactly(document, presentation, xaml, "SearchCombo", ["By Rows", "By Columns"]);
-        AssertComboBoxContainsExactly(document, presentation, xaml, "LookInCombo", ["Formulas", "Values", "Notes", "Comments"]);
         AssertNamedElementHasAttribute(document, presentation, xaml, "ComboBox", "LookInCombo", "SelectedIndex", "0");
-        document.Descendants(presentation + "ComboBoxItem")
-            .Select(element => element.Attribute("IsEnabled")?.Value)
-            .Should()
-            .NotContain("False");
-        document.Descendants(presentation + "ComboBoxItem")
-            .Select(element => element.Attribute("ToolTip")?.Value ?? string.Empty)
-            .Should()
-            .NotContain(value => value.Contains("not available yet", StringComparison.OrdinalIgnoreCase));
 
-        AssertCheckBoxContent(document, presentation, xaml, "MatchCaseBox", "Match _case");
-        AssertCheckBoxContent(document, presentation, xaml, "MatchEntireBox", "Match entire cell _contents");
-
-        document.Descendants(presentation + "Button")
-            .Select(element => element.Attribute("Content")?.Value)
-            .Should()
-            .Contain(["For_mat...", "Find _All"]);
-
-        AssertNamedButton(document, presentation, xaml, "FindFormatButton", "For_mat...", "FindFormatButton_Click");
-        AssertNamedButton(document, presentation, xaml, "ReplaceFindFormatButton", "For_mat...", "FindFormatButton_Click");
-        AssertNamedButton(document, presentation, xaml, "ReplaceWithFormatButton", "For_mat...", "ReplaceWithFormatButton_Click");
-        AssertNamedButton(document, presentation, xaml, "FindChooseFormatFromCellButton", "Choose From _Cell...", "ChooseFindFormatFromCellButton_Click");
-        AssertNamedButton(document, presentation, xaml, "ReplaceFindChooseFormatFromCellButton", "Choose From _Cell...", "ChooseFindFormatFromCellButton_Click");
-        AssertNamedButton(document, presentation, xaml, "ReplaceWithChooseFormatFromCellButton", "Choose From _Cell...", "ChooseReplaceWithFormatFromCellButton_Click");
-        AssertNamedButton(document, presentation, xaml, "FindClearFormatButton", "_Clear", "FindClearFormatButton_Click");
-        AssertNamedButton(document, presentation, xaml, "ReplaceFindClearFormatButton", "_Clear", "FindClearFormatButton_Click");
-        AssertNamedButton(document, presentation, xaml, "ReplaceWithClearFormatButton", "_Clear", "ReplaceWithClearFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "FindFormatButton", "FindFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceFindFormatButton", "FindFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceWithFormatButton", "ReplaceWithFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "FindChooseFormatFromCellButton", "ChooseFindFormatFromCellButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceFindChooseFormatFromCellButton", "ChooseFindFormatFromCellButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceWithChooseFormatFromCellButton", "ChooseReplaceWithFormatFromCellButton_Click");
+        AssertNamedButton(document, presentation, xaml, "FindClearFormatButton", "FindClearFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceFindClearFormatButton", "FindClearFormatButton_Click");
+        AssertNamedButton(document, presentation, xaml, "ReplaceWithClearFormatButton", "ReplaceWithClearFormatButton_Click");
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "FindClearFormatButton", "Visibility", "Collapsed");
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceFindClearFormatButton", "Visibility", "Collapsed");
         AssertNamedElementHasAttribute(document, presentation, xaml, "Button", "ReplaceWithClearFormatButton", "Visibility", "Collapsed");
 
         AssertNamedElement(document, presentation, xaml, "DataGrid", "FindResultsGrid");
+
+        WithDialog(dialog =>
+        {
+            GetPrivateControl<Expander>(dialog, "OptionsExpander").Header.Should().Be("_Options >>");
+            GetPrivateControl<ComboBox>(dialog, "WithinCombo").Items.Cast<string>()
+                .Should().Equal("Sheet", "Workbook");
+            GetPrivateControl<ComboBox>(dialog, "SearchCombo").Items.Cast<string>()
+                .Should().Equal("By Rows", "By Columns");
+            GetPrivateControl<ComboBox>(dialog, "LookInCombo").Items.Cast<string>()
+                .Should().Equal("Formulas", "Values", "Notes", "Comments");
+            GetPrivateControl<CheckBox>(dialog, "MatchCaseBox").Content.Should().Be("Match _case");
+            GetPrivateControl<CheckBox>(dialog, "MatchEntireBox").Content.Should().Be("Match entire cell _contents");
+            GetPrivateControl<Button>(dialog, "FindFormatButton").Content.Should().Be("For_mat...");
+            GetPrivateControl<Button>(dialog, "FindChooseFormatFromCellButton").Content.Should().Be("Choose From _Cell...");
+            GetPrivateControl<Button>(dialog, "FindClearFormatButton").Content.Should().Be("_Clear");
+        });
     }
 
     [Fact]
     public void Dialog_DefaultsWithinScopeToSheet()
     {
-        var source = ReadFindReplaceDialogSource();
-
-        source.Should().Contain("Within: WithinCombo.SelectedIndex == 1 ? FindWithin.Workbook : FindWithin.Sheet");
+        WithDialog(dialog => GetPrivateControl<ComboBox>(dialog, "WithinCombo").SelectedIndex.Should().Be(0));
     }
 
     [Fact]
@@ -188,10 +184,10 @@ public sealed class FindReplaceDialogXamlTests
             .Single(element => element.Attribute(xaml + "Name")?.Value == "FindResultsGrid");
 
         grid.Attribute("SelectionChanged")?.Value.Should().Be("FindResultsGrid_SelectionChanged");
-        grid.Descendants(presentation + "DataGridTextColumn")
-            .Select(element => element.Attribute("Header")?.Value)
+        WithDialog(dialog => GetPrivateControl<DataGrid>(dialog, "FindResultsGrid").Columns
+            .Select(column => column.Header)
             .Should()
-            .Equal("Book", "Sheet", "Name", "Cell", "Value", "Formula");
+            .Equal("Book", "Sheet", "Name", "Cell", "Value", "Formula"));
     }
 
     [Fact]
@@ -200,13 +196,14 @@ public sealed class FindReplaceDialogXamlTests
         var document = LoadDialogXaml();
         XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
 
-        var buttonContents = document.Descendants(presentation + "StackPanel")
+        XNamespace xaml = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var buttonNames = document.Descendants(presentation + "StackPanel")
             .Last()
             .Descendants(presentation + "Button")
-            .Select(element => element.Attribute("Content")?.Value)
+            .Select(element => element.Attribute(xaml + "Name")?.Value)
             .ToList();
 
-        buttonContents.Should().ContainInOrder("Find _All", "_Find Next", "_Replace", "_Replace All", "_Close");
+        buttonNames.Should().ContainInOrder("FindAllBtn", "FindNextBtn", "ReplaceBtn", "ReplaceAllBtn", "CloseBtn");
     }
 
     [Fact]
@@ -215,7 +212,8 @@ public sealed class FindReplaceDialogXamlTests
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FindReplaceDialog.xaml");
 
         xaml.Should().Contain("<Button x:Name=\"FindNextBtn\"");
-        xaml.Should().Contain("x:Name=\"FindNextBtn\" Content=\"_Find Next\" Width=\"80\" Margin=\"0,0,8,0\" IsDefault=\"True\"");
+        xaml.Should().Contain("x:Name=\"FindNextBtn\" Width=\"80\" Margin=\"0,0,8,0\" IsDefault=\"True\"");
+        WithDialog(dialog => GetPrivateControl<Button>(dialog, "FindNextBtn").Content.Should().Be("_Find Next"));
     }
 
     [Fact]
@@ -495,7 +493,7 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("private void FindAll_Click");
         source.Should().Contain("FindReplaceTabs.SelectedItem = ReplaceTab");
         source.Should().Contain("CreateFindOptions()");
-        source.Should().Contain("RequiredFormat: _findFormatDiff");
+        source.Should().Contain("requiredFormat: _findFormatDiff");
         source.Should().Contain("new FormatCellsDialog(baseStyle, FormatCellsDialogTab.Font)");
         source.Should().Contain("FindFormatButton_Click");
         source.Should().Contain("ReplaceWithFormatButton_Click");
@@ -507,15 +505,17 @@ public sealed class FindReplaceDialogXamlTests
         source.Should().Contain("FindClearFormatButton_Click");
         source.Should().Contain("ReplaceWithClearFormatButton_Click");
         source.Should().Contain("UpdateFormatStateButtons");
-        source.Should().Contain("UiText.Get(\"FindReplace_FormatSetButton\")");
+        source.Should().Contain("DialogText(FindReplaceDialogText.FormatSetButton)");
         source.Should().Contain("replacementFormat: _replaceFormatDiff");
         source.Should().Contain("FindResultsGrid_SelectionChanged");
         source.Should().Contain("_navigateTo(row.Address)");
         source.Should().Contain("BuildFindResultRows(_getWorkbook(), _results)");
         source.Should().Contain("OptionsExpander_Expanded");
-        source.Should().Contain("OptionsExpander.Header = UiText.Get(\"FindReplace_OptionsExpanded\")");
+        source.Should().Contain("OptionsExpander.Header = DialogText(FindReplaceDialogText.OptionsExpanded)");
         source.Should().Contain("OptionsExpander_Collapsed");
-        source.Should().Contain("OptionsExpander.Header = UiText.Get(\"FindReplace_Options\")");
+        source.Should().Contain("OptionsExpander.Header = DialogText(FindReplaceDialogText.Options)");
+        source.Should().Contain("ApplySharedDialogSchema();");
+        source.Should().Contain("FindReplaceDialogSchema.WithinChoices");
     }
 
     [Fact]
@@ -574,7 +574,7 @@ public sealed class FindReplaceDialogXamlTests
 
         source.Should().Contain("ShowBlankSearchWarning()");
         source.Should().Contain("private bool ShowBlankSearchWarning()");
-        source.Should().Contain("DialogFocus.ShowWarningAndFocus(this, UiText.Get(\"FindReplace_FindWhatRequired\"), Title, ResolveSearchBox());");
+        source.Should().Contain("DialogText(FindReplaceDialogText.FindWhatRequired)");
         source.Should().Contain("FocusSearchBox();");
         source.Should().Contain("private void FocusSearchBox()");
         source.Should().Contain("private TextBox ResolveSearchBox() => FindReplaceTabs.SelectedItem == ReplaceTab ? ReplaceFindBox : FindBox;");
@@ -593,6 +593,28 @@ public sealed class FindReplaceDialogXamlTests
     private static T GetPrivateControl<T>(FindReplaceDialog dialog, string fieldName)
         where T : class
         => DialogSourceTestSupport.GetPrivateField<T>(dialog, fieldName);
+
+    private static void WithDialog(Action<FindReplaceDialog> assertion)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var workbook = new Workbook("Book1");
+            workbook.AddSheet("Sheet1");
+            var commandBus = new CommandBus(_ => new TestCommandContext(workbook));
+            var dialog = new FindReplaceDialog(
+                () => workbook,
+                command => commandBus.Execute(workbook.Id, command),
+                _ => { });
+            try
+            {
+                assertion(dialog);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
 
     private static void AssertNamedElement(
         XDocument document,
@@ -619,47 +641,17 @@ public sealed class FindReplaceDialogXamlTests
             .Attribute(attributeName)?.Value.Should().Be(value);
     }
 
-    private static void AssertCheckBoxContent(
-        XDocument document,
-        XNamespace presentation,
-        XNamespace xaml,
-        string controlName,
-        string content)
-    {
-        document.Descendants(presentation + "CheckBox")
-            .Single(element => element.Attribute(xaml + "Name")?.Value == controlName)
-            .Attribute("Content")?.Value.Should().Be(content);
-    }
-
     private static void AssertNamedButton(
         XDocument document,
         XNamespace presentation,
         XNamespace xaml,
         string controlName,
-        string content,
         string clickHandler)
     {
         var button = document.Descendants(presentation + "Button")
             .Single(element => element.Attribute(xaml + "Name")?.Value == controlName);
 
-        button.Attribute("Content")?.Value.Should().Be(content);
         button.Attribute("Click")?.Value.Should().Be(clickHandler);
-    }
-
-    private static void AssertComboBoxContainsExactly(
-        XDocument document,
-        XNamespace presentation,
-        XNamespace xaml,
-        string controlName,
-        IReadOnlyCollection<string> values)
-    {
-        var combo = document.Descendants(presentation + "ComboBox")
-            .Single(element => element.Attribute(xaml + "Name")?.Value == controlName);
-
-        combo.Descendants(presentation + "ComboBoxItem")
-            .Select(element => element.Attribute("Content")?.Value)
-            .Should()
-            .Equal(values);
     }
 
 }

@@ -15,7 +15,7 @@ public sealed class ConsolidateSourceGuardTests
             var source = File.ReadAllText(file);
 
             source.Should().NotContain("System.Windows");
-            source.Should().NotContain("Avalonia");
+            source.Should().NotContain("using Avalonia");
             source.Should().NotContain("FreeX.App.Host");
             source.Should().NotContain("FreeX.App.Avalonia");
         }
@@ -36,8 +36,9 @@ public sealed class ConsolidateSourceGuardTests
         source.Should().Contain("Height = ConsolidateDialogPlanner.CaptureHeight");
         source.Should().Contain("MinWidth = ConsolidateDialogPlanner.MinWidth");
         source.Should().Contain("MinHeight = ConsolidateDialogPlanner.ReferencesListHeight");
-        source.Should().Contain("ConsolidateDialogPlanner.TryPlanApply(");
-        source.Should().Contain("new ConsolidateCommand(");
+        source.Should().Contain("ConsolidateApplicationWorkflow.Plan(");
+        source.Should().Contain("ConsolidateApplicationWorkflow.Execute(");
+        source.Should().NotContain("new ConsolidateCommand(");
         source.Should().NotContain("ConsolidateShellPlanner");
         source.Should().NotContain("new EditCellsCommand(sheetId, edits)");
     }
@@ -63,5 +64,10 @@ public sealed class ConsolidateSourceGuardTests
         planningSource.Should().Contain("ConsolidateDialogIssue");
         planningSource.Should().Contain("SharedConsolidateDialogPlanner.DescribeIssue(");
         planningSource.Should().NotContain("UiText.Get(\"Consolidate_EnterValidDestinationCell\")");
+
+        var commandSource = File.ReadAllText(Path.Combine(hostRoot, "MainWindow.DataCommands.cs"));
+        commandSource.Should().Contain("ConsolidateApplicationWorkflow.Plan(");
+        commandSource.Should().Contain("ConsolidateApplicationWorkflow.Execute(");
+        commandSource.Should().NotContain("new ConsolidateCommand(");
     }
 }

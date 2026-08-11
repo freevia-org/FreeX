@@ -5332,6 +5332,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StyleDiff? requiredFormat = null,");
         source.Should().Contain("IReadOnlyList<GridRange>? selectionScope = null) =>");
         source.Should().Contain("private static FindOptionsControls CreateFindOptionsControls(string automationPrefix, int defaultLookInIndex)");
+        source.Should().Contain("private static Button CreateFindReplaceFormatButton(string automationId, FindReplaceDialogText text)");
         source.Should().Contain("private static Button CreateFindReplaceFormatButton(string automationId, string content)");
         source.Should().Contain("private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton)");
         source.Should().Contain("private static void UpdateFindReplaceFormatState(StyleDiff? format, Button chooseButton, Button clearButton)");
@@ -5342,6 +5343,9 @@ public sealed class AvaloniaShellSourceTests
         findReplaceDialogPlannerSource.Should().Contain("FindLookIn.Formulas");
         findReplaceDialogPlannerSource.Should().Contain("FindLookIn.Notes");
         findReplaceDialogPlannerSource.Should().Contain("FindLookIn.Comments");
+        source.Should().Contain("FindReplaceDialogSchema.WithinChoices");
+        source.Should().Contain("FindReplaceDialogSchema.SearchChoices");
+        source.Should().Contain("FindReplaceDialogSchema.LookInChoices");
         source.Should().Contain("var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);");
         source.Should().Contain("var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);");
         // The Find command now opens the tabbed Find & Replace dialog (parity with the WPF FindReplaceDialog),
