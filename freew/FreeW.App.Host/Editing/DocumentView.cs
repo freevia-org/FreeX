@@ -1814,12 +1814,8 @@ public sealed class DocumentView : RichTextBox
     public void InsertBlankPage()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-
-        foreach (var block in DocumentOps.BuildBlankPage())
-            _commands.Execute(new InsertBlockCommand(index++, block));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanBlankPage(_model, CaretBlockIndex()));
     }
 
     /// <summary>
@@ -1829,10 +1825,8 @@ public sealed class DocumentView : RichTextBox
     public void InsertHorizontalRule()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateHorizontalRule()));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanHorizontalRule(_model, CaretBlockIndex()));
     }
 
     /// <summary>
@@ -1842,10 +1836,8 @@ public sealed class DocumentView : RichTextBox
     public void InsertPageBreak()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreatePageBreak()));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanPageBreak(_model, CaretBlockIndex()));
     }
 
     /// <summary>Insert a blank row above the caret's row in the table containing the caret.</summary>
@@ -1878,10 +1870,8 @@ public sealed class DocumentView : RichTextBox
     public void InsertSectionBreak(SectionBreakKind breakKind)
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateSectionBreak(breakKind, _model.Page)));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanSectionBreak(_model, CaretBlockIndex(), breakKind));
     }
 
     /// <summary>
@@ -1890,11 +1880,12 @@ public sealed class DocumentView : RichTextBox
     public void InsertColumnBreak()
     {
         CommitToModel();
-        var index = CaretBlockIndex() + 1;
-        if (index < 0 || index > _model.Blocks.Count)
-            index = _model.Blocks.Count;
-        _commands.Execute(new InsertBlockCommand(index, DocumentOps.CreateColumnBreak()));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanColumnBreak(_model, CaretBlockIndex()));
     }
+
+    private void ExecuteBlockInsertionPlan(DocumentBlockReplacementPlan plan) =>
+        _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
 
     /// <summary>Insert a blank row below the caret's row in the table containing the caret.</summary>
     public void InsertTableRow() => MutateCaretTable((index, rowIndex, _) =>

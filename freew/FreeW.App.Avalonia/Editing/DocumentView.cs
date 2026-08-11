@@ -21803,8 +21803,8 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreatePageBreak()));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanPageBreak(_doc, _caret.Block));
     }
 
     /// <summary>
@@ -21815,12 +21815,8 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        var blocks = DocumentOps.BuildBlankPage();
-        _bus.BeginUndoGroup();
-        for (var i = 0; i < blocks.Count; i++)
-            _bus.Execute(new InsertBlockCommand(insertAt + i, blocks[i]));
-        _bus.CommitUndoGroup("Insert Blank Page");
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanBlankPage(_doc, _caret.Block));
     }
 
     /// <summary>
@@ -21831,8 +21827,8 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateHorizontalRule()));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanHorizontalRule(_doc, _caret.Block));
     }
 
     /// <summary>
@@ -21843,8 +21839,8 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateColumnBreak()));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanColumnBreak(_doc, _caret.Block));
     }
 
     /// <summary>
@@ -21855,9 +21851,12 @@ public sealed class DocumentView : Control
         if (IsEditingLocked)
             return;
 
-        var insertAt = Math.Clamp(_caret.Block + 1, 0, _doc.Blocks.Count);
-        _bus.Execute(new InsertBlockCommand(insertAt, DocumentOps.CreateSectionBreak(breakKind, _doc.Page)));
+        ExecuteBlockInsertionPlan(
+            DocumentBlockInsertionMutationPlanner.PlanSectionBreak(_doc, _caret.Block, breakKind));
     }
+
+    private void ExecuteBlockInsertionPlan(DocumentBlockReplacementPlan plan) =>
+        _bus.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
 
     /// <summary>
     /// Insert an inline image at the caret's paragraph (AV-INSERT). The image is appended as a textless
