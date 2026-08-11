@@ -24,8 +24,8 @@ public sealed class MainWindowPivotHeaderDropdownSourceTests
         pivotSource.Should().Contain("ShowPivotFieldFilterDialog(PivotFieldFilterDialogTab.SelectItems)");
         pivotSource.Should().Contain("ShowPivotFieldFilterDialog(PivotFieldFilterDialogTab.LabelFilters)");
         pivotSource.Should().Contain("ShowPivotFieldFilterDialog(PivotFieldFilterDialogTab.ValueFilters)");
-        pivotSource.Should().Contain("new ConfigurePivotTableFieldFiltersCommand(");
-        pivotSource.Should().Contain(".CreateFieldSelectionState(");
+        pivotSource.Should().Contain("PivotApplication.PlanFieldItemSelection(");
+        pivotSource.Should().NotContain(".CreateFieldSelectionState(");
         pivotSource.Should().Contain("PivotFieldFilterPlanner.ResolveItemSelection(");
         pivotSource.Should().Contain("ToPivotHeaderArea(context.Zone)");
         pivotSource.Should().NotContain("SetFieldSelectedItems(pivotTable.RowFields");

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -14,7 +13,7 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
+        var headers = PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(sheet, pivotTable));
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable);
         if (sourceIndex is null)
             return;
@@ -32,7 +31,7 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
+        var headers = PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(sheet, pivotTable));
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable);
         if (sourceIndex is null)
             return;
@@ -81,7 +80,7 @@ public partial class MainWindow
         if (!TryGetActivePivotTable(out var sheet, out var pivotTable))
             return;
 
-        var headers = PivotSourceContext.ReadHeaders(_workbook, pivotTable, sheet);
+        var headers = PivotApplication.ReadSourceHeaders(new PivotApplicationTarget(sheet, pivotTable));
         var sourceIndex = ResolveSelectedPivotSourceField(headers, pivotTable) ?? 0;
         var dialog = new PivotCalculatedItemDialog(headers, sourceIndex) { Owner = this };
         if (dialog.ShowDialog() != true ||
@@ -141,10 +140,11 @@ public partial class MainWindow
         IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
         IReadOnlyList<PivotCalculatedItemModel> calculatedItems)
     {
-        if (!TryExecuteCommand(
-                new ConfigurePivotTableCalculatedItemsCommand(
-                    _currentSheetId,
-                    pivotTable.Name,
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null ||
+            !ApplyPivotApplicationPlan(
+                PivotApplication.PlanCalculatedConfiguration(
+                    new PivotApplicationTarget(sheet, pivotTable),
                     rowFields,
                     columnFields,
                     pageFields,
@@ -154,8 +154,6 @@ public partial class MainWindow
             return;
 
         _pendingPivotLayout = null;
-        RefreshPivotFieldListPane();
-        UpdateViewport();
     }
 
     private int? ResolveSelectedPivotSourceField(IReadOnlyList<string> headers, PivotTableModel pivotTable)

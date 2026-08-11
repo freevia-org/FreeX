@@ -31,10 +31,12 @@ public sealed class InsertCommandSourceTests
         pivotSource.Should().NotContain("PivotCreatePlanner.BuildCommand(");
         pivotSource.Should().Contain("private void PivotInsertSlicerBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
-        pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
+        pivotSource.Should().Contain("PivotApplication.PlanInsertSlicer(");
+        pivotSource.Should().NotContain("new AddSlicerCommand(");
         pivotSource.Should().Contain("private void PivotInsertTimelineBtn_Click(object sender, RoutedEventArgs e)");
         pivotSource.Should().Contain("new InsertTimelineDialog(headers, fieldName)");
-        pivotSource.Should().Contain("new AddTimelineCommand(dialog.Result.TimelineName, pivotTable.Name, dialog.Result.DateFieldName)");
+        pivotSource.Should().Contain("PivotApplication.PlanInsertTimeline(");
+        pivotSource.Should().NotContain("new AddTimelineCommand(");
     }
 
     [Fact]

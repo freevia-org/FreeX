@@ -17,9 +17,8 @@ public enum PivotSortOptionMode
 /// Portable, UI-free planning for the PivotTable "More Sort Options" dialog. Resolves the dialog's initial
 /// mode/value-field selection from the field's current <see cref="PivotSortModel"/>, validates a value-sort
 /// (a value field must exist), and builds the resulting <see cref="PivotSortModel"/>. Single-sourced here so
-/// every desktop host shares identical behavior. Replacing the field's existing sort in the pivot's
-/// <see cref="PivotTableModel.Sorts"/> list (and running the view command) stays with each shell's command
-/// glue.
+/// every desktop host shares identical behavior. Field-sort replacement is shared here and the Pivot
+/// application session owns the resulting view command.
 /// </summary>
 public static class PivotSortPlanner
 {
@@ -129,6 +128,36 @@ public static class PivotSortPlanner
         return existingSorts
             .Where(existing => existing.FieldIndex != sort.FieldIndex)
             .Append(sort)
+            .ToList();
+    }
+
+    public static IReadOnlyList<PivotSortModel> ReplaceQuickSort(
+        IReadOnlyList<PivotSortModel> existingSorts,
+        int? sourceFieldIndex,
+        int? dataFieldIndex,
+        int axisFieldIndex,
+        PivotSortDirection direction)
+    {
+        ArgumentNullException.ThrowIfNull(existingSorts);
+        if (sourceFieldIndex is null && dataFieldIndex is null)
+            return existingSorts.ToList();
+
+        var replacement = dataFieldIndex is { } valueFieldIndex
+            ? new PivotSortModel(
+                PivotSortTarget.Value,
+                direction,
+                DataFieldIndex: valueFieldIndex,
+                FieldIndex: axisFieldIndex)
+            : new PivotSortModel(
+                PivotSortTarget.Label,
+                direction,
+                FieldIndex: sourceFieldIndex!.Value);
+
+        return existingSorts
+            .Where(existing =>
+                (sourceFieldIndex is null || existing.FieldIndex != sourceFieldIndex.Value) &&
+                (dataFieldIndex is null || existing.DataFieldIndex != dataFieldIndex.Value))
+            .Append(replacement)
             .ToList();
     }
 }

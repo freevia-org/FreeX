@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -18,7 +17,7 @@ namespace FreeX.App.Avalonia;
 /// All catalogs, the current-grouping capture, the start/end/by validation, the result <see cref="PivotFieldModel"/>
 /// building, and the row/column/page layout rewrite come from the portable <see cref="PivotGroupFieldPlanner"/>
 /// so the behavior is single-sourced with the WPF host and reusable on macOS. The rewritten layout round-trips
-/// through <see cref="ConfigurePivotTableCalculatedItemsCommand"/> (the same command the desktop host's grouping
+/// through the shared Pivot application session (the same command policy the desktop host's grouping
 /// uses), carrying the existing calculated fields/items untouched. Reached from the Analyze ▸ Group Field /
 /// Ungroup ribbon commands (<c>pivotAnalyze.groupField</c> / <c>pivotAnalyze.ungroup</c>).
 /// </summary>
@@ -49,7 +48,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot!);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot!));
         var caption = PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex);
         var ungrouped = PivotGroupFieldPlanner.CreateField(
             field.SourceFieldIndex, PivotFieldGrouping.None, ungroup: true, null, null, null);
@@ -61,7 +61,8 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot));
         var layoutFields = LayoutFieldOptions(pivot, headers);
         if (layoutFields.Count == 0)
         {
@@ -207,15 +208,15 @@ public sealed partial class MainWindow
     private void ApplyPivotGrouping(PivotTableModel pivot, PivotFieldModel groupedField, string status)
     {
         var layout = PivotGroupFieldPlanner.BuildLayout(pivot, groupedField);
-        var command = new ConfigurePivotTableCalculatedItemsCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            layout.RowFields,
-            layout.ColumnFields,
-            layout.PageFields,
-            pivot.CalculatedFields.ToList(),
-            pivot.CalculatedItems.ToList());
-        ExecutePivotTabCommand(command, status);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanCalculatedConfiguration(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                layout.RowFields,
+                layout.ColumnFields,
+                layout.PageFields,
+                pivot.CalculatedFields.ToList(),
+                pivot.CalculatedItems.ToList()),
+            status);
     }
 
     // The row/column/page fields placed in the layout, captioned, in the order they appear (rows, columns,

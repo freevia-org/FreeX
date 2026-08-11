@@ -7,8 +7,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.SlicerTimeline;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -186,7 +186,8 @@ public sealed partial class MainWindow
             UiText.Get("MainWindow_AutomationName_ClearSlicerFilter"));
         clearButton.Click += (_, _) =>
         {
-            CommitFilterCommand(new SetSlicerSelectionCommand(slicer.Name, []), $"Slicer: {paneItem.Name}");
+            if (PivotApplication.PlanClearSlicer(slicer.Name) is { } plan)
+                CommitFilterPlan(plan, $"Slicer: {paneItem.Name}");
         };
         body.Children.Add(clearButton);
 
@@ -257,16 +258,18 @@ public sealed partial class MainWindow
             UiText.Get("MainWindow_AutomationName_ClearTimelineFilter"));
         applyButton.Click += (_, _) =>
         {
-            CommitFilterCommand(
-                new SetTimelineRangeCommand(
+            if (PivotApplication.PlanTimelineRange(
                     paneItem.Name,
-                    SlicerTimelinePanePlanner.NormalizeTimelineDateInput(paneItem.SelectedStartDate),
-                    SlicerTimelinePanePlanner.NormalizeTimelineDateInput(paneItem.SelectedEndDate)),
-                $"Timeline: {paneItem.Name}");
+                    paneItem.SelectedStartDate,
+                    paneItem.SelectedEndDate) is { } plan)
+            {
+                CommitFilterPlan(plan, $"Timeline: {paneItem.Name}");
+            }
         };
         clearButton.Click += (_, _) =>
         {
-            CommitFilterCommand(new SetTimelineRangeCommand(paneItem.Name, null, null), $"Timeline: {paneItem.Name}");
+            if (PivotApplication.PlanClearTimeline(paneItem.Name) is { } plan)
+                CommitFilterPlan(plan, $"Timeline: {paneItem.Name}");
         };
         var actions = new AvaloniaGrid
         {
@@ -296,14 +299,14 @@ public sealed partial class MainWindow
 
     private void HandleSlicerPaneTileClick(SlicerModel slicer, string caption, KeyModifiers modifiers)
     {
-        var allItems = ReadSlicerSourceItems(slicer).ToList();
-        IReadOnlyList<string> selected = modifiers.HasFlag(KeyModifiers.Shift)
-            ? SlicerTimelinePanePlanner.ExtendSlicerSelection(allItems, slicer.SelectedItems, caption)
+        var gesture = modifiers.HasFlag(KeyModifiers.Shift)
+            ? SlicerSelectionGesture.Extend
             : modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta)
-                ? SlicerTimelinePanePlanner.ToggleSlicerSelection(allItems, slicer.SelectedItems, caption)
-                : SlicerTimelinePanePlanner.ReplaceSlicerSelection(slicer.SelectedItems, caption);
-
-        CommitFilterCommand(new SetSlicerSelectionCommand(slicer.Name, selected), $"Slicer: {slicer.Name}");
+                ? SlicerSelectionGesture.Toggle
+                : SlicerSelectionGesture.Replace;
+        CommitFilterPlan(
+            PivotApplication.PlanSlicerSelection(slicer, caption, gesture),
+            $"Slicer: {slicer.Name}");
     }
 
     private void CloseSlicerTimelinePane()

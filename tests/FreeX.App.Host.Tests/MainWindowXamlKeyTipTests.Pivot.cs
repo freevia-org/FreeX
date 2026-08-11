@@ -457,11 +457,11 @@ public sealed partial class MainWindowXamlKeyTipTests
             .Contain(["SlicerItemsControl", "TimelineItemsControl"]);
 
         hostSource.Should().Contain("RefreshSlicerTimelinePane");
-        hostSource.Should().Contain("PivotSourceContext.ReadHeaders(");
-        hostSource.Should().Contain("AddSlicerCommand");
-        hostSource.Should().Contain("AddTimelineCommand");
-        hostSource.Should().Contain("SetSlicerSelectionCommand");
-        hostSource.Should().Contain("SetTimelineRangeCommand");
+        hostSource.Should().Contain("PivotApplication.ReadSourceHeaders(");
+        hostSource.Should().Contain("PivotApplication.PlanInsertSlicer(");
+        hostSource.Should().Contain("PivotApplication.PlanInsertTimeline(");
+        hostSource.Should().Contain("PivotApplication.PlanSlicerSelection(");
+        hostSource.Should().Contain("PivotApplication.PlanTimelineRange(");
         hostSource.Should().Contain("SlicerTileButton_Click");
         hostSource.Should().Contain("TimelineApplyButton_Click");
         hostSource.Should().Contain("new SlicerTimelineSourceSession(_workbook)");
@@ -476,8 +476,9 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var source = ReadPivotCommandSource();
 
-        source.Should().Contain("ApplyPivotOptions(");
-        source.Should().Contain("new ConfigurePivotTableOptionsCommand");
+        source.Should().Contain("ApplyPivotDesignOptions(");
+        source.Should().Contain("PivotApplication.PlanDesignOptions(");
+        source.Should().NotContain("new ConfigurePivotTableOptionsCommand");
         source.Should().NotContain("PivotTableRefreshService.Refresh(_workbook, sheet, pivotTable);");
     }
 
@@ -486,14 +487,10 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var source = ReadPivotCommandSource();
 
-        source.Should().Contain("int? compactRowLabelIndent = null");
-        source.Should().Contain("bool? printTitles = null");
-        source.Should().Contain("bool? printExpandCollapseButtons = null");
-        source.Should().Contain("bool updateAltText = false");
+        source.Should().Contain("PivotOptionsPlanner.CaptureDesignValues(pivotTable)");
         source.Should().Contain("showExpandCollapseButtons: !pivotTable.ShowExpandCollapseButtons");
-        source.Should().Contain("showFieldHeaders: !pivotTable.ShowFieldHeaders");
-        source.Should().Contain("compactRowLabelIndent,");
-        source.Should().Contain("updateAltText: true");
+        source.Should().Contain("ShowFieldHeaders = !pivotTable.ShowFieldHeaders");
+        source.Should().Contain("PivotApplication.PlanDialogOptions(");
     }
 
     [Fact]

@@ -1,5 +1,3 @@
-using System.Globalization;
-
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -10,7 +8,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using Free.Shared.Shell.Avalonia;
 
@@ -22,12 +19,11 @@ namespace FreeX.App.Avalonia;
 /// Windows-parity PivotTable field-filter dialogs for the Avalonia/macOS shell. The field-pane header
 /// dropdown (built in <see cref="BuildPivotFieldChip"/> / <see cref="ShowPivotHeaderDropdown"/>) exposes
 /// "Label Filters…", "Value Filters…" and a manual item (checkbox) filter; each opens a modal dialog and
-/// applies the result through <see cref="ConfigurePivotTableFieldFiltersCommand"/> — the one Core command
-/// that carries the row/column/page field lists (for manual <see cref="PivotFieldModel.SelectedItems"/>),
+/// applies the result through a shared plan carrying the row/column/page field lists (for manual
+/// <see cref="PivotFieldModel.SelectedItems"/>),
 /// the <see cref="PivotLabelFilterModel"/> list and the <see cref="PivotValueFilterModel"/> list together.
-/// Member text for the checkbox list is read from the pivot's source range and formatted to match the
-/// engine's key text (see <see cref="ReadPivotFieldMembers"/> / <see cref="MemberKeyText"/>), so a checked
-/// item agrees with what the refresh service keeps.
+/// Member text for the checkbox list comes from the shared Pivot application session, so both renderers
+/// present the same distinct, sorted source items that the refresh service consumes.
 /// </summary>
 public sealed partial class MainWindow
 {
@@ -168,7 +164,9 @@ public sealed partial class MainWindow
             return;
 
         var caption = PivotFieldListPaneBuilder.FieldCaption(headers, target.SourceFieldIndex);
-        var members = ReadPivotFieldMembers(pivot, target.SourceFieldIndex);
+        var members = PivotApplication.ReadSourceItems(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot),
+            target.SourceFieldIndex);
         if (members.Count == 0)
         {
             ShowEditIssue(UiText.Get("PivotLoc_NoItemsToFilter"));
@@ -571,52 +569,35 @@ public sealed partial class MainWindow
         PivotHeaderDropdownTargetModel target,
         IReadOnlyList<string>? selectedItems)
     {
-        var selectionState = PivotUiPlanner
-            .CreateFieldSelectionState(pivot, target.Area, target.SourceFieldIndex)
-            .WithSelectedItems(selectedItems);
-
-        ExecutePivotFilterCommand(
-            pivot,
-            selectionState.RowFields,
-            selectionState.ColumnFields,
-            selectionState.PageFields,
-            pivot.LabelFilters.ToList(),
-            pivot.ValueFilters.ToList());
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanFieldItemSelection(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                target.Area,
+                target.SourceFieldIndex,
+                selectedItems));
     }
 
     private void ClearPivotFieldFilters(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
     {
-        var selectionState = PivotUiPlanner
-            .CreateFieldSelectionState(pivot, target.Area, target.SourceFieldIndex)
-            .WithSelectedItems(null);
-        ExecutePivotFilterCommand(
-            pivot,
-            selectionState.RowFields,
-            selectionState.ColumnFields,
-            selectionState.PageFields,
-            pivot.LabelFilters.Where(filter => filter.SourceFieldIndex != target.SourceFieldIndex).ToList(),
-            pivot.ValueFilters.Where(filter =>
-                !PivotFilterOwnership.BelongsToSourceField(filter, target.SourceFieldIndex)).ToList());
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanClearFieldFilters(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                target.Area,
+                target.SourceFieldIndex));
     }
 
     private void RemovePivotLabelFilter(PivotTableModel pivot, int sourceFieldIndex) =>
-        ExecutePivotFilterCommand(
-            pivot,
-            pivot.RowFields.ToList(),
-            pivot.ColumnFields.ToList(),
-            pivot.PageFields.ToList(),
-            pivot.LabelFilters.Where(filter => filter.SourceFieldIndex != sourceFieldIndex).ToList(),
-            pivot.ValueFilters.ToList());
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanReplaceLabelFilter(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                sourceFieldIndex,
+                filter: null));
 
     private void RemovePivotValueFilter(PivotTableModel pivot, int sourceFieldIndex) =>
-        ExecutePivotFilterCommand(
-            pivot,
-            pivot.RowFields.ToList(),
-            pivot.ColumnFields.ToList(),
-            pivot.PageFields.ToList(),
-            pivot.LabelFilters.ToList(),
-            pivot.ValueFilters.Where(filter =>
-                !PivotFilterOwnership.BelongsToSourceField(filter, sourceFieldIndex)).ToList());
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanRemoveValueFilter(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                sourceFieldIndex));
 
     // ── Label filter (Equals / Contains / Begins With / …) ─────────────────────
     private async Task OpenPivotLabelFilterDialogAsync(PivotTableModel pivot, PivotHeaderDropdownTargetModel target)
@@ -725,16 +706,11 @@ public sealed partial class MainWindow
             }
         }
 
-        var labelFilters = PivotFieldFilterPlanner.ReplaceFieldLabelFilter(
-            pivot.LabelFilters, target.SourceFieldIndex, filter);
-
-        ExecutePivotFilterCommand(
-            pivot,
-            pivot.RowFields.ToList(),
-            pivot.ColumnFields.ToList(),
-            pivot.PageFields.ToList(),
-            labelFilters,
-            pivot.ValueFilters.ToList());
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanReplaceLabelFilter(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                target.SourceFieldIndex,
+                filter));
     }
 
     // ── Value filter (Top N / Greater Than / Between / …) ──────────────────────
@@ -878,84 +854,12 @@ public sealed partial class MainWindow
             }
         }
 
-        var valueFilters = PivotFieldFilterPlanner.ReplaceFieldValueFilter(
-            pivot.ValueFilters, target.SourceFieldIndex, filter);
-
-        ExecutePivotFilterCommand(
-            pivot,
-            pivot.RowFields.ToList(),
-            pivot.ColumnFields.ToList(),
-            pivot.PageFields.ToList(),
-            pivot.LabelFilters.ToList(),
-            valueFilters);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanReplaceValueFilter(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                target.SourceFieldIndex,
+                filter));
     }
 
     // ── Shared command execution + member reading ─────────────────────────────
-    private void ExecutePivotFilterCommand(
-        PivotTableModel pivot,
-        IReadOnlyList<PivotFieldModel> rowFields,
-        IReadOnlyList<PivotFieldModel> columnFields,
-        IReadOnlyList<PivotFieldModel> pageFields,
-        IReadOnlyList<PivotLabelFilterModel> labelFilters,
-        IReadOnlyList<PivotValueFilterModel> valueFilters)
-    {
-        var command = new ConfigurePivotTableFieldFiltersCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            rowFields,
-            columnFields,
-            pageFields,
-            labelFilters,
-            valueFilters,
-            pivot.Sorts.ToList());
-
-        var result = _session.ExecuteReviewCommand(command);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("PivotLoc_FilterFailed"));
-            return;
-        }
-
-        _pivotPaneSignature = null;
-        RefreshShell(command.Label);
-    }
-
-    /// <summary>
-    /// Distinct member labels of a source field, in first-seen order, formatted to match the refresh
-    /// service's group-key text (so a checked item agrees with what the engine keeps). Reads the source
-    /// range column below the header row.
-    /// </summary>
-    private IReadOnlyList<string> ReadPivotFieldMembers(PivotTableModel pivot, int sourceFieldIndex)
-    {
-        var sourceSheet = _session.Workbook.GetSheet(pivot.SourceRange.Start.Sheet);
-        if (sourceSheet is null || sourceFieldIndex < 0)
-            return [];
-
-        var col = pivot.SourceRange.Start.Col + (uint)sourceFieldIndex;
-        if (col > pivot.SourceRange.End.Col)
-            return [];
-
-        var seen = new HashSet<string>(StringComparer.CurrentCultureIgnoreCase);
-        var members = new List<string>();
-        for (var row = pivot.SourceRange.Start.Row + 1; row <= pivot.SourceRange.End.Row; row++)
-        {
-            var text = MemberKeyText(sourceSheet.GetCell(row, col)?.Value);
-            if (seen.Add(text))
-                members.Add(text);
-        }
-
-        return members.OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase).ToList();
-    }
-
-    // Mirrors PivotTableRefreshService.KeyText so checkbox labels match the engine's group keys.
-    private static string MemberKeyText(ScalarValue? value) => value switch
-    {
-        TextValue text => text.Value,
-        NumberValue number => number.Value.ToString(CultureInfo.CurrentCulture),
-        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
-        DateTimeValue date => date.ToDateTime().ToShortDateString(),
-        ErrorValue error => error.Code,
-        _ => "(blank)",
-    };
-
 }

@@ -6,7 +6,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using Free.Shared.Shell.Avalonia;
 
@@ -21,9 +20,8 @@ namespace FreeX.App.Avalonia;
 /// "More Sort Options" dialog (label/value ascending/descending + value field). Both collect input then
 /// call the portable planners (<see cref="PivotValueFieldPlanner"/> / <see cref="PivotSortPlanner"/>) for all
 /// validation/result building, so the logic is single-sourced with the WPF host and reusable on macOS. The
-/// value-field result replaces the data field in the layout (<see cref="ConfigurePivotTableLayoutCommand"/>);
-/// the sort result replaces the field's sort in the pivot's view state
-/// (<see cref="ConfigurePivotTableViewCommand"/>). These header actions are dialog routes in
+/// value-field result replaces the data field through a shared layout plan; the sort result replaces the
+/// field's sort through a shared view plan. These header actions are dialog routes in
 /// <c>PivotHeaderActionPlanner</c>; <c>InvokePivotHeaderAction</c> routes them here before the UI-free
 /// command factory. Field Settings reuses the same value-field dialog and data-field ownership fallback
 /// as the WPF host.
@@ -555,19 +553,13 @@ public sealed partial class MainWindow
         if (!confirmed)
             return;
 
-        var sort = PivotSortPlanner.CreateResult(CurrentMode(), target.SourceFieldIndex, valueFieldBox.SelectedIndex);
-        var sorts = PivotSortPlanner.ReplaceFieldSort(pivot.Sorts.ToList(), sort);
-
-        var command = new ConfigurePivotTableViewCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            pivot.LabelFilters.ToList(),
-            pivot.ValueFilters.ToList(),
-            sorts);
         ApplyPivotApplicationPlan(
-            PivotApplication.PlanMutation(
+            PivotApplication.PlanFieldSort(
                 new PivotApplicationTarget(_session.ActiveSheet, pivot),
-                command));
+                PivotSortPlanner.CreateResult(
+                    CurrentMode(),
+                    target.SourceFieldIndex,
+                    valueFieldBox.SelectedIndex)));
     }
 
     // The pane chip carries the value-area data-field index directly; fall back to a source-field match.

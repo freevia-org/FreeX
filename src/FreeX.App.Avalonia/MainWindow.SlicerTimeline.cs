@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Rendering;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.Core.Model;
@@ -328,57 +329,28 @@ public sealed partial class MainWindow
         SlicerLayoutModel layout,
         LayoutPoint point)
     {
-        // Priority order: clear-filter icon > tile toggle.
-        // The clear icon sits in the header and does not overlap any tile, but we test it first so
-        // a click near the corner that just barely overlaps both is unambiguously handled as a clear.
-        if (SlicerTimelineInteractionPlanner.BuildSlicerClearFilterCommand(slicer, layout, point) is { } clearCmd)
-        {
-            CommitFilterCommand(clearCmd, $"Slicer: {layout.Caption}");
-            return;
-        }
-
-        var command = SlicerTimelineInteractionPlanner.BuildSlicerToggleCommand(slicer, availableItems, layout, point);
-        if (command is null)
+        var plan = PivotApplication.PlanSlicerPointer(slicer, availableItems, layout, point);
+        if (plan is null)
             return;
 
-        CommitFilterCommand(command, $"Slicer: {layout.Caption}");
+        CommitFilterPlan(plan, $"Slicer: {layout.Caption}");
     }
 
     private void HandleTimelinePointer(TimelineModel timeline, TimelineLayoutModel layout, LayoutPoint point)
     {
-        // Priority order: clear-filter icon > granularity dropdown > track/handle.
-        if (SlicerTimelineInteractionPlanner.BuildTimelineClearFilterCommand(timeline, layout, point) is { } clearCmd)
-        {
-            CommitFilterCommand(clearCmd, $"Timeline: {layout.Caption}");
-            return;
-        }
-
-        if (SlicerTimelineInteractionPlanner.BuildTimelineGranularityCommand(timeline, layout, point) is { } granCmd)
-        {
-            CommitFilterCommand(granCmd, $"Timeline: {layout.Caption}");
-            return;
-        }
-
-        var command = SlicerTimelineInteractionPlanner.BuildTimelineRangeCommand(timeline, layout, point);
-        if (command is null)
+        var plan = PivotApplication.PlanTimelinePointer(timeline, layout, point);
+        if (plan is null)
             return;
 
-        CommitFilterCommand(command, $"Timeline: {layout.Caption}");
+        CommitFilterPlan(plan, $"Timeline: {layout.Caption}");
     }
 
-    private void CommitFilterCommand(FreeX.Core.Commands.IWorkbookCommand command, string status)
+    private void CommitFilterPlan(PivotApplicationPlan plan, string status)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.ExecuteReviewCommand(command);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_FilterUpdateFailed"));
-            return;
-        }
-
-        RefreshShell(status);
+        ApplyPivotApplicationPlan(plan, status);
     }
 
     /// <summary>
@@ -438,6 +410,4 @@ public sealed partial class MainWindow
 
     private static double EmusToPixels(long emus) => emus / EmusPerPixel;
 
-    private IReadOnlyList<string> ReadSlicerSourceItems(SlicerModel slicer) =>
-        new SlicerTimelineSourceSession(_session.Workbook).ReadSlicerSourceItems(slicer);
 }

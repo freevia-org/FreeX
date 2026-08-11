@@ -46,7 +46,9 @@ public sealed partial class MainWindow
         return true;
     }
 
-    private bool ApplyPivotApplicationPlan(PivotApplicationPlan plan)
+    private bool ApplyPivotApplicationPlan(
+        PivotApplicationPlan plan,
+        string? successStatus = null)
     {
         var outcome = PivotApplication.Execute(plan);
         if (!outcome.Success)
@@ -55,11 +57,13 @@ public sealed partial class MainWindow
             return false;
         }
 
-        ApplyPivotApplicationOutcome(outcome);
+        ApplyPivotApplicationOutcome(outcome, successStatus);
         return true;
     }
 
-    private void ApplyPivotApplicationOutcome(PivotApplicationOutcome outcome)
+    private void ApplyPivotApplicationOutcome(
+        PivotApplicationOutcome outcome,
+        string? successStatus = null)
     {
         if (outcome.Transition.ActivateSheetId is { } sheetId)
             _session.SelectSheet(sheetId);
@@ -67,7 +71,7 @@ public sealed partial class MainWindow
             _session.SelectRange(selectionRange);
 
         _pivotPaneSignature = null;
-        RefreshShell(PivotSuccessStatus(outcome));
+        RefreshShell(successStatus ?? PivotSuccessStatus(outcome));
     }
 
     private void ShowPivotApplicationIssue(PivotMessageModel? message)

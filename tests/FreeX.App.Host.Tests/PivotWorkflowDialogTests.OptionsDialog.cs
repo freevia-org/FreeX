@@ -378,7 +378,7 @@ public sealed partial class PivotWorkflowDialogTests
         handlerSource.Should().NotContain("ShowPivotTableOptionsDialog();");
         source.Should().Contain("private void ShowPivotStyleGalleryDialog()");
         source.Should().Contain("new PivotStyleGalleryDialog(pivotTable.StyleName)");
-        source.Should().Contain("styleName: dialog.Result.StyleName");
+        source.Should().Contain("StyleName = dialog.Result.StyleName");
     }
 
     [Fact]
@@ -398,8 +398,8 @@ public sealed partial class PivotWorkflowDialogTests
         var end = source.IndexOf("    private void", start + 1, StringComparison.Ordinal);
         var handlerSource = source[start..end];
 
-        handlerSource.Should().Contain("ApplyPivotOptions(");
-        handlerSource.Should().Contain("pivotTable.StyleName");
+        handlerSource.Should().Contain("ApplyPivotDesignOptions(");
+        handlerSource.Should().Contain("PivotOptionsPlanner.CaptureDesignValues(pivotTable)");
         handlerSource.Should().Contain(toggledFlag);
         handlerSource.Should().NotContain("PivotStyleLight16");
         handlerSource.Should().NotContain("PivotStyleMedium");

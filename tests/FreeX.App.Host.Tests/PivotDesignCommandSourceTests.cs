@@ -19,15 +19,16 @@ public sealed class PivotDesignCommandSourceTests
         source.Should().Contain("ShowPivotStyleGalleryDialog();");
         source.Should().Contain("new PivotTableOptionsDialog(pivotTable, cache)");
         source.Should().Contain("new PivotStyleGalleryDialog(pivotTable.StyleName)");
-        source.Should().Contain("new ConfigurePivotTableOptionsCommand(");
+        source.Should().Contain("PivotApplication.PlanDesignOptions(");
+        source.Should().Contain("PivotApplication.PlanDialogOptions(");
         source.Should().Contain("!pivotTable.BlankLineAfterItems");
         source.Should().Contain("!pivotTable.ShowRowHeaders");
         source.Should().Contain("!pivotTable.ShowColumnHeaders");
         source.Should().Contain("!pivotTable.ShowRowStripes");
         source.Should().Contain("!pivotTable.ShowColumnStripes");
-        source.Should().Contain("styleName: dialog.Result.StyleName");
-        source.Should().Contain("TryExecuteCommand(");
-        source.Should().Contain("UpdateViewport();");
+        source.Should().Contain("StyleName = dialog.Result.StyleName");
+        source.Should().Contain("ApplyPivotApplicationPlan(");
+        source.Should().NotContain("new ConfigurePivotTableOptionsCommand(");
     }
 
     private static string ReadPivotTableDesignTabXaml()

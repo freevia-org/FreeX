@@ -5,7 +5,6 @@ using Avalonia.Layout;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -19,7 +18,7 @@ namespace FreeX.App.Avalonia;
 /// reference list, the name/formula validation, the formula-token insertion, and the add/modify/delete rebuild
 /// of the pivot's calculated-field list come from the portable <see cref="PivotCalculatedFieldPlanner"/> so the
 /// behavior is single-sourced with the WPF host and reusable on macOS. The rebuilt list round-trips through
-/// <see cref="ConfigurePivotTableCalculatedItemsCommand"/> (the same command the desktop host uses), carrying
+/// the shared Pivot application session (the same command policy the desktop host uses), carrying
 /// the row/column/page fields and calculated items untouched. Reached from the Analyze ▸ Fields, Items &amp;
 /// Sets ▸ Calculated Field ribbon command (<c>pivotAnalyze.calculatedField</c>).
 /// </summary>
@@ -39,7 +38,8 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving)
             return;
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot));
         var workflowText = PivotCalculatedFieldSessionText.Default with
         {
             SavedStatusFormat = UiText.Get("PivotCalcField_Saved"),
@@ -203,15 +203,15 @@ public sealed partial class MainWindow
         IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
         string status)
     {
-        var command = new ConfigurePivotTableCalculatedItemsCommand(
-            _session.ActiveSheet.Id,
-            pivot.Name,
-            pivot.RowFields.ToList(),
-            pivot.ColumnFields.ToList(),
-            pivot.PageFields.ToList(),
-            calculatedFields,
-            pivot.CalculatedItems.ToList());
-        ExecutePivotTabCommand(command, status);
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanCalculatedConfiguration(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                pivot.RowFields.ToList(),
+                pivot.ColumnFields.ToList(),
+                pivot.PageFields.ToList(),
+                calculatedFields,
+                pivot.CalculatedItems.ToList()),
+            status);
     }
 
     private static int SelectionLength(TextBox box) => Math.Abs(box.SelectionEnd - box.SelectionStart);

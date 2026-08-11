@@ -7,7 +7,6 @@ using Avalonia.Media;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -16,7 +15,7 @@ namespace FreeX.App.Avalonia;
 
 /// <summary>
 /// Windows-parity "PivotTable Options" dialog for the Avalonia/macOS shell. The full six-tab option surface
-/// is backed by <see cref="PivotOptionsPlanner"/> and <see cref="ConfigurePivotTableOptionsCommand"/>, so
+/// is backed by <see cref="PivotOptionsPlanner"/> and the shared Pivot application session, so
 /// dialog edits round-trip through the same pivot/cache model as the WPF host.
 /// </summary>
 public sealed partial class MainWindow
@@ -471,9 +470,11 @@ public sealed partial class MainWindow
             errorValueText: errorValuesBox.Text,
             enableDrill: enableShowDetailsBox.IsChecked == true);
 
-        var command = BuildPivotTableOptionsCommand(pivot, result);
-
-        ExecutePivotTabCommand(command, "PivotTable options updated.");
+        ApplyPivotApplicationPlan(
+            PivotApplication.PlanDialogOptions(
+                new PivotApplicationTarget(_session.ActiveSheet, pivot),
+                result),
+            "PivotTable options updated.");
     }
 
     // ── Pivot option control factories ────────────────────────────────────────
@@ -492,53 +493,6 @@ public sealed partial class MainWindow
         2 => PivotOptionsPlanner.MaxMissingItemsLimit,
         _ => null,
     };
-
-    private ConfigurePivotTableOptionsCommand BuildPivotTableOptionsCommand(
-        PivotTableModel pivot,
-        PivotOptionsDialogValues values) => new(
-        _session.ActiveSheet.Id,
-        pivot.Name,
-        showRowGrandTotals: values.ShowRowGrandTotals,
-        showColumnGrandTotals: values.ShowColumnGrandTotals,
-        showSubtotals: values.ShowSubtotals,
-        subtotalPlacement: values.SubtotalPlacement,
-        repeatItemLabels: values.RepeatItemLabels,
-        blankLineAfterItems: values.BlankLineAfterItems,
-        styleName: values.StyleName,
-        showRowHeaders: values.ShowRowHeaders,
-        showColumnHeaders: values.ShowColumnHeaders,
-        showRowStripes: values.ShowRowStripes,
-        showColumnStripes: values.ShowColumnStripes,
-        reportLayout: values.ReportLayout,
-        emptyValueText: values.EmptyValueText,
-        updateEmptyValueText: true,
-        refreshOnOpen: values.RefreshOnOpen,
-        saveSourceData: values.SaveSourceData,
-        enableRefresh: values.EnableRefresh,
-        preserveSourceSortFilter: values.PreserveSourceSortFilter,
-        missingItemsLimit: values.MissingItemsLimit,
-        updateMissingItemsLimit: true,
-        printTitles: values.PrintTitles,
-        printExpandCollapseButtons: values.PrintExpandCollapseButtons,
-        altTextTitle: values.AltTextTitle,
-        altTextDescription: values.AltTextDescription,
-        compactRowLabelIndent: values.CompactRowLabelIndent,
-        updateAltText: true,
-        showExpandCollapseButtons: values.ShowExpandCollapseButtons,
-        autofitColumnsOnUpdate: values.AutofitColumnsOnUpdate,
-        preserveFormattingOnUpdate: values.PreserveFormattingOnUpdate,
-        showFieldHeaders: values.ShowFieldHeaders,
-        showContextualTooltips: values.ShowContextualTooltips,
-        showPropertiesInTooltips: values.ShowPropertiesInTooltips,
-        showClassicLayout: values.ShowClassicLayout,
-        mergeAndCenterLabels: values.MergeAndCenterLabels,
-        showItemsWithNoDataOnRows: values.ShowItemsWithNoDataOnRows,
-        showItemsWithNoDataOnColumns: values.ShowItemsWithNoDataOnColumns,
-        pageOverThenDown: values.PageOverThenDown,
-        pageWrap: values.PageWrap,
-        errorCaption: values.ErrorValueText,
-        updateErrorCaption: true,
-        enableDrill: values.EnableDrill);
 
     private static TextBlock OptionLabel(string text) => new()
     {

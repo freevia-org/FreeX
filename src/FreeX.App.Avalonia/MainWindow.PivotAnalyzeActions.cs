@@ -1,5 +1,4 @@
 using FreeX.App.Presentation.PivotUI;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using System.Diagnostics;
@@ -9,10 +8,8 @@ namespace FreeX.App.Avalonia;
 /// <summary>
 /// Real handlers for the lower-effort PivotTable Analyze contextual-tab commands that reuse existing Core
 /// commands without a new dialog: Field Settings (the value-field dialog targeting the active pivot's first
-/// value field), Show Details (<see cref="DrillDownPivotTableCommand"/>), Clear
-/// (<see cref="ClearPivotTableViewCommand"/>), Select (move the selection onto the pivot's target range), and
-/// the +/- Buttons display toggle (<see cref="ConfigurePivotTableOptionsCommand"/>'s
-/// <c>showExpandCollapseButtons</c>). Each resolves the active pivot through
+/// value field), Show Details, Clear, Select (move the selection onto the pivot's target range), and the +/-
+/// Buttons display toggle. Each resolves the active pivot through
 /// <see cref="MainWindow.ResolveInsertControlPivot"/> (the same fallback the other Analyze handlers use) and
 /// reports an honest status when no pivot/value cell applies, mirroring the WPF host's
 /// PivotTable{Clear,Select,ShowDetails,Field}Btn handlers.
@@ -39,7 +36,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+        var headers = PivotApplication.ReadSourceHeaders(
+            new PivotApplicationTarget(_session.ActiveSheet, pivot));
         var field = pivot.DataFields[0];
         var caption = string.IsNullOrWhiteSpace(field.Name)
             ? PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex)
@@ -58,7 +56,7 @@ public sealed partial class MainWindow
 
     // ── Analyze ▸ Actions ▸ Clear / Select ───────────────────────────────────────
 
-    /// <summary>Clear — empties the active pivot's rendered layout via <see cref="ClearPivotTableViewCommand"/>.</summary>
+    /// <summary>Clear — empties the active pivot's rendered layout through the shared application session.</summary>
     private void ClearActivePivotTable()
     {
         if (!TryResolvePivotApplicationTarget(out var target))
@@ -79,9 +77,9 @@ public sealed partial class MainWindow
     // ── Analyze ▸ Active Field ▸ Show Details ────────────────────────────────────
 
     /// <summary>
-    /// Show Details — drills the active cell into a new detail worksheet via
-    /// <see cref="DrillDownPivotTableCommand"/>. The command adds the detail sheet and returns its anchor, so
-    /// the shared review path (<see cref="ExecutePivotTabCommand"/>) switches to it automatically.
+    /// Show Details — drills the active cell into a new detail worksheet. The command behind the shared plan
+    /// adds the detail sheet and returns its anchor, so
+    /// the shared application session switches to it automatically.
     /// </summary>
     private void ShowActivePivotDetails()
     {
@@ -151,8 +149,8 @@ public sealed partial class MainWindow
     // ── Analyze ▸ Show ▸ +/- Buttons ─────────────────────────────────────────────
 
     /// <summary>
-    /// +/- Buttons — toggles <see cref="PivotTableModel.ShowExpandCollapseButtons"/> via
-    /// <see cref="ConfigurePivotTableOptionsCommand"/> (carrying the layout/style flags untouched).
+    /// +/- Buttons — toggles <see cref="PivotTableModel.ShowExpandCollapseButtons"/> through a shared
+    /// design-options plan while carrying the layout/style flags untouched.
     /// </summary>
     private void TogglePivotExpandCollapseButtons()
     {
@@ -160,10 +158,11 @@ public sealed partial class MainWindow
             return;
 
         var value = !pivot!.ShowExpandCollapseButtons;
-        // Carry the layout/style snapshot untouched (BuildPivotOptionsCommand) and add the expand/collapse flag.
-        var command = BuildPivotOptionsCommand(pivot, CapturePivotOptions(pivot), showExpandCollapseButtons: value);
-        ExecutePivotTabCommand(
-            command,
+        ApplyPivotApplicationPlan(
+            PlanPivotDesignOptions(
+                pivot,
+                PivotOptionsPlanner.CaptureDesignValues(pivot),
+                showExpandCollapseButtons: value),
             value ? UiText.Get("PivotAnalyze_PlusMinusOn") : UiText.Get("PivotAnalyze_PlusMinusOff"));
     }
 }

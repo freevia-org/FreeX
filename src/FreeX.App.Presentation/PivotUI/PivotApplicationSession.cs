@@ -28,7 +28,14 @@ public enum PivotApplicationAction
     Select,
     ShowDetails,
     ConfigureLayout,
-    ConfigureView
+    ConfigureView,
+    ConfigureFilters,
+    ConfigureCalculations,
+    ConfigureOptions,
+    InsertSlicer,
+    InsertTimeline,
+    ConfigureSlicer,
+    ConfigureTimeline
 }
 
 public enum PivotApplicationIssue
@@ -215,7 +222,7 @@ public delegate PivotCommandExecutionResult PivotCommandExecutor(
 /// composition, execution outcomes, and post-command display transitions. WPF and Avalonia retain native
 /// controls, modal lifetime, focus, messages, and visual-tree realization.
 /// </summary>
-public sealed class PivotApplicationSession
+public sealed partial class PivotApplicationSession
 {
     private readonly Workbook _workbook;
     private readonly PivotReferenceResolver _resolveReference;
@@ -571,7 +578,7 @@ public sealed class PivotApplicationSession
     }
 
     public PivotApplicationPlan PlanMutation(
-        PivotApplicationTarget target,
+        PivotApplicationTarget? target,
         IWorkbookCommand command,
         string? statusArgument = null)
     {
@@ -579,15 +586,28 @@ public sealed class PivotApplicationSession
         var action = command switch
         {
             ConfigurePivotTableLayoutCommand => PivotApplicationAction.ConfigureLayout,
+            ConfigurePivotTableFieldFiltersCommand => PivotApplicationAction.ConfigureFilters,
+            ConfigurePivotTableCalculatedItemsCommand => PivotApplicationAction.ConfigureCalculations,
+            ConfigurePivotTableOptionsCommand => PivotApplicationAction.ConfigureOptions,
+            AddSlicerCommand => PivotApplicationAction.InsertSlicer,
+            AddTimelineCommand => PivotApplicationAction.InsertTimeline,
+            SetSlicerSelectionCommand => PivotApplicationAction.ConfigureSlicer,
+            SetTimelineRangeCommand or SetTimelineGranularityCommand => PivotApplicationAction.ConfigureTimeline,
             _ => PivotApplicationAction.ConfigureView,
         };
+        var refreshSlicerTimeline = action is
+            PivotApplicationAction.InsertSlicer or
+            PivotApplicationAction.InsertTimeline or
+            PivotApplicationAction.ConfigureSlicer or
+            PivotApplicationAction.ConfigureTimeline;
         return Ready(
             action,
             command.Label,
             command,
             target,
             new PivotDisplayTransition(
-                RefreshFieldList: true,
+                RefreshFieldList: !refreshSlicerTimeline,
+                RefreshSlicerTimeline: refreshSlicerTimeline,
                 RefreshViewport: true),
             statusArgument ?? command.Label);
     }

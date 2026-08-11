@@ -50,8 +50,43 @@ public sealed class PivotCreateDialogSourceTests
         rendererSource.Should().NotContain("new DrillDownPivotTableCommand(");
 
         adapterSource.Should().Contain("_session.ExecuteReviewCommand(command)");
-        sharedSource.Should().Contain("public sealed class PivotApplicationSession");
+        sharedSource.Should().Contain("public sealed partial class PivotApplicationSession");
         sharedSource.Should().Contain("public PivotApplicationOutcome Execute(PivotApplicationPlan plan)");
+    }
+
+    [Fact]
+    public void PivotEditorsAndSlicerTimelineAdapters_DoNotConstructPortableCommands()
+    {
+        var rendererSource = string.Join(
+            "\n",
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotCalculatedField.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotCalculatedItem.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotGroupField.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotTabs.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotStyleGallery.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InsertSlicer.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.SlicerTimeline.cs")),
+            File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.SlicerTimelinePane.cs")));
+
+        rendererSource.Should().NotContain("new ConfigurePivotTableFieldFiltersCommand(");
+        rendererSource.Should().NotContain("new ConfigurePivotTableViewCommand(");
+        rendererSource.Should().NotContain("new ConfigurePivotTableCalculatedItemsCommand(");
+        rendererSource.Should().NotContain("new ConfigurePivotTableOptionsCommand(");
+        rendererSource.Should().NotContain("new AddSlicerCommand(");
+        rendererSource.Should().NotContain("new AddTimelineCommand(");
+        rendererSource.Should().NotContain("new SetSlicerSelectionCommand(");
+        rendererSource.Should().NotContain("new SetTimelineRangeCommand(");
+        rendererSource.Should().NotContain("new SetTimelineGranularityCommand(");
+        rendererSource.Should().Contain("PivotApplication.ReadSourceHeaders(");
+        rendererSource.Should().Contain("PivotApplication.ReadSourceItems(");
+        rendererSource.Should().Contain("PivotApplication.PlanFieldItemSelection(");
+        rendererSource.Should().Contain("PivotApplication.PlanCalculatedConfiguration(");
+        rendererSource.Should().Contain("PivotApplication.PlanDialogOptions(");
+        rendererSource.Should().Contain("PivotApplication.PlanSlicerSelection(");
+        rendererSource.Should().Contain("PivotApplication.PlanTimelineRange(");
     }
 
     private static string RepoFile(params string[] parts)

@@ -50,7 +50,7 @@ public sealed class PivotPlannerDedupSourceTests
 
         formulaEditingSource.Should().Contain("GetPivotDataFormulaPlanner.CreatePointModeFunctionCall(");
         formulaEditingSource.Should().NotContain("GetPivotDataFormulaPlanner.Create(");
-        pivotCommandsSource.Should().Contain("PivotSourceContext.ReadHeaders(");
+        pivotCommandsSource.Should().Contain("PivotApplication.ReadSourceHeaders(");
         pivotCommandsSource.Should().NotContain("PivotSourceHeaderResolver.Resolve(");
         presentationSource.Should().Contain("public sealed record GetPivotDataFormulaPlan");
         presentationSource.Should().Contain("public static class GetPivotDataFormulaPlanner");

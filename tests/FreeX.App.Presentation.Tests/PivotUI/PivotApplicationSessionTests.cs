@@ -205,6 +205,164 @@ public sealed class PivotApplicationSessionTests
         plan.Command.Should().BeNull();
     }
 
+    [Fact]
+    public void FieldFilterPlans_OwnSelectionAndClearPolicy()
+    {
+        var fixture = new Fixture();
+        fixture.Pivot.LabelFilters.Add(new PivotLabelFilterModel(0, PivotLabelFilterKind.Contains, "E"));
+        fixture.Pivot.ValueFilters.Add(new PivotValueFilterModel(
+            0,
+            PivotValueFilterKind.GreaterThan,
+            ComparisonValue: 5,
+            SourceFieldIndex: 0));
+
+        var select = fixture.Session.PlanFieldItemSelection(
+            fixture.Target,
+            PivotHeaderArea.Row,
+            sourceFieldIndex: 0,
+            ["East"]);
+
+        select.Action.Should().Be(PivotApplicationAction.ConfigureFilters);
+        select.Command.Should().BeOfType<ConfigurePivotTableFieldFiltersCommand>();
+        select.Command!.Apply(new TestCommandContext(fixture.Workbook)).Success.Should().BeTrue();
+        fixture.Pivot.RowFields[0].SelectedItems.Should().Equal("East");
+
+        var clear = fixture.Session.PlanClearFieldFilters(
+            fixture.Target,
+            PivotHeaderArea.Row,
+            sourceFieldIndex: 0);
+        clear.Command!.Apply(new TestCommandContext(fixture.Workbook)).Success.Should().BeTrue();
+
+        fixture.Pivot.RowFields[0].SelectedItems.Should().BeNull();
+        fixture.Pivot.LabelFilters.Should().BeEmpty();
+        fixture.Pivot.ValueFilters.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SourceReads_UseTheResolvedPivotTargetAndRejectInvalidFieldIndexes()
+    {
+        var fixture = new Fixture();
+
+        fixture.Session.ReadSourceHeaders(fixture.Target).Should().Equal("Region", "Sales");
+        fixture.Session.ReadSourceItems(fixture.Target, sourceFieldIndex: 0).Should().Equal("(blank)", "East");
+        fixture.Session.ReadSourceItems(fixture.Target, sourceFieldIndex: -1).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void FieldViewAndCalculatedPlans_CentralizeCoreCommandConstruction()
+    {
+        var fixture = new Fixture();
+        var sort = new PivotSortModel(
+            PivotSortTarget.Label,
+            PivotSortDirection.Descending,
+            FieldIndex: 0);
+
+        var sortPlan = fixture.Session.PlanFieldSort(fixture.Target, sort);
+        var calculatedPlan = fixture.Session.PlanCalculatedConfiguration(
+            fixture.Target,
+            fixture.Pivot.RowFields.ToList(),
+            fixture.Pivot.ColumnFields.ToList(),
+            fixture.Pivot.PageFields.ToList(),
+            [new PivotCalculatedFieldModel("Margin", "=1")],
+            []);
+
+        sortPlan.Command.Should().BeOfType<ConfigurePivotTableViewCommand>();
+        calculatedPlan.Action.Should().Be(PivotApplicationAction.ConfigureCalculations);
+        calculatedPlan.Command.Should().BeOfType<ConfigurePivotTableCalculatedItemsCommand>();
+
+        sortPlan.Command!.Apply(new TestCommandContext(fixture.Workbook)).Success.Should().BeTrue();
+        calculatedPlan.Command!.Apply(new TestCommandContext(fixture.Workbook)).Success.Should().BeTrue();
+        fixture.Pivot.Sorts.Should().ContainSingle().Which.Should().Be(sort);
+        fixture.Pivot.CalculatedFields.Should().ContainSingle().Which.Name.Should().Be("Margin");
+    }
+
+    [Fact]
+    public void OptionPlans_OwnDesignAndFullDialogCommandFactories()
+    {
+        var fixture = new Fixture();
+        var designValues = PivotOptionsPlanner.CaptureDesignValues(fixture.Pivot) with
+        {
+            ShowRowHeaders = false,
+            StyleName = "PivotStyleMedium2",
+        };
+        var dialogValues = PivotOptionsPlanner.CaptureDialogValues(fixture.Pivot) with
+        {
+            ShowColumnHeaders = false,
+            EmptyValueText = "-",
+        };
+
+        var designPlan = fixture.Session.PlanDesignOptions(fixture.Target, designValues);
+        var dialogPlan = fixture.Session.PlanDialogOptions(fixture.Target, dialogValues);
+
+        designPlan.Action.Should().Be(PivotApplicationAction.ConfigureOptions);
+        designPlan.Command.Should().BeOfType<ConfigurePivotTableOptionsCommand>();
+        dialogPlan.Command.Should().BeOfType<ConfigurePivotTableOptionsCommand>();
+
+        designPlan.Command!.Apply(new TestCommandContext(fixture.Workbook)).Success.Should().BeTrue();
+        fixture.Pivot.ShowRowHeaders.Should().BeFalse();
+        fixture.Pivot.StyleName.Should().Be("PivotStyleMedium2");
+    }
+
+    [Fact]
+    public void SlicerPlans_OwnGesturesInsertionAndRefreshTransitions()
+    {
+        var fixture = new Fixture();
+        var slicer = new SlicerModel
+        {
+            Name = "Region Slicer",
+            SourcePivotTableName = fixture.Pivot.Name,
+            SourceFieldName = "Region",
+        };
+        fixture.Workbook.Slicers.Add(slicer);
+
+        var selectionPlan = fixture.Session.PlanSlicerSelection(
+            slicer,
+            "East",
+            SlicerSelectionGesture.Replace);
+        var insertPlan = fixture.Session.PlanInsertSlicer(
+            fixture.Target,
+            "Second Slicer",
+            "Region");
+
+        selectionPlan.Action.Should().Be(PivotApplicationAction.ConfigureSlicer);
+        selectionPlan.Transition.RefreshSlicerTimeline.Should().BeTrue();
+        selectionPlan.Command!.Apply(new TestCommandContext(fixture.Workbook)).Success.Should().BeTrue();
+        slicer.SelectedItems.Should().Equal("East");
+
+        insertPlan.Action.Should().Be(PivotApplicationAction.InsertSlicer);
+        insertPlan.Command.Should().BeOfType<AddSlicerCommand>();
+        insertPlan.Transition.RefreshFieldList.Should().BeFalse();
+        insertPlan.Transition.RefreshSlicerTimeline.Should().BeTrue();
+        insertPlan.Transition.RefreshViewport.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TimelinePlans_NormalizeDatesAndOwnGranularityRouting()
+    {
+        var fixture = new Fixture();
+        var timeline = new TimelineModel
+        {
+            Name = "Date Timeline",
+            SourcePivotTableName = fixture.Pivot.Name,
+            SourceFieldName = "Region",
+            Level = 2,
+        };
+        fixture.Workbook.Timelines.Add(timeline);
+
+        var rangePlan = fixture.Session.PlanTimelineRange(
+            timeline,
+            " 2026-01-01 ",
+            " ");
+        var granularityPlan = fixture.Session.PlanCycleTimelineGranularity("date timeline");
+
+        var rangeCommand = rangePlan.Command.Should().BeOfType<SetTimelineRangeCommand>().Which;
+        rangeCommand.SelectedStartDate.Should().Be("2026-01-01");
+        rangeCommand.SelectedEndDate.Should().BeNull();
+        rangePlan.Action.Should().Be(PivotApplicationAction.ConfigureTimeline);
+        granularityPlan.Should().NotBeNull();
+        granularityPlan!.Command.Should().BeOfType<SetTimelineGranularityCommand>();
+    }
+
     private sealed class Fixture
     {
         public Fixture()
@@ -254,5 +412,13 @@ public sealed class PivotApplicationSessionTests
             ExecutedCommands.Add(command);
             return NextExecution;
         }
+    }
+
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
     }
 }

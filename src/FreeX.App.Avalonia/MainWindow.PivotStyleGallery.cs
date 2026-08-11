@@ -15,8 +15,8 @@ namespace FreeX.App.Avalonia;
 /// built-in style names (Light / Medium / Dark) with the active pivot's current style pre-selected. The
 /// catalog, the default-style normalization, and the current-selection lookup come from the portable
 /// <see cref="PivotStyleGalleryPlanner"/> so the gallery is single-sourced with the WPF host and reusable on
-/// macOS. The chosen style round-trips through <see cref="ConfigurePivotTableOptionsCommand"/> (the same
-/// command the Design contextual-tab toggles use), carrying only the style name and leaving every other
+/// macOS. The chosen style round-trips through the same shared options plan the Design contextual-tab toggles
+/// use, carrying only the style name and leaving every other
 /// (totals / layout / cache / print) option untouched. Reached from the Design ▸ PivotTable Styles ribbon
 /// command (<c>pivotDesign.pivotStyles</c>).
 /// </summary>
@@ -99,9 +99,9 @@ public sealed partial class MainWindow
             return;
 
         var result = PivotStyleGalleryPlanner.CreateResult(gallery.SelectedItem?.ToString());
-        var options = CapturePivotOptions(pivot) with { StyleName = result.StyleName };
-        ExecutePivotTabCommand(
-            BuildPivotOptionsCommand(pivot, options),
+        var options = PivotOptionsPlanner.CaptureDesignValues(pivot) with { StyleName = result.StyleName };
+        ApplyPivotApplicationPlan(
+            PlanPivotDesignOptions(pivot, options),
             UiText.Format("PivotStyleGallery_Applied", result.StyleName));
     }
 }

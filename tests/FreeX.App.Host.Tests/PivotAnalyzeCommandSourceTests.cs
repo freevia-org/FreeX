@@ -25,22 +25,25 @@ public sealed class PivotAnalyzeCommandSourceTests
         pivotSource.Should().Contain("new MovePivotTableDialog(");
         pivotSource.Should().Contain("PivotApplication.PlanMove(target, dialog.Result.DestinationRangeText)");
         pivotSource.Should().Contain("new InsertSlicerDialog(headers, fieldName)");
-        pivotSource.Should().Contain("new AddSlicerCommand(dialog.Result.SlicerName, pivotTable.Name, dialog.Result.FieldName)");
+        pivotSource.Should().Contain("PivotApplication.PlanInsertSlicer(");
+        pivotSource.Should().NotContain("new AddSlicerCommand(");
         pivotSource.Should().Contain("new InsertTimelineDialog(headers, fieldName)");
-        pivotSource.Should().Contain("new AddTimelineCommand(dialog.Result.TimelineName, pivotTable.Name, dialog.Result.DateFieldName)");
+        pivotSource.Should().Contain("PivotApplication.PlanInsertTimeline(");
+        pivotSource.Should().NotContain("new AddTimelineCommand(");
         pivotSource.Should().Contain("new PivotValueFieldSettingsDialog(current, context.Headers)");
 
         var designSource = DialogSourceTestSupport.ReadHostSources("MainWindow.PivotDesignCommands.cs");
         designSource.Should().Contain("private void PivotExpandCollapseButtonsBtn_Click(object sender, RoutedEventArgs e)");
         designSource.Should().Contain("showExpandCollapseButtons: !pivotTable.ShowExpandCollapseButtons");
         designSource.Should().Contain("private void PivotFieldHeadersBtn_Click(object sender, RoutedEventArgs e)");
-        designSource.Should().Contain("showFieldHeaders: !pivotTable.ShowFieldHeaders");
+        designSource.Should().Contain("ShowFieldHeaders = !pivotTable.ShowFieldHeaders");
 
         advancedSource.Should().Contain("new PivotFieldGroupingDialog(headers, currentField)");
         advancedSource.Should().Contain("PivotFieldGroupingDialog.CreateResult(");
         advancedSource.Should().Contain("new PivotCalculatedFieldDialog");
         advancedSource.Should().Contain("new PivotCalculatedItemDialog(headers, sourceIndex)");
-        advancedSource.Should().Contain("new ConfigurePivotTableCalculatedItemsCommand(");
+        advancedSource.Should().Contain("PivotApplication.PlanCalculatedConfiguration(");
+        advancedSource.Should().NotContain("new ConfigurePivotTableCalculatedItemsCommand(");
 
         chartSource.Should().Contain("new PivotChartTypeDialog(ChartType.Column)");
         chartSource.Should().Contain("ChartCommandWorkflowPlanner.BuildAddPivotChartCommand(");

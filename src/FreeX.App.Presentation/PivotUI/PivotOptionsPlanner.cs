@@ -61,13 +61,27 @@ public sealed record PivotOptionsDialogValues(
     string? ErrorValueText = null,
     bool EnableDrill = true);
 
+public sealed record PivotDesignOptionsValues(
+    bool ShowRowGrandTotals,
+    bool ShowColumnGrandTotals,
+    bool ShowSubtotals,
+    PivotSubtotalPlacement SubtotalPlacement,
+    bool RepeatItemLabels,
+    bool BlankLineAfterItems,
+    string StyleName,
+    PivotReportLayout ReportLayout,
+    bool ShowRowHeaders,
+    bool ShowColumnHeaders,
+    bool ShowRowStripes,
+    bool ShowColumnStripes,
+    bool ShowFieldHeaders);
+
 /// <summary>
 /// Portable, UI-free planning for the PivotTable Options dialog: the report-layout and subtotal-placement
 /// display catalogs (English labels), capturing the current option values off a <see cref="PivotTableModel"/>,
 /// validating the compact-row-label indent box, and applying the dialog's collected values back onto a
-/// values record. Single-sourced here so every desktop host shares identical behavior; building the command
-/// and running it stays with each shell's command glue (the host passes these values to
-/// <c>ConfigurePivotTableOptionsCommand</c>, leaving its other cache/print/alt-text options untouched).
+/// values record. Single-sourced here so every desktop host shares identical behavior; the pivot application
+/// session turns these values into commands while each shell retains only native dialog and rendering work.
 /// </summary>
 public static class PivotOptionsPlanner
 {
@@ -155,6 +169,25 @@ public static class PivotOptionsPlanner
             pivotTable.RepeatItemLabels,
             pivotTable.BlankLineAfterItems,
             pivotTable.MergeAndCenterLabels);
+    }
+
+    public static PivotDesignOptionsValues CaptureDesignValues(PivotTableModel pivotTable)
+    {
+        ArgumentNullException.ThrowIfNull(pivotTable);
+        return new PivotDesignOptionsValues(
+            pivotTable.ShowRowGrandTotals,
+            pivotTable.ShowColumnGrandTotals,
+            pivotTable.ShowSubtotals,
+            pivotTable.SubtotalPlacement,
+            pivotTable.RepeatItemLabels,
+            pivotTable.BlankLineAfterItems,
+            pivotTable.StyleName,
+            pivotTable.ReportLayout,
+            pivotTable.ShowRowHeaders,
+            pivotTable.ShowColumnHeaders,
+            pivotTable.ShowRowStripes,
+            pivotTable.ShowColumnStripes,
+            pivotTable.ShowFieldHeaders);
     }
 
     /// <summary>Validates the compact-form indent box; parses it on success.</summary>

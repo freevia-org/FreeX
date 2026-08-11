@@ -85,4 +85,40 @@ public sealed class PivotSortPlannerTests
         result.Should().ContainSingle(sort => sort.FieldIndex == 1);
         result.Single(sort => sort.FieldIndex == 0).Should().Be(newSort);
     }
+
+    [Fact]
+    public void ReplaceQuickSort_OwnsLabelAndValueReplacementPolicy()
+    {
+        var existing = new List<PivotSortModel>
+        {
+            new(PivotSortTarget.Label, PivotSortDirection.Ascending, FieldIndex: 0),
+            new(PivotSortTarget.Value, PivotSortDirection.Ascending, DataFieldIndex: 1, FieldIndex: 2),
+            new(PivotSortTarget.Label, PivotSortDirection.Ascending, FieldIndex: 3),
+        };
+
+        var labelResult = PivotSortPlanner.ReplaceQuickSort(
+            existing,
+            sourceFieldIndex: 0,
+            dataFieldIndex: null,
+            axisFieldIndex: 2,
+            direction: PivotSortDirection.Descending);
+        var valueResult = PivotSortPlanner.ReplaceQuickSort(
+            existing,
+            sourceFieldIndex: null,
+            dataFieldIndex: 1,
+            axisFieldIndex: 4,
+            direction: PivotSortDirection.Descending);
+
+        labelResult.Should().HaveCount(3);
+        labelResult.Should().ContainSingle(sort =>
+            sort.Target == PivotSortTarget.Label &&
+            sort.FieldIndex == 0 &&
+            sort.Direction == PivotSortDirection.Descending);
+        valueResult.Should().HaveCount(3);
+        valueResult.Should().ContainSingle(sort =>
+            sort.Target == PivotSortTarget.Value &&
+            sort.DataFieldIndex == 1 &&
+            sort.FieldIndex == 4 &&
+            sort.Direction == PivotSortDirection.Descending);
+    }
 }
