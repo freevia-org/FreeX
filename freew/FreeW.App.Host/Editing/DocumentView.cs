@@ -1056,15 +1056,7 @@ public sealed class DocumentView : RichTextBox
     /// Design-ribbon command.
     /// </summary>
     public void SetPageColor(string? colorHex) =>
-        ApplyPageSettings(page => page.BackgroundColorHex = NormalizePageColor(colorHex));
-
-    private static string? NormalizePageColor(string? colorHex)
-    {
-        if (string.IsNullOrWhiteSpace(colorHex))
-            return null;
-        var trimmed = colorHex.Trim();
-        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
-    }
+        ApplyPageSettings(page => page.BackgroundColorHex = PageColorDialogPlanner.NormalizeForModel(colorHex));
 
     /// <summary>
     /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the

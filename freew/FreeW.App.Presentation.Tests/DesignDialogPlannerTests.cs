@@ -125,6 +125,19 @@ public sealed class DesignDialogPlannerTests
         validation!.Message.Should().Be(PageColorDialogPlanner.CustomColorValidationMessage);
     }
 
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("DDEBF7", "#DDEBF7")]
+    [InlineData(" #F2F2F2 ", "#F2F2F2")]
+    public void PageColor_NormalizeForModel_MatchesBothRendererContracts(
+        string? input,
+        string? expected)
+    {
+        PageColorDialogPlanner.NormalizeForModel(input).Should().Be(expected);
+    }
+
     [Fact]
     public void SetAsDefaultConfirmation_UsesStableWordActionText()
     {

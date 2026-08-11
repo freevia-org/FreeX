@@ -219,6 +219,19 @@ public static class PageColorDialogPlanner
         (NoColorLabel, null),
     ];
 
+    /// <summary>
+    /// Normalizes a renderer-supplied page-color token for the document model. Blank clears the page
+    /// color; nonblank values are trimmed and receive the canonical leading hash when absent.
+    /// Dialog validation remains the responsibility of <see cref="TryBuildResult"/>.
+    /// </summary>
+    public static string? NormalizeForModel(string? colorHex)
+    {
+        if (string.IsNullOrWhiteSpace(colorHex))
+            return null;
+        var trimmed = colorHex.Trim();
+        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
+    }
+
     public static PageColorInitialState BuildInitialState(string? currentHex)
     {
         var index = -1;

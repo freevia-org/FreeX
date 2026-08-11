@@ -24325,15 +24325,7 @@ public sealed class DocumentView : Control
     /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.
     /// </summary>
     public void SetPageColor(string? colorHex) =>
-        _bus.Execute(new SetPageColorCommand(NormalizePageColor(colorHex)));
-
-    private static string? NormalizePageColor(string? colorHex)
-    {
-        if (string.IsNullOrWhiteSpace(colorHex))
-            return null;
-        var trimmed = colorHex.Trim();
-        return trimmed.StartsWith('#') ? trimmed : "#" + trimmed;
-    }
+        _bus.Execute(new SetPageColorCommand(PageColorDialogPlanner.NormalizeForModel(colorHex)));
 
     /// <summary>
     /// AV-DESIGN: set (or clear) the page border (Design &gt; Page Borders). Pass null to remove it.
