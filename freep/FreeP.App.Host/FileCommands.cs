@@ -36,7 +36,9 @@ internal sealed class FileCommands
         Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null,
         LinuxVideoEncoderCapability? videoEncoderCapability = null,
         ILinuxVideoExportAdapter? videoExportAdapter = null,
-        WpfNativePrintCapability? nativePrintCapability = null)
+        WpfNativePrintCapability? nativePrintCapability = null,
+        Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+            videoFramePackageArtifactFactory = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(getModel);
@@ -76,7 +78,8 @@ internal sealed class FileCommands
             new WpfPresentationFileFeedbackPort(workflow),
             getImageExportRange,
             getPrintCurrentSlideNumber,
-            getPrintSelectedSlideNumbers);
+            getPrintSelectedSlideNumbers,
+            videoPackageArtifactFactory: videoFramePackageArtifactFactory);
         _session = session;
     }
 

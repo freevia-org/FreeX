@@ -101,7 +101,8 @@ public sealed partial class MainWindow : Window
     private PresentationVideoExportHandoffHostCapabilities _videoExportHostCapabilities;
     private readonly Func<LinuxNativeOutputCapabilities>? _nativeOutputCapabilityDetector;
     private readonly Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? _printOutputPackageFactory;
-    private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? _videoFramePackageFactory;
+    private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+        _videoFramePackageArtifactFactory;
     private bool _nativeOutputDetectionStarted;
     private CancellationTokenSource? _nativeOutputCancellation;
 
@@ -717,7 +718,8 @@ public sealed partial class MainWindow : Window
         ILinuxVideoExportAdapter? videoExportAdapter = null,
         Func<LinuxNativeOutputCapabilities>? nativeOutputCapabilityDetector = null,
         Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? printOutputPackageFactory = null,
-        Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? videoFramePackageFactory = null,
+        Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+            videoFramePackageArtifactFactory = null,
         bool enableStartupDirtyTrace = false,
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
@@ -749,7 +751,7 @@ public sealed partial class MainWindow : Window
         _nativeOutputCapabilityDetector = nativeOutputCapabilityDetector ??
             (nativeOutputCapabilities is null ? DetectNativeOutputCapabilities : null);
         _printOutputPackageFactory = printOutputPackageFactory;
-        _videoFramePackageFactory = videoFramePackageFactory;
+        _videoFramePackageArtifactFactory = videoFramePackageArtifactFactory;
         _clipboardService = new AvaloniaPresentationClipboardService(
             systemClipboard ?? new AvaloniaPresentationSystemClipboard(
                 () => TopLevel.GetTopLevel(this)?.Clipboard),
@@ -834,7 +836,7 @@ public sealed partial class MainWindow : Window
             getImageExportRange: () => PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex),
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
             printPackageFactory: _printOutputPackageFactory,
-            videoPackageFactory: _videoFramePackageFactory);
+            videoPackageArtifactFactory: _videoFramePackageArtifactFactory);
         _startupDirtyTrace?.Record("file-workflow-created", _fileWorkflow);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: () => _fileSession.ConfirmCloseAllowedAsync(),

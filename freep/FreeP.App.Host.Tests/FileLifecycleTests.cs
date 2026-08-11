@@ -20,7 +20,10 @@ public sealed class FileLifecycleTests : IDisposable
         FileCommands File,
         Func<Presentation> GetModel,
         Func<int> ChangeCount,
-        RecordingUserMessageService Messages) CreateHarness(bool canEncodeVideo = false)
+        RecordingUserMessageService Messages) CreateHarness(
+            bool canEncodeVideo = false,
+            Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+                videoFramePackageArtifactFactory = null)
     {
         var window = new Window { Width = 100, Height = 100, ShowInTaskbar = false, Left = -10000, Top = -10000 };
         var model = Presentation.CreateEmpty();
@@ -37,7 +40,8 @@ public sealed class FileLifecycleTests : IDisposable
             videoEncoderCapability: canEncodeVideo
                 ? new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "test encoder ready")
                 : LinuxVideoEncoderCapability.Unavailable("Test encoder handoff deferred."),
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."),
+            videoFramePackageArtifactFactory: videoFramePackageArtifactFactory);
         return (window, file, () => model, () => changes, messages);
     }
 
@@ -333,6 +337,39 @@ public sealed class FileLifecycleTests : IDisposable
         package.Frames[0].WidthPx.Should().Be(852);
         package.Frames[0].HeightPx.Should().Be(480);
         package.Bytes.Length.Should().BeGreaterThan(100);
+        file.LastVideoFrameImageDiagnostics.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void BuildVideoFramePackage_InjectedWpfArtifactRetainsImageDiagnostics()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var request = new PresentationVideoExportRequest(
+            Quality: PresentationVideoQualityKind.Standard,
+            SecondsPerSlide: 0.5,
+            IncludeNarration: false);
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            request,
+            static (_, _, _, _) => [0x89, 0x50, 0x4E, 0x47]);
+        string[] diagnostics = ["Slide 1: injected WPF image diagnostic"];
+        var artifact = new PresentationVideoFramePackageArtifact(package, diagnostics);
+        PresentationVideoExportRequest? receivedRequest = null;
+        var (_, file, _, _, _) = CreateHarness(
+            videoFramePackageArtifactFactory: request =>
+            {
+                receivedRequest = request;
+                return artifact;
+            });
+
+        var result = file.BuildVideoFramePackage(request);
+
+        result.Should().BeSameAs(package);
+        receivedRequest.Should().BeSameAs(request);
+        file.LastVideoFramePackage.Should().BeSameAs(package);
+        file.LastVideoFrameImageDiagnostics.Should().BeSameAs(diagnostics);
+        file.LastVideoExecutionDescriptor!.PackagePlan.Should().BeSameAs(package.Plan);
+        file.LastVideoExportHandoffPlan.Should().BeSameAs(file.LastVideoExecutionDescriptor.HandoffPlan);
     }
 
     [StaFact]

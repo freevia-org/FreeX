@@ -443,7 +443,8 @@ public sealed class PresentationFileCommandSession
     private readonly Func<int?> _getPrintCurrentSlideNumber;
     private readonly Func<IReadOnlyList<int>?> _getPrintSelectedSlideNumbers;
     private readonly Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? _printPackageFactory;
-    private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? _videoPackageFactory;
+    private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+        _videoPackageArtifactFactory;
 
     public PresentationFileCommandSession(
         Func<Presentation> getPresentation,
@@ -458,7 +459,8 @@ public sealed class PresentationFileCommandSession
         Func<int?>? getPrintCurrentSlideNumber = null,
         Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null,
         Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? printPackageFactory = null,
-        Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? videoPackageFactory = null)
+        Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+            videoPackageArtifactFactory = null)
     {
         ArgumentNullException.ThrowIfNull(getPresentation);
         ArgumentNullException.ThrowIfNull(loadPresentation);
@@ -480,7 +482,7 @@ public sealed class PresentationFileCommandSession
         _getPrintCurrentSlideNumber = getPrintCurrentSlideNumber ?? (() => null);
         _getPrintSelectedSlideNumbers = getPrintSelectedSlideNumbers ?? (() => null);
         _printPackageFactory = printPackageFactory;
-        _videoPackageFactory = videoPackageFactory;
+        _videoPackageArtifactFactory = videoPackageArtifactFactory;
     }
 
     public bool IsDirty => _lifecycle.IsDirty;
@@ -903,21 +905,15 @@ public sealed class PresentationFileCommandSession
 
     public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
-        if (_videoPackageFactory is not null)
-        {
-            LastVideoFramePackage = _videoPackageFactory(request);
-            LastVideoFrameImageDiagnostics = [];
-        }
-        else
-        {
-            var artifact = PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(
+        var artifact = _videoPackageArtifactFactory?.Invoke(request) ??
+            PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(
                 _getPresentation(),
                 request,
                 _render.RenderSlideToPng,
                 _video.Capabilities);
-            LastVideoFramePackage = artifact.Package;
-            LastVideoFrameImageDiagnostics = artifact.ImageDiagnostics;
-        }
+
+        LastVideoFramePackage = artifact.Package;
+        LastVideoFrameImageDiagnostics = artifact.ImageDiagnostics;
 
         LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
         LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(

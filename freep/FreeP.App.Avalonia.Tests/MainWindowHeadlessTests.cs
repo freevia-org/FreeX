@@ -320,6 +320,9 @@ public sealed class MainWindowHeadlessTests : IDisposable
             LinuxNativePrintCapability.Unavailable("no queue"),
             new LinuxVideoEncoderCapability(true, "ffmpeg", "mpeg4", false, "ready"));
         var videoAdapter = new RecordingVideoAdapter(capabilities.Video);
+        var videoArtifact = new PresentationVideoFramePackageArtifact(
+            BuildTestVideoPackage(),
+            []);
         {
             MainWindow? window = null;
             var ran = await OnUiThread(() =>
@@ -330,7 +333,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
                     nativeOutputCapabilities: capabilities,
                     nativePrintAdapter: new RecordingPrintAdapter(),
                     videoExportAdapter: videoAdapter,
-                    videoFramePackageFactory: _ => BuildTestVideoPackage());
+                    videoFramePackageArtifactFactory: _ => videoArtifact);
             });
             if (!ran) return;
 
@@ -355,7 +358,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
             var successRan = await OnUiThread(() => videoTask = window.FileExportVideoAsyncForTests());
             if (!successRan) return;
             (await videoTask!).Should().BeTrue();
-            videoAdapter.Package.Should().NotBeNull();
+            videoAdapter.Package.Should().BeSameAs(videoArtifact.Package);
 
             window.ShowBackstageForTests();
             window.ActivateBackstageEntryForTests("Export").Should().BeTrue();
@@ -378,6 +381,32 @@ public sealed class MainWindowHeadlessTests : IDisposable
                 .NotContain("BackstageExport_freepfileexportvideo");
         });
         if (!disabledRan) return;
+    }
+
+    [Fact]
+    public async Task Injected_video_frame_package_artifact_retains_image_diagnostics()
+    {
+        string[] imageDiagnostics = ["Slide 1: injected Avalonia image diagnostic"];
+        var artifact = new PresentationVideoFramePackageArtifact(
+            BuildTestVideoPackage(),
+            imageDiagnostics);
+        PresentationVideoFramePackage? package = null;
+        IReadOnlyList<string>? retainedDiagnostics = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                videoFramePackageArtifactFactory: _ => artifact);
+
+            package = window.RefreshVideoFramePackage();
+            retainedDiagnostics = window.LastVideoFrameImageDiagnostics;
+        });
+
+        if (!ran) return;
+        package.Should().BeSameAs(artifact.Package);
+        retainedDiagnostics.Should().BeSameAs(imageDiagnostics);
     }
 
     [Fact]
@@ -3581,6 +3610,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         PresentationVideoFramePackage? videoPackage = null;
         PresentationVideoExportHandoffPlan? videoHandoff = null;
         PresentationVideoFramePackageExecutionDescriptor? videoDescriptor = null;
+        IReadOnlyList<string>? videoImageDiagnostics = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -3598,6 +3628,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
             videoPlan = window.LastVideoExportPlan;
             videoHandoff = window.LastVideoExportHandoffPlan;
             videoDescriptor = window.LastVideoExecutionDescriptor;
+            videoImageDiagnostics = window.LastVideoFrameImageDiagnostics;
         });
 
         if (!ran) return;
@@ -3606,6 +3637,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         videoPlan.Should().NotBeNull();
         videoHandoff.Should().NotBeNull();
         videoDescriptor.Should().NotBeNull();
+        videoImageDiagnostics.Should().BeEmpty();
         videoPackage!.Plan.ExportPlan.Should().BeSameAs(videoPlan);
         videoHandoff!.PackagePlan.Should().BeSameAs(videoPackage.Plan);
         videoDescriptor!.PackagePlan.Should().BeSameAs(videoPackage.Plan);

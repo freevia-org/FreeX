@@ -138,6 +138,46 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
     }
 
     [Fact]
+    public void BuildVideoFramePackage_InjectedArtifactRetainsPackageAndImageDiagnostics()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var request = new PresentationVideoExportRequest(
+            Quality: PresentationVideoQualityKind.Standard,
+            SecondsPerSlide: 0.25,
+            IncludeNarration: false);
+        var video = new FakeVideoPort();
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            request,
+            static (_, _, _, _) => [0x89, 0x50, 0x4E, 0x47],
+            video.Capabilities);
+        string[] diagnostics = ["Slide 1: injected image diagnostic"];
+        var artifact = new PresentationVideoFramePackageArtifact(package, diagnostics);
+        PresentationVideoExportRequest? receivedRequest = null;
+        var session = CreateSession(
+            () => presentation,
+            _ => { },
+            new FakeLifecyclePort(),
+            new FakePickerPort(),
+            video: video,
+            videoPackageArtifactFactory: value =>
+            {
+                receivedRequest = value;
+                return artifact;
+            });
+
+        var result = session.BuildVideoFramePackage(request);
+
+        result.Should().BeSameAs(package);
+        receivedRequest.Should().BeSameAs(request);
+        session.LastVideoFramePackage.Should().BeSameAs(package);
+        session.LastVideoFrameImageDiagnostics.Should().BeSameAs(diagnostics);
+        session.LastVideoExportPlan.Should().BeSameAs(package.Plan.ExportPlan);
+        session.LastVideoExecutionDescriptor!.PackagePlan.Should().BeSameAs(package.Plan);
+        session.LastVideoExportHandoffPlan.Should().BeSameAs(session.LastVideoExecutionDescriptor.HandoffPlan);
+    }
+
+    [Fact]
     public async Task Print_DelegatesNativeExecutionAndRetainsPackageState()
     {
         var print = new FakePrintPort();
@@ -201,7 +241,9 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         FakeRenderPort? render = null,
         FakePrintPort? print = null,
         FakeVideoPort? video = null,
-        FakeFeedbackPort? feedback = null) =>
+        FakeFeedbackPort? feedback = null,
+        Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
+            videoPackageArtifactFactory = null) =>
         new(
             getPresentation,
             loadPresentation,
@@ -210,7 +252,8 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
             render ?? new FakeRenderPort(),
             print ?? new FakePrintPort(),
             video ?? new FakeVideoPort(),
-            feedback);
+            feedback,
+            videoPackageArtifactFactory: videoPackageArtifactFactory);
 
     private sealed class FakeLifecyclePort : IPresentationFileLifecyclePort
     {
