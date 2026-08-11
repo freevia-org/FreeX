@@ -116,7 +116,13 @@ public sealed partial class SlideCanvas : FrameworkElement
     public HashSet<uint> SuppressedShapeIds { get; } = new();
 
     private static void OnModelChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        => ((SlideCanvas)d).Refresh();
+    {
+        var canvas = (SlideCanvas)d;
+        canvas._canvasAutomation.ResetSelection(
+            canvas.Slide,
+            canvas._editingSession?.SelectedShapeIds);
+        canvas.Refresh();
+    }
 
     // ── Editing (Wave 3C / 9A) ────────────────────────────────────────────────
 
@@ -126,7 +132,8 @@ public sealed partial class SlideCanvas : FrameworkElement
     private Canvas?                    _textOverlay;   // WPF Canvas layered above SlideCanvas for text-edit overlay
     private PresentationViewShowState  _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState  _viewZoomState = PresentationViewZoomState.FitToWindow;
-    private EditingSession?            _editingSession;   // R134: tracked for SlideCanvasAutomationPeer
+    private EditingSession?            _editingSession;
+    private readonly PresentationCanvasAutomationSession _canvasAutomation = new();
 
     /// <summary>
     /// Returns the custom UIA automation peer for the slide editing surface: the canvas itself
@@ -172,6 +179,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         if (_editingSession is not null)
             _editingSession.SelectionChanged -= OnEditingSessionSelectionChangedForAutomation;
         _editingSession = editor;
+        _canvasAutomation.ResetSelection(Slide, editor.SelectedShapeIds);
         _editingSession.SelectionChanged += OnEditingSessionSelectionChangedForAutomation;
 
         _gestureHandler  = new CanvasGestureHandler(
@@ -194,8 +202,11 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// </summary>
     private void OnEditingSessionSelectionChangedForAutomation(object? sender, EventArgs e)
     {
+        var delta = _canvasAutomation.CaptureSelectionDelta(
+            Slide,
+            _editingSession?.SelectedShapeIds);
         if (UIElementAutomationPeer.FromElement(this) is SlideCanvasAutomationPeer peer)
-            peer.NotifySelectionChanged();
+            peer.NotifySelectionChanged(delta);
     }
 
     public PresentationViewShowState ViewShowState => _viewShowState;
@@ -2927,40 +2938,31 @@ public sealed partial class SlideCanvas : FrameworkElement
     // EMU bounds through the canvas's live CurrentTransform instead of reading a real element's
     // layout rect.
     //
-    // Scope delivered: the canvas's own name/role, each shape's name (falling back through
-    // Name -> AlternativeTextTitle -> AlternativeText -> a generic "Shape N"), a role hint
-    // derived from SlideShapeKind, selection state, and SelectionChanged notifications routed
-    // from EditingSession. NOT delivered (tracked as follow-up, same as GridView's own
-    // documented gaps): TextPattern access to a shape's rich text runs, table cell structure
-    // inside a Table shape, and per-data-point structure inside a Chart shape.
+    // PresentationCanvasAutomationSession owns the virtual tree, identity, roles, selection
+    // snapshots, deltas, and focus intent. This peer only translates that contract to WPF UIA
+    // providers/events and maps presentation coordinates to screen coordinates.
     private sealed class SlideCanvasAutomationPeer(SlideCanvas owner) :
         FrameworkElementAutomationPeer(owner),
         ISelectionProvider
     {
         private readonly Dictionary<uint, SlideShapeAutomationPeer> _shapePeers = [];
-        private IReadOnlyList<uint> _lastNotifiedSelection = owner._editingSession?.SelectedShapeIds ?? [];
 
         private SlideCanvas OwnerCanvas => (SlideCanvas)Owner;
 
-        public bool CanSelectMultiple => true;
+        public bool CanSelectMultiple => OwnerCanvas._canvasAutomation.CanSelectMultiple;
 
-        public bool IsSelectionRequired => false;
+        public bool IsSelectionRequired => OwnerCanvas._canvasAutomation.IsSelectionRequired;
 
         public IRawElementProviderSimple[] GetSelection()
         {
-            var slide = OwnerCanvas.Slide;
-            var session = OwnerCanvas._editingSession;
-            if (slide is null || session is null || session.SelectedShapeIds.Count == 0)
-                return [];
-
-            var selected = new List<IRawElementProviderSimple>();
-            foreach (var shapeId in session.SelectedShapeIds)
-            {
-                if (TryFindShape(slide, shapeId, out _))
-                    selected.Add(ProviderFromPeer(GetOrCreateShapePeer(shapeId)));
-            }
-
-            return [.. selected];
+            var descriptors = OwnerCanvas._canvasAutomation.ProjectSelection(
+                OwnerCanvas.Slide,
+                OwnerCanvas._editingSession?.SelectedShapeIds);
+            return
+            [
+                .. descriptors.Select(descriptor =>
+                    ProviderFromPeer(GetOrCreateShapePeer(descriptor.ShapeId!.Value)))
+            ];
         }
 
         public override object? GetPattern(PatternInterface patternInterface) =>
@@ -2972,17 +2974,16 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         protected override List<AutomationPeer> GetChildrenCore()
         {
-            var slide = OwnerCanvas.Slide;
-            if (slide is null || slide.Shapes.Count == 0)
-                return [];
-
-            var children = new List<AutomationPeer>(slide.Shapes.Count);
+            var descriptors = OwnerCanvas._canvasAutomation.ProjectShapes(
+                OwnerCanvas.Slide,
+                OwnerCanvas._editingSession?.SelectedShapeIds);
+            var children = new List<AutomationPeer>(descriptors.Length);
             var liveIds = new HashSet<uint>();
-            foreach (var shape in slide.Shapes)
+            foreach (var descriptor in descriptors)
             {
-                if (shape.IsHidden) continue;
-                liveIds.Add(shape.Id);
-                children.Add(GetOrCreateShapePeer(shape.Id));
+                var shapeId = descriptor.ShapeId!.Value;
+                liveIds.Add(shapeId);
+                children.Add(GetOrCreateShapePeer(shapeId));
             }
 
             // Evict peers for shapes that no longer exist on the current slide (deleted, or the
@@ -2994,27 +2995,33 @@ public sealed partial class SlideCanvas : FrameworkElement
             return children;
         }
 
-        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Pane;
+        protected override AutomationControlType GetAutomationControlTypeCore() =>
+            ToNativeRole(OwnerCanvas._canvasAutomation.ProjectCanvas(
+                OwnerCanvas.Presentation,
+                OwnerCanvas.Slide).Role);
 
-        protected override string GetClassNameCore() => nameof(SlideCanvas);
+        protected override string GetClassNameCore() =>
+            OwnerCanvas._canvasAutomation.ProjectCanvas(
+                OwnerCanvas.Presentation,
+                OwnerCanvas.Slide).ClassName;
 
-        protected override string GetNameCore()
-        {
-            var presentation = OwnerCanvas.Presentation;
-            var slide = OwnerCanvas.Slide;
-            if (presentation is not null && slide is not null)
-            {
-                var index = presentation.Slides.IndexOf(slide);
-                if (index >= 0)
-                    return $"Slide {index + 1} canvas";
-            }
-
-            return "Slide canvas";
-        }
+        protected override string GetNameCore() =>
+            OwnerCanvas._canvasAutomation.ProjectCanvas(
+                OwnerCanvas.Presentation,
+                OwnerCanvas.Slide).Name;
 
         protected override bool IsControlElementCore() => true;
 
         protected override bool IsContentElementCore() => true;
+
+        internal static AutomationControlType ToNativeRole(PresentationCanvasAutomationRole role) =>
+            role switch
+            {
+                PresentationCanvasAutomationRole.Canvas => AutomationControlType.Pane,
+                PresentationCanvasAutomationRole.Image => AutomationControlType.Image,
+                PresentationCanvasAutomationRole.DataGrid => AutomationControlType.DataGrid,
+                _ => AutomationControlType.Custom,
+            };
 
         private SlideShapeAutomationPeer GetOrCreateShapePeer(uint shapeId)
         {
@@ -3026,36 +3033,25 @@ public sealed partial class SlideCanvas : FrameworkElement
             return peer;
         }
 
-        internal bool TryGetShape(uint shapeId, out SlideShape shape)
-        {
-            var slide = OwnerCanvas.Slide;
-            if (slide is not null && TryFindShape(slide, shapeId, out var found))
-            {
-                shape = found;
-                return true;
-            }
-
-            shape = null!;
-            return false;
-        }
-
-        private static bool TryFindShape(Slide slide, uint shapeId, out SlideShape shape)
-        {
-            foreach (var candidate in slide.Shapes)
-            {
-                if (candidate.Id == shapeId)
-                {
-                    shape = candidate;
-                    return true;
-                }
-            }
-
-            shape = null!;
-            return false;
-        }
+        internal bool TryGetShape(
+            uint shapeId,
+            out PresentationCanvasAutomationDescriptor descriptor) =>
+            OwnerCanvas._canvasAutomation.TryProjectShape(
+                OwnerCanvas.Slide,
+                shapeId,
+                OwnerCanvas._editingSession?.SelectedShapeIds,
+                out descriptor);
 
         internal bool IsShapeSelected(uint shapeId) =>
-            OwnerCanvas._editingSession?.SelectedShapeIds.Contains(shapeId) == true;
+            TryGetShape(shapeId, out var descriptor) && descriptor.IsSelected;
+
+        internal bool HasShapeKeyboardFocus(uint shapeId) =>
+            TryGetShape(shapeId, out var descriptor) && descriptor.HasKeyboardFocus;
+
+        internal void RequestSelectionMutation(
+            uint shapeId,
+            PresentationCanvasAutomationSelectionMutation mutation) =>
+            OwnerCanvas._canvasAutomation.RequestSelectionMutation(shapeId, mutation);
 
         /// <summary>
         /// Projects a shape's EMU bounds through the canvas's live slide→screen
@@ -3067,16 +3063,16 @@ public sealed partial class SlideCanvas : FrameworkElement
         /// </summary>
         internal Rect GetShapeBoundingRectangle(uint shapeId)
         {
-            if (!TryGetShape(shapeId, out var shape))
+            if (!TryGetShape(shapeId, out var descriptor) || descriptor.Bounds is not { } bounds)
                 return Rect.Empty;
 
             var transform = OwnerCanvas.CurrentTransform;
             var topLeft = transform.SlideToScreen(
-                SlideTransform.EmuToDip(shape.OffsetXEmu),
-                SlideTransform.EmuToDip(shape.OffsetYEmu));
+                SlideTransform.EmuToDip(bounds.OffsetXEmu),
+                SlideTransform.EmuToDip(bounds.OffsetYEmu));
             var bottomRight = transform.SlideToScreen(
-                SlideTransform.EmuToDip(shape.OffsetXEmu + shape.ExtentCxEmu),
-                SlideTransform.EmuToDip(shape.OffsetYEmu + shape.ExtentCyEmu));
+                SlideTransform.EmuToDip(bounds.OffsetXEmu + bounds.ExtentCxEmu),
+                SlideTransform.EmuToDip(bounds.OffsetYEmu + bounds.ExtentCyEmu));
 
             try
             {
@@ -3099,31 +3095,38 @@ public sealed partial class SlideCanvas : FrameworkElement
         /// from <see cref="OnEditingSessionSelectionChangedForAutomation"/> whenever
         /// EditingSession.SelectionChanged fires.
         /// </summary>
-        internal void NotifySelectionChanged()
+        internal void NotifySelectionChanged(PresentationCanvasAutomationSelectionDelta delta)
         {
-            IReadOnlyList<uint> current = OwnerCanvas._editingSession?.SelectedShapeIds ?? [];
-            var previous = _lastNotifiedSelection;
-            _lastNotifiedSelection = current;
-
-            if (current.SequenceEqual(previous))
+            if (!delta.HasChanges && delta.FocusIntent == PresentationCanvasAutomationFocusIntent.None)
                 return;
 
-            foreach (var removedId in previous.Except(current))
+            foreach (var removedId in delta.RemovedShapeIds)
             {
                 if (_shapePeers.TryGetValue(removedId, out var removedPeer))
                     removedPeer.RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, true, false);
             }
 
-            AutomationPeer? lastAddedPeer = null;
-            foreach (var addedId in current.Except(previous))
+            foreach (var addedId in delta.AddedShapeIds)
             {
                 var addedPeer = GetOrCreateShapePeer(addedId);
                 addedPeer.RaisePropertyChangedEvent(SelectionItemPatternIdentifiers.IsSelectedProperty, false, true);
                 addedPeer.RaiseAutomationEvent(AutomationEvents.SelectionItemPatternOnElementSelected);
-                lastAddedPeer = addedPeer;
             }
 
-            lastAddedPeer?.RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
+            if (delta.FocusIntent == PresentationCanvasAutomationFocusIntent.None)
+                return;
+
+            if (delta.Previous.FocusedShapeId is { } previousFocusId &&
+                _shapePeers.TryGetValue(previousFocusId, out var previousFocusPeer))
+            {
+                previousFocusPeer.RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
+            }
+
+            if (delta.Current.FocusedShapeId is { } currentFocusId)
+            {
+                GetOrCreateShapePeer(currentFocusId)
+                    .RaiseAutomationEvent(AutomationEvents.AutomationFocusChanged);
+            }
         }
     }
 
@@ -3135,14 +3138,17 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         public IRawElementProviderSimple SelectionContainer => ProviderFromPeer(parent);
 
-        public void Select() =>
-            throw new InvalidOperationException("Shape selection is owned by the slide canvas's editing session.");
+        public void Select() => parent.RequestSelectionMutation(
+            shapeId,
+            PresentationCanvasAutomationSelectionMutation.Select);
 
-        public void AddToSelection() =>
-            throw new InvalidOperationException("Shape selection is owned by the slide canvas's editing session.");
+        public void AddToSelection() => parent.RequestSelectionMutation(
+            shapeId,
+            PresentationCanvasAutomationSelectionMutation.Add);
 
-        public void RemoveFromSelection() =>
-            throw new InvalidOperationException("Shape selection is owned by the slide canvas's editing session.");
+        public void RemoveFromSelection() => parent.RequestSelectionMutation(
+            shapeId,
+            PresentationCanvasAutomationSelectionMutation.Remove);
 
         public override object? GetPattern(PatternInterface patternInterface) =>
             patternInterface switch
@@ -3152,31 +3158,20 @@ public sealed partial class SlideCanvas : FrameworkElement
             };
 
         protected override string GetNameCore()
-        {
-            if (!parent.TryGetShape(shapeId, out var shape))
-                return string.Empty;
-            if (!string.IsNullOrWhiteSpace(shape.Name))
-                return shape.Name;
-            if (!string.IsNullOrWhiteSpace(shape.AlternativeTextTitle))
-                return shape.AlternativeTextTitle;
-            if (!string.IsNullOrWhiteSpace(shape.AlternativeText))
-                return shape.AlternativeText;
-            return $"Shape {shapeId}";
-        }
+            => parent.TryGetShape(shapeId, out var descriptor) ? descriptor.Name : string.Empty;
 
         protected override AutomationControlType GetAutomationControlTypeCore() =>
-            parent.TryGetShape(shapeId, out var shape) ? ShapeKindToControlType(shape.Kind) : AutomationControlType.Custom;
+            parent.TryGetShape(shapeId, out var descriptor)
+                ? SlideCanvasAutomationPeer.ToNativeRole(descriptor.Role)
+                : AutomationControlType.Custom;
 
-        private static AutomationControlType ShapeKindToControlType(SlideShapeKind kind) => kind switch
-        {
-            SlideShapeKind.Picture => AutomationControlType.Image,
-            SlideShapeKind.Table   => AutomationControlType.DataGrid,
-            _                      => AutomationControlType.Custom
-        };
+        protected override string GetClassNameCore() =>
+            parent.TryGetShape(shapeId, out var descriptor)
+                ? descriptor.ClassName
+                : PresentationCanvasAutomationSession.ShapeClassName;
 
-        protected override string GetClassNameCore() => "SlideShape";
-
-        protected override string GetAutomationIdCore() => $"Shape_{shapeId}";
+        protected override string GetAutomationIdCore() =>
+            parent.TryGetShape(shapeId, out var descriptor) ? descriptor.AutomationId : string.Empty;
 
         protected override Rect GetBoundingRectangleCore() => parent.GetShapeBoundingRectangle(shapeId);
 
@@ -3195,7 +3190,7 @@ public sealed partial class SlideCanvas : FrameworkElement
         protected override string GetAccessKeyCore() => string.Empty;
 
         protected override string GetHelpTextCore() =>
-            parent.TryGetShape(shapeId, out var shape) ? shape.AlternativeText : string.Empty;
+            parent.TryGetShape(shapeId, out var descriptor) ? descriptor.HelpText : string.Empty;
 
         protected override string GetItemStatusCore() => string.Empty;
 
@@ -3203,11 +3198,14 @@ public sealed partial class SlideCanvas : FrameworkElement
 
         protected override AutomationPeer? GetLabeledByCore() => null;
 
-        protected override string GetLocalizedControlTypeCore() => "shape";
+        protected override string GetLocalizedControlTypeCore() =>
+            parent.TryGetShape(shapeId, out var descriptor)
+                ? descriptor.LocalizedControlType
+                : PresentationCanvasAutomationSession.ShapeLocalizedControlType;
 
         protected override AutomationOrientation GetOrientationCore() => AutomationOrientation.None;
 
-        protected override bool HasKeyboardFocusCore() => IsSelected;
+        protected override bool HasKeyboardFocusCore() => parent.HasShapeKeyboardFocus(shapeId);
 
         protected override bool IsEnabledCore() => true;
 

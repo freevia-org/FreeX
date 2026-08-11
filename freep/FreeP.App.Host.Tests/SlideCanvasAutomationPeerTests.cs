@@ -30,6 +30,7 @@ public sealed class SlideCanvasAutomationPeerTests
         var shapeA = new SlideShape
         {
             Id = 1,
+            Kind = SlideShapeKind.Picture,
             Name = "Title 1",
             AutoShapeKind = DrawingShapeKind.Rectangle,
             OffsetXEmu = 457200,
@@ -40,6 +41,7 @@ public sealed class SlideCanvasAutomationPeerTests
         var shapeB = new SlideShape
         {
             Id = 2,
+            Kind = SlideShapeKind.Table,
             // No Name set -- exercises the AlternativeText fallback (Wave 26/R134 alt-text
             // announcement, analogous to GridView's comment/hyperlink cue fallbacks).
             AlternativeText = "A decorative circle",
@@ -95,11 +97,18 @@ public sealed class SlideCanvasAutomationPeerTests
         var shapeAItem = shapeAPeer.GetPattern(PatternInterface.SelectionItem)
             .Should().BeAssignableTo<ISelectionItemProvider>().Subject;
         shapeAItem.IsSelected.Should().BeFalse();
+        shapeAPeer.GetAutomationId().Should().Be("Shape_1");
+        shapeAPeer.GetClassName().Should().Be("SlideShape");
+        shapeAPeer.GetAutomationControlType().Should().Be(AutomationControlType.Image);
+        Action selectFromAutomation = shapeAItem.Select;
+        selectFromAutomation.Should().Throw<InvalidOperationException>()
+            .WithMessage(PresentationCanvasAutomationSession.SelectionMutationNotSupportedMessage);
 
         // Shape B has a blank Name; its announced name must fall back to AlternativeText
         // rather than being blank/unannounced.
         var shapeBPeer = children.Single(c => c.GetName() == shapeB.AlternativeText);
-        shapeBPeer.Should().NotBeNull();
+        shapeBPeer.GetAutomationId().Should().Be("Shape_2");
+        shapeBPeer.GetAutomationControlType().Should().Be(AutomationControlType.DataGrid);
     }
 
     [StaFact]
@@ -110,7 +119,10 @@ public sealed class SlideCanvasAutomationPeerTests
         var peer = UIElementAutomationPeer.CreatePeerForElement(canvas);
         var children = peer.GetChildren();
         var shapeAPeer = children.Single(c => c.GetName() == shapeA.Name);
+        var shapeBPeer = children.Single(c => c.GetName() == shapeB.AlternativeText);
         var shapeAItem = (ISelectionItemProvider)shapeAPeer.GetPattern(PatternInterface.SelectionItem)!;
+        var shapeBItem = (ISelectionItemProvider)shapeBPeer.GetPattern(PatternInterface.SelectionItem)!;
+        var liveSelection = editor.SelectedShapeIds;
 
         shapeAItem.IsSelected.Should().BeFalse();
         shapeAPeer.HasKeyboardFocus().Should().BeFalse();
@@ -119,16 +131,31 @@ public sealed class SlideCanvasAutomationPeerTests
         // Selection Pane both funnel through EditingSession.Select).
         editor.Select(shapeA.Id);
 
+        editor.SelectedShapeIds.Should().BeSameAs(liveSelection);
         shapeAItem.IsSelected.Should().BeTrue();
         shapeAPeer.HasKeyboardFocus().Should().BeTrue();
 
         var selectionProvider = (ISelectionProvider)peer.GetPattern(PatternInterface.Selection)!;
         selectionProvider.GetSelection().Should().ContainSingle();
 
+        // EditingSession mutates the same selected-id list before raising SelectionChanged.
+        // The shared automation session must retain a detached baseline and move focus to the
+        // last selected shape rather than treating every selected peer as focused.
+        editor.Select(shapeB.Id, addToSelection: true);
+
+        editor.SelectedShapeIds.Should().BeSameAs(liveSelection);
+        shapeAItem.IsSelected.Should().BeTrue();
+        shapeAPeer.HasKeyboardFocus().Should().BeFalse();
+        shapeBItem.IsSelected.Should().BeTrue();
+        shapeBPeer.HasKeyboardFocus().Should().BeTrue();
+        selectionProvider.GetSelection().Should().HaveCount(2);
+
         editor.ClearSelection();
 
         shapeAItem.IsSelected.Should().BeFalse();
         shapeAPeer.HasKeyboardFocus().Should().BeFalse();
+        shapeBItem.IsSelected.Should().BeFalse();
+        shapeBPeer.HasKeyboardFocus().Should().BeFalse();
         selectionProvider.GetSelection().Should().BeEmpty();
     }
 }
