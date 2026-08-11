@@ -16,7 +16,9 @@ public sealed class SelectionPaneOwnershipTests
         source.Should().Contain("itemSession.MoveTowardFront()");
         source.Should().Contain("itemSession.MoveTowardBack()");
         source.Should().Contain("item.VisibilityActionText");
-        source.Should().Contain("item.AccessibilityStateText");
+        source.Should().Contain("PresentationPaneAccessibilityAdapter.ApplyItem(");
+        source.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
+        source.Should().Contain("PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)");
         source.Should().Contain("Avalonia.Controls");
         source.Should().Contain("rename.LostFocus");
         source.Should().Contain("Key.Enter");

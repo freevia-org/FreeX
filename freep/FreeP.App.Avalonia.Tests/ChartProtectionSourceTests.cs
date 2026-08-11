@@ -6,9 +6,16 @@ public sealed class ChartProtectionSourceTests
     public void Avalonia_ChartDialogsRespectImportedProtectionPolicy()
     {
         var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var planner = File.ReadAllText(RepoFile(
+            "freep", "FreeP.App.Presentation", "PresentationDomainDialogLaunchPlanner.cs"));
 
-        source.Should().Contain("if (!Editor.CanEditSelectedChartData)");
-        source.Should().Contain("if (!Editor.CanEditSelectedChartFormatting)");
+        source.Should().Contain(
+            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData)");
+        source.Should().Contain(
+            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions)");
+        planner.Should().Contain(
+            "PresentationDomainDialogKind.ChartData => editor.CanEditSelectedChartData");
+        planner.Should().Contain("editor.CanEditSelectedChartFormatting");
     }
 
     [Fact]

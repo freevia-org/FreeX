@@ -489,7 +489,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         title.Should().EndWith("FreeP");
         hasIcon.Should().BeTrue("Avalonia and WPF must load the same owned FreeP icon asset");
         statusText.Should().StartWith("Slide 1 / 1");
-        statusText.Should().EndWith("options.json");
+        statusText.Should().EndWith(FreePApplicationFrameDescriptor.ResolveDataFolderLabel());
     }
 
     [Fact]
