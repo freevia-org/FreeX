@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Avalonia;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -288,6 +289,9 @@ public sealed class DocumentView : Control
     }
     private DocPosition _caret;
     private DocPosition? _selectionAnchor;
+    private DocumentViewAutomationPeer? _automationPeer;
+    private string? _lastAutomationValue;
+    private string? _lastAutomationSelectionStatus;
     // BZ5: pending character formatting to be applied to the NEXT typed character when the caret
     // is collapsed (no selection). Set by the Font dialog on a collapsed-caret apply; consumed
     // and cleared by the next InsertText call.
@@ -346,6 +350,8 @@ public sealed class DocumentView : Control
         // in page previews and captured document surfaces, so keep document text device-independent.
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         _editingSession.Changed += OnModelChanged;
+        CaretMoved += RaiseAutomationSelectionChanged;
+        DocumentChanged += RaiseAutomationValueChanged;
     }
 
     internal Func<bool>? CanPasteProvider { get; set; }
@@ -979,6 +985,55 @@ public sealed class DocumentView : Control
     internal IReadOnlyList<double> BodyPageVerticalOffsetsForTest => _bodyPageVerticalOffsets;
     internal IReadOnlyList<double> BodyPageVerticalJustifiedGapsForTest => _bodyPageVerticalJustifiedGaps;
     public string PlainText => _doc.PlainText;
+
+    protected override AutomationPeer OnCreateAutomationPeer()
+    {
+        _automationPeer = new DocumentViewAutomationPeer(this);
+        _lastAutomationValue = PlainText;
+        _lastAutomationSelectionStatus = AutomationSelectionStatus();
+        return _automationPeer;
+    }
+
+    internal AutomationPeer CreateAutomationPeerForTests() => OnCreateAutomationPeer();
+
+    internal string AutomationSelectionStatus()
+    {
+        var caretDescription = CellCaretInfo is { } cell
+            ? $"Table {cell.TableBlock} row {cell.Row} col {cell.Col} para {cell.ParaIdx} offset {cell.Offset}"
+            : $"Block {_caret.Block} offset {_caret.Offset}";
+        var selected = SelectedText;
+        return selected.Length > 0
+            ? $"{caretDescription}; Selected: {selected}"
+            : caretDescription;
+    }
+
+    private void RaiseAutomationValueChanged()
+    {
+        if (_automationPeer is null)
+            return;
+
+        var newValue = PlainText;
+        if (string.Equals(_lastAutomationValue, newValue, StringComparison.Ordinal))
+            return;
+
+        var oldValue = _lastAutomationValue;
+        _lastAutomationValue = newValue;
+        _automationPeer.NotifyValueChanged(oldValue, newValue);
+    }
+
+    private void RaiseAutomationSelectionChanged()
+    {
+        if (_automationPeer is null)
+            return;
+
+        var status = AutomationSelectionStatus();
+        if (string.Equals(_lastAutomationSelectionStatus, status, StringComparison.Ordinal))
+            return;
+
+        var oldStatus = _lastAutomationSelectionStatus;
+        _lastAutomationSelectionStatus = status;
+        _automationPeer.NotifySelectionChanged(oldStatus, status);
+    }
 
     /// <summary>
     /// AV-LINK: Introspect the <em>resolved</em> render styling of the first laid-out glyph in the body
@@ -7478,13 +7533,14 @@ public sealed class DocumentView : Control
         double availWidth,
         string pageNumberText,
         int pageCount,
-        Func<int, HfTarget> targetFactory,
+        Func<int, HfTarget>? targetFactory,
         HeaderFooterSlotKind slot,
         int pageNumber = 1,
         int sectionOrdinal = 1,
         int sectionRelativePageNumber = 1,
         int sectionPageCount = 1)
     {
+        var slotName = HeaderFooterDialogPlanner.SlotNameFor(slot);
         // Preserved side-by-side layout table (e.g. Word's classic Left/Center/Right header/footer
         // building block — see HeaderFooter.Table / DocxReader.IsSingleTableHeaderFooterContent): lay the
         // row's cells out side-by-side instead of falling through to the linear paragraph loop below,
@@ -7493,16 +7549,15 @@ public sealed class DocumentView : Control
         {
             return EmitHfTable(
                 table, startY, availWidth, pageNumberText, pageCount,
-                slotName, pageNumber, sectionOrdinal, sectionRelativePageNumber, sectionPageCount);
+                slot, pageNumber, sectionOrdinal, sectionRelativePageNumber, sectionPageCount);
         }
 
         var y = startY;
-        var slotName = HeaderFooterDialogPlanner.SlotNameFor(slot);
         for (var paraIdx = 0; paraIdx < hf.Paragraphs.Count; paraIdx++)
         {
             var para = hf.Paragraphs[paraIdx];
             var pf = ResolveParagraphFmt(para);
-            var paraTarget = targetFactory(paraIdx);
+            var paraTarget = targetFactory?.Invoke(paraIdx);
 
             // Build segments split on TAB characters.
             // Each entry carries (tabStopIndex, Text, Fmt, ModelStart):
@@ -7814,7 +7869,7 @@ public sealed class DocumentView : Control
         double totalWidth,
         string pageNumberText,
         int pageCount,
-        string slotName,
+        HeaderFooterSlotKind slot,
         int pageNumber,
         int sectionOrdinal,
         int sectionRelativePageNumber,
@@ -7841,7 +7896,7 @@ public sealed class DocumentView : Control
                     cellHf.Paragraphs.AddRange(cell.Paragraphs);
                     var cellEndY = EmitHfParagraphs(
                         cellHf, y, cellWidth, pageNumberText, pageCount,
-                        targetFactory: null, slotName, pageNumber, sectionOrdinal, sectionRelativePageNumber,
+                        targetFactory: null, slot, pageNumber, sectionOrdinal, sectionRelativePageNumber,
                         sectionPageCount);
                     rowEndY = Math.Max(rowEndY, cellEndY);
                     cellX += cellWidth;

@@ -15,7 +15,7 @@ public sealed class MailMergeWorkflowArchitectureTests
 
         source.Should().Contain("public sealed class MailMergeSessionWorkflow");
         source.Should().Contain("Session.BuildAugmentedData(finishPlan.RowIndexes)");
-        source.Should().Contain("MailMerge.MergeAllWithRules(template, augmentedData, state)");
+        source.Should().Contain("MailMerge.MergeAllWithRules(template, augmentedData, state, recordNumbers)");
         source.Should().NotContain("public static class MailMergePromptPlanner");
         source.Should().Contain("public static class MailMergeRuleAuthoringPlanner");
         source.Should().Contain("MailMergeFieldInsertionPlan");

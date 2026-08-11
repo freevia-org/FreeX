@@ -276,7 +276,7 @@ public sealed class App : Application
             ExecuteRestoreAsync: (operation, _) => new ValueTask(operation()),
             DeleteCandidate: AutosaveSnapshotStore.DeleteCandidate);
 
-        return await StartupRecoveryWorkflow.RunAsync(snapshotStore.EnumerateCandidates(), host);
+        return await StartupRecoveryWorkflow.RunAsync(snapshotStore, host);
     }
 
     /// <summary>

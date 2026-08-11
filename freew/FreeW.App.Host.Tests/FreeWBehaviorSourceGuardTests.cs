@@ -102,7 +102,7 @@ public sealed class FreeWBehaviorSourceGuardTests
         session.Should().Contain("new AutosaveSnapshotCoordinator(");
         session.Should().Contain("AutosaveRecoveryPlanner.PlanAll(_store)");
         session.Should().Contain("AutosaveRecoveryPlanner.Complete(");
-        planner.Should().Contain("SelectAllOrdered(store.EnumerateCandidates())");
+        planner.Should().Contain("SelectAllOrdered(store.ExcludeLiveOwned(store.EnumerateCandidates()))");
         session.Should().Contain("class SnapshotSource : IAutosaveSnapshotSource");
         session.Should().Contain("ExecuteWithDocument(document => DocxWriter.Write(document, snapshotPath))");
         session.Should().Contain("DocxReader.Read(snapshotPath)");

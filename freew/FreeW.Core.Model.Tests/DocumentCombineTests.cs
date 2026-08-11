@@ -532,4 +532,123 @@ public class DocumentCombineTests
         result.Preserved.Parts.Single().Bytes.Should().NotBeSameAs(revisedB.Preserved.Parts.Single().Bytes);
         result.Preserved.ContentTypeDefaults.Should().ContainKey("xml");
     }
+
+    // -----------------------------------------------------------------------
+    // Comment threads (r134 HIGH: Combine dropped every comment thread, leaving dangling anchors)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Combine_BothReviewersCommentedWithCollidingIds_CarriesBothThreadsWithNoDanglingOrCollidingAnchors()
+    {
+        // Reviewer A deletes the "Doomed" paragraph, which carries a comment thread anchored in `original`.
+        // Reviewer B leaves "Kept text" untouched but attaches their OWN comment thread, independently
+        // numbered starting at the same id (5) as A's thread — a realistic collision since both reviewers
+        // started annotating from the same unmodified base.
+        var original = DocWith("Doomed", "Kept text");
+        var doomed = original.Paragraphs.First();
+        doomed.Runs[0].CommentId = 5;
+        doomed.Runs.Add(Run.CommentReference(5));
+        original.Comments[5] = new Comment(5, "Original note", "Carol", "C");
+
+        var revisedA = DocWith("Kept text");
+
+        var revisedB = DocWith("Kept text");
+        var keptTextB = revisedB.Paragraphs.First();
+        keptTextB.Runs[0].CommentId = 5;
+        keptTextB.Runs.Add(Run.CommentReference(5));
+        revisedB.Comments[5] = new Comment(5, "Revised note", "Dave", "D");
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        // Both threads must survive with distinct ids — a dropped Comments dictionary or a naive id copy
+        // would either lose one thread entirely or collide the two under the same id.
+        result.Comments.Should().HaveCount(2);
+        result.Comments.Values.Select(c => c.PlainText).Should().BeEquivalentTo("Original note", "Revised note");
+
+        var runs = result.Paragraphs.SelectMany(p => p.Runs).Where(r => !r.IsCommentReference).ToList();
+        var doomedRun = runs.Single(r => r.Text == "Doomed");
+        var keptRun = runs.Single(r => r.Text == "Kept text");
+
+        doomedRun.CommentId.Should().NotBeNull();
+        keptRun.CommentId.Should().NotBeNull();
+        doomedRun.CommentId.Should().NotBe(keptRun.CommentId);
+
+        result.Comments.Should().ContainKey(doomedRun.CommentId!.Value);
+        result.Comments.Should().ContainKey(keptRun.CommentId!.Value);
+        result.Comments[doomedRun.CommentId!.Value].PlainText.Should().Be("Original note");
+        result.Comments[keptRun.CommentId!.Value].PlainText.Should().Be("Revised note");
+
+        // The matching w:commentRangeEnd reference run must follow the same remap as its anchor.
+        var referenceRuns = result.Paragraphs.SelectMany(p => p.Runs).Where(r => r.IsCommentReference).ToList();
+        referenceRuns.Should().Contain(r => r.CommentId == doomedRun.CommentId);
+        referenceRuns.Should().Contain(r => r.CommentId == keptRun.CommentId);
+    }
+
+    [Fact]
+    public void Combine_ReviewerBCommentThreadWithReply_SurvivesIntact()
+    {
+        // Sibling coverage for the simple (non-colliding) case: a threaded reply must round-trip too.
+        var original = DocWith("Annotated text");
+        var revisedA = DocWith("Annotated text");
+
+        var revisedB = DocWith("Annotated text");
+        var annotated = revisedB.Paragraphs.First();
+        annotated.Runs[0].CommentId = 5;
+        annotated.Runs.Add(Run.CommentReference(5));
+        var comment = new Comment(5, "Please verify", "Carol", "C") { Resolved = true };
+        comment.AddReply(6, "Verified", "Dave", "D");
+        revisedB.Comments[5] = comment;
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        result.Comments.Should().ContainKey(5);
+        result.Comments[5].PlainText.Should().Be("Please verify");
+        result.Comments[5].Resolved.Should().BeTrue();
+        result.Comments[5].Replies.Should().ContainSingle(reply => reply.Id == 6 && reply.PlainText == "Verified");
+    }
+
+    // -----------------------------------------------------------------------
+    // Move revisions (r134 MED: a tracked MOVE degraded into an unrelated insert+delete pair)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Combine_ReviewerAMovedParagraph_PreservesMoveRevisionIdOnDeletedSide()
+    {
+        var original = DocWith("Alpha", "Bravo", "Charlie");
+        var revisedA = DocWith("Bravo", "Alpha", "Charlie"); // A moves "Alpha" after "Bravo"
+        var revisedB = DocWith("Bravo", "Alpha", "Charlie"); // B makes no further changes
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        var moveRuns = result.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.MoveRevisionId != null)
+            .ToList();
+
+        // Without the fix, MoveRevisionId is silently dropped by the run clone, so this list is empty and
+        // A's move degrades into an ordinary, unpaired deletion (still present, but no longer flagged as
+        // part of a move — the exact "unrelated insert+delete pair" regression from the finding).
+        moveRuns.Should().ContainSingle(run =>
+            run.Text == "Alpha"
+            && run.Revision == RevisionKind.Deleted
+            && run.RevisionAuthor == AuthorA);
+    }
+
+    [Fact]
+    public void Combine_OrdinaryReviewerADeletion_NeverCarriesAMoveRevisionId()
+    {
+        // Sibling no-regression: an ordinary (non-moved) deletion by A must NOT be mistaken for a move —
+        // guards against a fix that stamps every A-side deletion with a bogus MoveRevisionId.
+        var original = DocWith("Alpha", "Bravo");
+        var revisedA = DocWith("Bravo"); // A deletes "Alpha" outright (no reinsertion elsewhere)
+        var revisedB = DocWith("Bravo");
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        var deletedAlpha = result.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.Text == "Alpha" && run.Revision == RevisionKind.Deleted);
+
+        deletedAlpha.MoveRevisionId.Should().BeNull();
+    }
 }

@@ -170,7 +170,7 @@ public sealed class MailMergeSessionTests
         wpf.Should().NotContain("class MailMergeSession");
         avalonia.Should().NotContain("class MailMergeSession");
         workflow.Should().Contain("Session.BuildAugmentedData(finishPlan.RowIndexes)");
-        workflow.Should().Contain("MailMerge.MergeAllWithRules(template, augmentedData, state)");
+        workflow.Should().Contain("MailMerge.MergeAllWithRules(template, augmentedData, state, recordNumbers)");
         wpf.Should().Contain("workflow.BuildFinish(template, finishPlan, mergeState)");
         avalonia.Should().Contain("_workflow.BuildFinish(_editor.Document, finishPlan, mergeState)");
         wpf.Should().NotContain("MailMerge.MergeAllWithRules(");

@@ -56,6 +56,30 @@ public sealed class WorkbookImportWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void ApplyImportedWorkbook_ForwardsPreviousExtentToSharedImportCommand()
+    {
+        var targetWorkbook = new Workbook("Target");
+        var targetSheet = targetWorkbook.AddSheet("Sheet1");
+        targetSheet.SetCell(new CellAddress(targetSheet.Id, 1, 1), new TextValue("old"));
+        targetSheet.SetCell(new CellAddress(targetSheet.Id, 2, 1), new TextValue("leftover"));
+        var imported = new Workbook("Imported");
+        var importedSheet = imported.AddSheet("Data");
+        importedSheet.SetCell(new CellAddress(importedSheet.Id, 1, 1), new TextValue("new"));
+        var context = new TestCommandContext(targetWorkbook);
+
+        var result = WorkbookImportWorkflow.ApplyImportedWorkbook(
+            imported,
+            targetSheet.Id,
+            new CellAddress(targetSheet.Id, 1, 1),
+            command => command.Apply(context),
+            previousExtent: (RowCount: 2u, ColCount: 1u));
+
+        result.Succeeded.Should().BeTrue();
+        targetSheet.GetValue(1, 1).Should().Be(new TextValue("new"));
+        targetSheet.GetCell(2, 1).Should().BeNull();
+    }
+
+    [Fact]
     public async Task ImportPathAsync_XsltFailureUsesReusableDiagnostic()
     {
         var adapter = new TestFileAdapter(
@@ -75,5 +99,13 @@ public sealed class WorkbookImportWorkflowTests : IDisposable
         result.Outcome.Should().Be(WorkbookImportExecutionOutcome.Failed);
         result.Reason.Should().Be("xslt_transform_failed");
         result.UserMessage.Should().StartWith("Failed to import XML data after applying the XSLT transform:");
+    }
+
+    private sealed class TestCommandContext(Workbook workbook) : ICommandContext
+    {
+        public Workbook Workbook { get; } = workbook;
+
+        public Sheet GetSheet(SheetId sheetId) =>
+            Workbook.GetSheet(sheetId) ?? throw new KeyNotFoundException($"Sheet {sheetId} not found");
     }
 }

@@ -132,6 +132,13 @@ public static class DocumentCompare
         // Carry over the revised document's defaults, styles and page setup so the result renders like it.
         CopyDocumentShell(revised, result);
 
+        // Whole-paragraph deletions below copy the original document's runs (and their StyleId) verbatim.
+        // If original defines a style revised no longer has (renamed/removed), the deleted paragraph would
+        // otherwise reference an id missing from result's style catalog. Backfill only the ids revised
+        // doesn't already define, so revised's own style wins on any id both documents share.
+        foreach (var (id, style) in original.Styles)
+            result.Styles.TryAdd(id, style);
+
         var originalParagraphs = original.Blocks.OfType<Paragraph>().ToList();
         var revisedBlocks = revised.Blocks;
         var revisedParagraphs = revisedBlocks.OfType<Paragraph>().ToList();

@@ -19,7 +19,7 @@ public static class AutosaveRecoveryPlanner
     {
         ArgumentNullException.ThrowIfNull(store);
 
-        return PlanLatest(store.EnumerateCandidates());
+        return PlanLatest(store.ExcludeLiveOwned(store.EnumerateCandidates()));
     }
 
     public static AutosaveRecoveryPlan? PlanLatest(
@@ -35,7 +35,7 @@ public static class AutosaveRecoveryPlanner
     {
         ArgumentNullException.ThrowIfNull(store);
 
-        return SelectAllOrdered(store.EnumerateCandidates())
+        return SelectAllOrdered(store.ExcludeLiveOwned(store.EnumerateCandidates()))
             .Select(candidate => new AutosaveRecoveryPlan(candidate, DisplayName(candidate)))
             .ToList();
     }

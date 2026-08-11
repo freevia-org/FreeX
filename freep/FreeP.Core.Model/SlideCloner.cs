@@ -54,7 +54,7 @@ public static class SlideCloner
             copy.Animations.Add(CloneAnimation(anim));
 
         foreach (var comment in slide.Comments)
-            copy.Comments.Add(CloneComment(comment));
+            copy.Comments.Add(CloneComment(comment, mintFreshModernIds: true));
 
         return copy;
     }
@@ -677,7 +677,20 @@ public static class SlideCloner
         return copy;
     }
 
-    private static SlideComment CloneComment(SlideComment c)
+    /// <param name="mintFreshModernIds">
+    /// When true, a non-empty <see cref="SlideComment.ModernCommentId"/> / <see cref="SlideCommentReply.ModernReplyId"/>
+    /// is replaced with a freshly minted id instead of being copied verbatim. Only
+    /// <see cref="CloneSlide"/> passes true: a duplicated slide is an independent copy, and two
+    /// modern (p188) comment threads must not share one id — both would live in the same package
+    /// once written (in the two slides' commentsN.xml parts), and the format requires cm/id — and
+    /// reply/id — to be unique, or resolving/replying to one thread could alias the other.
+    /// <see cref="CommentMutationCommand"/> also calls this method to snapshot before/after state
+    /// for undo/redo on an ordinary edit/resolve/reopen/reply — that must NOT mint a new id (it
+    /// would silently change the comment's identity on every edit), so it always passes false
+    /// (the default). Thread *structure* (parent/child nesting via Replies, author, timestamps,
+    /// resolved state) is preserved either way.
+    /// </param>
+    internal static SlideComment CloneComment(SlideComment c, bool mintFreshModernIds = false)
     {
         var clone = new SlideComment
         {
@@ -690,7 +703,9 @@ public static class SlideCloner
             ResolvedDateTime = c.ResolvedDateTime,
             ResolvedBy       = c.ResolvedBy,
             UsesModernCommentSchema = c.UsesModernCommentSchema,
-            ModernCommentId = c.ModernCommentId,
+            ModernCommentId = mintFreshModernIds && !string.IsNullOrWhiteSpace(c.ModernCommentId)
+                ? NewModernId()
+                : c.ModernCommentId,
             ModernAuthorId = c.ModernAuthorId,
             ModernAuthorUserId = c.ModernAuthorUserId,
             ModernAuthorProviderId = c.ModernAuthorProviderId,
@@ -706,7 +721,9 @@ public static class SlideCloner
             clone.Replies.Add(new SlideCommentReply
             {
                 AuthorId = reply.AuthorId,
-                ModernReplyId = reply.ModernReplyId,
+                ModernReplyId = mintFreshModernIds && !string.IsNullOrWhiteSpace(reply.ModernReplyId)
+                    ? NewModernId()
+                    : reply.ModernReplyId,
                 ModernAuthorId = reply.ModernAuthorId,
                 ModernAuthorUserId = reply.ModernAuthorUserId,
                 ModernAuthorProviderId = reply.ModernAuthorProviderId,
@@ -719,6 +736,13 @@ public static class SlideCloner
 
         return clone;
     }
+
+    /// <summary>
+    /// Mints a fresh modern-comment/reply id in the same brace-wrapped GUID shape the writer
+    /// uses for deterministic ids (see PptxPackageWriter.DeterministicGuidString) so a cloned
+    /// thread's identity is guaranteed unique instead of aliasing its source.
+    /// </summary>
+    private static string NewModernId() => $"{{{Guid.NewGuid():D}}}";
 
     private static SlideTransition CloneTransition(SlideTransition t) => new()
     {

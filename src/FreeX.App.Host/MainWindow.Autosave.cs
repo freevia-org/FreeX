@@ -86,6 +86,11 @@ public partial class MainWindow : IAutosaveWorkbookSource
     {
         _autosaveTimer?.Stop();
         _autosaveService?.DeleteSnapshot();
+        // Releases this window's Round134-remediation liveness lock deterministically on close,
+        // rather than leaving it to whenever the GC finalizes the underlying handle — see
+        // AutosaveSnapshotCoordinator.Dispose / ReleaseOwnershipLock. Safe after DeleteSnapshot:
+        // the timer is already stopped, so no further OnTimerTick can race this.
+        _autosaveService?.Dispose();
     }
 
     /// <summary>

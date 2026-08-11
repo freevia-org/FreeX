@@ -139,6 +139,8 @@ public sealed class SlideShowRuntimeApplication
 
     public Slide? DisplaySlide => _session.DisplaySlide;
 
+    public Slide? RevealedHiddenSlide => _session.RevealedHiddenSlide;
+
     public int CurrentPresentationSlideIndex => _session.CurrentPresentationSlideIndex;
 
     public SlideShowPresenterToolPlan ToolPlan => _session.ToolPlan;
@@ -176,7 +178,7 @@ public sealed class SlideShowRuntimeApplication
             callbacks.NavigateToSlide);
         _inputCallbacks = new SlideShowSessionInputExecutionCallbacks(
             callbacks.TogglePresenterView,
-            () => ExecuteHiddenSlideReveal(),
+            targetSlideId => ExecuteHiddenSlideReveal(targetSlideId),
             mode => SetScreenMode(mode),
             command => ExecuteHostCommand(command),
             callbacks.OpenExternalHyperlink,
@@ -227,11 +229,12 @@ public sealed class SlideShowRuntimeApplication
     public void ExecuteSlideNumberJump(int oneBasedSlideNumber, DateTimeOffset? nowUtc = null) =>
         ExecuteHostCommand(_session.PlanSlideNumberJump(oneBasedSlideNumber), nowUtc);
 
-    public Slide? ExecuteHiddenSlideReveal()
+    public Slide? ExecuteHiddenSlideReveal(string? targetSlideId = null)
     {
-        var slide = _session.RevealNextHiddenSlide();
+        var slide = _session.RevealHiddenSlide(targetSlideId);
         if (slide is not null)
         {
+            RequireRenderer().StopAutoAdvance();
             RequireRenderer().DisplayCurrentSlideWithoutAnimation();
         }
 

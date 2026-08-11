@@ -62,7 +62,7 @@ public sealed partial class MainWindow : Window
     // synthetic file and don't go through the shared PDF writers, so they cannot produce real image
     // diagnostics; this stands in for "none" so the result shape matches the production Save() path.
     private static readonly FreeWAvaloniaPdfExportResult NoImageDiagnosticsPrintResult =
-        new(0, PdfExportBackend.PortableWinAnsi, []);
+        new(0, Free.Shared.Pdf.Skia.PdfExportBackend.PortableWinAnsi, []);
     private readonly Func<IStorageProvider, AvaloniaFilePickerSaveRequest, Task<(bool Canceled, string? LocalPath)>> _pickExportPath;
     private readonly Func<Task<string?>> _pickPdfImportPathAsync;
     private readonly Func<bool, string, Task<string?>>? _askHeaderFooterText;
@@ -2337,7 +2337,9 @@ public sealed partial class MainWindow : Window
         // the editor stays fully typeable — a keystroke that splits a paragraph mid-merge throws
         // "collection was modified" on the background thread. Running the merge inline is not an
         // option: its per-record prompts post to the UI thread and wait, so that would deadlock.
-        var templateSnapshot = _mailMerge.Session.IsPreviewing ? null : CloneDocument(_editor.Document);
+        var templateSnapshot = _mailMerge.Session.IsPreviewing
+            ? null
+            : FreeWDocumentSnapshot.Clone(_editor.Document);
         var result = await Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState, templateSnapshot));
         if (result is null)
             return;

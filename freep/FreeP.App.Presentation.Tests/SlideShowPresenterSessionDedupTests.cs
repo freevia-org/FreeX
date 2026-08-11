@@ -94,7 +94,7 @@ public sealed class SlideShowPresenterSessionDedupTests
         var events = new List<string>();
         var callbacks = new SlideShowSessionInputExecutionCallbacks(
             () => events.Add("presenter"),
-            () => events.Add("hidden-slide"),
+            _ => events.Add("hidden-slide"),
             mode => events.Add($"screen:{mode}"),
             command => events.Add($"command:{command.Kind}"),
             hyperlink => events.Add($"external:{hyperlink.Url}"));
@@ -169,11 +169,71 @@ public sealed class SlideShowPresenterSessionDedupTests
             externalPlan,
             new SlideShowSessionInputExecutionCallbacks(
                 () => { },
-                () => { },
+                _ => { },
                 _ => { },
                 _ => events.Add("host-command"),
                 hyperlink => events.Add($"external:{hyperlink.Url}")));
         events.Should().Equal("external:https://example.com");
+    }
+
+    [Fact]
+    public void Session_BlankScreenGatesNavigationRevealAndPointerInput()
+    {
+        var presentation = MakePresentation(3);
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            DateTimeOffset.UtcNow,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("portable blank-screen test"));
+
+        session.PlanKeyboardInput("B").ScreenMode.Should().Be(SlideShowScreenMode.Black);
+        session.PlanKeyboardInput("Right").ActionKind.Should().Be(SlideShowSessionInputActionKind.None);
+        session.PlanKeyboardInput("H").ActionKind.Should().Be(SlideShowSessionInputActionKind.None);
+        session.PlanPointerInput(new SlideShowCanvasPointer(
+                10,
+                10,
+                960,
+                540,
+                new SlideShowSlideMetrics(960, 540)))
+            .ActionKind.Should().Be(SlideShowSessionInputActionKind.None);
+        session.CurrentPresentationSlideIndex.Should().Be(0);
+
+        var close = session.PlanKeyboardInput("Escape");
+        close.ShouldExecuteHostCommand.Should().BeTrue();
+        close.HostCommand.Kind.Should().Be(SlideShowHostCommandKind.Close);
+    }
+
+    [Fact]
+    public void Session_HiddenHyperlinkRevealsTargetWithoutMovingPlaybackRoute()
+    {
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var session = new SlideShowSessionController(
+            presentation,
+            route,
+            DateTimeOffset.UtcNow,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("portable hidden-link test"));
+        var hyperlink = new Hyperlink { TargetSlideId = presentation.Slides[1].Id };
+        var navigated = new List<Hyperlink>();
+
+        var plan = session.PlanHyperlinkActivation(hyperlink);
+        plan.ActionKind.Should().Be(SlideShowSessionInputActionKind.RevealHiddenSlide);
+        session.ExecuteInputPlan(
+            plan,
+            new SlideShowSessionInputExecutionCallbacks(
+                () => { },
+                targetSlideId => session.RevealHiddenSlide(targetSlideId),
+                _ => { },
+                _ => { },
+                _ => { },
+                navigated.Add));
+
+        session.RevealedHiddenSlide.Should().BeSameAs(presentation.Slides[1]);
+        session.DisplaySlide.Should().BeSameAs(presentation.Slides[1]);
+        session.CurrentPresentationSlideIndex.Should().Be(0);
+        navigated.Should().Equal(hyperlink);
     }
 
     [Fact]
@@ -264,6 +324,36 @@ public sealed class SlideShowPresenterSessionDedupTests
         unfocused.ShouldUpdateSlideNumber.Should().BeTrue();
         unfocused.ViewPlan.CurrentSlideNumber.Should().Be(1);
         notes.Should().Equal("Committed");
+    }
+
+    [Fact]
+    public void PresenterViewRefreshPlan_CommitsNotesToTheSlideThatPopulatedTheEditor()
+    {
+        var presentation = MakePresentation(2);
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation, startIndex: 0);
+        var started = new DateTimeOffset(2026, 8, 11, 10, 0, 0, TimeSpan.Zero);
+        var slideshow = new SlideShowSessionController(
+            presentation,
+            route,
+            started,
+            SlideShowHostCapabilityRecordingCaptureBackend.Deferred("portable presenter note binding test"));
+        var committed = new List<(int SlideIndex, string? Text)>();
+        var presenter = new SlideShowPresenterViewSession(
+            () => slideshow.CreatePresenterState(started),
+            setNotesText: (slideIndex, text) => committed.Add((slideIndex, text)));
+
+        presenter.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(
+            NotesFocused: false,
+            NotesDirty: false,
+            NotesText: string.Empty,
+            SlideNumberFocused: false));
+        slideshow.ExecuteHostCommand(
+            slideshow.PlanAdvance(stopAutoAdvance: true),
+            started.AddSeconds(1),
+            NoOpCallbacks());
+
+        presenter.CommitNotes(notesDirty: true, notesText: "Edited during auto-advance").Should().BeTrue();
+        committed.Should().Equal((0, "Edited during auto-advance"));
     }
 
     [Fact]

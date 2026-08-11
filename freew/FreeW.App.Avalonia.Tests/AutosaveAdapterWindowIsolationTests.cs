@@ -74,10 +74,16 @@ public sealed class AutosaveAdapterWindowIsolationTests
             var ran = await OnUiThread(() =>
             {
                 var (editorA, workflowA) = NewWindowParts();
-                var adapterA = new AutosaveAdapter(editorA, workflowA, store);
+                var adapterA = new AutosaveAdapter(
+                    editorA,
+                    workflowA,
+                    ports => new FreeWAutosaveSession(ports, store));
 
                 var (editorB, workflowB) = NewWindowParts();
-                var adapterB = new AutosaveAdapter(editorB, workflowB, store);
+                var adapterB = new AutosaveAdapter(
+                    editorB,
+                    workflowB,
+                    ports => new FreeWAutosaveSession(ports, store));
 
                 idA = adapterA.SnapshotIdForTests;
                 idB = adapterB.SnapshotIdForTests;
@@ -128,10 +134,16 @@ public sealed class AutosaveAdapterWindowIsolationTests
             var ran = await OnUiThread(() =>
             {
                 var (editorA, workflowA) = NewWindowParts();
-                adapterA = new AutosaveAdapter(editorA, workflowA, store);
+                adapterA = new AutosaveAdapter(
+                    editorA,
+                    workflowA,
+                    ports => new FreeWAutosaveSession(ports, store));
 
                 var (editorB, workflowB) = NewWindowParts();
-                adapterB = new AutosaveAdapter(editorB, workflowB, store);
+                adapterB = new AutosaveAdapter(
+                    editorB,
+                    workflowB,
+                    ports => new FreeWAutosaveSession(ports, store));
             });
 
             if (!ran || adapterA is null || adapterB is null)
@@ -223,7 +235,7 @@ public sealed class AutosaveAdapterWindowIsolationTests
                     var adapterUnderTest = new AutosaveAdapter(
                         owningEditor,
                         workflow,
-                        store,
+                        sessionFactory: ports => new FreeWAutosaveSession(ports, store),
                         recoverInNewWindowAsync: candidate =>
                         {
                             recoveredInNewWindow.Add(candidate);

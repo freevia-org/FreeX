@@ -71,23 +71,13 @@ public sealed class PrintLayoutImageCloneTests
     }
 
     [StaFact]
-    public void XpsExport_DocumentWithImage_WritesNonEmptyFile()
+    public void XpsExport_DocumentWithImage_ProducesNonEmptyArtifact()
     {
         var view = BuildViewWithImage(OnePixelPng(), ImageFormat.Png);
-        var path = Path.Combine(Path.GetTempPath(), $"freew-image-{Guid.NewGuid():N}.xps");
 
-        try
-        {
-            XpsExport.Save(PrintLayout.BuildPaginator(view), path);
+        var bytes = XpsExport.RenderToBytes(PrintLayout.BuildPaginator(view));
 
-            Assert.True(File.Exists(path));
-            Assert.True(new FileInfo(path).Length > 0, "Exported XPS file should not be empty.");
-        }
-        finally
-        {
-            if (File.Exists(path))
-                File.Delete(path);
-        }
+        Assert.NotEmpty(bytes);
     }
 
     [StaFact]

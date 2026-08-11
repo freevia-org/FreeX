@@ -451,6 +451,8 @@ public sealed partial class MainWindow : Window
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
     internal PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
+    internal IReadOnlyList<string> LastVideoFrameImageDiagnostics =>
+        _fileSession.LastVideoFrameImageDiagnostics;
     internal LinuxNativePrintResult? LastNativePrintResult { get; private set; }
     internal PrinterDiscoveryResult? LatestPrinterDiscoveryForTests => _latestPrinterDiscovery;
     internal PrintSelection? LastPrintSelectionForTests { get; private set; }

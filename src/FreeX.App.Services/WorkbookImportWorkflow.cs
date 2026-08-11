@@ -82,7 +82,8 @@ public static class WorkbookImportWorkflow
         SheetId targetSheetId,
         CellAddress destination,
         Func<ImportSheetCommand, CommandOutcome> executeCommand,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        (uint RowCount, uint ColCount)? previousExtent = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(adapter);
@@ -99,7 +100,12 @@ public static class WorkbookImportWorkflow
                 return workbook;
             }, cancellationToken).ConfigureAwait(true);
 
-            return ApplyImportedWorkbook(imported, targetSheetId, destination, executeCommand);
+            return ApplyImportedWorkbook(
+                imported,
+                targetSheetId,
+                destination,
+                executeCommand,
+                previousExtent);
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
@@ -127,7 +133,8 @@ public static class WorkbookImportWorkflow
         Workbook imported,
         SheetId targetSheetId,
         CellAddress destination,
-        Func<ImportSheetCommand, CommandOutcome> executeCommand)
+        Func<ImportSheetCommand, CommandOutcome> executeCommand,
+        (uint RowCount, uint ColCount)? previousExtent = null)
     {
         ArgumentNullException.ThrowIfNull(imported);
         ArgumentNullException.ThrowIfNull(executeCommand);
@@ -141,7 +148,11 @@ public static class WorkbookImportWorkflow
                 Reason: "empty_workbook");
         }
 
-        var outcome = executeCommand(new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0]));
+        var outcome = executeCommand(new ImportSheetCommand(
+            targetSheetId,
+            destination,
+            imported.Sheets[0],
+            previousExtent));
         if (!outcome.Success)
         {
             return new WorkbookImportExecutionResult(
@@ -164,7 +175,8 @@ public static class WorkbookImportWorkflow
         Workbook imported,
         SheetId targetSheetId,
         CellAddress destination,
-        Func<ImportSheetCommand, WorkbookCellEditResult> executeCommand)
+        Func<ImportSheetCommand, WorkbookCellEditResult> executeCommand,
+        (uint RowCount, uint ColCount)? previousExtent = null)
     {
         ArgumentNullException.ThrowIfNull(imported);
         ArgumentNullException.ThrowIfNull(executeCommand);
@@ -178,7 +190,11 @@ public static class WorkbookImportWorkflow
                 Reason: "empty_workbook");
         }
 
-        var outcome = executeCommand(new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0]));
+        var outcome = executeCommand(new ImportSheetCommand(
+            targetSheetId,
+            destination,
+            imported.Sheets[0],
+            previousExtent));
         if (!outcome.Success)
         {
             return new WorkbookImportExecutionResult(

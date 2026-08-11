@@ -1400,7 +1400,7 @@ public sealed class AvaloniaShellSourceTests
         // TryPasteClipboardImageAsync itself (right before use, after the bitmap-read await)
         // rather than passed in by the caller, so the status message always names the live
         // active cell instead of one captured before the await could go stale.
-        windowSource.Should().Contain("return await TryPasteClipboardImageAsync(clipboard);");
+        windowSource.Should().Contain("return await TryPasteClipboardImageAsync();");
         windowSource.Should().Contain("var externalImageClipboardPictures = _session.ActiveSheet.Pictures");
         windowSource.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
         windowSource.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
@@ -2454,6 +2454,7 @@ public sealed class AvaloniaShellSourceTests
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var parserSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "GoalSeekRequestParser.cs"));
+        var statusPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Dialogs", "GoalSeekStatusDialogPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
@@ -2494,7 +2495,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"GoalSeekErrorText\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekOkButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"GoalSeekCancelButton\");");
-        source.Should().Contain("FocusGoalSeekErrorField(parseResult.Error, setCellBox, targetValueBox, changingCellBox);");
+        source.Should().Contain("FocusGoalSeekErrorField(validation.FocusTarget, setCellBox, targetValueBox, changingCellBox);");
 
         source.Should().Contain("private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync(WorkbookGoalSeekResult result)");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"GoalSeekStatusDialog\");");
@@ -2502,7 +2503,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(restoreButton, \"GoalSeekRestoreOriginalValuesButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(keepButton, \"GoalSeekKeepResultButton\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"GoalSeekStatusOkButton\");");
-        source.Should().Contain("private static string FormatGoalSeekParseError(GoalSeekRequestParseResult result)");
+        source.Should().Contain("GoalSeekStatusDialogPlanner.DescribeValidationError(");
+        statusPlannerSource.Should().Contain("public static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeValidationError(");
         source.Should().Contain("private static string FormatGoalSeekStatus(WorkbookGoalSeekResult result)");
 
         sessionSource.Should().Contain("public WorkbookGoalSeekResult ExecuteGoalSeek(GoalSeekRequest request)");
@@ -2731,10 +2733,10 @@ public sealed class AvaloniaShellSourceTests
         selectionPaneSource.Should().Contain("Width = 520");
         selectionPaneSource.Should().Contain("Height = 440");
         selectionPaneSource.Should().Contain("var searchBox = new TextBox { MinWidth = 160");
-        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(searchBox, \"SelectionPaneSearchBox\")");
-        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(filterBox, \"SelectionPaneFilterBox\")");
-        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(renameBox, \"SelectionPaneRenameBox\")");
-        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(toggleVisibilityButton, \"SelectionPaneToggleVisibilityButton\")");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(searchBox, FreeXAutomationIdCatalog.SelectionPane.SearchBox)");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(filterBox, FreeXAutomationIdCatalog.SelectionPane.FilterBox)");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(renameBox, FreeXAutomationIdCatalog.SelectionPane.RenameBox)");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(toggleVisibilityButton, FreeXAutomationIdCatalog.SelectionPane.ToggleVisibilityButton)");
         selectionPaneSource.Should().Contain("ApplySelectionPaneListStyle(listBox)");
         selectionPaneSource.Should().Contain("x.OfType<ListBoxItem>().Class(\":selected\")");
         // R125: the Selection Pane gained a Delete button that routes to the SAME
@@ -2743,7 +2745,7 @@ public sealed class AvaloniaShellSourceTests
         // chrome call -- pinning only the row composition would let a future change drop the
         // automation id or the chrome and still pass.
         selectionPaneSource.Should().Contain("Children = { showAllButton, hideAllButton, moveUpButton, moveDownButton, deleteButton }");
-        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, \"SelectionPaneDeleteButton\")");
+        selectionPaneSource.Should().Contain("AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.SelectionPane.DeleteButton)");
         selectionPaneSource.Should().Contain("ApplySelectionPaneButtonChrome(deleteButton, 82)");
         selectionPaneSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);");
         selectionPaneSource.Should().Contain("CreateSelectionPaneEyeIcon()");
@@ -3222,20 +3224,20 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell(FormatAdvancedFilterStatus(plan));");
 
         source.Should().Contain("private async Task<AdvancedFilterPlan?> ShowAdvancedFilterInputDialogAsync()");
-        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"AdvancedFilterCompactDialog\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(listRangeBox, \"AdvancedFilterListRangeBox\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(criteriaRangeBox, \"AdvancedFilterCriteriaRangeBox\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(dialog, FreeXAutomationIdCatalog.AdvancedFilter.Dialog);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(listRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.ListRangeBox);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(criteriaRangeBox, FreeXAutomationIdCatalog.AdvancedFilter.CriteriaRangeBox);");
         source.Should().Contain("AutomationProperties.SetAutomationId(pickerButton, pickerAutomationId);");
-        source.Should().Contain("\"AdvancedFilterSelectListRangeButton\"");
-        source.Should().Contain("\"AdvancedFilterSelectCriteriaRangeButton\"");
-        source.Should().Contain("\"AdvancedFilterSelectCopyToButton\"");
-        source.Should().Contain("AutomationProperties.SetAutomationId(inPlaceButton, \"AdvancedFilterInPlaceButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(copyToAnotherLocationButton, \"AdvancedFilterCopyToAnotherLocationButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(copyToBox, \"AdvancedFilterCopyToBox\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(uniqueBox, \"AdvancedFilterUniqueRecordsOnlyBox\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, \"AdvancedFilterErrorText\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"AdvancedFilterOkButton\");");
-        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"AdvancedFilterCancelButton\");");
+        source.Should().Contain("FreeXAutomationIdCatalog.AdvancedFilter.SelectListRangeButton");
+        source.Should().Contain("FreeXAutomationIdCatalog.AdvancedFilter.SelectCriteriaRangeButton");
+        source.Should().Contain("FreeXAutomationIdCatalog.AdvancedFilter.SelectCopyToButton");
+        source.Should().Contain("AutomationProperties.SetAutomationId(inPlaceButton, FreeXAutomationIdCatalog.AdvancedFilter.InPlaceButton);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(copyToAnotherLocationButton, FreeXAutomationIdCatalog.AdvancedFilter.CopyToAnotherLocationButton);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(copyToBox, FreeXAutomationIdCatalog.AdvancedFilter.CopyToBox);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(uniqueBox, FreeXAutomationIdCatalog.AdvancedFilter.UniqueRecordsOnlyBox);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(errorText, FreeXAutomationIdCatalog.AdvancedFilter.ErrorText);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(okButton, FreeXAutomationIdCatalog.AdvancedFilter.OkButton);");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, FreeXAutomationIdCatalog.AdvancedFilter.CancelButton);");
         source.Should().Contain("Text = FormatRangeReference(AdvancedFilterPlanner.CreateDefaultListRange(_session.ActiveSheet, _session.SelectedRange))");
         source.Should().Contain("var selectedOutputMode = copyToAnotherLocationButton.IsChecked == true");
         source.Should().Contain("AdvancedFilterOutputMode.CopyToAnotherLocation");
@@ -3248,9 +3250,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("selectedOutputMode");
         source.Should().Contain("uniqueBox.IsChecked == true");
         source.Should().Contain("sheetName => _session.Workbook.GetSheet(sheetName)?.Id");
-        source.Should().Contain("FocusAdvancedFilterErrorField(planResult.Error, listRangeBox, criteriaRangeBox, copyToBox);");
+        source.Should().Contain("var error = AdvancedFilterPlanner.DescribeError(");
+        source.Should().Contain("FocusAdvancedFilterErrorField(error.FocusTarget, listRangeBox, criteriaRangeBox, copyToBox);");
         source.Should().Contain("private static string FormatAdvancedFilterStatus(AdvancedFilterPlan plan)");
-        source.Should().Contain("private static string FormatAdvancedFilterPlanError(AdvancedFilterPlanResult result)");
         source.Should().Contain("private static void FocusAdvancedFilterErrorField(");
         source.Should().Contain("var actionGroup = new AvaloniaGrid");
         source.Should().Contain("Text = \"Action\"");
@@ -3258,6 +3260,7 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteAdvancedFilterPlan(AdvancedFilterPlan plan)");
         sessionSource.Should().Contain("ApplySuccessfulRangeEditResult(result, GetAdvancedFilterSelectedRange(plan));");
         plannerSource.Should().Contain("public static AdvancedFilterPlanResult CreatePlan(");
+        plannerSource.Should().Contain("public static AdvancedFilterErrorDescriptor DescribeError(");
         plannerSource.Should().Contain("public static GridRange CreateDefaultListRange(Sheet sheet, GridRange selectedRange)");
         plannerSource.Should().Contain("public AdvancedFilterCommand CreateCommand()");
 
@@ -3445,6 +3448,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_SetsCompactDialogVoiceOverNamesAndHelpText()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var dataValidationDialogPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Dialogs", "DataValidationDialogPlanner.cs"));
         var markers = new[]
         {
             "AutomationProperties.SetName(groupColumnBox, StripDisplayMnemonic(UiText.Get(\"Subtotal_AtEachChangeInAutomationName\")));",
@@ -3503,9 +3507,6 @@ public sealed class AvaloniaShellSourceTests
             "AutomationProperties.SetName(errorText, \"Forecast Sheet validation\");",
             "AutomationProperties.SetHelpText(errorText, \"Shows Forecast Sheet readiness and validation messages.\");",
             "AutomationProperties.SetName(formula1Box, formula1Label.Text);",
-            "\"List source range or comma-separated values.\"",
-            "\"Minimum value for the validation rule.\"",
-            "\"Value for the validation rule.\"",
             "AutomationProperties.SetName(textBox, title);",
             "AutomationProperties.SetHelpText(textBox, $\"Read-only {title} text.\");",
             "AutomationProperties.SetHelpText(closeButton, $\"Close {title}.\");",
@@ -3513,6 +3514,10 @@ public sealed class AvaloniaShellSourceTests
 
         foreach (var marker in markers)
             source.Should().Contain(marker);
+
+        dataValidationDialogPlannerSource.Should().Contain("\"List source range or comma-separated values.\"");
+        dataValidationDialogPlannerSource.Should().Contain("\"Minimum value for the validation rule.\"");
+        dataValidationDialogPlannerSource.Should().Contain("\"Value for the validation rule.\"");
     }
 
     [Fact]
@@ -4688,7 +4693,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("CreateBorderPalette(borderColorBox)");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,190,*\")");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"80,*,*\")");
-        source.Should().Contain("ShowFormatCellsError(message)");
+        source.Should().Contain("ShowFormatCellsError(UiText.Get(validation.MessageResourceKey), target);");
         normalizedSource.Should().Contain(
             "ItemsSource = new[]\n" +
             "            {\n" +
@@ -5219,6 +5224,7 @@ public sealed class AvaloniaShellSourceTests
         var findReplaceWorkflowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FindReplaceWorkflowSession.cs"));
         var findReplaceServiceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceService.cs"));
         var findReplaceSearchPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceSearchPlanner.cs"));
+        var findReplaceDialogPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FindReplaceDialogPlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
@@ -5331,10 +5337,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static void UpdateFindReplaceFormatState(StyleDiff? format, Button chooseButton, Button clearButton)");
         source.Should().Contain("chooseButton.Content = format is null ? \"Choose From Cell\" : \"Format Set\";");
         source.Should().Contain("clearButton.IsVisible = format is not null;");
-        source.Should().Contain("RequiredFormat: requiredFormat");
-        source.Should().Contain("FindLookIn.Formulas");
-        source.Should().Contain("FindLookIn.Notes");
-        source.Should().Contain("FindLookIn.Comments");
+        source.Should().Contain("requiredFormat: requiredFormat");
+        findReplaceDialogPlannerSource.Should().Contain("RequiredFormat: requiredFormat");
+        findReplaceDialogPlannerSource.Should().Contain("FindLookIn.Formulas");
+        findReplaceDialogPlannerSource.Should().Contain("FindLookIn.Notes");
+        findReplaceDialogPlannerSource.Should().Contain("FindLookIn.Comments");
         source.Should().Contain("var result = _session.FindNext(searchText, options, matchCase, matchEntireCell);");
         source.Should().Contain("var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);");
         // The Find command now opens the tabbed Find & Replace dialog (parity with the WPF FindReplaceDialog),
@@ -5536,7 +5543,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"WorkbookStatisticsDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(okButton, \"WorkbookStatisticsOkButton\");");
         source.Should().Contain("CreateWorkbookStatisticsDialogContent(statistics, okButton, copyToClipboardButton)");
-        source.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, \"WorkbookStatisticsSummary\");");
+        source.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsSummary");
         source.Should().Contain("Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
         source.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
         source.Should().Contain("WorkbookStatisticsFormatter.Format(statistics);");
@@ -5750,9 +5757,17 @@ public sealed class AvaloniaShellSourceTests
         getDataSource.Should().Contain("delimiter, allowSeparatorDirective, options.TreatConsecutiveDelimitersAsOne).Load(stream)");
         getDataSource.Should().Contain("WorkbookImportWorkflow.ApplyImportedWorkbookEdit(");
         getDataSource.Should().Contain("command => _session.ExecuteReviewCommand(command)");
+        getDataSource.Should().Contain("previousExtent);");
+        getDataSource.Should().NotContain("new ImportSheetCommand(");
         getDataSource.Should().Contain("_session.AddSheet()");
-        getDataSource.Should().Contain("_lastImportSource = new ImportDataSource(filePath, options, resolvedDestination, destination)");
+        getDataSource.Should().Contain("filePath, options, resolvedDestination, destination, used.RowCount, used.ColCount);");
         getDataSource.Should().Contain("private void RefreshImportedData()");
+
+        // R134 fix: the extent (row/col count) the previous import wrote at this same anchor is
+        // remembered and fed back into the next refresh's ImportSheetCommand so a source that has
+        // shrunk since the last refresh gets its leftover cells cleared instead of left stale.
+        getDataSource.Should().Contain("(uint RowCount, uint ColCount)? previousExtent = null;");
+        getDataSource.Should().Contain("previousExtent = (previousSource.LastRowCount, previousSource.LastColCount);");
 
         // User-facing strings go through UiText with the unique GetData_ key prefix.
         getDataSource.Should().Contain("UiText.Get(\"GetData_DialogTitle\")");

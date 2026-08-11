@@ -489,6 +489,8 @@ public sealed partial class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("var targetSheetId = _currentSheetId;");
         dataCommandsSource.Should().Contain("var targetSession = _session;");
         dataCommandsSource.Should().Contain("targetSession.ExecuteCommandPreservingSelection(command)");
+        dataCommandsSource.Should().Contain("previousExtent: previousExtent");
+        dataCommandsSource.Should().Contain("_lastImportExtent = (");
         dataCommandsSource.Should().NotContain("_commandBus.Execute(");
         dataCommandsSource.Should().NotContain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");

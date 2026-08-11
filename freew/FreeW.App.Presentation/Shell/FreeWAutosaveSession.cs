@@ -83,6 +83,10 @@ public sealed class FreeWAutosaveSession : IDisposable
         {
             // Autosave cleanup must not block a normal close.
         }
+        finally
+        {
+            _coordinator.Dispose();
+        }
     }
 
     public AutosaveRecoveryPlan? PlanLatestRecovery() =>

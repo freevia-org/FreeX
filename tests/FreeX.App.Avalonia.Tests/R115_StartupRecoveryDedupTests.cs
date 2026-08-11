@@ -212,8 +212,14 @@ public sealed class R115_StartupRecoveryDedupTests
         string displayName,
         DateTimeOffset timestampUtc)
     {
-        var coordinator = new AutosaveSnapshotCoordinator(store, snapshotId);
-        coordinator.TryEmergencySnapshot(new FakeSnapshotSource(documentId, displayName));
+        // Disposed before the recovery run: this fixture models snapshots left behind by a PREVIOUS,
+        // now-dead launch, and a dead launch holds no ownership lock. AutosaveSnapshotCoordinator
+        // takes the store's FileShare.None liveness lock in its constructor and holds it until
+        // Dispose (R134), so leaving the coordinator alive here would make every candidate look
+        // like a still-running sibling window's live snapshot -- ExcludeLiveOwned would drop them
+        // all and startup recovery would silently offer nothing at all.
+        using (var coordinator = new AutosaveSnapshotCoordinator(store, snapshotId))
+            coordinator.TryEmergencySnapshot(new FakeSnapshotSource(documentId, displayName));
 
         var sidecarPath = store.GetSidecarPath(snapshotId);
         var sidecar = AutosaveSnapshotStore.TryDeserializeSidecar(File.ReadAllText(sidecarPath))!;

@@ -24,6 +24,32 @@ public sealed class WorkbookReadOnlySessionTests
 
         plan.ShouldPrompt.Should().BeTrue();
         plan.WorkbookName.Should().Be("Budget.xlsx");
+        plan.PromptKind.Should().Be(reservationPassword is null
+            ? WorkbookReadOnlyPromptKind.ReadOnlyRecommended
+            : WorkbookReadOnlyPromptKind.ReservationPassword);
+    }
+
+    [Theory]
+    [InlineData("secret", false, false)]
+    [InlineData("wrong", true, true)]
+    [InlineData(null, true, false)]
+    public void ApplyReservationPassword_OwnsVerificationAndReadOnlyFallback(
+        string? providedPassword,
+        bool expectedReadOnly,
+        bool expectedIncorrectNotice)
+    {
+        var workbook = new Workbook("Budget.xlsx")
+        {
+            FileSharing = new WorkbookFileSharingModel { ReservationPassword = "secret" },
+        };
+        var session = new WorkbookReadOnlySession();
+        session.PlanOpen(workbook).PromptKind.Should().Be(WorkbookReadOnlyPromptKind.ReservationPassword);
+
+        var decision = session.ApplyReservationPassword(providedPassword);
+
+        decision.IsReadOnly.Should().Be(expectedReadOnly);
+        decision.ShouldShowIncorrectPasswordNotice.Should().Be(expectedIncorrectNotice);
+        session.IsReadOnly.Should().Be(expectedReadOnly);
     }
 
     [Fact]

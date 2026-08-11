@@ -22,6 +22,30 @@ public sealed record StartupRecoveryWorkflowHost<TTarget>(
 /// </summary>
 public static class StartupRecoveryWorkflow
 {
+    /// <summary>
+    /// Enumerates recoverable snapshots from <paramref name="snapshotStore"/> while excluding
+    /// snapshots still owned by a live window or process before any candidate can be offered or
+    /// retired. Native hosts should use this overload so liveness filtering cannot drift.
+    /// </summary>
+    public static async Task<bool> RunAsync<TTarget>(
+        AutosaveSnapshotStore snapshotStore,
+        StartupRecoveryWorkflowHost<TTarget> host,
+        CancellationToken cancellationToken = default)
+        where TTarget : class
+    {
+        ArgumentNullException.ThrowIfNull(snapshotStore);
+
+        try
+        {
+            var candidates = snapshotStore.ExcludeLiveOwned(snapshotStore.EnumerateCandidates());
+            return await RunAsync(candidates, host, cancellationToken);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public static async Task<bool> RunAsync<TTarget>(
         IReadOnlyList<AutosaveRecoveryCandidate> candidates,
         StartupRecoveryWorkflowHost<TTarget> host,

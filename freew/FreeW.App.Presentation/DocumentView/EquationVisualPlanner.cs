@@ -37,7 +37,8 @@ public enum EquationVisualSegmentRole
     FunctionOpenDelimiter,
     FunctionArgument,
     FunctionCloseDelimiter,
-    LinearFallback
+    LinearFallback,
+    DelimiterSeparator
 }
 
 public enum EquationVisualElementKind
@@ -117,6 +118,15 @@ public sealed record EquationVisualElement(
     public EquationVisualPlan? RadicandPlan { get; init; }
     public EquationVisualPlan? DegreePlan { get; init; }
     public EquationVisualPlan? DelimiterContentPlan { get; init; }
+    /// <summary>
+    /// Multi-argument delimiter arguments beyond the first (index 0 lives in <see cref="BaseText"/>/
+    /// <see cref="DelimiterContentPlan"/>). Empty for the ordinary single-argument delimiter.
+    /// </summary>
+    public IReadOnlyList<string> AdditionalDelimiterArgumentTexts { get; init; } = [];
+    /// <summary>Structured plans parallel to <see cref="AdditionalDelimiterArgumentTexts"/> (null at a plain-text index).</summary>
+    public IReadOnlyList<EquationVisualPlan?> AdditionalDelimiterArgumentPlans { get; init; } = [];
+    /// <summary>Separator glyph placed between multi-argument delimiter arguments (e.g. "," ).</summary>
+    public string DelimiterSeparatorText { get; init; } = ",";
     public EquationVisualPlan? FunctionArgumentPlan { get; init; }
     public EquationVisualPlan? NAryLowerLimitPlan { get; init; }
     public EquationVisualPlan? NAryUpperLimitPlan { get; init; }
@@ -300,7 +310,10 @@ public sealed record EquationVisualElement(
         string openDelimiter,
         string closeDelimiter,
         IReadOnlyList<EquationVisualSegment> segments,
-        EquationVisualPlan? delimiterContentPlan = null) =>
+        EquationVisualPlan? delimiterContentPlan = null,
+        IReadOnlyList<string>? additionalArgumentTexts = null,
+        IReadOnlyList<EquationVisualPlan?>? additionalArgumentPlans = null,
+        string delimiterSeparator = ",") =>
         new(
             EquationVisualElementKind.Delimiter,
             linearText,
@@ -313,7 +326,10 @@ public sealed record EquationVisualElement(
             BaseText = baseText,
             OpenDelimiter = openDelimiter,
             CloseDelimiter = closeDelimiter,
-            DelimiterContentPlan = delimiterContentPlan
+            DelimiterContentPlan = delimiterContentPlan,
+            AdditionalDelimiterArgumentTexts = additionalArgumentTexts ?? [],
+            AdditionalDelimiterArgumentPlans = additionalArgumentPlans ?? [],
+            DelimiterSeparatorText = delimiterSeparator
         };
 
     public static EquationVisualElement GroupChar(
@@ -1011,9 +1027,30 @@ public static class EquationVisualPlanner
         var delimiterContentPlan = BuildSlotPlan(run.DelimiterContentEquation, depth);
         var contentText = delimiterContentPlan?.LinearText ?? run.Base;
 
+        // Multi-argument delimiter (binomial/case/matrix-style m:d with more than one m:e): argument 0
+        // lives in Base/DelimiterContentEquation above, the rest are carried in AdditionalDelimiterArguments/
+        // AdditionalDelimiterContentEquations. Plan every one of them so none are silently truncated on
+        // screen even though the model has always round-tripped all of them.
+        var additionalTexts = new List<string>(run.AdditionalDelimiterArguments.Count);
+        var additionalPlans = new List<EquationVisualPlan?>(run.AdditionalDelimiterArguments.Count);
+        for (var index = 0; index < run.AdditionalDelimiterArguments.Count; index++)
+        {
+            var argumentEquation = index < run.AdditionalDelimiterContentEquations.Count
+                ? run.AdditionalDelimiterContentEquations[index]
+                : null;
+            var argumentPlan = BuildSlotPlan(argumentEquation, depth);
+            additionalTexts.Add(argumentPlan?.LinearText ?? run.AdditionalDelimiterArguments[index]);
+            additionalPlans.Add(argumentPlan);
+        }
+
         var runSegments = new List<EquationVisualSegment>();
         AddIfAny(runSegments, run.OpenChar, EquationVisualSegmentRole.DelimiterOpen, DelimiterStyle);
         AddIfAny(runSegments, contentText, EquationVisualSegmentRole.DelimiterContent, StructureStyle);
+        for (var index = 0; index < additionalTexts.Count; index++)
+        {
+            AddIfAny(runSegments, run.DelimiterSeparator, EquationVisualSegmentRole.DelimiterSeparator, DelimiterStyle);
+            AddIfAny(runSegments, additionalTexts[index], EquationVisualSegmentRole.DelimiterContent, StructureStyle);
+        }
         AddIfAny(runSegments, run.CloseChar, EquationVisualSegmentRole.DelimiterClose, DelimiterStyle);
 
         if (runSegments.Count == 0)
@@ -1026,7 +1063,10 @@ public static class EquationVisualPlanner
             run.OpenChar,
             run.CloseChar,
             runSegments,
-            delimiterContentPlan));
+            delimiterContentPlan,
+            additionalTexts,
+            additionalPlans,
+            run.DelimiterSeparator));
     }
 
     private static void AddGroupCharElement(
@@ -1224,6 +1264,9 @@ public static class EquationVisualPlanner
             yield return ("nary-operand", element.NAryOperandPlan);
         if (element.DelimiterContentPlan is not null)
             yield return ("delimiter-content", element.DelimiterContentPlan);
+        for (var index = 0; index < element.AdditionalDelimiterArgumentPlans.Count; index++)
+            if (element.AdditionalDelimiterArgumentPlans[index] is { } additionalPlan)
+                yield return ("delimiter-content-" + (index + 2).ToString(CultureInfo.InvariantCulture), additionalPlan);
         if (element.FunctionArgumentPlan is not null)
             yield return ("function-argument", element.FunctionArgumentPlan);
         if (element.AccentBasePlan is not null)

@@ -73,7 +73,7 @@ public sealed class AutosaveAdapterTests
     {
         using var temporaryDirectory = new TestTemporaryDirectory("FreeW.AutosaveAdapterTests-");
         var store = new AutosaveSnapshotStore(temporaryDirectory.Path);
-        var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
+        using var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
 
         // A fake source that is NOT dirty.
         var source = new FakeSnapshotSource { IsDirty = false };
@@ -97,7 +97,7 @@ public sealed class AutosaveAdapterTests
         using var temporaryDirectory = new TestTemporaryDirectory("FreeW.AutosaveAdapterTests-");
         var store = new AutosaveSnapshotStore(temporaryDirectory.Path);
         {
-            var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
+            using var coordinator = new AutosaveSnapshotCoordinator(store, Guid.NewGuid().ToString("N"));
             var source = new FakeSnapshotSource { IsDirty = false };
 
             // Start + immediate stop — should not throw.

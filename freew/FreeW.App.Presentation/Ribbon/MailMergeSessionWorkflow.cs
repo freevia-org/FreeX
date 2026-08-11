@@ -320,7 +320,8 @@ public sealed class MailMergeSessionWorkflow
         var template = Session.Template ?? currentDocument;
         var augmentedData = Session.BuildAugmentedData(finishPlan.RowIndexes);
         var state = mergeState ?? new MergeState();
-        var merged = MailMerge.MergeAllWithRules(template, augmentedData, state);
+        var recordNumbers = finishPlan.RowIndexes.Select(index => index + 1).ToList();
+        var merged = MailMerge.MergeAllWithRules(template, augmentedData, state, recordNumbers);
         if (state.CancelRequested)
             return FinishFailure(finishPlan, "Finish & Merge was cancelled.");
 

@@ -354,11 +354,27 @@ public static class DocumentIndex
             .GroupBy(
                 item => item.Reference.Identity,
                 StringComparer.Ordinal)
-            .Select(group => new IndexPageReference(
+            .Select(group => new PageItem(
+                group.First().Reference.StartIndex,
+                group.First().Reference.EndIndex,
+                group.First().Reference.FirstLabel,
+                group.First().Reference.LastLabel,
                 group.First().Reference.Label,
                 group.Any(item => item.Occurrence.Mark.BoldPageNumber),
-                group.Any(item => item.Occurrence.Mark.ItalicPageNumber)))
+                group.Any(item => item.Occurrence.Mark.ItalicPageNumber),
+                group.First().Reference.IsRange))
+            // Grouping above only collapses exact-duplicate marks; it otherwise preserves the
+            // document (mark-occurrence) order the marks were encountered in, which does not match
+            // ascending page order once a \r bookmark-ranged mark is involved (its own literal
+            // location in the document has no relation to the pages its bookmark resolves to). Sort
+            // ascending by resolved physical page so an entry never reads e.g. "12, 4-7, 9" instead
+            // of "4-7, 9, 12". Entries whose page could not be resolved to a real physical index (no
+            // host page-layout evidence available) sort last, stably preserving their relative
+            // document order among themselves (OrderBy is a stable sort) rather than guessing at an
+            // order the model cannot actually know.
+            .OrderBy(item => item.StartIndex < 0 ? int.MaxValue : item.StartIndex)
             .ToList();
+        var mergedPages = MergeAdjacentPageReferences(pages);
         var crossReferences = node.Occurrences
             .Select(occurrence => occurrence.Mark.CrossReference)
             .Where(value => value.Length > 0)
@@ -377,7 +393,7 @@ public static class DocumentIndex
             }
         };
         paragraph.Runs.Add(new Run(node.Label));
-        foreach (var page in pages)
+        foreach (var page in mergedPages)
         {
             paragraph.Runs.Add(new Run(", "));
             paragraph.Runs.Add(new Run(page.Label)
@@ -396,6 +412,79 @@ public static class DocumentIndex
         foreach (var child in Ordered(node.Children.Values, cultureName))
             AppendNode(paragraphs, child, depth + 1, document, pageTextOf, pageReferenceOf, entryStyleId, cultureName);
     }
+
+    /// <summary>
+    /// Collapses adjacent entries of an ascending-sorted page-reference list when their resolved
+    /// physical page spans overlap or abut (the later entry's start falls at-or-before one page past
+    /// the earlier entry's end) AND at least one of the two originates from an explicit <c>\r</c>
+    /// bookmark-ranged mark, matching Word's INDEX behaviour of merging a ranged mark with a
+    /// contiguous page into one continuous range instead of listing them separately. Two ordinary
+    /// single-page marks that merely happen to land on consecutive physical pages are intentionally
+    /// left as distinct entries (Word does not auto-collapse those). Entries with an unresolved
+    /// physical page (<see cref="PageItem.StartIndex"/> or <see cref="PageItem.EndIndex"/> below zero)
+    /// are never merged, since their true page position relative to other entries is unknown.
+    /// </summary>
+    private static List<IndexPageReference> MergeAdjacentPageReferences(IReadOnlyList<PageItem> sortedItems)
+    {
+        var result = new List<IndexPageReference>();
+        PageItem? pending = null;
+        foreach (var item in sortedItems)
+        {
+            if (pending is { } current
+                && (current.IsRange || item.IsRange)
+                && current.EndIndex >= 0
+                && item.StartIndex >= 0
+                && item.StartIndex <= current.EndIndex + 1)
+            {
+                pending = MergePageItems(current, item);
+                continue;
+            }
+
+            if (pending is { } finished)
+                result.Add(new IndexPageReference(finished.Label, finished.Bold, finished.Italic));
+            pending = item;
+        }
+
+        if (pending is { } last)
+            result.Add(new IndexPageReference(last.Label, last.Bold, last.Italic));
+
+        return result;
+    }
+
+    private static PageItem MergePageItems(PageItem left, PageItem right)
+    {
+        var extendsRange = right.EndIndex > left.EndIndex;
+        var endIndex = extendsRange ? right.EndIndex : left.EndIndex;
+        var lastLabel = extendsRange ? right.LastLabel : left.LastLabel;
+        var label = left.StartIndex == endIndex
+            ? left.FirstLabel
+            : left.FirstLabel + "–" + lastLabel;
+        return new PageItem(
+            left.StartIndex,
+            endIndex,
+            left.FirstLabel,
+            lastLabel,
+            label,
+            left.Bold || right.Bold,
+            left.Italic || right.Italic,
+            IsRange: true);
+    }
+
+    /// <summary>One collated page reference before final display formatting. <see cref="StartIndex"/>
+    /// and <see cref="EndIndex"/> are resolved physical page indexes (below zero when unresolved),
+    /// used to sort entries ascending and to detect overlapping/abutting ranges to merge.
+    /// <see cref="IsRange"/> is true when this entry originates from an explicit <c>\r</c>
+    /// bookmark-ranged mark (or from a prior merge), which gates automatic merging with a neighbour —
+    /// two ordinary single-page marks are never auto-collapsed together.</summary>
+    private sealed record PageItem(
+        int StartIndex,
+        int EndIndex,
+        string FirstLabel,
+        string LastLabel,
+        string Label,
+        bool Bold,
+        bool Italic,
+        bool IsRange);
 
     private static IEnumerable<IndexNode> Ordered(IEnumerable<IndexNode> nodes, string cultureName) =>
         nodes.OrderBy(node => node.Label, IndexLabelComparer(cultureName))
@@ -453,7 +542,12 @@ public static class DocumentIndex
             {
                 return new ResolvedIndexPageReference(
                     "broken-bookmark:" + occurrence.Mark.BookmarkName,
-                    BrokenBookmarkText);
+                    BrokenBookmarkText,
+                    StartIndex: -1,
+                    EndIndex: -1,
+                    FirstLabel: BrokenBookmarkText,
+                    LastLabel: BrokenBookmarkText,
+                    IsRange: true);
             }
 
             var first = ResolveBlockPageReference(document, range.StartBlockIndex, pageTextOf, pageReferenceOf);
@@ -466,17 +560,32 @@ public static class DocumentIndex
                 : first.DisplayText + "\u2013" + last.DisplayText;
             return new ResolvedIndexPageReference(
                 $"range:{first.PhysicalPageIndex}:{last.PhysicalPageIndex}:{occurrence.Mark.BookmarkName}",
-                label);
+                label,
+                StartIndex: first.PhysicalPageIndex,
+                EndIndex: last.PhysicalPageIndex,
+                FirstLabel: first.DisplayText,
+                LastLabel: last.DisplayText,
+                IsRange: true);
         }
 
         if (occurrence.BlockIndex is not { } index)
-            return new ResolvedIndexPageReference("label:1", "1");
+        {
+            return new ResolvedIndexPageReference(
+                "label:1", "1", StartIndex: -1, EndIndex: -1, FirstLabel: "1", LastLabel: "1", IsRange: false);
+        }
 
         var reference = ResolveBlockPageReference(document, index, pageTextOf, pageReferenceOf);
         var identity = reference.PhysicalPageIndex >= 0
             ? $"page:{reference.PhysicalPageIndex}"
             : "label:" + reference.DisplayText;
-        return new ResolvedIndexPageReference(identity, reference.DisplayText);
+        return new ResolvedIndexPageReference(
+            identity,
+            reference.DisplayText,
+            StartIndex: reference.PhysicalPageIndex,
+            EndIndex: reference.PhysicalPageIndex,
+            FirstLabel: reference.DisplayText,
+            LastLabel: reference.DisplayText,
+            IsRange: false);
     }
 
     private static IndexPageReferenceAddress ResolveBlockPageReference(
@@ -543,7 +652,19 @@ public static class DocumentIndex
 
     private sealed record IndexPageReference(string Label, bool Bold, bool Italic);
 
-    private sealed record ResolvedIndexPageReference(string Identity, string Label);
+    /// <summary><see cref="StartIndex"/>/<see cref="EndIndex"/> are the resolved physical page indexes
+    /// (below zero when unresolvable) used to sort and merge page references ascending; <see cref="FirstLabel"/>
+    /// and <see cref="LastLabel"/> are the individual endpoint display texts (equal for a single-page
+    /// reference) used to recompute a merged range's display text. <see cref="IsRange"/> is true for a
+    /// reference resolved from an explicit <c>\r</c> bookmark-ranged mark, gating automatic merging.</summary>
+    private sealed record ResolvedIndexPageReference(
+        string Identity,
+        string Label,
+        int StartIndex,
+        int EndIndex,
+        string FirstLabel,
+        string LastLabel,
+        bool IsRange);
 
     private sealed class IndexNode(string label)
     {

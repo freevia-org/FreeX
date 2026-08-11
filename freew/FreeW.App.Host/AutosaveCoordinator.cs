@@ -21,7 +21,7 @@ internal sealed class AutosaveCoordinator
     public AutosaveCoordinator(
         DocumentView editor,
         FileCommands file,
-        AutosaveSnapshotStore? store = null,
+        Func<FreeWAutosavePorts, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, bool>? recoverInNewWindow = null)
     {
         _file = file;
@@ -35,9 +35,7 @@ internal sealed class AutosaveCoordinator
                 editor.CommitToModel();
                 writeDocument(editor.Model);
             });
-        _session = store is null
-            ? new FreeWAutosaveSession(ports)
-            : new FreeWAutosaveSession(ports, store);
+        _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _recoverInNewWindow = recoverInNewWindow;
         _timer = new DispatcherTimer { Interval = FreeWAutosaveSession.DefaultInterval };
         _timer.Tick += (_, _) => _session.Snapshot();
@@ -45,6 +43,7 @@ internal sealed class AutosaveCoordinator
 
     internal string SnapshotIdForTests => _session.SnapshotId;
     internal void SnapshotNowForTests() => _session.Snapshot();
+    internal void SimulateCrashForTests() => _session.Dispose();
 
     public void Start() => _timer.Start();
 

@@ -33,6 +33,10 @@ public sealed record PresentationImageExportResult(
     public bool Succeeded => ExportedSlides.Count == Plan.SlideRange.SlideNumbers.Count;
 }
 
+public sealed record PresentationImageExportArtifact(
+    PresentationImageExportResult Result,
+    IReadOnlyList<string> ImageDiagnostics);
+
 /// <summary>
 /// Shared image export execution for FreeP. Hosts provide only the native render callback;
 /// slide-range policy, naming, and atomic output writes live here.
@@ -43,6 +47,17 @@ public static class PresentationImageExportExecutor
     public const int DefaultHeightPx = 720;
 
     private const string FallbackBaseFileName = "Presentation";
+
+    public static PresentationImageExportArtifact ExportWithDiagnostics(
+        Presentation presentation,
+        PresentationImageExportRequest request,
+        PresentationSlideImageRenderer renderSlideToPng)
+    {
+        var imageDiagnostics = new List<string>();
+        using var capture = SlideImageRenderDiagnostics.Capture(imageDiagnostics);
+        var result = Export(presentation, request, renderSlideToPng);
+        return new PresentationImageExportArtifact(result, imageDiagnostics);
+    }
 
     public static PresentationImageExportResult Export(
         Presentation presentation,

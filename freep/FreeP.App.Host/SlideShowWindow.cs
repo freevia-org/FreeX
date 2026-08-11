@@ -414,6 +414,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _runtime.AnimationRendererSession.LastStep?.Readiness;
     internal SlideShowPlaybackRoute PlaybackRoute => _runtime.PlaybackRoute;
     internal int CurrentPresentationSlideIndex => _runtime.CurrentPresentationSlideIndex;
+    internal Slide? RevealedHiddenSlideForTest => _runtime.RevealedHiddenSlide;
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,

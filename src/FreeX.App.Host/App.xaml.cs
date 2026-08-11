@@ -503,7 +503,7 @@ public partial class App : Application
             },
             DeleteCandidate: AutosaveSnapshotStore.DeleteCandidate);
 
-        return StartupRecoveryWorkflow.RunAsync(snapshotStore.EnumerateCandidates(), host)
+        return StartupRecoveryWorkflow.RunAsync(snapshotStore, host)
             .GetAwaiter()
             .GetResult();
     }

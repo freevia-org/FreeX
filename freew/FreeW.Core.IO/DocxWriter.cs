@@ -3903,9 +3903,14 @@ public static class DocxWriter
         }
 
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
-        // sibling of w:r, never wrapped in one), carrying its math fragments as m:r/m:sSup/m:f.
+        // sibling of w:r, never wrapped in one), carrying its math fragments as m:r/m:sSup/m:f. A display-
+        // mode equation (Equation.IsDisplayMath, e.g. one DocxReader recovered from m:oMathPara) instead
+        // wraps that same m:oMath in m:oMathPara so it round-trips as Word's paragraph-level centred layout
+        // rather than silently downgrading to inline.
         if (run.Equation is { } equation)
-            return BuildOMath(equation);
+            return equation.IsDisplayMath
+                ? new XElement(M + "oMathPara", BuildOMath(equation))
+                : BuildOMath(equation);
 
         // A ruby annotation is a paragraph-level sibling of w:r. Its base text remains mirrored in Run.Text
         // for fallback consumers, but the emitted w:ruby preserves Word's phonetic-guide payload.
@@ -4272,15 +4277,31 @@ public static class DocxWriter
             BuildMathSlot(M + "e", run.DecoratorBaseEquation, run.Base, depth));
 
     /// <summary>
-    /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr); a single
-    /// m:e holds the bracketed content.
+    /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr) and, for a
+    /// multi-argument delimiter (binomial/case/matrix-style group), the separator glyph (m:sepChr). The
+    /// first m:e holds the ordinary Base/DelimiterContentEquation slot; every entry in
+    /// AdditionalDelimiterArguments emits its own trailing m:e so no argument is dropped. Mirrors
+    /// <c>DocxReader.ReadDelimiter</c>.
     /// </summary>
-    private static XElement BuildDelimiter(MathRun run, int depth) =>
-        new(M + "d",
-            new XElement(M + "dPr",
-                new XElement(M + "begChr", new XAttribute(M + "val", run.OpenChar)),
-                new XElement(M + "endChr", new XAttribute(M + "val", run.CloseChar))),
-            BuildMathSlot(M + "e", run.DelimiterContentEquation, run.Base, depth));
+    private static XElement BuildDelimiter(MathRun run, int depth)
+    {
+        var dPr = new XElement(M + "dPr",
+            new XElement(M + "begChr", new XAttribute(M + "val", run.OpenChar)),
+            new XElement(M + "endChr", new XAttribute(M + "val", run.CloseChar)));
+        if (run.AdditionalDelimiterArguments.Count > 0)
+            dPr.Add(new XElement(M + "sepChr", new XAttribute(M + "val", run.DelimiterSeparator)));
+
+        var d = new XElement(M + "d", dPr, BuildMathSlot(M + "e", run.DelimiterContentEquation, run.Base, depth));
+        for (var index = 0; index < run.AdditionalDelimiterArguments.Count; index++)
+        {
+            var argumentEquation = index < run.AdditionalDelimiterContentEquations.Count
+                ? run.AdditionalDelimiterContentEquations[index]
+                : null;
+            d.Add(BuildMathSlot(M + "e", argumentEquation, run.AdditionalDelimiterArguments[index], depth));
+        }
+
+        return d;
+    }
 
     /// <summary>
     /// Builds a matrix (m:m): one m:mr per row, each holding one m:e (cell) per column. An absent/empty

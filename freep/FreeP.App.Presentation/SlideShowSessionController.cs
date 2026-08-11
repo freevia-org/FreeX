@@ -37,7 +37,7 @@ public sealed record SlideShowSessionPointerPlan(
 
 public sealed record SlideShowSessionInputExecutionCallbacks(
     Action TogglePresenterView,
-    Action RevealHiddenSlide,
+    Action<string?> RevealHiddenSlide,
     Action<SlideShowScreenMode> SetScreenMode,
     Action<SlideShowHostCommand> ExecuteHostCommand,
     Action<Hyperlink> OpenExternalHyperlink,
@@ -117,6 +117,8 @@ public sealed class SlideShowSessionController
     public string SlideNumberBuffer => _slideNumberBuffer;
 
     public Slide? DisplaySlide => _revealedHiddenSlide ?? Controller.CurrentSlide;
+
+    public Slide? RevealedHiddenSlide => _revealedHiddenSlide;
 
     public int DisplaySourceSlideIndex => _revealedHiddenSlideSourceIndex >= 0
         ? _revealedHiddenSlideSourceIndex
@@ -240,6 +242,28 @@ public sealed class SlideShowSessionController
                 SlideShowHostCommand.Ignored);
         }
 
+        if (IsScreenBlank)
+        {
+            _slideNumberBuffer = string.Empty;
+            if (SlideShowScreenModePlanner.TryPlanKey(normalizedKey, ScreenMode, out var blankScreenMode))
+            {
+                ScreenMode = blankScreenMode;
+                return new SlideShowSessionKeyPlan(
+                    true,
+                    SlideShowSessionInputActionKind.SetScreenMode,
+                    blankScreenMode,
+                    SlideShowHostCommand.Ignored);
+            }
+
+            return SlideShowHostPlanner.IntentFromKeyName(normalizedKey) == SlideShowHostIntent.Close
+                ? new SlideShowSessionKeyPlan(
+                    true,
+                    SlideShowSessionInputActionKind.ExecuteHostCommand,
+                    null,
+                    SlideShowHostCommand.Close(stopAutoAdvance: true))
+                : SlideShowSessionKeyPlan.HandledNoOp;
+        }
+
         if (normalizedKey == "H")
         {
             return new SlideShowSessionKeyPlan(
@@ -309,7 +333,7 @@ public sealed class SlideShowSessionController
                 callbacks.TogglePresenterView();
                 break;
             case SlideShowSessionInputActionKind.RevealHiddenSlide:
-                callbacks.RevealHiddenSlide();
+                callbacks.RevealHiddenSlide(null);
                 break;
             case SlideShowSessionInputActionKind.SetScreenMode when plan.ScreenMode is { } screenMode:
                 callbacks.SetScreenMode(screenMode);
@@ -322,21 +346,32 @@ public sealed class SlideShowSessionController
 
     public void SetScreenMode(SlideShowScreenMode mode) => ScreenMode = mode;
 
-    public Slide? RevealNextHiddenSlide()
+    public Slide? RevealNextHiddenSlide() => RevealHiddenSlide(targetSlideId: null);
+
+    public Slide? RevealHiddenSlide(string? targetSlideId)
     {
-        if (Controller.CurrentSlideIndex < 0 ||
-            Controller.CurrentSlideIndex >= _playbackRoute.SourceSlideIndices.Count)
+        SlideShowHiddenSlideTarget? target;
+        if (!string.IsNullOrWhiteSpace(targetSlideId))
         {
-            return null;
+            target = SlideShowHostPlanner.FindHiddenSlideById(_presentation, targetSlideId);
+        }
+        else
+        {
+            if (Controller.CurrentSlideIndex < 0 ||
+                Controller.CurrentSlideIndex >= _playbackRoute.SourceSlideIndices.Count)
+            {
+                return null;
+            }
+
+            var currentSourceIndex = _revealedHiddenSlideSourceIndex >= 0
+                ? _revealedHiddenSlideSourceIndex
+                : _playbackRoute.SourceSlideIndices[Controller.CurrentSlideIndex];
+            target = SlideShowHostPlanner.FindNextHiddenSlide(
+                _presentation,
+                _playbackRoute,
+                currentSourceIndex);
         }
 
-        var currentSourceIndex = _revealedHiddenSlideSourceIndex >= 0
-            ? _revealedHiddenSlideSourceIndex
-            : _playbackRoute.SourceSlideIndices[Controller.CurrentSlideIndex];
-        var target = SlideShowHostPlanner.FindNextHiddenSlide(
-            _presentation,
-            _playbackRoute,
-            currentSourceIndex);
         if (target is null)
         {
             return null;
@@ -352,6 +387,15 @@ public sealed class SlideShowSessionController
 
     public SlideShowSessionPointerPlan PlanPointerInput(SlideShowCanvasPointer pointer)
     {
+        if (IsScreenBlank)
+        {
+            return new SlideShowSessionPointerPlan(
+                true,
+                SlideShowSessionInputActionKind.None,
+                SlideShowHostCommand.Ignored,
+                null);
+        }
+
         var intent = PlanPointerClick(pointer);
         return intent.Kind switch
         {
@@ -391,6 +435,15 @@ public sealed class SlideShowSessionController
     {
         ArgumentNullException.ThrowIfNull(hyperlink);
 
+        if (IsScreenBlank)
+        {
+            return new SlideShowSessionPointerPlan(
+                true,
+                SlideShowSessionInputActionKind.None,
+                SlideShowHostCommand.Ignored,
+                hyperlink);
+        }
+
         if (hyperlink.IsExternal)
         {
             return new SlideShowSessionPointerPlan(
@@ -400,16 +453,35 @@ public sealed class SlideShowSessionController
                 hyperlink);
         }
 
-        return hyperlink.TargetSlideId is null
-            ? new SlideShowSessionPointerPlan(
+        if (hyperlink.TargetSlideId is null)
+        {
+            return new SlideShowSessionPointerPlan(
                 true,
                 SlideShowSessionInputActionKind.None,
+                SlideShowHostCommand.Ignored,
+                hyperlink);
+        }
+
+        var command = PlanInternalSlideJump(hyperlink.TargetSlideId);
+        if (command.Kind == SlideShowHostCommandKind.NavigateToSlide)
+        {
+            return new SlideShowSessionPointerPlan(
+                true,
+                SlideShowSessionInputActionKind.ExecuteHostCommand,
+                command,
+                hyperlink);
+        }
+
+        return SlideShowHostPlanner.FindHiddenSlideById(_presentation, hyperlink.TargetSlideId) is not null
+            ? new SlideShowSessionPointerPlan(
+                true,
+                SlideShowSessionInputActionKind.RevealHiddenSlide,
                 SlideShowHostCommand.Ignored,
                 hyperlink)
             : new SlideShowSessionPointerPlan(
                 true,
-                SlideShowSessionInputActionKind.ExecuteHostCommand,
-                PlanInternalSlideJump(hyperlink.TargetSlideId),
+                SlideShowSessionInputActionKind.None,
+                SlideShowHostCommand.Ignored,
                 hyperlink);
     }
 
@@ -432,6 +504,10 @@ public sealed class SlideShowSessionController
             case SlideShowSessionInputActionKind.OpenExternalHyperlink when plan.Hyperlink is not null:
                 callbacks.OpenExternalHyperlink(plan.Hyperlink);
                 break;
+            case SlideShowSessionInputActionKind.RevealHiddenSlide when plan.Hyperlink is not null:
+                callbacks.RevealHiddenSlide(plan.Hyperlink.TargetSlideId);
+                callbacks.InternalHyperlinkNavigated?.Invoke(plan.Hyperlink);
+                break;
         }
     }
 
@@ -441,13 +517,19 @@ public sealed class SlideShowSessionController
         SlideShowPointerInteractionPlanner.HitTestHyperlink(slide, pointer);
 
     public SlideShowInkExecutionResult BeginPointerInk(SlideShowCanvasPointer pointer) =>
-        BeginInkStroke(SlideShowPointerInteractionPlanner.MapInkPoint(pointer));
+        IsScreenBlank
+            ? new SlideShowInkExecutionResult(InkExecutionState, [], IsHandled: true)
+            : BeginInkStroke(SlideShowPointerInteractionPlanner.MapInkPoint(pointer));
 
     public SlideShowInkExecutionResult AppendPointerInk(SlideShowCanvasPointer pointer) =>
-        AppendInkStroke(SlideShowPointerInteractionPlanner.MapInkPoint(pointer));
+        IsScreenBlank
+            ? new SlideShowInkExecutionResult(InkExecutionState, [], IsHandled: true)
+            : AppendInkStroke(SlideShowPointerInteractionPlanner.MapInkPoint(pointer));
 
     public SlideShowInkExecutionResult EndPointerInk(SlideShowCanvasPointer pointer) =>
-        EndInkStroke(SlideShowPointerInteractionPlanner.MapInkPoint(pointer));
+        IsScreenBlank
+            ? new SlideShowInkExecutionResult(InkExecutionState, [], IsHandled: true)
+            : EndInkStroke(SlideShowPointerInteractionPlanner.MapInkPoint(pointer));
 
     public void ExecuteHostCommand(
         SlideShowHostCommand command,

@@ -78,6 +78,16 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         }
     }
 
+    /// <summary>
+    /// The <see cref="EditingSession"/> this handler drives selection/move/resize/rotate
+    /// commands through. Exposed so <see cref="SlideCanvas.AttachGestureHandler"/> can point its
+    /// UIA automation peer's selection-change subscription (see
+    /// <c>SlideCanvasAutomationPeer</c>) at the same session, mirroring the WPF twin
+    /// (FreeP.App.Rendering.Wpf.SlideCanvas tracks its EditingSession directly since its
+    /// gesture handler is constructed inline).
+    /// </summary>
+    public EditingSession Editor => _editor;
+
     // ── Construction / attach ──────────────────────────────────────────────────
 
     public AvaloniaCanvasGestureHandler(SlideCanvas canvas, EditingSession editor,

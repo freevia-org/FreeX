@@ -31,7 +31,7 @@ internal sealed class AutosaveAdapter : IDisposable
     public AutosaveAdapter(
         DocumentView editor,
         FileCommandWorkflow workflow,
-        AutosaveSnapshotStore? store = null,
+        Func<FreeWAutosavePorts, FreeWAutosaveSession>? sessionFactory = null,
         Func<AutosaveRecoveryCandidate, Task<bool>>? recoverInNewWindowAsync = null)
     {
         ArgumentNullException.ThrowIfNull(editor);
@@ -48,14 +48,13 @@ internal sealed class AutosaveAdapter : IDisposable
                 writeDocument(editor.Document))
                 .GetAwaiter()
                 .GetResult());
-        _session = store is null
-            ? new FreeWAutosaveSession(ports)
-            : new FreeWAutosaveSession(ports, store);
+        _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _recoverInNewWindowAsync = recoverInNewWindowAsync;
     }
 
     internal string SnapshotIdForTests => _session.SnapshotId;
     internal void SnapshotNowForTests() => _session.Snapshot();
+    internal void SimulateCrashForTests() => _session.Dispose();
 
     /// <summary>
     /// Start the periodic autosave loop. Safe to call from any thread.
@@ -76,12 +75,12 @@ internal sealed class AutosaveAdapter : IDisposable
     /// </summary>
     public async Task StopAsync()
     {
-        if (_cts is null)
-            return;
-
-        await _cts.CancelAsync();
-        _cts.Dispose();
-        _cts = null;
+        if (_cts is not null)
+        {
+            await _cts.CancelAsync();
+            _cts.Dispose();
+            _cts = null;
+        }
 
         _session.CompleteCleanExit();
     }

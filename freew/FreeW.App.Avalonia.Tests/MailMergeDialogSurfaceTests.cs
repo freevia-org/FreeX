@@ -69,7 +69,8 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("this, title, prompt.Prompt, prompt.DefaultAnswer");
         source.Should().Contain("mergeState.RecordPromptResolver = ResolvePerRecordMergePrompt;");
         source.Should().Contain("_mailMerge.RouteFinish(");
-        source.Should().Contain("var templateSnapshot = _mailMerge.Session.IsPreviewing ? null : CloneDocument(_editor.Document);");
+        source.Should().Contain("FreeWDocumentSnapshot.Clone(_editor.Document)");
+        source.Should().NotContain("private static TextDocument CloneDocument(");
         source.Should().Contain("Task.Run(() => _mailMerge.BuildFinishedMerge(plan, mergeState, templateSnapshot))");
         source.Should().Contain("await PlanEmailMergeAsync(route.EmailRecordIndexes)");
         source.Should().Contain("selectedRecordIndexes ?? Array.Empty<int>()");

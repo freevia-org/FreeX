@@ -1250,4 +1250,163 @@ public class EquationRoundTripTests
         var cellParagraph = ((Table)read.Blocks.Single()).Rows[0].Cells[0].Paragraphs.Single();
         cellParagraph.Runs.Single(r => r.Equation is not null).Equation!.LinearText.Should().Be("x^n");
     }
+
+    [Fact]
+    public void RawOMathPara_ReadsAsDisplayEquation_InsteadOfBeingDropped()
+    {
+        // Word's "Display"/"Professional" equation layout wraps the equation in m:oMathPara (a
+        // paragraph-level sibling of w:r), distinct from an inline bare m:oMath. Before the fix this whole
+        // element (and the equation inside it) was silently dropped on open — no branch in
+        // AddParagraphContentElement recognised m:oMathPara, so it fell through unmatched.
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMathPara>
+                    <m:oMath>
+                      <m:r><m:t>E=mc</m:t></m:r>
+                      <m:sSup>
+                        <m:e><m:r><m:t>2</m:t></m:r></m:e>
+                        <m:sup><m:r><m:t></m:t></m:r></m:sup>
+                      </m:sSup>
+                    </m:oMath>
+                  </m:oMathPara>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var paragraph = read.Paragraphs.Single();
+        var equationRun = paragraph.Runs.SingleOrDefault(r => r.Equation is not null);
+        equationRun.Should().NotBeNull("the display equation must not be dropped on open");
+        var equation = equationRun!.Equation!;
+        equation.IsDisplayMath.Should().BeTrue();
+        equation.Runs.Should().ContainSingle(r => r.Kind == MathRunKind.Text && r.Text == "E=mc");
+        equation.LinearText.Should().StartWith("E=mc");
+    }
+
+    [Fact]
+    public void DisplayEquation_SurvivesWriteRoundTripAndEmitsOMathParaWrapper()
+    {
+        var equation = Equation.FromText("x = y + 1");
+        equation.IsDisplayMath = true;
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var xml = WriteDocumentXml(doc);
+        var read = RoundTrip(doc);
+
+        // Renders in the correct (display/centred) mode: the OMML is wrapped in m:oMathPara, the container
+        // Word itself keys off to lay the equation out on its own centred line rather than inline.
+        var oMathPara = xml.Descendants(M + "oMathPara").Single();
+        oMathPara.Elements(M + "oMath").Should().ContainSingle();
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.IsDisplayMath.Should().BeTrue();
+        roundTripped.LinearText.Should().Be("x = y + 1");
+    }
+
+    [Fact]
+    public void InlineEquation_DoesNotEmitOMathParaWrapper()
+    {
+        // Sibling no-regression: the default (IsDisplayMath = false, every equation authored before this
+        // flag existed) must keep emitting a bare inline m:oMath — never wrapped in m:oMathPara.
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(Equation.FromText("a + b")));
+        doc.Blocks.Add(paragraph);
+
+        var xml = WriteDocumentXml(doc);
+
+        xml.Descendants(M + "oMathPara").Should().BeEmpty();
+        xml.Descendants(M + "oMath").Should().ContainSingle();
+
+        var read = RoundTrip(doc);
+        read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!.IsDisplayMath.Should().BeFalse();
+    }
+
+    [Fact]
+    public void RawMultiArgumentDelimiter_ReadsEveryArgument_InsteadOfTruncating()
+    {
+        // A binomial/case/matrix-style delimiter carries more than one m:e child under a single m:d,
+        // separated by m:dPr/m:sepChr. Before the fix, d.Element(M + "e") only ever read the FIRST m:e,
+        // silently dropping every argument after it.
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:d>
+                      <m:dPr>
+                        <m:begChr m:val="(" />
+                        <m:endChr m:val=")" />
+                        <m:sepChr m:val="," />
+                      </m:dPr>
+                      <m:e><m:r><m:t>n</m:t></m:r></m:e>
+                      <m:e><m:r><m:t>k</m:t></m:r></m:e>
+                      <m:e><m:r><m:t>m</m:t></m:r></m:e>
+                    </m:d>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        var delimiter = equation.Runs.Single();
+        delimiter.Kind.Should().Be(MathRunKind.Delimiter);
+        delimiter.Base.Should().Be("n");
+        delimiter.AdditionalDelimiterArguments.Should().Equal("k", "m");
+        delimiter.DelimiterSeparator.Should().Be(",");
+        equation.LinearText.Should().Be("(n,k,m)");
+    }
+
+    [Fact]
+    public void MultiArgumentDelimiterEquation_SurvivesWriteRoundTrip()
+    {
+        var equation = new Equation([MathRun.Delimiter(["n", "k", "m"], "(", ")", ",")]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var xml = WriteDocumentXml(doc);
+        var read = RoundTrip(doc);
+
+        var writtenDelimiter = xml.Descendants(M + "d").Single();
+        writtenDelimiter.Elements(M + "e").Should().HaveCount(3);
+        writtenDelimiter.Element(M + "dPr")!.Element(M + "sepChr")!.Attribute(M + "val")!.Value.Should().Be(",");
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        var delimiter = roundTripped.Runs.Single();
+        delimiter.Base.Should().Be("n");
+        delimiter.AdditionalDelimiterArguments.Should().Equal("k", "m");
+        roundTripped.LinearText.Should().Be("(n,k,m)");
+    }
+
+    [Fact]
+    public void SingleArgumentDelimiter_StillEmitsExactlyOneE_NoSepChr()
+    {
+        // Sibling no-regression: the ordinary single-argument delimiter (every delimiter authored before
+        // this fix) must not gain a spurious m:sepChr or extra m:e now that multi-argument support exists.
+        var read = RoundTripEquation(new Equation([MathRun.Delimiter("a, b", "[", "]")]));
+
+        read.Runs.Should().ContainSingle();
+        read.Runs[0].AdditionalDelimiterArguments.Should().BeEmpty();
+
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(new Equation([MathRun.Delimiter("a, b", "[", "]")])));
+        doc.Blocks.Add(paragraph);
+        var xml = WriteDocumentXml(doc);
+        var writtenDelimiter = xml.Descendants(M + "d").Single();
+        writtenDelimiter.Elements(M + "e").Should().ContainSingle();
+        writtenDelimiter.Element(M + "dPr")!.Element(M + "sepChr").Should().BeNull();
+    }
 }

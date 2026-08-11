@@ -22,6 +22,10 @@ public sealed class RendererIntegrationPolicyOwnershipTests
         avalonia.Should().Contain("private readonly WorkbookReadOnlySession _workbookReadOnlySession = new();");
         wpfBackstage.Should().Contain("_workbookReadOnlySession.PlanOpen(workbook)");
         avalonia.Should().Contain("_workbookReadOnlySession.PlanOpen(workbook)");
+        wpfBackstage.Should().Contain("_workbookReadOnlySession.ApplyReservationPassword(entered)");
+        avalonia.Should().Contain("_workbookReadOnlySession.ApplyReservationPassword(entered)");
+        wpfBackstage.Should().NotContain("ProtectionPasswordHelper.VerifyStoredPassword(");
+        avalonia.Should().NotContain("ProtectionPasswordHelper.VerifyStoredPassword(");
         wpfLifecycle.Should().Contain("_workbookReadOnlySession.ResolveExistingSaveTarget(");
         avalonia.Should().Contain("_workbookReadOnlySession.ResolveExistingSaveTarget(");
         (wpfWindow + wpfBackstage + wpfLifecycle).Should().NotContain("_isWorkbookReadOnly");

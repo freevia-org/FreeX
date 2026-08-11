@@ -96,6 +96,8 @@ internal sealed class FileCommands
     public LinuxVideoExportResult? LastVideoExportResult => _videoPort.LastResult;
     public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor =>
         _session.LastVideoExecutionDescriptor;
+    internal IReadOnlyList<string> LastVideoFrameImageDiagnostics =>
+        _session.LastVideoFrameImageDiagnostics;
 
     public void MarkDirty() => _session.MarkDirty();
     public bool New() => Run(_session.NewAsync());

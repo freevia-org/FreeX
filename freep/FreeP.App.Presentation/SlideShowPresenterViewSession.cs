@@ -46,6 +46,7 @@ public sealed class SlideShowPresenterViewSession
     private readonly Func<SlideShowRecordingReviewPlan>? _recordingReviewProvider;
     private readonly Func<SlideShowRecordingReviewApplyResult>? _applyRecordingReview;
     private readonly Action<int, string?>? _setNotesText;
+    private int? _notesSlideIndex;
 
     public SlideShowPresenterViewSession(
         Func<SlideShowPresenterState> stateProvider,
@@ -91,6 +92,11 @@ public sealed class SlideShowPresenterViewSession
     public SlideShowPresenterViewPlan BuildViewPlan()
     {
         var state = _stateProvider();
+        return BuildViewPlan(state);
+    }
+
+    private SlideShowPresenterViewPlan BuildViewPlan(SlideShowPresenterState state)
+    {
         return SlideShowPresenterViewPlanner.Build(
             state,
             _recordingReviewProvider?.Invoke(),
@@ -109,11 +115,18 @@ public sealed class SlideShowPresenterViewSession
         var notesCommitted = !request.NotesFocused &&
             CommitNotes(request.NotesDirty, request.NotesText);
         var notesRemainDirty = request.NotesDirty && !notesCommitted;
-        var viewPlan = BuildViewPlan();
+        var state = _stateProvider();
+        var viewPlan = BuildViewPlan(state);
+        var shouldUpdateNotesText = !request.NotesFocused && !notesRemainDirty;
+        if (shouldUpdateNotesText)
+        {
+            _notesSlideIndex = state.CurrentSlide?.SlideIndex;
+        }
+
         return new(
             viewPlan,
             notesCommitted,
-            ShouldUpdateNotesText: !request.NotesFocused && !notesRemainDirty,
+            ShouldUpdateNotesText: shouldUpdateNotesText,
             ShouldUpdateSlideNumber:
                 !request.SlideNumberFocused && viewPlan.CurrentSlideNumber is not null);
     }
@@ -205,7 +218,7 @@ public sealed class SlideShowPresenterViewSession
             return false;
         }
 
-        var slideIndex = _stateProvider().CurrentSlide?.SlideIndex;
+        var slideIndex = _notesSlideIndex ?? _stateProvider().CurrentSlide?.SlideIndex;
         if (slideIndex is not int index)
         {
             return false;

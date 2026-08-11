@@ -228,6 +228,11 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         }
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        // R134-commands-pivotchart-stale-datarange: ReportLayout/ShowSubtotals/grand-total/header
+        // options can all change the pivot's row/column geometry on refresh -- without this, a
+        // PivotChart bound to this pivot table keeps rendering the cells the pivot occupied under the
+        // OLD options, silently inconsistent with the pivot right next to it.
+        PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
 
         // R45-roundtrip-not-consumed-sweep-4: AutofitColumnsOnUpdate round-tripped through this
         // dialog/XLSX but no refresh path ever consulted it, so toggling "Autofit column widths on
@@ -257,6 +262,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         if (_autofitAppliedRange is { } autofitRange && _autofitColumnWidthsSnapshot is not null)
             RangeSnapshot.Restore(sheet.ColumnWidths, autofitRange.Start.Col, autofitRange.End.Col, _autofitColumnWidthsSnapshot);
+        if (pivotTable is not null)
+            PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, sheet, pivotTable);
         _snapshot = null;
         _targetSnapshot = null;
         _autofitAppliedRange = null;

@@ -504,6 +504,7 @@ public sealed class PresentationFileCommandSession
     public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
     public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
     public PresentationImageExportResult? LastImageExportResult { get; private set; }
+    public IReadOnlyList<string> LastVideoFrameImageDiagnostics { get; private set; } = [];
     public PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
 
     public void MarkDirty() => _lifecycle.MarkDirty();
@@ -751,23 +752,20 @@ public sealed class PresentationFileCommandSession
     {
         try
         {
-            var imageDiagnostics = new List<string>();
-            using (SlideImageRenderDiagnostics.Capture(imageDiagnostics))
-            {
-                LastImageExportResult = PresentationImageExportExecutor.Export(
-                    _getPresentation(),
-                    new PresentationImageExportRequest(
-                        outputDirectory,
-                        BaseFileName: Path.GetFileNameWithoutExtension(CurrentFileName),
-                        SlideRange: range),
-                    _render.RenderSlideToPng);
-            }
+            var artifact = PresentationImageExportExecutor.ExportWithDiagnostics(
+                _getPresentation(),
+                new PresentationImageExportRequest(
+                    outputDirectory,
+                    BaseFileName: Path.GetFileNameWithoutExtension(CurrentFileName),
+                    SlideRange: range),
+                _render.RenderSlideToPng);
+            LastImageExportResult = artifact.Result;
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
                     PresentationFileCommand.ExportImages,
                     outputDirectory,
                     $"Exported slides to {outputDirectory}",
-                    imageDiagnostics),
+                    artifact.ImageDiagnostics),
                 cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -905,12 +903,22 @@ public sealed class PresentationFileCommandSession
 
     public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
-        LastVideoFramePackage = _videoPackageFactory?.Invoke(request) ??
-            PresentationVideoFramePackageExecutor.BuildPackage(
+        if (_videoPackageFactory is not null)
+        {
+            LastVideoFramePackage = _videoPackageFactory(request);
+            LastVideoFrameImageDiagnostics = [];
+        }
+        else
+        {
+            var artifact = PresentationVideoFramePackageExecutor.BuildPackageWithDiagnostics(
                 _getPresentation(),
                 request,
                 _render.RenderSlideToPng,
                 _video.Capabilities);
+            LastVideoFramePackage = artifact.Package;
+            LastVideoFrameImageDiagnostics = artifact.ImageDiagnostics;
+        }
+
         LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
         LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
             LastVideoFramePackage,
@@ -986,7 +994,8 @@ public sealed class PresentationFileCommandSession
                 PresentationFileCommand.ExportVideo,
                 native,
                 outputPath,
-                cancellationToken);
+                cancellationToken,
+                LastVideoFrameImageDiagnostics);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -1120,10 +1129,11 @@ public sealed class PresentationFileCommandSession
         PresentationFileCommand command,
         PresentationNativeCommandResult native,
         string? path,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<string>? imageDiagnostics = null)
     {
         var result = native.Succeeded
-            ? PresentationFileCommandResult.Success(command, path, native.StatusText)
+            ? PresentationFileCommandResult.Success(command, path, native.StatusText, imageDiagnostics)
             : native.Cancelled
                 ? PresentationFileCommandResult.Cancel(command, native.StatusText)
                 : PresentationFileCommandResult.Failure(

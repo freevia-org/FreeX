@@ -521,6 +521,102 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DuplicateSlideCommand_MintsFreshModernCommentAndReplyIds_ButKeepsThreadStructure()
+    {
+        var (p, bus) = Make(1);
+        var source = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{33333333-3333-3333-3333-333333333333}",
+            Author = "Alice",
+            Initials = "AR",
+            Text = "Please clarify",
+            IsResolved = true,
+            ResolvedBy = "Bob",
+            ResolvedDateTime = new DateTime(2026, 1, 1),
+            ModernAnchorKind = "unknownAnchor",
+            ModernAnchorXml = "<p188:unknownAnchor/>",
+        };
+        source.Replies.Add(new SlideCommentReply
+        {
+            ModernReplyId = "{44444444-4444-4444-4444-444444444444}",
+            Author = "Bob",
+            Initials = "BR",
+            Text = "Done",
+            DateTime = new DateTime(2026, 1, 2),
+        });
+        p.Slides[0].Comments.Add(source);
+
+        bus.Execute(new DuplicateSlideCommand(0));
+
+        var clone = p.Slides[1].Comments.Single();
+
+        // Disjoint identity: the clone's comment id and reply id must differ from the source's.
+        clone.ModernCommentId.Should().NotBe(source.ModernCommentId);
+        clone.ModernCommentId.Should().NotBeNullOrWhiteSpace();
+        clone.Replies.Single().ModernReplyId.Should().NotBe(source.Replies.Single().ModernReplyId);
+        clone.Replies.Single().ModernReplyId.Should().NotBeNullOrWhiteSpace();
+
+        var allIds = new[] { source.ModernCommentId, clone.ModernCommentId,
+            source.Replies.Single().ModernReplyId, clone.Replies.Single().ModernReplyId };
+        allIds.Should().OnlyHaveUniqueItems();
+
+        // Thread structure (parent/child nesting, author, resolved state, timestamps) preserved.
+        clone.Author.Should().Be(source.Author);
+        clone.Initials.Should().Be(source.Initials);
+        clone.Text.Should().Be(source.Text);
+        clone.IsResolved.Should().Be(source.IsResolved);
+        clone.ResolvedBy.Should().Be(source.ResolvedBy);
+        clone.ResolvedDateTime.Should().Be(source.ResolvedDateTime);
+        clone.Replies.Should().ContainSingle();
+        clone.Replies.Single().Author.Should().Be(source.Replies.Single().Author);
+        clone.Replies.Single().Text.Should().Be(source.Replies.Single().Text);
+        clone.Replies.Single().DateTime.Should().Be(source.Replies.Single().DateTime);
+    }
+
+    [Fact]
+    public void CommentMutationCommand_Resolve_PreservesModernCommentId_AcrossUndoRedo()
+    {
+        // Sibling no-regression test for the DuplicateSlideCommand fresh-id fix above:
+        // CommentMutationCommand also snapshots comments through SlideCloner.CloneComment (for
+        // undo/redo bookkeeping on ordinary edit/resolve/reopen/reply), and that path must NOT
+        // mint a fresh id — only slide duplication should. Otherwise a plain "resolve" would
+        // silently change the comment's identity on every apply/undo/redo.
+        var (p, bus) = Make();
+        var original = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{55555555-5555-5555-5555-555555555555}",
+            Author = "Alice",
+            Text = "Original text",
+        };
+        p.Slides[0].Comments.Add(original);
+
+        var resolved = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = original.ModernCommentId,
+            Author = original.Author,
+            Text = original.Text,
+            IsResolved = true,
+            ResolvedBy = "Bob",
+        };
+
+        bus.Execute(new CommentMutationCommand("Resolve Comment", 0, 0, original, resolved));
+
+        p.Slides[0].Comments[0].ModernCommentId.Should().Be(original.ModernCommentId);
+        p.Slides[0].Comments[0].IsResolved.Should().BeTrue();
+
+        bus.Undo();
+        p.Slides[0].Comments[0].ModernCommentId.Should().Be(original.ModernCommentId);
+        p.Slides[0].Comments[0].IsResolved.Should().BeFalse();
+
+        bus.Redo();
+        p.Slides[0].Comments[0].ModernCommentId.Should().Be(original.ModernCommentId);
+        p.Slides[0].Comments[0].IsResolved.Should().BeTrue();
+    }
+
+    [Fact]
     public void MoveSlideCommand_Apply_MovesSlideToNewPosition()
     {
         // 3 slides: [A, B, C] — move A (index 0) to index 2 => [B, C, A]
@@ -833,6 +929,69 @@ public sealed class PresentationCommandTests
         p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(chart);
         bus.Undo();
         p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(chart);
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_OrphansModernCommentAnchor_AndUndoRestoresIt()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape(7);
+        p.Slides[0].Shapes.Add(shape);
+
+        var anchoredComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{11111111-1111-1111-1111-111111111111}",
+            Author = "Reviewer",
+            Text = "Fix this shape",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"7\"/></p188:deMkLst>",
+        };
+        p.Slides[0].Comments.Add(anchoredComment);
+
+        bus.Execute(new DeleteShapeCommand(0, shape.Id));
+
+        // The comment thread survives the shape delete (comments are independent review data)
+        // but its anchor no longer names the now-absent shape id.
+        p.Slides[0].Comments.Should().ContainSingle().Which.Should().BeSameAs(anchoredComment);
+        anchoredComment.ModernAnchorXml.Should().NotContain("id=\"7\"");
+        anchoredComment.Text.Should().Be("Fix this shape");
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().ContainSingle().Which.Should().BeSameAs(shape);
+        anchoredComment.ModernAnchorKind.Should().Be("deMkLst");
+        anchoredComment.ModernAnchorXml.Should().Contain("id=\"7\"");
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_LeavesUnrelatedModernCommentAnchor_Untouched()
+    {
+        var (p, bus) = Make();
+        var deleted = MakeShape(7);
+        var retained = MakeShape(8);
+        p.Slides[0].Shapes.Add(deleted);
+        p.Slides[0].Shapes.Add(retained);
+
+        var unrelatedComment = new SlideComment
+        {
+            UsesModernCommentSchema = true,
+            ModernCommentId = "{22222222-2222-2222-2222-222222222222}",
+            Author = "Reviewer",
+            Text = "Looks good",
+            ModernAnchorKind = "deMkLst",
+            ModernAnchorXml =
+                "<p188:deMkLst xmlns:p188=\"http://schemas.microsoft.com/office/powerpoint/2018/8/main\">" +
+                "<p188:sp id=\"8\"/></p188:deMkLst>",
+        };
+        p.Slides[0].Comments.Add(unrelatedComment);
+
+        bus.Execute(new DeleteShapeCommand(0, deleted.Id));
+
+        unrelatedComment.ModernAnchorKind.Should().Be("deMkLst");
+        unrelatedComment.ModernAnchorXml.Should().Contain("id=\"8\"");
     }
 
     [Fact]

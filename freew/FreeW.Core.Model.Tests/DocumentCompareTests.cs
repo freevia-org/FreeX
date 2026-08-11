@@ -726,4 +726,46 @@ public class DocumentCompareTests
         result.Paragraphs.ElementAt(1).Runs.Should().NotContain(run => run.CommentId != null);
         result.Comments.Should().BeEmpty();
     }
+
+    // -----------------------------------------------------------------------
+    // Style catalog for whole-paragraph deletions (r134 MED: dangling StyleId reference)
+    // -----------------------------------------------------------------------
+
+    [Fact]
+    public void Compare_WholeParagraphDeletion_CarriesOriginalOnlyStyleIntoResultCatalog()
+    {
+        // "Quote" exists only in the original document — revised dropped the style entirely (e.g. the
+        // author removed it while cleaning up the style catalog). The deleted paragraph still references
+        // it, so the result's style catalog must define it or the saved document has a dangling style id.
+        var original = DocWith("Doomed paragraph", "Tail");
+        original.Styles["Quote"] = new DocumentStyle { Id = "Quote", Name = "Quote" };
+        original.Paragraphs.First().StyleId = "Quote";
+
+        var revised = DocWith("Tail"); // revised never had "Quote" in its catalog at all
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var deletedParagraph = result.Paragraphs.Single(paragraph =>
+            paragraph.Runs.Any(run => run.Revision == RevisionKind.Deleted));
+
+        deletedParagraph.StyleId.Should().Be("Quote");
+        result.Styles.Should().ContainKey("Quote");
+    }
+
+    [Fact]
+    public void Compare_RevisedRedefinesSameStyleId_KeepsRevisedDefinitionNotOriginals()
+    {
+        // Sibling no-regression: when both documents define the same style id, revised's own definition
+        // must win in the result catalog — the original-style backfill must never overwrite it.
+        var original = DocWith("Doomed paragraph", "Tail");
+        original.Styles["Quote"] = new DocumentStyle { Id = "Quote", Name = "Original Quote Name" };
+        original.Paragraphs.First().StyleId = "Quote";
+
+        var revised = DocWith("Tail");
+        revised.Styles["Quote"] = new DocumentStyle { Id = "Quote", Name = "Revised Quote Name" };
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Styles["Quote"].Name.Should().Be("Revised Quote Name");
+    }
 }

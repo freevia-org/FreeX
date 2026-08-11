@@ -169,6 +169,11 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
             PivotTableSlicerTimelineCommandHelpers.ReplaceSelectedItems(pivotTable.PageFields, sourceFieldIndex, slicer.SelectedItems);
 
             PivotTableRefreshService.Refresh(ctx.Workbook, targetSheet, pivotTable);
+            // R134-commands-pivotchart-stale-datarange: a slicer selection change re-filters the pivot's
+            // rows (Refresh above), which moves/shrinks/grows its materialized output range -- without
+            // this, a PivotChart bound to this pivot table keeps rendering the cells the pivot occupied
+            // BEFORE the selection change, silently inconsistent with the pivot right next to it.
+            PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, targetSheet, pivotTable);
         }
 
         return new CommandOutcome(true, AffectedCells: resolvedTargets.Select(t => t.PivotTable.TargetRange.Start).ToArray());
@@ -244,6 +249,13 @@ public sealed class SetSlicerSelectionCommand : IWorkbookCommand
                 foreach (var (sheet, _, cellSnapshot) in _targetSnapshots)
                     AddPivotTableCommand.Restore(sheet, cellSnapshot);
             }
+
+            // R134-commands-pivotchart-stale-datarange: point every affected pivot's bound PivotChart(s)
+            // back at the just-restored (pre-Apply) output range, mirroring the Apply-side sync above --
+            // otherwise Undo puts the pivot's cells back but leaves the chart still rendering the
+            // post-Apply range.
+            foreach (var snapshot in _snapshot.PivotTables)
+                PivotTableRefreshService.UpdateBoundPivotCharts(ctx.Workbook, snapshot.Sheet, snapshot.PivotTable);
         }
 
         _snapshot = null;

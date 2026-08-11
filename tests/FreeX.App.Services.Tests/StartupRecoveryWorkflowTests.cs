@@ -113,6 +113,35 @@ public sealed class StartupRecoveryWorkflowTests
     }
 
     [Fact]
+    public async Task StoreOverload_ExcludesLiveOwnedCandidatesBeforeOfferingOrDeleting()
+    {
+        using var tempDirectory = new TestTemporaryDirectory(nameof(StartupRecoveryWorkflowTests) + "-");
+        var store = new AutosaveSnapshotStore(tempDirectory.Path);
+        const string snapshotId = "recovery-live-window";
+        File.WriteAllText(store.GetSnapshotPath(snapshotId), "{}");
+        File.WriteAllText(
+            store.GetSidecarPath(snapshotId),
+            AutosaveSnapshotStore.SerializeSidecar(new AutosaveSidecar
+            {
+                SnapshotId = snapshotId,
+                DisplayName = "Live workbook",
+                TimestampUtc = DateTimeOffset.UtcNow.ToString("O"),
+            }));
+        using var ownershipLock = store.TryAcquireOwnershipLock(snapshotId);
+        ownershipLock.Should().NotBeNull();
+        var events = new List<string>();
+
+        var accepted = await StartupRecoveryWorkflow.RunAsync(
+            store,
+            CreateHost(events, _ => true, operation => operation()));
+
+        accepted.Should().BeFalse();
+        events.Should().BeEmpty();
+        File.Exists(store.GetSnapshotPath(snapshotId)).Should().BeTrue();
+        File.Exists(store.GetSidecarPath(snapshotId)).Should().BeTrue();
+    }
+
+    [Fact]
     public void FreeX_apps_keep_only_native_recovery_adapters()
     {
         var wpfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "App.xaml.cs"));
@@ -121,9 +150,10 @@ public sealed class StartupRecoveryWorkflowTests
         foreach (var source in new[] { wpfSource, avaloniaSource })
         {
             source.Should().Contain("new StartupRecoveryWorkflowHost<MainWindow>(");
-            source.Should().Contain("StartupRecoveryWorkflow.RunAsync(");
+            source.Should().Contain("StartupRecoveryWorkflow.RunAsync(snapshotStore, host)");
             source.Should().NotContain("foreach (var offer in offers)");
             source.Should().NotContain("AutosaveRecoveryOfferPlanner.PrepareOffers(");
+            source.Should().NotContain("ExcludeLiveOwned(");
         }
 
         wpfSource.Should().Contain("mainWindow.Dispatcher.BeginInvoke");

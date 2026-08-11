@@ -88,16 +88,16 @@ public sealed class SlideShowRuntimeApplicationTests
 
         runtime.ExecuteAdvance(StartedAtUtc.AddSeconds(1), stopAutoAdvance: true)
             .Should().BeOfType<AdvanceResult.NavigateToSlide>();
+        runtime.ActivateHyperlink(new Hyperlink { Url = "https://example.com" });
         runtime.HandleKeyboardInput("B").Should().BeTrue();
         runtime.HandleKeyboardInput("P", controlPressed: true).Should().BeTrue();
-        runtime.ActivateHyperlink(new Hyperlink { Url = "https://example.com" });
 
         events.Should().Equal(
             "stop",
             "navigate:1",
+            "external:https://example.com",
             "screen:Black:True",
-            "presenter",
-            "external:https://example.com");
+            "presenter");
         runtime.CurrentPresentationSlideIndex.Should().Be(1);
         runtime.ScreenMode.Should().Be(SlideShowScreenMode.Black);
     }
@@ -173,6 +173,7 @@ public sealed class SlideShowRuntimeApplicationTests
         runtime.RestartKioskShow();
 
         events.Should().Equal(
+            "stop",
             "display-hidden",
             "stop",
             "navigate:1",
