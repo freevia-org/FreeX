@@ -32,30 +32,26 @@ internal sealed class BackstageView : UserControl
     private static BackstagePaneComposer Panes => BackstageResources.Panes;
     private static readonly PresentationBackstagePanePlanner PanePlans = new(BackstageStrings.Current.Get);
 
-    private readonly Func<Presentation> _getModel;
-    private readonly FileCommands _file;
-    private readonly BackstageActions _actions;
+    private readonly PresentationBackstageEndpoints _endpoints;
     private readonly PresentationBackstagePrintSession _printSession;
     private readonly SisterBackstageHostController _backstage;
     private string? _evidencePaneLabel;
     private TextBox? _customRangeInput;
     private Button? _customRangeApplyButton;
 
-    public BackstageView(Func<Presentation> getModel, FileCommands file, BackstageActions actions)
+    public BackstageView(PresentationBackstageEndpoints endpoints)
     {
-        _getModel = getModel;
-        _file = file;
-        _actions = actions;
+        _endpoints = endpoints ?? throw new ArgumentNullException(nameof(endpoints));
         _printSession = new PresentationBackstagePrintSession(
-            _file.BuildPrintBackstagePlan,
-            _actions.Print);
+            endpoints.GetPrintPlan,
+            endpoints.Print);
 
         _backstage = new SisterBackstageHostController(
             this,
             new SisterBackstageHostSpec(
                 Theme,
                 BuildEntries,
-                _actions.OnClosed)
+                () => { })
             {
                 Chrome = BackstageRibbonChrome.Create()
             });
@@ -94,10 +90,10 @@ internal sealed class BackstageView : UserControl
     {
         return new SisterBackstageEntrySpec(
             BuildInfoPane,
-            backstage.FrameCommand(_actions.New),
-            backstage.FrameCommand(_actions.Open),
-            backstage.FrameCommand(_actions.Save),
-            backstage.FrameCommand(_actions.SaveAs),
+            backstage.FrameCommand(_endpoints.New),
+            backstage.FrameCommand(_endpoints.Open),
+            backstage.FrameCommand(_endpoints.Save),
+            backstage.FrameCommand(_endpoints.SaveAs),
             BuildRecentPane,
             BuildNewPane,
             BuildOptionsPane)
@@ -218,35 +214,35 @@ internal sealed class BackstageView : UserControl
     private UIElement BuildExportPane()
     {
         return Panes.BuildActionPane(PanePlans.BuildExportPane(
-            _actions.CanExportVideo(),
+            _endpoints.CanExportVideo(),
             new PresentationBackstageExportActions(
-                _backstage.HideThen(_actions.ExportPdf),
-                _backstage.HideThen(_actions.ExportNotesPagePdf),
-                _backstage.HideThen(_actions.ExportImages),
-                _backstage.HideThen(_actions.ExportVideo))));
+                _backstage.HideThen(_endpoints.ExportPdf),
+                _backstage.HideThen(_endpoints.ExportNotesPagePdf),
+                _backstage.HideThen(_endpoints.ExportImages),
+                _backstage.HideThen(_endpoints.ExportVideo))));
     }
 
     private UIElement BuildInfoPane()
     {
-        var model = _getModel();
+        var model = _endpoints.GetPresentation();
         return Panes.BuildInfoPane(PanePlans.BuildInfoPane(
             model,
-            _file.DisplayName,
-            _file.IsDirty,
-            _file.CurrentPath));
+            _endpoints.GetDisplayName(),
+            _endpoints.GetIsDirty(),
+            _endpoints.GetCurrentPath()));
     }
 
     private UIElement BuildRecentPane()
     {
         return Panes.BuildRecentPane(PanePlans.BuildRecentPane(
-            _file.RecentEntries,
-            _backstage.HideThen<string>(_actions.OpenPath)));
+            _endpoints.GetRecentEntries(),
+            _backstage.HideThen<string>(_endpoints.OpenPath)));
     }
 
     private UIElement BuildNewPane()
     {
         var pane = Panes.BuildTemplatePane(PanePlans.BuildNewPane(
-            _backstage.HideThen(_actions.New)));
+            _backstage.HideThen(_endpoints.New)));
         if (pane is StackPanel panel &&
             panel.Children.Count > 1 &&
             panel.Children[1] is Panel gallery &&
@@ -262,12 +258,12 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildOptionsPane()
     {
-        var options = _actions.CurrentOptions();
+        var options = _endpoints.GetCurrentOptions();
 
         return Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(
             options,
-            _actions.DataFolder(),
-            _backstage.HideThen(_actions.EditOptions)));
+            _endpoints.GetDataFolder(),
+            _backstage.HideThen(_endpoints.OpenOptions)));
     }
 
     private UIElement BuildAccountPane()
@@ -275,24 +271,7 @@ internal sealed class BackstageView : UserControl
         return Panes.BuildAccountPane(PanePlans.BuildAccountPane(
             AppProduct.Current.ProductName,
             EntryAssemblyVersion.Resolve(),
-            _actions.DataFolder(),
+            _endpoints.GetDataFolder(),
             _backstage.ShowPane("Options")));
     }
 }
-
-internal sealed record BackstageActions(
-    Action New,
-    Action Open,
-    Action<string> OpenPath,
-    Action Save,
-    Action SaveAs,
-    Action ExportPdf,
-    Action ExportNotesPagePdf,
-    Action ExportImages,
-    Action<PresentationPrintRequest> Print,
-    Action ExportVideo,
-    Func<bool> CanExportVideo,
-    Func<FreePOptions> CurrentOptions,
-    Action EditOptions,
-    Action OnClosed,
-    Func<string> DataFolder);

@@ -7,7 +7,7 @@ namespace FreeP.App.Host.Tests;
 
 /// <summary>
 /// End-to-end cover for File &gt; Export to PDF on Windows (the exact renderer/backend pair
-/// <see cref="FileCommands.ExportPdf"/> uses). The route rasterizes each slide, so without a text
+/// <see cref="PresentationFileCommandSession.ExportPdfAsync"/> uses). The route rasterizes each slide, so without a text
 /// layer the exported PDF holds no text whatsoever: nothing selectable, searchable, or visible to a
 /// screen reader. PDFsharp leaves overlay content streams uncompressed, so a literal search of the
 /// raw PDF bytes is enough to prove the text really shipped.

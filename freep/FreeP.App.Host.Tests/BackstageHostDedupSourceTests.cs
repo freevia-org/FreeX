@@ -82,7 +82,7 @@ public sealed class BackstageHostDedupSourceTests
         wpfSource.Should().Contain("Chrome = BackstageRibbonChrome.Create()");
         wpfSource.Should().Contain("public void Show() => _backstage.Show();");
         wpfSource.Should().Contain("public void Hide() => _backstage.Hide();");
-        wpfSource.Should().Contain("backstage.FrameCommand(_actions.New)");
+        wpfSource.Should().Contain("backstage.FrameCommand(_endpoints.New)");
         wpfSource.Should().Contain("PresentationBackstagePanePlanner");
         wpfSource.Should().Contain("PresentationBackstagePrintSession");
         wpfSource.Should().Contain("_printSession.Refresh().Surface");
@@ -111,6 +111,9 @@ public sealed class BackstageHostDedupSourceTests
 
         foreach (var source in new[] { wpfSource, avaloniaSource })
         {
+            source.Should().Contain("PresentationBackstageEndpoints");
+            source.Should().NotContain("record BackstageActions");
+            source.Should().NotContain("record BackstageCallbacks");
             source.Should().NotContain("PresentationExportPlanner.BuildBackstageExportPlan(");
             source.Should().NotContain("PresentationExportPlanner.PdfExportCommandId");
             source.Should().NotContain("SisterBackstageInfoPanePlanner.Build(");

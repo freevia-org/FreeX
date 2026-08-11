@@ -6,7 +6,7 @@ namespace FreeP.App.Host.Tests;
 /// R133-imageDiagnostics-wiring: an embedded slide picture with bytes the PDF writer cannot decode
 /// (corrupt or an unrecognized format) used to be silently omitted from the exported page with no
 /// trace anywhere -- the shared writer's imageDiagnostics sink existed since r132 but no production
-/// caller ever passed a collection in. <see cref="FileCommands.ExportNotesPagePdf"/> (File &gt; Export
+/// caller ever passed a collection in. <see cref="PresentationFileCommandSession.ExportNotesPagePdfAsync"/> (File &gt; Export
 /// &gt; Notes Page PDF) delegates to <see cref="PresentationFilePdfExportExecutor"/>; this test calls
 /// that exact shared pipeline (not a re-implementation) to prove the production wiring itself
 /// -- not just the shared library underneath it -- surfaces the loss instead of discarding it.

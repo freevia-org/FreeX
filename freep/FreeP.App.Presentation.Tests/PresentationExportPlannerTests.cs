@@ -1749,7 +1749,7 @@ public sealed class PresentationExportPlannerTests : IDisposable
     public void NotesPagePdfRenderPlan_AllSlidesRange_ExportsOneNotesPagePerSlideForWholeDeck()
     {
         // IA1: the Avalonia notes-page PDF export must cover the whole deck (AllSlides), matching
-        // the WPF host, which passes no range (null) to FileCommands.ExportNotesPagePdf and so
+        // the WPF host, which passes no range (null) to ExportNotesPagePdfAsync and so
         // defaults to AllSlides via PresentationExportPlanner.BuildSlideRangePlan. Both requests
         // must therefore produce the same number of pages for the same deck.
         var deck = BuildNotesDeck();

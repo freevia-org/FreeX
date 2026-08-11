@@ -36,7 +36,8 @@ public sealed class PrintPlatformDedupSourceTests
     {
         var root = FindWorkspaceRoot();
         var wpfPrint = Read(root, "freep", "FreeP.App.Host", "WpfPresentationPrintService.cs");
-        var wpfCommands = Read(root, "freep", "FreeP.App.Host", "FileCommands.cs");
+        var wpfCommands = Read(
+            root, "freep", "FreeP.App.Host", "WpfPresentationFileCommandPorts.cs");
         var wpfWindow = Read(root, "freep", "FreeP.App.Host", "MainWindow.cs");
         var avaloniaWindow = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var avaloniaPorts = Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.FileCommandPorts.cs");

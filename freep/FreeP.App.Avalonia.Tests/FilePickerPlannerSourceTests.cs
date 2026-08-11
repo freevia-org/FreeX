@@ -64,7 +64,7 @@ public sealed class FilePickerPlannerSourceTests
         session.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportPlan(");
         session.Should().Contain("PresentationExportPlanner.BuildNotesPagePdfExportPickerPlan(");
         // IA1 regression guard: notes-page PDF export must cover the whole deck (AllSlides), the
-        // same as the WPF host (FreeP.App.Host/FileCommands.cs ExportNotesPagePdf, range: null ->
+        // same as the WPF host (PresentationFileCommandSession.ExportNotesPagePdfAsync, range: null ->
         // AllSlides) and this shell's own slides-PDF export. It must not be narrowed back down to
         // only the current slide.
         source.Should().Contain("var range = new PresentationSlideRangeRequest(PresentationSlideRangeKind.AllSlides);");

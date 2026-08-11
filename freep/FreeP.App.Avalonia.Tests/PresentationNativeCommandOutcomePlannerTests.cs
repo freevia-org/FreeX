@@ -109,7 +109,7 @@ public sealed class PresentationNativeCommandOutcomePlannerTests
     [Fact]
     public void Renderer_ports_only_supply_facts_and_realize_feedback_plans()
     {
-        var wpf = Read("freep", "FreeP.App.Host", "FileCommands.cs");
+        var wpf = Read("freep", "FreeP.App.Host", "WpfPresentationFileCommandPorts.cs");
         var avaloniaPorts = Read("freep", "FreeP.App.Avalonia", "MainWindow.FileCommandPorts.cs");
         var avaloniaWindow = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 

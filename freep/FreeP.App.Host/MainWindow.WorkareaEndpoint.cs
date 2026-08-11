@@ -12,7 +12,7 @@ public sealed partial class MainWindow
                 BeforePresentationReplaced = () => _findReplaceDialog?.Close(),
                 BindEditor = BindWorkareaEditor,
                 HideTransientPickers = HideTransientPickers,
-                MarkDirty = () => _file.MarkDirty(),
+                MarkDirty = () => _fileSession.MarkDirty(),
                 RefreshSlidePane = RefreshSlidePane,
                 RefreshCanvas = RefreshCanvas,
                 RefreshNotesPane = RefreshNotesPane,
@@ -37,10 +37,10 @@ public sealed partial class MainWindow
             },
             NativeCommands = new PresentationWorkareaNativeCommandEndpoints
             {
-                NewPresentation = () => _file.New(),
-                OpenPresentation = () => _file.Open(),
-                SavePresentation = () => _file.Save(),
-                SavePresentationAs = () => _file.SaveAs(),
+                NewPresentation = () => FileNew(),
+                OpenPresentation = () => FileOpen(),
+                SavePresentation = () => FileSave(),
+                SavePresentationAs = () => FileSaveAs(),
                 PrintPresentation = ShowPrintBackstage,
                 StartSlideShowFromBeginning = () => StartSlideShow(true),
                 StartSlideShowFromCurrentSlide = () => StartSlideShow(false),

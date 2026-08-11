@@ -33,7 +33,7 @@ internal sealed class BackstageView : UserControl
         usePresentationExportPlannerText: true);
     private static readonly AvaloniaBackstagePaneComposer Panes = new(PaneStyle);
 
-    private readonly BackstageCallbacks _callbacks;
+    private readonly PresentationBackstageEndpoints _endpoints;
     private readonly BackstageActionBinder _dismissBeforeDispatch;
     private readonly PresentationBackstagePrintSession _printSession;
     private readonly AvaloniaBackstageFrame _frame;
@@ -41,20 +41,20 @@ internal sealed class BackstageView : UserControl
     private Button? _customRangeApplyButton;
     private readonly List<(string AutomationId, Button Button)> _printActionButtons = new();
 
-    public BackstageView(BackstageCallbacks callbacks)
+    public BackstageView(PresentationBackstageEndpoints endpoints)
     {
-        _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
+        _endpoints = endpoints ?? throw new ArgumentNullException(nameof(endpoints));
         _dismissBeforeDispatch = BackstageActionBinder.DismissBefore(Hide);
         _printSession = new PresentationBackstagePrintSession(
-            callbacks.GetPrintPlan,
-            callbacks.Print);
+            endpoints.GetPrintPlan,
+            endpoints.Print);
 
         var entries = SisterBackstageEntryPlanner.Build(new SisterBackstageEntryPlanSpec<Control>(
             BuildInfoPane,
-            callbacks.New,
-            callbacks.Open,
-            callbacks.Save,
-            callbacks.SaveAs,
+            endpoints.New,
+            endpoints.Open,
+            endpoints.Save,
+            endpoints.SaveAs,
             BuildRecentPane,
             BuildNewPane,
             BuildOptionsPane)
@@ -131,12 +131,12 @@ internal sealed class BackstageView : UserControl
 
     private Control BuildInfoPane()
     {
-        var presentation = _callbacks.GetPresentation();
+        var presentation = _endpoints.GetPresentation();
         return Panes.BuildInfoPane(PanePlans.BuildInfoPane(
             presentation,
-            _callbacks.GetDisplayName(),
-            _callbacks.GetIsDirty(),
-            _callbacks.GetCurrentPath()));
+            _endpoints.GetDisplayName(),
+            _endpoints.GetIsDirty(),
+            _endpoints.GetCurrentPath()));
     }
 
     private Control BuildPrintPane()
@@ -222,35 +222,35 @@ internal sealed class BackstageView : UserControl
     private Control BuildExportPane()
     {
         return Panes.BuildActionPane(PanePlans.BuildExportPane(
-            _callbacks.CanExportVideo(),
+            _endpoints.CanExportVideo(),
             new PresentationBackstageExportActions(
-                _dismissBeforeDispatch.Bind(_callbacks.ExportPdf),
-                _dismissBeforeDispatch.Bind(_callbacks.ExportNotesPagePdf),
-                _dismissBeforeDispatch.Bind(_callbacks.ExportImages),
-                _dismissBeforeDispatch.Bind(_callbacks.ExportVideo))),
+                _dismissBeforeDispatch.Bind(_endpoints.ExportPdf),
+                _dismissBeforeDispatch.Bind(_endpoints.ExportNotesPagePdf),
+                _dismissBeforeDispatch.Bind(_endpoints.ExportImages),
+                _dismissBeforeDispatch.Bind(_endpoints.ExportVideo))),
             "BackstageExport");
     }
 
     private Control BuildRecentPane()
     {
         return Panes.BuildRecentPane(PanePlans.BuildRecentPane(
-            _callbacks.GetRecentEntries(),
-            _dismissBeforeDispatch.Bind(_callbacks.OpenPath)));
+            _endpoints.GetRecentEntries(),
+            _dismissBeforeDispatch.Bind(_endpoints.OpenPath)));
     }
 
     private Control BuildNewPane()
     {
         return Panes.BuildTemplatePane(
-            PanePlans.BuildNewPane(_dismissBeforeDispatch.Bind(_callbacks.New)),
+            PanePlans.BuildNewPane(_dismissBeforeDispatch.Bind(_endpoints.New)),
             BuildTemplateTile);
     }
 
     private Control BuildOptionsPane()
     {
         return Panes.BuildOptionsPane(PanePlans.BuildOptionsPane(
-            _callbacks.GetCurrentOptions(),
-            _callbacks.GetDataFolder(),
-            _dismissBeforeDispatch.Bind(_callbacks.OpenOptions)));
+            _endpoints.GetCurrentOptions(),
+            _endpoints.GetDataFolder(),
+            _dismissBeforeDispatch.Bind(_endpoints.OpenOptions)));
     }
 
     private Control BuildAccountPane()
@@ -258,7 +258,7 @@ internal sealed class BackstageView : UserControl
         return Panes.BuildAccountPane(PanePlans.BuildAccountPane(
             AppProduct.Current.ProductName,
             EntryAssemblyVersion.Resolve(),
-            _callbacks.GetDataFolder(),
+            _endpoints.GetDataFolder(),
             _frame.ShowPane("Options")));
     }
 

@@ -109,7 +109,8 @@ public sealed class PresentationShellTextCatalogTests
         var wpf = Read("freep", "FreeP.App.Host", "MainWindow.cs");
         var wpfOptions = Read("freep", "FreeP.App.Host", "OptionsDialog.cs");
         var wpfBackstage = Read("freep", "FreeP.App.Host", "Backstage", "BackstageView.cs");
-        var wpfFileCommands = Read("freep", "FreeP.App.Host", "FileCommands.cs");
+        var wpfFileCommands = Read(
+            "freep", "FreeP.App.Host", "WpfPresentationFileCommandPorts.cs");
         var nativePrint = Read(
             "freep", "FreeP.App.Presentation", "PresentationPrintOutputPackageExecutor.cs");
         var fileSession = Read(

@@ -6,7 +6,7 @@ namespace FreeP.App.Host.Tests;
 /// <summary>
 /// R133 remediation: <see cref="PresentationNotesPagePdfImageDiagnosticsTests"/> proved the shared
 /// writer's imageDiagnostics sink is wired, but only for the *vector* Notes-Page PDF path. File &gt;
-/// Export to PDF (<see cref="FileCommands.ExportPdf"/>) -- the primary, most-used raster export
+/// Export to PDF (<see cref="PresentationFileCommandSession.ExportPdfAsync"/>) -- the primary raster export
 /// command, on both shells -- rasterizes each slide first (via
 /// <see cref="WpfPresentationSlideImageRenderer"/> + <c>SlideCanvas</c>), then hands the shared writer
 /// an already-composited PNG. That PNG is one the host itself just encoded, so it is always
@@ -14,7 +14,7 @@ namespace FreeP.App.Host.Tests;
 /// never observe a picture dropped one layer further down, inside the slide composite itself (an
 /// undecodable embedded picture used to be a bare <c>catch { return; }</c> in
 /// <c>FreeP.App.Rendering.Wpf.SlideCanvas.RenderPicture</c> with no way to report it). This test drives
-/// the exact shared composition <see cref="FileCommands.ExportPdf"/> uses --
+/// the exact shared composition <see cref="PresentationFileCommandSession.ExportPdfAsync"/> uses --
 /// <see cref="PresentationFilePdfExportExecutor"/>, not a re-implementation -- to prove the raster
 /// path itself surfaces the loss instead of the export silently looking clean.
 /// </summary>

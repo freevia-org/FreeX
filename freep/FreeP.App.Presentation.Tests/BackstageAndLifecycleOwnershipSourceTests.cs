@@ -7,12 +7,15 @@ public sealed class BackstageAndLifecycleOwnershipSourceTests
     [Fact]
     public void Renderers_use_the_portable_lifecycle_adapter_and_keep_native_ports_only()
     {
-        var wpf = Read("freep", "FreeP.App.Host", "FileCommands.cs");
+        var wpf = Read("freep", "FreeP.App.Host", "WpfPresentationFileCommandPorts.cs");
+        var wpfMain = Read("freep", "FreeP.App.Host", "MainWindow.cs");
         var avalonia = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var avaloniaPorts = Read("freep", "FreeP.App.Avalonia", "MainWindow.FileCommandPorts.cs");
         var adapter = Read("freep", "FreeP.App.Presentation", "PresentationFileLifecycleAdapter.cs");
 
         wpf.Should().Contain("new PresentationFileLifecycleAdapter(workflow.Workflow)");
+        wpfMain.Should().Contain("private PresentationFileCommandSession _fileSession")
+            .And.NotContain("private FileCommands");
         avalonia.Should().Contain("new PresentationFileLifecycleAdapter(")
             .And.Contain("_fileWorkflow.Workflow")
             .And.Contain("_fileWorkflow.ConfirmCloseAllowedAsync");
@@ -35,11 +38,17 @@ public sealed class BackstageAndLifecycleOwnershipSourceTests
         var sharedComposer = Read("shared", "Free.Shared.Shell.Avalonia", "AvaloniaBackstagePaneComposer.cs");
         var sharedFrame = Read("shared", "Free.Shared.Shell.Avalonia", "AvaloniaBackstageFrame.cs");
         var sharedFrameSession = Read("shared", "Free.Shared.Shell", "BackstageFrameSession.cs");
+        var endpoints = Read(
+            "freep", "FreeP.App.Presentation", "Backstage", "PresentationBackstageEndpoints.cs");
 
         wpf.Should().Contain("surface.SettingsHeading").And.Contain("choice.DisplayText");
+        wpf.Should().Contain("PresentationBackstageEndpoints")
+            .And.NotContain("record BackstageActions");
         avalonia.Should().Contain("BackstageActionBinder.DismissBefore(Hide)")
+            .And.Contain("PresentationBackstageEndpoints")
             .And.Contain("surface.SettingsHeading")
             .And.Contain("choice.DisplayText")
+            .And.NotContain("record BackstageCallbacks")
             .And.NotContain("private Action DismissThen")
             .And.NotContain("private static string AutomationToken");
         avaloniaMain.Should().Contain("surface.SettingsHeading")
@@ -64,6 +73,10 @@ public sealed class BackstageAndLifecycleOwnershipSourceTests
 
         sharedFrame.Should().Contain("BackstageFrameEntryIdentity.From(entry).ResolveAutomationId()")
             .And.NotContain("AutomationIdToken.KeepLettersAndDigits(");
+        endpoints.Should().Contain("public sealed record PresentationBackstageEndpoints(")
+            .And.Contain("Func<PresentationPrintRequest?, PresentationPrintBackstagePlan> GetPrintPlan")
+            .And.NotContain("System.Windows")
+            .And.NotContain("Avalonia");
     }
 
     private static string Read(params string[] pathParts) =>

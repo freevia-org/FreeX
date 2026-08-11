@@ -917,7 +917,7 @@ public sealed partial class MainWindow : Window
             chrome: ribbon,
             workArea: BuildBody(),
             statusBar: statusBar));
-        _backstage = new BackstageView(BuildBackstageCallbacks());
+        _backstage = new BackstageView(BuildBackstageEndpoints());
         var clientRoot = new Grid();
         clientRoot.Children.Add(frame.Root);
         clientRoot.Children.Add(_backstage);
@@ -3614,12 +3614,12 @@ public sealed partial class MainWindow : Window
     private async Task<bool> FileNewAsync() =>
         (await _fileSession.NewAsync()).Succeeded;
 
-    private BackstageCallbacks BuildBackstageCallbacks() => new(
+    private PresentationBackstageEndpoints BuildBackstageEndpoints() => new(
         GetPresentation: () => _presentation,
-        GetDisplayName: () => _fileWorkflow.DisplayName,
-        GetIsDirty: () => _fileWorkflow.IsDirty,
-        GetCurrentPath: () => _fileWorkflow.CurrentPath,
-        GetRecentEntries: () => _fileWorkflow.RecentEntries,
+        GetDisplayName: () => _fileSession.DisplayName,
+        GetIsDirty: () => _fileSession.IsDirty,
+        GetCurrentPath: () => _fileSession.CurrentPath,
+        GetRecentEntries: () => _fileSession.RecentEntries,
         GetCurrentOptions: () => _options,
         GetDataFolder: FreePApplicationFrameDescriptor.ResolveDataFolderLabel,
         OpenOptions: () => _ = OpenOptionsAsync(),
@@ -3634,7 +3634,7 @@ public sealed partial class MainWindow : Window
         GetPrintPlan: RefreshPrintBackstagePlan,
         Print: request => _backstagePrintOperation = ExecutePrintWorkflowAsync(request),
         ExportVideo: () => _ = FileExportVideoAsync(),
-        CanExportVideo: () => _nativeOutputCapabilities.Video.CanEncodeMp4);
+        CanExportVideo: () => _fileSession.CanExportVideo);
 
     private Control? _backstageRestoreFocus;
 
@@ -3688,7 +3688,7 @@ public sealed partial class MainWindow : Window
     }
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
-    // shared _options instance the Backstage and FileCommands read) and persists them through the shared
+    // shared _options instance the Backstage and file-command session read) and persists it through the shared
     // ApplicationOptionsStore so they survive a restart.
     internal async Task OpenOptionsAsync()
     {

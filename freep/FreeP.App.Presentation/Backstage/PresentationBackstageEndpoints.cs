@@ -1,10 +1,12 @@
 using Free.Shared.AppServices;
-using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
-namespace FreeP.App.Avalonia.Backstage;
+namespace FreeP.App.Compositor;
 
-internal sealed record BackstageCallbacks(
+/// <summary>
+/// Portable live state and command endpoints consumed by FreeP Backstage renderers.
+/// </summary>
+public sealed record PresentationBackstageEndpoints(
     Func<Presentation> GetPresentation,
     Func<string> GetDisplayName,
     Func<bool> GetIsDirty,

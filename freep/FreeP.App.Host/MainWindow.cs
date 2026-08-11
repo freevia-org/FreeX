@@ -85,7 +85,7 @@ public sealed partial class MainWindow : Window
 
     // ── Shell chrome ──────────────────────────────────────────────────────────────
 
-    private FileCommands _file = null!;
+    private PresentationFileCommandSession _fileSession = null!;
     private BackstageView _backstage = null!;
     private Border _titleBar = null!;
     private SisterWpfWindowTitleBinder _titleBinder = null!;
@@ -277,7 +277,8 @@ public sealed partial class MainWindow : Window
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
-    internal PresentationPrintBackstagePlan? LastFilePrintBackstagePlanForTests => _file.LastPrintBackstagePlan;
+    internal PresentationPrintBackstagePlan? LastFilePrintBackstagePlanForTests =>
+        _fileSession.LastPrintBackstagePlan;
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
@@ -331,7 +332,7 @@ public sealed partial class MainWindow : Window
     internal string AccessibilityCheckerPaneMessage => _accessibilityCheckerPaneMessage?.Text ?? string.Empty;
     internal IReadOnlyList<string> AccessibilityCheckerTableStructureReviewRenderedLines =>
         _accessibilityCheckerTableStructureReviewRenderedLines.ToArray();
-    internal bool IsDirty => _file.IsDirty;
+    internal bool IsDirty => _fileSession.IsDirty;
     internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal bool IsReviewCommentsPaneVisible =>
         _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReviewComments);
@@ -483,7 +484,7 @@ public sealed partial class MainWindow : Window
         _reviewWorkflowSession = new(
             () => Editor,
             new PresentationReviewWorkflowSessionCallbacks(
-                MarkDirty: () => _file.MarkDirty(),
+                MarkDirty: () => _fileSession.MarkDirty(),
                 RefreshCanvas: RefreshCanvas,
                 RefreshNotesPane: RefreshNotesPane,
                 RenderAccessibilityCheckerPaneIfVisible: RenderAccessibilityCheckerPaneIfVisible,
@@ -503,21 +504,21 @@ public sealed partial class MainWindow : Window
         _mediaPaneHostCoordinator = new(new PresentationMediaPaneSession(
             () => Editor,
             new PresentationMediaPaneSessionCallbacks(
-                MarkDirty: () => _file.MarkDirty(),
+                MarkDirty: () => _fileSession.MarkDirty(),
                 RefreshReviewWorkflowPlans: RefreshReviewWorkflowPlans,
                 UpdateHost: UpdateTitle,
                 RefreshPane: RefreshVisibleMediaCaptionPaneFromFields)));
         _smartArtTextPaneSession = new(
             () => Editor,
             new PresentationSmartArtTextPaneSessionCallbacks(
-                MarkDirty: () => _file.MarkDirty(),
+                MarkDirty: () => _fileSession.MarkDirty(),
                 RefreshCanvas: RefreshCanvas,
                 UpdateHost: UpdateTitle,
                 RenderPane: RenderSmartArtTextPane));
         _zoomAuthoringSession = new(
             () => Editor,
             new PresentationZoomAuthoringSessionCallbacks(
-                MarkDirty: () => _file.MarkDirty(),
+                MarkDirty: () => _fileSession.MarkDirty(),
                 RefreshCanvas: RefreshCanvas,
                 UpdateHost: UpdateTitle,
                 RenderSlidePreview: (presentation, slideIndex, widthPx, heightPx) =>
@@ -541,7 +542,7 @@ public sealed partial class MainWindow : Window
         _customShowSession = new(() => Editor);
 
         // File commands.
-        _file = new FileCommands(
+        _fileSession = WpfPresentationFileCommandSessionFactory.Create(
             this,
             () => _presentation,
             LoadModel,
@@ -664,27 +665,12 @@ public sealed partial class MainWindow : Window
 
         Closing += (_, e) =>
         {
-            if (!_file.ConfirmCloseAllowed())
+            if (!_fileSession.ConfirmCloseAllowedAsync().GetAwaiter().GetResult())
                 e.Cancel = true;
         };
 
         // Backstage.
-        _backstage = new BackstageView(() => _presentation, _file, new BackstageActions(
-            New: () => _file.New(),
-            Open: () => _file.Open(),
-            OpenPath: path => _file.OpenPath(path),
-            Save: () => _file.Save(),
-            SaveAs: () => _file.SaveAs(),
-            ExportPdf: () => _file.ExportPdf(),
-            ExportNotesPagePdf: () => _file.ExportNotesPagePdf(),
-            ExportImages: () => _file.ExportImages(),
-            Print: request => _file.Print(request),
-            ExportVideo: () => _ = _file.ExportVideoAsync(),
-            CanExportVideo: () => _file.CanExportVideo,
-            CurrentOptions: () => _options,
-            EditOptions: OpenOptions,
-            OnClosed: () => { },
-            DataFolder: FreePApplicationFrameDescriptor.ResolveDataFolderLabel));
+        _backstage = new BackstageView(BuildBackstageEndpoints());
 
         var frame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(_titleBar, root, _backstage));
         Content = frame.Root;
@@ -692,7 +678,7 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) => _workareaSession.Dispose();
         _workareaSession.Initialize();
         if (startupFilePaths is { Count: > 0 })
-            _file.OpenPath(startupFilePaths[0]);
+            FileOpenPath(startupFilePaths[0]);
     }
 
     // ── Editor construction ───────────────────────────────────────────────────────
@@ -2382,33 +2368,33 @@ public sealed partial class MainWindow : Window
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
-        LastVideoExportPlan = _file.BuildVideoExportPlan(request);
+        LastVideoExportPlan = _fileSession.BuildVideoExportPlan(request);
         return LastVideoExportPlan;
     }
 
     internal PresentationVideoFramePackage RefreshVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
-        LastVideoFramePackage = _file.BuildVideoFramePackage(request);
-        LastVideoExportPlan = _file.BuildVideoExportPlan(request);
-        LastVideoExportHandoffPlan = _file.LastVideoExportHandoffPlan;
+        LastVideoFramePackage = _fileSession.BuildVideoFramePackage(request);
+        LastVideoExportPlan = _fileSession.BuildVideoExportPlan(request);
+        LastVideoExportHandoffPlan = _fileSession.LastVideoExportHandoffPlan;
         return LastVideoFramePackage;
     }
 
     internal PresentationNotesPagePdfRenderPlan RefreshNotesPagePdfRenderPlan(PresentationSlideRangeRequest? range = null)
     {
-        LastNotesPagePdfRenderPlan = _file.BuildNotesPagePdfRenderPlan(range);
+        LastNotesPagePdfRenderPlan = _fileSession.BuildNotesPagePdfRenderPlan(range);
         return LastNotesPagePdfRenderPlan;
     }
 
     internal PresentationPrintOutputPackage RefreshPrintOutputPackage(PresentationPrintRequest? request = null)
     {
-        LastPrintOutputPackage = _file.BuildPrintOutputPackage(request);
+        LastPrintOutputPackage = _fileSession.BuildPrintOutputPackage(request);
         return LastPrintOutputPackage;
     }
 
     internal PresentationPrintBackstagePlan RefreshPrintBackstagePlan(PresentationPrintRequest? request = null)
     {
-        LastPrintBackstagePlan = _file.BuildPrintBackstagePlan(request);
+        LastPrintBackstagePlan = _fileSession.BuildPrintBackstagePlan(request);
         return LastPrintBackstagePlan;
     }
 
@@ -3864,9 +3850,9 @@ public sealed partial class MainWindow : Window
     {
         var title = FreePApplicationFrameDescriptor.Title;
         _titleBinder.Update(new SisterWpfWindowTitleSpec(
-            DisplayName: _file.DisplayName,
+            DisplayName: _fileSession.DisplayName,
             ApplicationName: title.ApplicationName,
-            IsDirty: _file.IsDirty,
+            IsDirty: _fileSession.IsDirty,
             DirtyMarker: title.DirtyMarker,
             Separator: title.Separator,
             ApplicationPlacement: title.ApplicationPlacement));
@@ -4633,6 +4619,42 @@ public sealed partial class MainWindow : Window
 
     // ── Backstage ─────────────────────────────────────────────────────────────────
 
+    private PresentationBackstageEndpoints BuildBackstageEndpoints() => new(
+        GetPresentation: () => _presentation,
+        GetDisplayName: () => _fileSession.DisplayName,
+        GetIsDirty: () => _fileSession.IsDirty,
+        GetCurrentPath: () => _fileSession.CurrentPath,
+        GetRecentEntries: () => _fileSession.RecentEntries,
+        GetCurrentOptions: () => _options,
+        GetDataFolder: FreePApplicationFrameDescriptor.ResolveDataFolderLabel,
+        OpenOptions: OpenOptions,
+        New: () => FileNew(),
+        Open: () => FileOpen(),
+        OpenPath: path => FileOpenPath(path),
+        Save: () => FileSave(),
+        SaveAs: () => FileSaveAs(),
+        ExportPdf: () => FileExportPdf(),
+        ExportNotesPagePdf: () => FileExportNotesPagePdf(),
+        ExportImages: () => FileExportImages(),
+        GetPrintPlan: _fileSession.BuildPrintBackstagePlan,
+        Print: request => FilePrint(request),
+        ExportVideo: () => _ = _fileSession.ExportVideoAsync(),
+        CanExportVideo: () => _fileSession.CanExportVideo);
+
+    private bool FileNew() => RunFileCommand(_fileSession.NewAsync());
+    private bool FileOpen() => RunFileCommand(_fileSession.OpenAsync());
+    private bool FileOpenPath(string path) => RunFileCommand(_fileSession.OpenPathAsync(path));
+    private bool FileSave() => RunFileCommand(_fileSession.SaveAsync());
+    private bool FileSaveAs() => RunFileCommand(_fileSession.SaveAsAsync());
+    private bool FileExportPdf() => RunFileCommand(_fileSession.ExportPdfAsync());
+    private bool FileExportNotesPagePdf() => RunFileCommand(_fileSession.ExportNotesPagePdfAsync());
+    private bool FileExportImages() => RunFileCommand(_fileSession.ExportImagesAsync());
+    private bool FilePrint(PresentationPrintRequest request) =>
+        RunFileCommand(_fileSession.PrintAsync(request));
+
+    private static bool RunFileCommand(Task<PresentationFileCommandResult> command) =>
+        command.GetAwaiter().GetResult().Succeeded;
+
     private void ShowBackstage() => ShowBackstage("Info");
 
     private void ShowBackstage(string paneLabel) => _backstage.Show(paneLabel);
@@ -4682,7 +4704,7 @@ public sealed partial class MainWindow : Window
     }
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
-    // shared _options instance FileCommands/Program read) and persists them through the shared
+    // shared _options instance the file-command session and Program read) and persists it through the shared
     // ApplicationOptionsStore so they survive a restart. Save is best-effort — a failure surfaces a
     // message but never throws.
     private void OpenOptions()

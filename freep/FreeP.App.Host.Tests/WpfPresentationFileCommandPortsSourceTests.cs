@@ -2,23 +2,30 @@ using System.IO;
 
 namespace FreeP.App.Host.Tests;
 
-public sealed class FileCommandsSourceTests
+public sealed class WpfPresentationFileCommandPortsSourceTests
 {
     [Fact]
-    public void FileCommands_UsesSharedPerFormatDialogPlans()
+    public void WpfHost_OwnsPortableSessionDirectlyAndKeepsOnlyNativePorts()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
             root,
             "freep",
             "FreeP.App.Host",
-            "FileCommands.cs"));
+            "WpfPresentationFileCommandPorts.cs"));
+        var mainWindow = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.cs"));
         var session = File.ReadAllText(Path.Combine(
             root,
             "freep",
             "FreeP.App.Presentation",
             "PresentationFileCommandSession.cs"));
 
+        source.Should().Contain("internal static class WpfPresentationFileCommandSessionFactory");
+        source.Should().Contain("public static PresentationFileCommandSession Create(");
         source.Should().Contain("new PresentationFileCommandSession(");
         source.Should().Contain("new PresentationFileLifecycleAdapter(workflow.Workflow)");
         source.Should().Contain("WpfPresentationFilePickerPort");
@@ -34,14 +41,13 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         source.Should().Contain("new OpenFolderDialog");
         source.Should().Contain("SisterWpfFileCommandWorkflow");
-        source.Should().Contain("public PresentationPrintOutputPackage BuildPrintOutputPackage(");
-        source.Should().Contain("public PresentationPrintBackstagePlan BuildPrintBackstagePlan(");
-        source.Should().Contain("public PresentationVideoFramePackage BuildVideoFramePackage(");
-        source.Should().Contain("public PresentationVideoExportHandoffPlan BuildVideoExportHandoffPlan(");
-        source.Should().Contain("public async Task<bool> ExportVideoAsync(");
-        source.Should().Contain("public bool ExportNotesPagePdf(");
-        source.Should().Contain("public bool ExportImages()");
         source.Should().Contain("IUserMessageService? messageService = null");
+        source.Should().NotContain("class FileCommands");
+        source.Should().NotContain("private readonly PresentationFileCommandSession");
+        mainWindow.Should().Contain("private PresentationFileCommandSession _fileSession")
+            .And.Contain("WpfPresentationFileCommandSessionFactory.Create(")
+            .And.Contain("_fileSession.ConfirmCloseAllowedAsync().GetAwaiter().GetResult()")
+            .And.NotContain("private FileCommands");
         source.Should().NotContain("PresentationFilePersistenceWorkflow.");
         source.Should().NotContain("PresentationFileDialogPlanner.");
         source.Should().NotContain("PresentationExportPlanner.Build");
@@ -87,7 +93,7 @@ public sealed class FileCommandsSourceTests
             "FreeP.App.Host",
             "MainWindow.cs"));
 
-        source.Should().Contain("ExportVideo: () => _ = _file.ExportVideoAsync(),");
+        source.Should().Contain("ExportVideo: () => _ = _fileSession.ExportVideoAsync(),");
     }
 
     [Fact]
@@ -167,21 +173,19 @@ public sealed class FileCommandsSourceTests
             "MainWindow.WorkareaEndpoint.cs"));
 
         source.Should().Contain("InstallSharedKeyboardShortcuts();");
-        source.Should().Contain("New: () => _file.New(),");
-        source.Should().Contain("Open: () => _file.Open(),");
-        source.Should().Contain("Save: () => _file.Save(),");
-        source.Should().Contain("SaveAs: () => _file.SaveAs(),");
-        source.Should().Contain("New: () => _file.New()");
-        source.Should().Contain("Open: () => _file.Open()");
-        source.Should().Contain("Save: () => _file.Save()");
-        source.Should().Contain("SaveAs: () => _file.SaveAs()");
+        source.Should().Contain("New: () => FileNew(),");
+        source.Should().Contain("Open: () => FileOpen(),");
+        source.Should().Contain("Save: () => FileSave(),");
+        source.Should().Contain("SaveAs: () => FileSaveAs(),");
+        source.Should().Contain("RunFileCommand(_fileSession.NewAsync())");
+        source.Should().Contain("RunFileCommand(_fileSession.SaveAsync())");
         source.Should().Contain(
             "_workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());");
         source.Should().Contain("_workareaSession.ExecuteCommand(FreePKeyboardCommand.Undo)");
         source.Should().Contain("_workareaSession.ExecuteCommand(FreePKeyboardCommand.Redo)");
         source.Should().Contain("(_, _) => _workareaSession.ExecuteCommand(command)");
-        endpoint.Should().Contain("NewPresentation = () => _file.New()");
-        endpoint.Should().Contain("SavePresentation = () => _file.Save()");
+        endpoint.Should().Contain("NewPresentation = () => FileNew()");
+        endpoint.Should().Contain("SavePresentation = () => FileSave()");
         source.Should().NotContain("private void ExecuteKeyboardCommand(");
         source.Should().NotContain("case FreePKeyboardCommand.");
         source.Should().Contain("foreach (var shortcut in FreePKeyboardShortcutCatalog.All)");

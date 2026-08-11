@@ -15,15 +15,11 @@ using Microsoft.Win32;
 namespace FreeP.App.Host;
 
 /// <summary>
-/// WPF compatibility facade over the portable presentation file command session.
-/// Native dialogs, rendering, printing, encoding, and message boxes stay in the ports below.
+/// Creates the portable file-command session with WPF-native ports.
 /// </summary>
-internal sealed class FileCommands
+internal static class WpfPresentationFileCommandSessionFactory
 {
-    private readonly PresentationFileCommandSession _session;
-    private readonly WpfPresentationVideoPort _videoPort;
-
-    public FileCommands(
+    public static PresentationFileCommandSession Create(
         Window window,
         Func<Presentation> getModel,
         Action<Presentation> loadModel,
@@ -64,7 +60,7 @@ internal sealed class FileCommands
         var resolvedVideoCapability = videoEncoderCapability ??
             videoExportAdapter?.Capability ??
             WpfVideoEncoderCapabilityDetector.Detect();
-        _videoPort = new WpfPresentationVideoPort(
+        var videoPort = new WpfPresentationVideoPort(
             videoExportAdapter ?? new WpfVideoExportAdapter(resolvedVideoCapability),
             BuildVideoExportHostCapabilities(resolvedVideoCapability));
         session = new PresentationFileCommandSession(
@@ -74,100 +70,14 @@ internal sealed class FileCommands
             picker,
             render,
             print,
-            _videoPort,
+            videoPort,
             new WpfPresentationFileFeedbackPort(workflow),
             getImageExportRange,
             getPrintCurrentSlideNumber,
             getPrintSelectedSlideNumbers,
             videoPackageArtifactFactory: videoFramePackageArtifactFactory);
-        _session = session;
+        return session;
     }
-
-    public bool IsDirty => _session.IsDirty;
-    public string? CurrentPath => _session.CurrentPath;
-    public string DisplayName => _session.DisplayName;
-    public IReadOnlyList<RecentFileEntry> RecentEntries => _session.RecentEntries;
-    public bool CanPrint => _session.CanPrint;
-    public bool CanExportVideo => _session.CanExportVideo;
-    public PresentationPrintOutputPackage? LastPrintOutputPackage => _session.LastPrintOutputPackage;
-    public PresentationPrintBackstagePlan? LastPrintBackstagePlan => _session.LastPrintBackstagePlan;
-    public PresentationNativePrintHandoffPlan? LastNativePrintHandoffPlan => _session.LastNativePrintHandoffPlan;
-    public PresentationPrintOutputPackageExecutionDescriptor? LastPrintExecutionDescriptor =>
-        _session.LastPrintExecutionDescriptor;
-    public PresentationVideoFramePackage? LastVideoFramePackage => _session.LastVideoFramePackage;
-    public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan => _session.LastVideoExportHandoffPlan;
-    public LinuxVideoExportResult? LastVideoExportResult => _videoPort.LastResult;
-    public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor =>
-        _session.LastVideoExecutionDescriptor;
-    internal IReadOnlyList<string> LastVideoFrameImageDiagnostics =>
-        _session.LastVideoFrameImageDiagnostics;
-
-    public void MarkDirty() => _session.MarkDirty();
-    public bool New() => Run(_session.NewAsync());
-    public bool Open() => Run(_session.OpenAsync());
-
-    /// <summary>Loads a recent/startup path without adding a second dirty gate.</summary>
-    public bool OpenPath(string path) => Run(_session.OpenPathAsync(path));
-
-    public bool Save() => Run(_session.SaveAsync());
-    public bool SaveAs() => Run(_session.SaveAsAsync());
-    public bool ExportPdf() => Run(_session.ExportPdfAsync());
-
-    public bool ExportNotesPagePdf(PresentationSlideRangeRequest? range = null) =>
-        Run(_session.ExportNotesPagePdfAsync(range));
-
-    public bool ExportImages() => Run(_session.ExportImagesAsync());
-
-    public bool ExportImagesToFolder(
-        string outputDirectory,
-        PresentationSlideRangeRequest? range = null) =>
-        Run(_session.ExportImagesToFolderAsync(outputDirectory, range));
-
-    public PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
-        int? slidesPerPage = null,
-        PresentationSlideRangeRequest? range = null) =>
-        _session.BuildHandoutLayoutPlan(slidesPerPage, range);
-
-    public PresentationNotesPagePdfRenderPlan BuildNotesPagePdfRenderPlan(
-        PresentationSlideRangeRequest? range = null) =>
-        _session.BuildNotesPagePdfRenderPlan(range);
-
-    public PresentationPrintOutputPackage BuildPrintOutputPackage(PresentationPrintRequest? request = null) =>
-        _session.BuildPrintOutputPackage(request);
-
-    public PresentationNativePrintHandoffPlan BuildNativePrintHandoffPlan(
-        PresentationPrintOutputPackagePlan packagePlan,
-        PresentationNativePrintHandoffHostCapabilities? hostCapabilities = null) =>
-        _session.BuildNativePrintHandoffPlan(packagePlan, hostCapabilities);
-
-    public PresentationNativePrintHandoffPlan ExecuteNativePrintHandoff(
-        PresentationPrintRequest? request = null) =>
-        _session.ExecuteNativePrintHandoff(request);
-
-    public PresentationPrintBackstagePlan BuildPrintBackstagePlan(PresentationPrintRequest? request = null) =>
-        _session.BuildPrintBackstagePlan(request);
-
-    public bool Print(PresentationPrintRequest? request = null) => Run(_session.PrintAsync(request));
-
-    public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null) =>
-        _session.BuildVideoFramePackage(request);
-
-    public PresentationVideoExportHandoffPlan BuildVideoExportHandoffPlan(
-        PresentationVideoFramePackagePlan packagePlan,
-        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null) =>
-        _session.BuildVideoExportHandoffPlan(packagePlan, hostCapabilities);
-
-    public PresentationVideoExportPlan BuildVideoExportPlan(PresentationVideoExportRequest? request = null) =>
-        _session.BuildVideoExportPlan(request);
-
-    public async Task<bool> ExportVideoAsync(PresentationVideoExportRequest? request = null) =>
-        (await _session.ExportVideoAsync(request).ConfigureAwait(true)).Succeeded;
-
-    public bool ConfirmCloseAllowed() =>
-        _session.ConfirmCloseAllowedAsync().GetAwaiter().GetResult();
-
-    private static bool Run(Task<PresentationFileCommandResult> operation) =>
-        operation.GetAwaiter().GetResult().Succeeded;
 
     private static PresentationVideoExportHandoffHostCapabilities BuildVideoExportHostCapabilities(
         LinuxVideoEncoderCapability capability) =>

@@ -104,7 +104,7 @@ public sealed class OptionsDialogTests
     public void R128_EditFlow_AppliesLiveAndPersists()
     {
         // Mirrors MainWindow.OpenOptions without opening a real modal: the dialog produces a normalized
-        // result, the host copies it onto the live options instance (so FileCommands/Program see the new
+        // result, the host copies it onto the live options instance (so the file session/Program see the new
         // cap/language immediately) and saves via the shared ApplicationOptionsStore.
         using var temporaryDirectory = new TestTemporaryDirectory("FreeP.OptionsDialogTests-");
         {
