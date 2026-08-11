@@ -221,6 +221,11 @@ public sealed class TemporaryResourceLeaseTests
     public void RemainingProductionTemporaryFlowsDelegateOwnershipToLeases()
     {
         var linuxOutput = ReadSource("freep", "FreeP.App.Recording", "Recording", "LinuxNativeOutput.cs");
+        var videoExportOrchestrator = ReadSource(
+            "freep",
+            "FreeP.App.Recording",
+            "Recording",
+            "PresentationVideoExportOrchestrator.cs");
         var linuxCapture = ReadSource("freep", "FreeP.App.Recording", "Recording", "LinuxMediaCaptureLifecycle.cs");
         var windowsCapture = ReadSource("freep", "FreeP.App.Recording.Windows", "WindowsRecordingCaptureEngine.cs");
         var windowsVideo = ReadSource("freep", "FreeP.App.Recording.Windows", "WindowsNativeVideoExportAdapter.cs");
@@ -232,28 +237,40 @@ public sealed class TemporaryResourceLeaseTests
         var oleInPlace = ReadSource("freep", "FreeP.App.Ole.Windows", "WindowsOleInPlaceEngine.cs");
         var svgRasterizer = ReadSource("freew", "FreeW.App.Host", "SvgRasterizerHelper.cs");
         var screenClip = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "ScreenClipService.cs");
+        var readAloudPauseSmoke = ReadSource(
+            "freew",
+            "FreeW.App.Avalonia",
+            "Smoke",
+            "ReadAloudPauseSmoke.cs");
         var autosave = ReadSource("shared", "Free.Shared.AppServices", "AutosaveSnapshotCoordinator.cs");
 
         linuxOutput.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
-        linuxOutput.Should().Contain("TemporaryDirectoryLease.Create(\"freep-video-\")");
+        linuxOutput.Should().Contain("TemporaryDirectoryPrefix: \"freep-video-\"");
+        videoExportOrchestrator.Should().Contain("TemporaryDirectoryLease.Create(");
+        videoExportOrchestrator.Should().Contain("_options.TemporaryDirectoryPrefix");
         linuxCapture.Should().Contain("TemporaryDirectoryLease.Create(");
         linuxCapture.Should().Contain("TemporaryFileLease.Own(outputPath)");
         windowsCapture.Should().Contain("TemporaryFileLease.CreateForExternalWriter(\"freep_rec_\", \".wav\")");
-        windowsVideo.Should().Contain("TemporaryDirectoryLease.Create(\"freep-windows-video-\")");
+        windowsVideo.Should().Contain("TemporaryDirectoryPrefix: \"freep-windows-video-\"");
         windowsPrint.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
-        wpfVideo.Should().Contain("TemporaryDirectoryLease.Create(\"freep-video-\")");
+        wpfVideo.Should().NotContain("TemporaryDirectoryLease");
         transitionSound.Should().Contain("TemporaryFileLease.Create(\"freep_transition_\", extension)");
         slideShowMedia.Should().Contain("TemporaryFileLease.Create(\"freep_media_\", ext)");
         oleActivation.Should().Contain("TemporaryDirectoryLease.Create(string.Empty, root)");
         oleInPlace.Should().Contain("TemporaryFileLease.Create(");
         svgRasterizer.Should().Contain("TemporaryFileLease.Create(\"freew_icon_\", \".svg\")");
         screenClip.Should().Contain("TemporaryFileLease.CreateForExternalWriter(");
+        readAloudPauseSmoke.Should().Contain(
+            "TemporaryFileLease.CreateForExternalWriter(");
+        readAloudPauseSmoke.Should().NotContain("Path.GetTempPath()");
+        readAloudPauseSmoke.Should().NotContain("File.Delete(");
         autosave.Should().Contain("AtomicFileWriter.CreateTempLease(snapshotPath)");
 
         foreach (var source in new[]
                  {
-                     linuxOutput, linuxCapture, windowsCapture, windowsVideo, windowsPrint,
+                     linuxOutput, videoExportOrchestrator, linuxCapture, windowsCapture, windowsVideo, windowsPrint,
                      wpfVideo, transitionSound, slideShowMedia, oleInPlace, svgRasterizer, screenClip,
+                     readAloudPauseSmoke,
                  })
         {
             source.Should().NotContain("private static void TryDeleteDirectory");

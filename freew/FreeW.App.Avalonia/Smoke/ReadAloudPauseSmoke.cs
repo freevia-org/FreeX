@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Free.Shared.AppServices;
 
 namespace FreeW.App.Avalonia.Smoke;
 
@@ -34,7 +35,10 @@ internal static class ReadAloudPauseSmoke
             return true;
         }
 
-        var wavPath = Path.Combine(Path.GetTempPath(), $"freew-read-aloud-{Guid.NewGuid():N}.wav");
+        using var wavFile = TemporaryFileLease.CreateForExternalWriter(
+            "freew-read-aloud-",
+            ".wav");
+        var wavPath = wavFile.Path;
         var text = string.Join(' ', Enumerable.Repeat(
             "FreeW pause and resume validation keeps the owned speech process suspended until resumed.",
             4000));
@@ -129,15 +133,6 @@ internal static class ReadAloudPauseSmoke
                 // Disposal below remains best-effort cleanup for shutdown paths.
             }
             engine?.Dispose();
-            try
-            {
-                if (File.Exists(wavPath))
-                    File.Delete(wavPath);
-            }
-            catch
-            {
-                // The container owns the temporary file and will clean it up on teardown.
-            }
         }
     }
 
