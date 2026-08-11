@@ -195,6 +195,68 @@ public sealed class ChartOptionsDialogPlanTests
         input.InvertIfNegative.Should().BeNull();
     }
 
+    [Fact]
+    public void SelectionTransitionsOwnFieldRoutingMutationAndPlanRebuilds()
+    {
+        var area = new ChartAreaOptionsDialogSession(CreateEditor(new ChartShape()));
+        area.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.AreaTarget,
+            1,
+            out var areaPlan).Should().BeTrue();
+        areaPlan.Field(ChartOptionsDialogFieldId.AreaTarget).SelectedIndex.Should().Be(1);
+        area.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.FillColor,
+            0,
+            out var ignoredPlan).Should().BeFalse();
+        ignoredPlan.Should().BeNull();
+
+        var axis = new ChartAxisOptionsDialogSession(CreateEditor(new ChartShape()));
+        axis.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.Axis,
+            1,
+            out var axisPlan).Should().BeTrue();
+        axisPlan.Field(ChartOptionsDialogFieldId.Axis).SelectedIndex.Should().Be(1);
+
+        var layout = new ChartLayoutOptionsDialogSession(CreateEditor(new ChartShape()));
+        layout.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.LayoutTargetObject,
+            1,
+            out var layoutPlan).Should().BeTrue();
+        layoutPlan.Field(ChartOptionsDialogFieldId.LayoutTargetObject).SelectedIndex.Should().Be(1);
+
+        var series = new ChartSeriesOptionsDialogSession(CreateEditor(CreateSelectionChart()));
+        series.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.Series,
+            1,
+            out var seriesPlan).Should().BeTrue();
+        seriesPlan.Field(ChartOptionsDialogFieldId.Series).SelectedIndex.Should().Be(1);
+
+        var point = new ChartPointOptionsDialogSession(CreateEditor(CreateSelectionChart()));
+        point.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.Series,
+            1,
+            out var pointSeriesPlan).Should().BeTrue();
+        pointSeriesPlan.Field(ChartOptionsDialogFieldId.Point).ChoiceLabels.Should().HaveCount(3);
+        point.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.Point,
+            2,
+            out var pointPlan).Should().BeTrue();
+        pointPlan.Field(ChartOptionsDialogFieldId.Point).SelectedIndex.Should().Be(2);
+        point.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.FillColor,
+            0,
+            out ignoredPlan).Should().BeFalse();
+        ignoredPlan.Should().BeNull();
+
+        var chartEx = new ChartExSeriesLayoutDialogSession(CreateEditor(CreateChartEx()));
+        chartEx.TryApplySelectionChange(
+            ChartOptionsDialogFieldId.ChartExSeries,
+            1,
+            out var chartExPlan).Should().BeTrue();
+        chartExPlan.Field(ChartOptionsDialogFieldId.ChartExSeries).SelectedIndex.Should().Be(1);
+        chartExPlan.Field(ChartOptionsDialogFieldId.ChartExLayout).SelectedIndex.Should().Be(1);
+    }
+
     private static ChartShape CreateBubbleChart() => new()
     {
         ChartType = ChartType.Bubble,
@@ -213,6 +275,26 @@ public sealed class ChartOptionsDialogPlanTests
         margin.Values.AddRange([1.0, 2.0, 3.0]);
         chart.Series.Add(revenue);
         chart.Series.Add(margin);
+        return chart;
+    }
+
+    private static ChartShape CreateChartEx()
+    {
+        var chart = new ChartShape
+        {
+            IsChartEx = true,
+            PreservedChartExXml = "<cx:chartSpace />",
+        };
+        chart.Series.Add(new ChartSeries
+        {
+            Name = "Sales",
+            ChartExLayoutId = "histogram",
+        });
+        chart.Series.Add(new ChartSeries
+        {
+            Name = "Budget",
+            ChartExLayoutId = "pareto",
+        });
         return chart;
     }
 

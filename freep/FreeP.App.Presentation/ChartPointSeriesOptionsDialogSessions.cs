@@ -103,6 +103,28 @@ public sealed class ChartPointOptionsDialogSession
         return BuildState();
     }
 
+    public bool TryApplySelectionChange(
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex,
+        out ChartOptionsDialogPlan plan)
+    {
+        Func<int, ChartPointOptionsDialogState>? select = fieldId switch
+        {
+            ChartOptionsDialogFieldId.Series => SelectSeries,
+            ChartOptionsDialogFieldId.Point => SelectPoint,
+            _ => null,
+        };
+        if (select is null)
+        {
+            plan = null!;
+            return false;
+        }
+
+        select(selectedIndex);
+        plan = this.BuildDialogPlan();
+        return true;
+    }
+
     public string Format(double? value) =>
         ChartDialogOptionProjection.Format(value, _culture);
 
@@ -375,6 +397,18 @@ public sealed class ChartSeriesOptionsDialogSession
         _planner.SetSeriesIndex(seriesIndex);
         return BuildState();
     }
+
+    public bool TryApplySelectionChange(
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex,
+        out ChartOptionsDialogPlan plan) =>
+        ChartOptionsDialogSelectionTransition.TryApply(
+            fieldId,
+            ChartOptionsDialogFieldId.Series,
+            selectedIndex,
+            SelectSeries,
+            this.BuildDialogPlan,
+            out plan);
 
     public string Format(double? value) =>
         ChartDialogOptionProjection.Format(value, _culture);

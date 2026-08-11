@@ -34,11 +34,8 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {
-        if (fieldId != ChartOptionsDialogFieldId.Series)
-            return;
-
-        _session.SelectSeries(_form.SelectedIndex(fieldId));
-        _form.ApplyPlan(_session.BuildDialogPlan());
+        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
+            _form.ApplyPlan(plan);
     }
 
     private void OnOk()

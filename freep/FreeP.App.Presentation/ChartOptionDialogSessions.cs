@@ -59,6 +59,18 @@ public sealed class ChartAreaOptionsDialogSession
         return BuildState();
     }
 
+    public bool TryApplySelectionChange(
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex,
+        out ChartOptionsDialogPlan plan) =>
+        ChartOptionsDialogSelectionTransition.TryApply(
+            fieldId,
+            ChartOptionsDialogFieldId.AreaTarget,
+            selectedIndex,
+            SelectTarget,
+            () => this.BuildDialogPlan(CultureInfo.CurrentCulture),
+            out plan);
+
     public ChartAreaOptions BuildCommitPlan(
         ChartAreaOptionsDialogInput input,
         CultureInfo culture)
@@ -277,6 +289,18 @@ public sealed class ChartLayoutOptionsDialogSession
         _planner.SetTarget(TargetAt(targetIndex));
         return BuildState();
     }
+
+    public bool TryApplySelectionChange(
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex,
+        out ChartOptionsDialogPlan plan) =>
+        ChartOptionsDialogSelectionTransition.TryApply(
+            fieldId,
+            ChartOptionsDialogFieldId.LayoutTargetObject,
+            selectedIndex,
+            SelectTarget,
+            () => this.BuildDialogPlan(CultureInfo.CurrentCulture),
+            out plan);
 
     public ChartLayoutOptions BuildCommitPlan(
         ChartLayoutOptionsDialogInput input,

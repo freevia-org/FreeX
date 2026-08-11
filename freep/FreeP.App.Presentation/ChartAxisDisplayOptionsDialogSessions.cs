@@ -123,6 +123,18 @@ public sealed class ChartAxisOptionsDialogSession
         return _state;
     }
 
+    public bool TryApplySelectionChange(
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex,
+        out ChartOptionsDialogPlan plan) =>
+        ChartOptionsDialogSelectionTransition.TryApply(
+            fieldId,
+            ChartOptionsDialogFieldId.Axis,
+            selectedIndex,
+            SelectAxis,
+            this.BuildDialogPlan,
+            out plan);
+
     public ChartAxisOptions BuildCommitPlan(ChartAxisOptionsDialogInput input)
     {
         ArgumentNullException.ThrowIfNull(input);

@@ -38,11 +38,8 @@ internal sealed class ChartAreaOptionsDialog : Window
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {
-        if (fieldId != ChartOptionsDialogFieldId.AreaTarget)
-            return;
-
-        _session.SelectTarget(_form.SelectedIndex(fieldId));
-        _form.ApplyPlan(_session.BuildDialogPlan(CultureInfo.CurrentCulture));
+        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
+            _form.ApplyPlan(plan);
     }
 
     private void OnOk()

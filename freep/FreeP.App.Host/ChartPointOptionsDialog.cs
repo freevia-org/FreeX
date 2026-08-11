@@ -37,17 +37,8 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {
-        switch (fieldId)
-        {
-            case ChartOptionsDialogFieldId.Series:
-                _session.SelectSeries(_form.SelectedIndex(fieldId));
-                _form.ApplyPlan(_session.BuildDialogPlan());
-                break;
-            case ChartOptionsDialogFieldId.Point:
-                _session.SelectPoint(_form.SelectedIndex(fieldId));
-                _form.ApplyPlan(_session.BuildDialogPlan());
-                break;
-        }
+        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
+            _form.ApplyPlan(plan);
     }
 
     private void OnOk()

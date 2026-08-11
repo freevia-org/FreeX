@@ -34,11 +34,8 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {
-        if (fieldId != ChartOptionsDialogFieldId.Axis)
-            return;
-
-        _session.SelectAxis(_form.SelectedIndex(fieldId));
-        _form.ApplyPlan(_session.BuildDialogPlan());
+        if (_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan))
+            _form.ApplyPlan(plan);
     }
 
     private void OnOk()

@@ -73,6 +73,18 @@ public sealed class ChartExSeriesLayoutDialogSession
         return Selection;
     }
 
+    public bool TryApplySelectionChange(
+        ChartOptionsDialogFieldId fieldId,
+        int selectedIndex,
+        out ChartOptionsDialogPlan plan) =>
+        ChartOptionsDialogSelectionTransition.TryApply(
+            fieldId,
+            ChartOptionsDialogFieldId.ChartExSeries,
+            selectedIndex,
+            SelectSeries,
+            this.BuildDialogPlan,
+            out plan);
+
     public string? LayoutIdAt(int layoutIndex) =>
         layoutIndex >= 0 && layoutIndex < Selection.LayoutChoices.Count
             ? Selection.LayoutChoices[layoutIndex].LayoutId

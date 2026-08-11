@@ -43,6 +43,35 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
     }
 
     [Fact]
+    public void NativeSelectionCallbacksOnlyCaptureIndicesAndRenderPortableTransitions()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var dialogFiles = new[]
+        {
+            "ChartAxisOptionsDialog.cs",
+            "ChartAreaOptionsDialog.cs",
+            "ChartSeriesOptionsDialog.cs",
+            "ChartLayoutOptionsDialog.cs",
+            "ChartPointOptionsDialog.cs",
+            "ChartExSeriesLayoutDialog.cs",
+        };
+
+        foreach (var app in new[] { "FreeP.App.Host", "FreeP.App.Avalonia" })
+        {
+            foreach (var dialogFile in dialogFiles)
+            {
+                var source = Read(root, "freep", app, dialogFile);
+                source.Should().Contain("_session.TryApplySelectionChange(fieldId, _form.SelectedIndex(fieldId), out var plan)")
+                    .And.Contain("_form.ApplyPlan(plan)")
+                    .And.NotContain("_session.SelectAxis(")
+                    .And.NotContain("_session.SelectTarget(")
+                    .And.NotContain("_session.SelectSeries(")
+                    .And.NotContain("_session.SelectPoint(");
+            }
+        }
+    }
+
+    [Fact]
     public void PortableFormSession_NormalizesNativeTextAndOwnsTypedAccessors()
     {
         var text = new FakeControl
