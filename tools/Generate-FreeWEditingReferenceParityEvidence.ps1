@@ -51,7 +51,9 @@ $sharedSource = Read-SourceSet @(
     "freew\FreeW.App.Presentation\Ribbon\ThesaurusPaneSession.cs",
     "freew\FreeW.App.Presentation\Ribbon\ThesaurusPresentationPlanner.cs",
     "freew\FreeW.App.Presentation\Dialogs\MultilevelListDialogPlanner.cs",
-    "freew\FreeW.App.Presentation\Dialogs\MultilevelListDialogSession.cs"
+    "freew\FreeW.App.Presentation\Dialogs\MultilevelListDialogSession.cs",
+    "freew\FreeW.App.Presentation\Editing\DocumentReferenceEditingCoordinator.cs",
+    "freew\FreeW.App.Presentation\Ribbon\TableOfAuthoritiesRegionPlanner.cs"
 )
 
 function New-Workflow {
@@ -119,8 +121,8 @@ $workflows = @(
         -WpfSources @("freew/FreeW.App.Host/MainWindow.cs", "freew/FreeW.App.Host/Ribbon/FreeWRibbonCommands.cs", "freew/FreeW.App.Host/Editing/DocumentView.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/MainWindow.cs", "freew/FreeW.App.Avalonia/NotesPane.cs", "freew/FreeW.App.Avalonia/Editing/DocumentView.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/EditableNotesPaneTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("registry.BindToggle(FreeWRibbonCommandAction.ShowNotes", "FootnoteEndnoteOptionsDialog.Prompt", "MoveToNextFootnote") `
-        -RequiredAvaloniaTokens @("r.BindToggle(FreeWRibbonCommandAction.ShowNotes", "NoteTextDialog.ShowAsync", "_notesPane.Toggle", "ReplaceNoteContent", "MoveToPreviousEndnote", "ApplyFootnoteEndnoteOptions") `
+        -RequiredWpfTokens @("referenceCommands.BindToggle(FreeWRibbonCommandAction.ShowNotes", "FootnoteEndnoteOptionsDialog.Prompt", "MoveToNextFootnote") `
+        -RequiredAvaloniaTokens @("family.BindToggle(FreeWRibbonCommandAction.ShowNotes", "NoteTextDialog.ShowAsync", "_notesPane.Toggle", "ReplaceNoteContent", "MoveToPreviousEndnote", "ApplyFootnoteEndnoteOptions") `
         -RequiredSharedTokens @("public sealed class FreeWStatefulToggleCommand")
 
     New-Workflow -Id "insert.date-time" `
@@ -165,8 +167,9 @@ $workflows = @(
         -WpfSources @("freew/FreeW.App.Host/TableOfAuthoritiesDialog.cs", "freew/FreeW.App.Host/Editing/DocumentView.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/TableOfAuthoritiesDialog.cs", "freew/FreeW.App.Avalonia/MainWindow.cs", "freew/FreeW.App.Avalonia/Editing/DocumentView.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/TableOfAuthoritiesDialogTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("TableOfAuthoritiesDialog.Prompt", "BuildRefreshPlan") `
-        -RequiredAvaloniaTokens @("TableOfAuthoritiesDialog.ShowAsync", "InsertTableOfAuthorities(commit.Options!)", "RefreshTableOfAuthorities")
+        -RequiredWpfTokens @("TableOfAuthoritiesDialog.Prompt", "ReferenceEdits.RefreshTableOfAuthorities(") `
+        -RequiredAvaloniaTokens @("TableOfAuthoritiesDialog.ShowAsync", "InsertTableOfAuthorities(commit.Options!)", "ReferenceEdits.RefreshTableOfAuthorities(") `
+        -RequiredSharedTokens @("BuildRefreshPlanWithTableAddresses", "ApplyStabilizedTableOfAuthoritiesRegion")
 
     New-Workflow -Id "home.multilevel-list" `
         -Triggers @("freew.multilevel-define") `
@@ -211,8 +214,8 @@ $workflows = @(
         -WpfSources @("freew/FreeW.App.Host/ThesaurusPane.cs", "freew/FreeW.App.Host/MainWindow.cs") `
         -AvaloniaSources @("freew/FreeW.App.Avalonia/ThesaurusPane.cs", "freew/FreeW.App.Avalonia/MainWindow.cs") `
         -Tests @("freew/FreeW.App.Host.Tests/ThesaurusAndBalloonsTests.cs", "freew/FreeW.App.Avalonia.Tests/EditingReferenceParityTests.cs") `
-        -RequiredWpfTokens @("ToggleThesaurusPane", "_session.Refresh(", "_session.PlanAction(", "Clipboard.SetText") `
-        -RequiredAvaloniaTokens @("Thesaurus: ToggleThesaurusPane", "_session.Refresh(", "_session.PlanAction(", "ReplaceCurrentProofingWord", "await clipboard.SetTextAsync") `
+        -RequiredWpfTokens @("ToggleThesaurusPane", "_session.Refresh(", "_session.PlanAction(", "_platformClipboard.WriteAsync") `
+        -RequiredAvaloniaTokens @("Thesaurus: ToggleThesaurusPane", "_session.Refresh(", "_session.PlanAction(", "ReplaceCurrentProofingWord", "await _copyText(intent.Text)") `
         -RequiredSharedTokens @("public sealed class ThesaurusPaneSession", "ThesaurusPresentationPlanner.Lookup")
 )
 
