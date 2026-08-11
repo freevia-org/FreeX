@@ -389,7 +389,7 @@ public sealed partial class MainWindowSourceHygieneTests
         pivotSource.Should().Contain("private void ApplyPivotFieldListLayout(");
         pivotSource.Should().Contain("private enum PivotFieldDropZone");
         pivotSource.Should().Contain("PivotUiPlanner");
-        pivotSource.Should().Contain("SlicerTimelinePanePlanner");
+        pivotSource.Should().Contain("PivotApplication");
         pivotSource.Should().Contain("SlicerTimelineSourceSession");
     }
 
