@@ -27,7 +27,9 @@ public sealed class SelectionPaneOwnershipTests
         source.Should().Contain("itemSession.MoveTowardFront()");
         source.Should().Contain("itemSession.MoveTowardBack()");
         source.Should().Contain("item.VisibilityActionText");
-        source.Should().Contain("item.AccessibilityStateText");
+        source.Should().Contain("PresentationPaneAccessibilityPlanner.PlanItem(");
+        source.Should().Contain("PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)");
+        source.Should().Contain("item.IsSelected");
         source.Should().NotContain("var committed");
         source.Should().NotContain("_session.SelectShape(");
         source.Should().NotContain("_session.RenameShape(");

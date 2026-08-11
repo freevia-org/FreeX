@@ -2509,6 +2509,11 @@ public sealed class ReviewWorkflowAdapterTests
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
+        var workareaEndpointSource = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.WorkareaEndpoint.cs"));
 
         source.Should().Contain("PresentationReviewWorkflowSession");
         source.Should().Contain("_reviewWorkflowSession.RefreshReviewWorkflowPlans();");
@@ -2523,17 +2528,18 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("_reviewWorkflowSession.RefreshAltTextPlans(");
         source.Should().Contain("_reviewWorkflowSession.ApplyReadingOrderMove(");
         source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");
-        source.Should().Contain("_reviewWorkflowSession.RefreshReadingOrderPlan();");
+        workareaEndpointSource.Should().Contain(
+            "RefreshReadingOrder = () => _ = _reviewWorkflowSession.RefreshReadingOrderPlan()");
         source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
-        source.Should().Contain("_mediaPaneSession.RefreshCaptionAuthoringPanePlan(");
-        source.Should().Contain("_mediaPaneSession.ApplyCaptionAuthoring(");
+        source.Should().Contain("_mediaPaneHostCoordinator.BuildRenderPlan(");
+        source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
         source.Should().NotContain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
         source.Should().NotContain("Editor.ApplyMediaCaptionAuthoring(");
         source.Should().Contain("RenderCommentPane(PresentationCommentPanePlan plan)");
         source.Should().Contain("cm.AuthorDisplayName");
         source.Should().Contain("cm.InitialsBadgeText");
         source.Should().Contain("cm.ThreadStatusLabel");
-        source.Should().Contain("reply.AuthorDisplayName");
+        source.Should().Contain("reply.DisplayText");
         source.Should().Contain("onLayoutPicker:     () => OpenLayoutPicker()");
         source.Should().Contain("PresentationDesignCommandPlanner.BuildLayoutPickerPlan(");
         source.Should().Contain("PresentationDesignCommandPlanner.TryApplyLayoutChoice(");

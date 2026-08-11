@@ -91,7 +91,15 @@ public sealed class PresentationPaneAccessibilityTests
         animation.SelectedIndex.Should().Be(0);
         window.AnimationPaneItemsForAccessibilityTests.Should().ContainSingle();
         var animationItem = window.AnimationPaneItemsForAccessibilityTests.Single();
-        AutomationProperties.GetAutomationId(animationItem).Should().Be("FreePAnimationPaneItem1");
+        AutomationProperties.GetAutomationId(animationItem).Should().Be(
+            PresentationPaneAccessibilityPlanner.ProjectItem(
+                PresentationPaneAccessibilityPlanner.PlanItem(
+                    PresentationPaneAccessibilityPlanner.AnimationPaneId,
+                    index: 0,
+                    shape.Name,
+                    isSelected: true,
+                    PresentationPaneAccessibilityPlanner.BuildAnimationKey(shape.Id, animationIndex: 0)))
+            .AutomationId);
         AutomationProperties.GetName(animationItem).Should().Be(shape.Name);
         AutomationProperties.GetItemStatus(animationItem).Should().Be("Selected; Order 1");
 
@@ -100,7 +108,16 @@ public sealed class PresentationPaneAccessibilityTests
         window.SetSelectedReviewCommentIndexForTests(0);
         window.CommentsPaneItemsForAccessibilityTests.Should().ContainSingle();
         var commentItem = window.CommentsPaneItemsForAccessibilityTests.Single();
-        AutomationProperties.GetAutomationId(commentItem).Should().Be("FreePCommentsPaneItem1");
+        var comment = window.LastCommentPanePlan!.Comments.Single();
+        AutomationProperties.GetAutomationId(commentItem).Should().Be(
+            PresentationPaneAccessibilityPlanner.ProjectItem(
+                PresentationPaneAccessibilityPlanner.PlanItem(
+                    PresentationPaneAccessibilityPlanner.CommentsPaneId,
+                    index: 0,
+                    comment.TextPreview,
+                    isSelected: true,
+                    comment.AccessibilityKey))
+            .AutomationId);
         AutomationProperties.GetName(commentItem).Should().Be("Accessible comment");
         AutomationProperties.GetItemStatus(commentItem).Should().Be("Selected; Order 1");
 
@@ -132,13 +149,13 @@ public sealed class PresentationPaneAccessibilityTests
         var slideItems = window.SlidePaneItemsForAccessibilityTests;
         AutomationProperties.GetItemStatus(slideItems[0]).Should().Be("Not selected; Order 1");
         AutomationProperties.GetItemStatus(slideItems[1]).Should().Be("Not selected; Order 2");
-        AutomationProperties.GetItemStatus(slideItems[2]).Should().Be("Selected; Order 3");
+        AutomationProperties.GetItemStatus(slideItems[2]).Should().Be("Active and selected; Order 3");
 
         window.Editor.SelectSlide(0);
         var reorderedSlideItems = window.SlidePaneItemsForAccessibilityTests;
         reorderedSlideItems.Select(AutomationProperties.GetAutomationId).Should().Equal(slideItemIds);
         AutomationProperties.GetItemStatus(reorderedSlideItems[0]).Should().Be("Not selected; Order 1");
-        AutomationProperties.GetItemStatus(reorderedSlideItems[1]).Should().Be("Selected; Order 2");
+        AutomationProperties.GetItemStatus(reorderedSlideItems[1]).Should().Be("Active and selected; Order 2");
         AutomationProperties.GetItemStatus(reorderedSlideItems[2]).Should().Be("Not selected; Order 3");
     }
 

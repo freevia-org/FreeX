@@ -1573,22 +1573,21 @@ public sealed class ParagraphRangeOverlayPrecedenceTests
                 "stepping back from the landing slide must navigate to slide 0 and run DisplayCurrentSlide -> PrepareAnimationOverlay for it");
             window.Controller.CurrentSlideIndex.Should().Be(0, "the animated shape's slide must now be current");
 
-            var rangeField = typeof(SlideShowWindow).GetField(
-                "_paragraphRangeAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
-            var naiveField = typeof(SlideShowWindow).GetField(
-                "_paragraphAnimElements", BindingFlags.NonPublic | BindingFlags.Instance);
-            rangeField.Should().NotBeNull("PrepareAnimationOverlay's ranged-overlay dictionary must still exist");
-            naiveField.Should().NotBeNull("PrepareAnimationOverlay's naive per-paragraph dictionary must still exist");
+            var targetField = typeof(SlideShowWindow).GetField(
+                "_animationTargets", BindingFlags.NonPublic | BindingFlags.Instance);
+            targetField.Should().NotBeNull(
+                "PrepareAnimationOverlay must retain its shared animation target registry");
+            var targets = (SlideShowAnimationTargetRegistry<FrameworkElement>)targetField!.GetValue(window)!;
+            var availability = targets.BuildAvailability();
 
-            var rangedElements = (System.Collections.IDictionary)rangeField!.GetValue(window)!;
-            var naiveElements = (System.Collections.IDictionary)naiveField!.GetValue(window)!;
-
-            rangedElements.Count.Should().Be(2,
+            availability.ParagraphRangeAnimations.Should().HaveCount(2,
                 "the explicit per-paragraph ranged timing must drive playback when both it and the bldLst marker are present on the same shape");
-            rangedElements.Contains(rangeAnim0).Should().BeTrue("the first paragraph's ranged animation must have its own overlay element");
-            rangedElements.Contains(rangeAnim1).Should().BeTrue("the second paragraph's ranged animation must have its own overlay element");
+            availability.ParagraphRangeAnimations.Should().Contain(rangeAnim0,
+                "the first paragraph's ranged animation must have its own overlay target");
+            availability.ParagraphRangeAnimations.Should().Contain(rangeAnim1,
+                "the second paragraph's ranged animation must have its own overlay target");
 
-            naiveElements.Contains(shapeId).Should().BeFalse(
+            availability.ParagraphCounts.Should().NotContainKey(shapeId,
                 "the naive bldLst-only split must NOT run once richer ranged timing already covers every paragraph of the shape");
         }
         finally

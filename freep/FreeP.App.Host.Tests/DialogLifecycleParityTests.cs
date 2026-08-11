@@ -141,7 +141,7 @@ public sealed class DialogLifecycleParityTests
         dialogSource.Should().Contain("e.Key != Key.Escape");
         dialogSource.Should().Contain("Close();");
         mainWindowSource.Should().Contain("_findReplaceDialog.Closed += (_, _) => _findReplaceDialog = null;");
-        workareaEndpointSource.Should().Contain("BeforePresentationReplaced => () => _findReplaceDialog?.Close()");
+        workareaEndpointSource.Should().Contain("BeforePresentationReplaced = () => _findReplaceDialog?.Close()");
     }
 
     private static EditingSession MakeSession()

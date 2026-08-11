@@ -118,7 +118,11 @@ public sealed class OsClipboardServiceTests
                     PlatformClipboardReadResult<PlatformClipboardContent>.Failed("clipboard locked"));
             return ValueTask.FromResult(
                 PlatformClipboardReadResult<PlatformClipboardContent>.Success(
-                    PresentationClipboardPlatformMapper.ToPlatformContent(Read())));
+                    PresentationClipboardPlatformMapper.ToPlatformContent(
+                        Read(),
+                        PresentationClipboardPlatformMapper.ResolveNativeScope(),
+                        PresentationClipboardPlatformMapper.ResolveNativeXamlPackageFormat(),
+                        PresentationClipboardPlatformMapper.ResolveNativeRtfFormat())));
         }
 
         public ValueTask<PlatformClipboardWriteResult> WriteAsync(

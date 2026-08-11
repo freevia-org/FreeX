@@ -888,12 +888,21 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [Fact]
-    public void MainWindow_ChartDialogsRespectImportedProtectionPolicy()
+    public void MainWindow_ChartDialogsDelegateImportedProtectionPolicyToSharedLaunchPlanner()
     {
         var source = ReadWorkspaceFile("freep", "FreeP.App.Host", "MainWindow.cs");
+        var planner = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "PresentationDomainDialogLaunchPlanner.cs");
 
-        source.Should().Contain("if (!Editor.CanEditSelectedChartData) return;");
-        source.Should().Contain("if (!Editor.CanEditSelectedChartFormatting) return;");
+        source.Should().Contain(
+            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartData)");
+        source.Should().Contain(
+            "_workareaSession.CanOpenDomainDialog(PresentationDomainDialogKind.ChartDisplayOptions)");
+        planner.Should().Contain(
+            "PresentationDomainDialogKind.ChartData => editor.CanEditSelectedChartData");
+        planner.Should().Contain("editor.CanEditSelectedChartFormatting");
     }
 
     [Fact]
