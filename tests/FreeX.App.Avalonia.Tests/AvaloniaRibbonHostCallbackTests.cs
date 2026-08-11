@@ -4,6 +4,7 @@ using System.Linq;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.Ribbon.Definitions;
 using Free.Shared.Ribbon;
 using FreeX.Core.Model;
@@ -17,7 +18,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// declarative ribbon invokes the same handlers as the native menus (charts/CF/table/quick-analysis/etc.).
 /// The ribbon definition is now the single-source shared <see cref="FreeXRibbon"/>; the shell registers
 /// handlers under its historical dotted ids, which are re-keyed to the canonical ids the shared definition
-/// emits via <see cref="AvaloniaCommandIdAdapter"/>. Tests therefore resolve through the adapter. Pure
+/// emits via <see cref="FreeXRibbonCommandIdentityCatalog"/>. Tests therefore resolve through the catalog. Pure
 /// registry assertions — no running shell or UI thread required.
 /// </summary>
 public sealed class AvaloniaRibbonHostCallbackTests
@@ -26,7 +27,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         new(new Dictionary<string, object?>());
 
     private static RibbonCommandId Canonical(string avaloniaId) =>
-        new(AvaloniaCommandIdAdapter.ToCanonical(avaloniaId));
+        new(FreeXRibbonCommandIdentityCatalog.ToCanonical(avaloniaId));
 
     [Theory]
     [InlineData("data.textToColumns")]
@@ -330,7 +331,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     {
         foreach (var item in ConditionalFormatPresetGalleryPlanner.PopupItems)
         {
-            Assert.Contains(item.CommandId, AvaloniaExtraCommandIds.RawCanonical);
+            Assert.Contains(item.CommandId, FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds);
 
             var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
             Assert.True(defaults.TryGet(Canonical(item.CommandId), out var noOp), $"Conditional-format popup id '{item.CommandId}' is not in the shared definition.");
@@ -631,8 +632,8 @@ public sealed class AvaloniaRibbonHostCallbackTests
             .Select(id => id.Value)
             .ToHashSet(StringComparer.Ordinal);
 
-        var unmapped = AvaloniaCommandIdAdapter.AvaloniaIds
-            .Where(avaloniaId => !canonicalIds.Contains(AvaloniaCommandIdAdapter.ToCanonical(avaloniaId)))
+        var unmapped = FreeXRibbonCommandIdentityCatalog.AvaloniaIds
+            .Where(avaloniaId => !canonicalIds.Contains(FreeXRibbonCommandIdentityCatalog.ToCanonical(avaloniaId)))
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
 
@@ -643,7 +644,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
 
     /// <summary>
     /// The documented orphans (features with no canonical control in the shared definition) pass through
-    /// <see cref="AvaloniaCommandIdAdapter.ToCanonical"/> unchanged and are intentionally NOT present in the
+    /// <see cref="FreeXRibbonCommandIdentityCatalog.ToCanonical"/> unchanged and are intentionally NOT present in the
     /// shared definition — so their handler registration is harmless dead weight, never a hijack of an
     /// unrelated canonical control.
     /// </summary>
@@ -655,11 +656,11 @@ public sealed class AvaloniaRibbonHostCallbackTests
             .Select(id => id.Value)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var orphan in AvaloniaCommandIdAdapter.OrphanAvaloniaIds)
+        foreach (var orphan in FreeXRibbonCommandIdentityCatalog.OrphanAvaloniaIds)
         {
-            Assert.Equal(orphan, AvaloniaCommandIdAdapter.ToCanonical(orphan));
+            Assert.Equal(orphan, FreeXRibbonCommandIdentityCatalog.ToCanonical(orphan));
             Assert.DoesNotContain(orphan, canonicalIds);
-            Assert.False(AvaloniaCommandIdAdapter.IsKnownAvaloniaId(orphan),
+            Assert.False(FreeXRibbonCommandIdentityCatalog.IsKnownAvaloniaId(orphan),
                 $"Orphan '{orphan}' must not also have a canonical mapping.");
         }
     }
@@ -669,13 +670,13 @@ public sealed class AvaloniaRibbonHostCallbackTests
     {
         // ToAvalonia maps a canonical id back to its primary Avalonia id; for ids that are not aliased, the
         // round-trip is stable.
-        Assert.Equal("Bold", AvaloniaCommandIdAdapter.ToCanonical("home.bold"));
-        Assert.Equal("home.bold", AvaloniaCommandIdAdapter.ToAvalonia("Bold"));
-        Assert.Equal("Change Chart Type#ChangeChartTypeBtn_Click", AvaloniaCommandIdAdapter.ToCanonical("chartDesign.changeType"));
+        Assert.Equal("Bold", FreeXRibbonCommandIdentityCatalog.ToCanonical("home.bold"));
+        Assert.Equal("home.bold", FreeXRibbonCommandIdentityCatalog.ToAvalonia("Bold"));
+        Assert.Equal("Change Chart Type#ChangeChartTypeBtn_Click", FreeXRibbonCommandIdentityCatalog.ToCanonical("chartDesign.changeType"));
 
         // Unknown ids pass through unchanged.
-        Assert.Equal("not.a.real.id", AvaloniaCommandIdAdapter.ToCanonical("not.a.real.id"));
-        Assert.Equal("Not A Real Canonical", AvaloniaCommandIdAdapter.ToAvalonia("Not A Real Canonical"));
+        Assert.Equal("not.a.real.id", FreeXRibbonCommandIdentityCatalog.ToCanonical("not.a.real.id"));
+        Assert.Equal("Not A Real Canonical", FreeXRibbonCommandIdentityCatalog.ToAvalonia("Not A Real Canonical"));
     }
 
     private static AvaloniaRibbonHostCallbacks AllWired() => new()

@@ -1,5 +1,6 @@
 using Avalonia.Headless;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Ribbon;
 using Xunit.Abstractions;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -49,7 +50,7 @@ public sealed class AvaloniaRibbonInteractionValidationTests
             Assert.Equal(expectedPlacementCount, placements.Length);
             Assert.Equal(expectedPlacementCount, placements.Select(result => result.Id).Distinct(StringComparer.Ordinal).Count());
             Assert.Equal(8, orphans.Length);
-            Assert.Equal(AvaloniaCommandIdAdapter.OrphanAvaloniaIds.Count, orphans.Length);
+            Assert.Equal(FreeXRibbonCommandIdentityCatalog.OrphanAvaloniaIds.Count, orphans.Length);
             Assert.All(commands, result => Assert.Contains(result.Status, new[] { "passed", "skipped", "failed" }));
             Assert.All(placements, result => Assert.Contains(result.Status, new[] { "passed", "skipped", "failed" }));
             Assert.DoesNotContain(results, result => result.EvidenceLevel == "registry-bound");
@@ -107,7 +108,7 @@ public sealed class AvaloniaRibbonInteractionValidationTests
                 .Where(result => result.Category == "ribbon-orphan-command-behavior")
                 .ToArray();
             Assert.Equal(
-                AvaloniaCommandIdAdapter.OrphanAvaloniaIds.OrderBy(id => id, StringComparer.Ordinal),
+                FreeXRibbonCommandIdentityCatalog.OrphanAvaloniaIds.OrderBy(id => id, StringComparer.Ordinal),
                 orphans.Select(result => Uri.UnescapeDataString(result.Id.Split('/')[1])).OrderBy(id => id, StringComparer.Ordinal));
             Assert.All(orphans, result =>
             {

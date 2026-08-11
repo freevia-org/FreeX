@@ -6,9 +6,6 @@ using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
 using Free.Shared.Drawing;
 using Free.Shared.Ribbon;
-// Disambiguate: this test file exercises the WPF ShapeHitTester compatibility facade.
-// The implementation lives in FreeP.App.Compositor.
-using ShapeHitTester = FreeP.App.Rendering.Wpf.ShapeHitTester;
 
 namespace FreeP.App.Host.Tests;
 
@@ -656,17 +653,20 @@ public sealed class CanvasEditingTests
     }
 
     [Fact]
-    public void ShapeHitTester_WpfFacadeDelegatesToCompositorImplementation()
+    public void ShapeHitTester_WpfCallersUseCompositorImplementation()
     {
-        var source = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "ShapeHitTester.cs");
+        var textEditor = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "InCanvasTextEditor.cs");
+        var tableEditor = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "InCanvasTableCellEditor.cs");
+        var source = ReadWorkspaceFile("freep", "FreeP.App.Presentation", "ShapeHitTester.cs");
 
-        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.HitTest");
-        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.MarqueeHitTest");
-        source.Should().Contain("FreeP.App.Compositor.ShapeHitTester.GetShapeBoundsDip");
-        source.Should().NotContain("PlaceholderResolver.ResolveAnchor");
-        source.Should().NotContain("SlideTransformCore.UnRotatePoint");
-        source.Should().NotContain("private const double EmuPerDip");
-        source.Should().NotContain("private static bool HitTestShape");
+        textEditor.Should().Contain("using FreeP.App.Compositor;");
+        tableEditor.Should().Contain("using FreeP.App.Compositor;");
+        source.Should().Contain("namespace FreeP.App.Compositor;");
+        source.Should().Contain("public static uint? HitTest(");
+        source.Should().Contain("public static IReadOnlyList<uint> MarqueeHitTest(");
+        source.Should().Contain("public static ShapeBoundsDip GetShapeBoundsDip(");
+        source.Should().Contain("PlaceholderResolver.ResolveAnchor");
+        source.Should().Contain("DrawingBoundsHitTester.Contains");
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts) =>

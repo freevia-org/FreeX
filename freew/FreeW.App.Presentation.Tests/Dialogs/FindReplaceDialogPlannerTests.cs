@@ -262,6 +262,41 @@ public sealed class FindReplaceDialogPlannerTests
         match.Should().Be(new FindReplaceMatch(0, 6, 3));
     }
 
+    [Theory]
+    [InlineData("the", 0, 0, 0, 0, 3)]
+    [InlineData("the", 0, 3, 1, 11, 3)]
+    [InlineData("quick", 1, 0, 0, 4, 5)]
+    [InlineData("QUICK", 0, 0, 0, 4, 5)]
+    public void FindNextMatch_DefaultOptionsFindAndWrapCaseInsensitively(
+        string query,
+        int fromBlock,
+        int fromOffset,
+        int expectedBlock,
+        int expectedStart,
+        int expectedLength)
+    {
+        var match = FindReplaceDialogPlanner.FindNextMatch(
+            BuildTwoParagraphDocument(),
+            query,
+            new FindReplaceSearchOptions(),
+            fromBlock,
+            fromOffset);
+
+        match.Should().Be(new FindReplaceMatch(expectedBlock, expectedStart, expectedLength));
+    }
+
+    [Fact]
+    public void FindNextMatch_ReturnsNullWhenTextIsAbsent()
+    {
+        FindReplaceDialogPlanner.FindNextMatch(
+                BuildTwoParagraphDocument(),
+                "zebra",
+                new FindReplaceSearchOptions(),
+                fromBlock: 0,
+                fromOffset: 0)
+            .Should().BeNull();
+    }
+
     [Fact]
     public void BuildGoToTargets_ProjectsStartEndHeadingsAndBookmarksInParityOrder()
     {
@@ -311,6 +346,15 @@ public sealed class FindReplaceDialogPlannerTests
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph { Runs = { new Run(text) } });
+        return doc;
+    }
+
+    private static TextDocument BuildTwoParagraphDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("the quick brown fox"));
+        doc.Blocks.Add(new Paragraph("jumps over the lazy dog"));
         return doc;
     }
 }

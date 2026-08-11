@@ -711,7 +711,12 @@ public sealed class DocumentView : Control
     {
         if (string.IsNullOrEmpty(query))
             return false;
-        if (DocumentSearch.FindNext(_doc, query, _caret.Block, _caret.Offset) is not { } hit)
+        if (FindReplaceDialogPlanner.FindNextMatch(
+                _doc,
+                query,
+                new FindReplaceSearchOptions(),
+                _caret.Block,
+                _caret.Offset) is not { } hit)
             return false;
 
         _selectionAnchor = new DocPosition(hit.Block, hit.Start);

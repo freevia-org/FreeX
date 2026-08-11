@@ -6,6 +6,7 @@ using FluentAssertions;
 
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.Core.Model;
 
 using Xunit;
@@ -37,7 +38,7 @@ public sealed class AvaloniaPageLayoutScaleCommitTests
                 var sheet = window.Session.ActiveSheet;
                 sheet.ScaleToFit.Should().Be(WorksheetScaleToFit.Default);
 
-                var canonicalId = new RibbonCommandId(AvaloniaCommandIdAdapter.ToCanonical(commandId));
+                var canonicalId = new RibbonCommandId(FreeXRibbonCommandIdentityCatalog.ToCanonical(commandId));
                 window.RibbonCommandRegistryForTest!.TryGet(canonicalId, out var command).Should().BeTrue();
 
                 command!.Execute(RibbonCommandContext.ForSelectedValue(selectedValue));

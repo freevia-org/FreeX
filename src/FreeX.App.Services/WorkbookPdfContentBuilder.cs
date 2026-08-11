@@ -300,7 +300,7 @@ public static class WorkbookPdfContentBuilder
                 var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
                 // B&W mode: force font colour to black regardless of style.
                 var fontColor = bw ? PdfColor.Black : ToPdfColor(style.ResolveFontColor(workbook.Theme));
-                var displayText = PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, 64);
+                var displayText = PdfWinAnsiTextCapability.Truncate(cell.DisplayText, 64);
 
                 // Resolve the cell's effective horizontal alignment the same way the on-screen
                 // GridView viewport does (GridView.Rendering.cs + CellTextOrientationLayoutPlanner):
@@ -605,7 +605,7 @@ public static class WorkbookPdfContentBuilder
                 fontSize,
                 fontFace,
                 fontColor,
-                PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength)));
+                PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength)));
         }
 
         ops.Add(new PdfText(
@@ -901,7 +901,7 @@ public static class WorkbookPdfContentBuilder
                     fontSize,
                     ToPdfFontFace(textBox.Font.Bold, textBox.Font.Italic),
                     ToPdfColor(textBox.Font.Color),
-                    PortablePdfWinAnsiTextCapability.Truncate(textBox.Text, 128)));
+                    PdfWinAnsiTextCapability.Truncate(textBox.Text, 128)));
             }
         }
     }
@@ -1703,7 +1703,7 @@ public static class WorkbookPdfContentBuilder
             fontSize,
             PdfFontFace.Regular,
             ToPdfColor(overlay.Color),
-            PortablePdfWinAnsiTextCapability.Truncate(overlay.Text, 128));
+            PdfWinAnsiTextCapability.Truncate(overlay.Text, 128));
 
         if (Math.Abs(overlay.RotationDegrees) < 0.01)
         {
@@ -1972,7 +1972,7 @@ public static class WorkbookPdfContentBuilder
             if (remaining <= 0)
                 break;
 
-            var text = PortablePdfWinAnsiTextCapability.Truncate(run.Text, remaining);
+            var text = PdfWinAnsiTextCapability.Truncate(run.Text, remaining);
             if (text.Length == 0)
                 continue;
 

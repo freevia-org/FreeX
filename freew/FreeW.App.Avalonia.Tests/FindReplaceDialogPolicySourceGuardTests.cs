@@ -84,9 +84,23 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         }
     }
 
-    private static string ReadAvaloniaSource(string fileName)
+    [Fact]
+    public void DocumentView_UsesPresentationFindPlannerDirectly()
     {
-        var path = Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Avalonia", fileName);
+        var source = ReadAvaloniaSource("Editing", "DocumentView.cs");
+
+        source.Should().Contain("FindReplaceDialogPlanner.FindNextMatch(");
+        source.Should().Contain("new FindReplaceSearchOptions()");
+        source.Should().NotContain("DocumentSearch");
+    }
+
+    private static string ReadAvaloniaSource(params string[] relativeParts)
+    {
+        var path = Path.Combine(
+            [TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+                "freew",
+                "FreeW.App.Avalonia",
+                .. relativeParts]);
         return File.ReadAllText(path);
     }
 

@@ -4734,7 +4734,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public static object Build(object workbook, object exportPlan, object options)
                 {
                     PortablePdfPageContentPlanner.CreatePlan(workbook, request);
-                    PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength);
+                    PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength);
                     return new object();
                 }
             }

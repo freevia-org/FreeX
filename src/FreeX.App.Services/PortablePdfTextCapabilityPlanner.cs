@@ -1,3 +1,4 @@
+using Free.Shared.Pdf;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -18,11 +19,6 @@ public enum PortablePdfTextRunSource
     PageFooter
 }
 
-public sealed record PortablePdfUnsupportedUnicodeScalar(
-    int TextIndex,
-    string CodePoint,
-    string TextElement);
-
 public sealed record PortablePdfUnsupportedUnicodeTextDiagnostic(
     PortablePdfTextRunSource Source,
     int ExportPageNumber,
@@ -30,7 +26,7 @@ public sealed record PortablePdfUnsupportedUnicodeTextDiagnostic(
     uint? Row,
     uint? Column,
     string Text,
-    IReadOnlyList<PortablePdfUnsupportedUnicodeScalar> UnsupportedScalars);
+    IReadOnlyList<PdfUnsupportedUnicodeScalar> UnsupportedScalars);
 
 public sealed record PortablePdfTextCapabilityPlan(
     PortablePdfTextCapabilityPlanStatus Status,
@@ -99,7 +95,7 @@ public static class PortablePdfTextCapabilityPlanner
                     request,
                     cell.Row,
                     cell.Column,
-                    PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength),
+                    PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength),
                     diagnostics,
                     ref textRunCount);
             }
@@ -141,8 +137,8 @@ public static class PortablePdfTextCapabilityPlanner
             return;
 
         textRunCount++;
-        var normalized = PortablePdfWinAnsiTextCapability.NormalizePdfText(text);
-        var unsupportedScalars = PortablePdfWinAnsiTextCapability.FindUnsupportedUnicodeScalars(normalized);
+        var normalized = PdfWinAnsiTextCapability.NormalizePdfText(text);
+        var unsupportedScalars = PdfWinAnsiTextCapability.FindUnsupportedUnicodeScalars(normalized);
         if (unsupportedScalars.Count == 0)
             return;
 
@@ -166,7 +162,7 @@ public static class PortablePdfTextCapabilityPlanner
         if (diagnostics.Count > 3)
             summary += $"; plus {diagnostics.Count - 3} more text {Pluralize(diagnostics.Count - 3, "run")}";
 
-        return $"{PortablePdfWinAnsiTextCapability.UnsupportedUnicodeTextMessage} Unsupported text: {summary}.";
+        return $"{PdfWinAnsiTextCapability.UnsupportedUnicodeTextMessage} Unsupported text: {summary}.";
     }
 
     private static string FormatLocation(PortablePdfUnsupportedUnicodeTextDiagnostic diagnostic) =>
@@ -179,7 +175,7 @@ public static class PortablePdfTextCapabilityPlanner
             _ => $"text run on export page {diagnostic.ExportPageNumber}"
         };
 
-    private static string FormatCodePoints(IReadOnlyList<PortablePdfUnsupportedUnicodeScalar> unsupportedScalars) =>
+    private static string FormatCodePoints(IReadOnlyList<PdfUnsupportedUnicodeScalar> unsupportedScalars) =>
         string.Join(", ", unsupportedScalars.Select(scalar => scalar.CodePoint).Distinct(StringComparer.Ordinal));
 
     private static string FormatCellReference(uint? row, uint? column) =>

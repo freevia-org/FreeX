@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
@@ -521,7 +522,7 @@ public sealed partial class MainWindow
 
     private void AddOrphanCommandResults(List<InteractionValidationResult> results)
     {
-        foreach (var orphanId in AvaloniaCommandIdAdapter.OrphanAvaloniaIds.OrderBy(id => id, StringComparer.Ordinal))
+        foreach (var orphanId in FreeXRibbonCommandIdentityCatalog.OrphanAvaloniaIds.OrderBy(id => id, StringComparer.Ordinal))
         {
             var commandId = new RibbonCommandId(orphanId);
             IRibbonCommand? command = null;
@@ -546,11 +547,11 @@ public sealed partial class MainWindow
     private static string GetDeterministicSelectedValue(RibbonCommandId commandId)
     {
         var id = commandId.Value;
-        if (string.Equals(id, AvaloniaCommandIdAdapter.ToCanonical("home.fontName"), StringComparison.Ordinal))
+        if (string.Equals(id, FreeXRibbonCommandIdentityCatalog.ToCanonical("home.fontName"), StringComparison.Ordinal))
             return "Arial";
-        if (string.Equals(id, AvaloniaCommandIdAdapter.ToCanonical("home.fontSize"), StringComparison.Ordinal))
+        if (string.Equals(id, FreeXRibbonCommandIdentityCatalog.ToCanonical("home.fontSize"), StringComparison.Ordinal))
             return "11";
-        if (string.Equals(id, AvaloniaCommandIdAdapter.ToCanonical("home.numberFormat"), StringComparison.Ordinal))
+        if (string.Equals(id, FreeXRibbonCommandIdentityCatalog.ToCanonical("home.numberFormat"), StringComparison.Ordinal))
             return HomeNumberFormatDropdownPlanner.Options[0].Label;
         return "1";
     }

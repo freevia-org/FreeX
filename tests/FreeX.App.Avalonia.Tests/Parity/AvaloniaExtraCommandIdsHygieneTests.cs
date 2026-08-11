@@ -6,31 +6,32 @@ using System.Text.RegularExpressions;
 
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Ribbon;
 
 using Xunit;
 
 namespace FreeX.App.Avalonia.Tests.Parity;
 
 /// <summary>
-/// Keeps <see cref="AvaloniaExtraCommandIds.RawCanonical"/> in lock-step with the actual raw-canonical
+/// Keeps <see cref="FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds"/> in lock-step with the actual raw-canonical
 /// <c>ExtraCommands</c> keys wired in the Avalonia <c>MainWindow</c> source. The functional parity matrix
 /// trusts <c>RawCanonical</c> as the (UI-instantiation-free) record of the shell's raw-canonical bindings;
 /// this guard reads the MainWindow partial-class sources and asserts the declared set is exactly the set of
 /// non-dotted dictionary keys those files assign — so a future wiring change can never quietly desync the
 /// matrix from reality.
 /// </summary>
-public sealed class AvaloniaExtraCommandIdsHygieneTests
+public sealed class RawCanonicalCommandIdsHygieneTests
 {
     [Fact]
     public void RawCanonical_MatchesLiteralExtraCommandKeysInSource()
     {
         var keys = ExtractRawCanonicalKeysFromSource();
 
-        var declaredOnly = AvaloniaExtraCommandIds.RawCanonical.Except(keys).OrderBy(x => x, StringComparer.Ordinal).ToArray();
-        var sourceOnly = keys.Except(AvaloniaExtraCommandIds.RawCanonical).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var declaredOnly = FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds.Except(keys).OrderBy(x => x, StringComparer.Ordinal).ToArray();
+        var sourceOnly = keys.Except(FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds).OrderBy(x => x, StringComparer.Ordinal).ToArray();
 
         Assert.True(declaredOnly.Length == 0 && sourceOnly.Length == 0,
-            "AvaloniaExtraCommandIds.RawCanonical has drifted from the MainWindow ExtraCommands keys."
+            "FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds has drifted from the MainWindow ExtraCommands keys."
             + Environment.NewLine + "Declared but not in source: " + string.Join(", ", declaredOnly)
             + Environment.NewLine + "In source but not declared: " + string.Join(", ", sourceOnly));
     }
@@ -59,7 +60,7 @@ public sealed class AvaloniaExtraCommandIdsHygieneTests
                     continue;
                 var key = Regex.Unescape(m.Groups["key"].Value);
                 if (IsDottedHandlerId(key))
-                    continue; // routed through AvaloniaCommandIdAdapter, not a raw-canonical wiring.
+                    continue; // routed through the shared identity catalog, not a raw-canonical wiring.
                 keys.Add(key);
             }
         }

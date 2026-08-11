@@ -34,21 +34,19 @@ public sealed class FreeXRibbonCommandIdentityCatalogTests
     }
 
     [Fact]
-    public void AvaloniaCompatibilityFacades_DoNotOwnCommandIdentityPolicy()
+    public void AvaloniaCallers_UsePresentationCatalogDirectly()
     {
-        var adapter = ReadSource(
-            "src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaCommandIdAdapter.cs");
-        var rawCanonical = ReadSource(
-            "src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaExtraCommandIds.cs");
+        var host = ReadSource(
+            "src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaRibbonHost.cs");
+        var validation = ReadSource(
+            "src", "FreeX.App.Avalonia", "MainWindow.RibbonInteractionValidation.cs");
         var presentation = ReadSource(
             "src", "FreeX.App.Presentation", "Ribbon", "FreeXRibbonCommandIdentityCatalog.cs");
 
-        adapter.Should().Contain("FreeXRibbonCommandIdentityCatalog.ToCanonical");
-        adapter.Should().NotContain("new Dictionary");
-        adapter.Should().NotContain("[\"home.bold\"]");
-        rawCanonical.Should().Contain("FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds");
-        rawCanonical.Should().NotContain("new HashSet");
+        host.Should().Contain("FreeXRibbonCommandIdentityCatalog.ToCanonical");
+        validation.Should().Contain("FreeXRibbonCommandIdentityCatalog.OrphanAvaloniaIds");
         presentation.Should().Contain("[\"home.bold\"] = \"Bold\"");
+        presentation.Should().Contain("public static readonly IReadOnlySet<string> OrphanAvaloniaIds");
     }
 
     private static string ReadSource(params string[] parts) =>

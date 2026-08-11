@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.Ribbon.Definitions;
 using Free.Shared.Ribbon;
 
@@ -18,7 +19,7 @@ namespace FreeX.App.Avalonia.Tests.Parity;
 /// "Handled by the WPF shell" is sourced from the generated WPF handler map snapshot
 /// (<c>docs/parity/wpf-handler-ids.txt</c>, kept in lock-step with <c>FreeXRibbonHandlerMap</c> by a guard
 /// test in the App.Host.Tests lane). "Bound by the Avalonia shell" is sourced from
-/// <see cref="AvaloniaCommandIdAdapter"/> — the documented single-source map of every Avalonia handler id to
+/// <see cref="FreeXRibbonCommandIdentityCatalog"/> — the documented single-source map of every Avalonia handler id to
 /// its canonical control, which the keystone test already proves maps only to real shared-definition ids.
 /// </summary>
 public static class SurfaceCatalog
@@ -50,8 +51,8 @@ public static class SurfaceCatalog
     /// The complete set of canonical ids the Avalonia shell binds a handler for. The shell wires commands
     /// through three statically-enumerable sources, all unioned here:
     /// <list type="bullet">
-    ///   <item>the dotted handler ids in <see cref="AvaloniaCommandIdAdapter"/>, projected to canonical;</item>
-    ///   <item>the raw-canonical <c>ExtraCommands</c> menu/gallery wirings (<see cref="AvaloniaExtraCommandIds.RawCanonical"/>);</item>
+    ///   <item>the dotted handler ids in <see cref="FreeXRibbonCommandIdentityCatalog"/>, projected to canonical;</item>
+    ///   <item>the raw-canonical <c>ExtraCommands</c> menu/gallery wirings (<see cref="FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds"/>);</item>
     ///   <item>the Home ▸ Styles ▸ Cell Styles gallery presets, whose display name IS the canonical id.</item>
     /// </list>
     /// This mirrors exactly how <c>MainWindow</c> assembles its ribbon callbacks, so the parity matrix counts
@@ -61,11 +62,11 @@ public static class SurfaceCatalog
 
     private static IReadOnlySet<string> BuildAvaloniaBoundIds()
     {
-        var ids = AvaloniaCommandIdAdapter.AvaloniaIds
-            .Select(AvaloniaCommandIdAdapter.ToCanonical)
+        var ids = FreeXRibbonCommandIdentityCatalog.AvaloniaIds
+            .Select(FreeXRibbonCommandIdentityCatalog.ToCanonical)
             .ToHashSet(StringComparer.Ordinal);
 
-        foreach (var raw in AvaloniaExtraCommandIds.RawCanonical)
+        foreach (var raw in FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds)
             ids.Add(raw);
 
         foreach (var preset in Enum.GetValues<FreeX.App.Services.CellStylePreset>())

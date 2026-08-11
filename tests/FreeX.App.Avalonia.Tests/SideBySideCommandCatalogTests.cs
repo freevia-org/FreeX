@@ -1,5 +1,6 @@
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Avalonia.Tests.Parity;
+using FreeX.App.Presentation.Ribbon;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -13,14 +14,14 @@ public sealed class SideBySideCommandCatalogTests
     [Fact]
     public void ViewSideBySide_IsInRawCanonical()
     {
-        AvaloniaExtraCommandIds.RawCanonical.Should().Contain("View Side by Side",
+        FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds.Should().Contain("View Side by Side",
             "the command must be registered in the Avalonia extra-command catalog so the parity matrix counts it");
     }
 
     [Fact]
     public void SynchronousScrolling_IsInRawCanonical()
     {
-        AvaloniaExtraCommandIds.RawCanonical.Should().Contain("Synchronous Scrolling",
+        FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds.Should().Contain("Synchronous Scrolling",
             "the command must be registered in the Avalonia extra-command catalog so the parity matrix counts it");
     }
 
@@ -50,7 +51,7 @@ public sealed class SideBySideCommandCatalogTests
     [InlineData("B5 (JIS)")]
     public void JisPaperSize_IsInRawCanonical(string commandId)
     {
-        AvaloniaExtraCommandIds.RawCanonical.Should().Contain(commandId,
+        FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds.Should().Contain(commandId,
             "the Avalonia extra-command catalog must use the shared suffixed paper-size ids");
     }
 

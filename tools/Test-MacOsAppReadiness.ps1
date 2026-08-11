@@ -2198,7 +2198,7 @@ function Test-SourceWiring {
             Markers = @(
                 "public static class WorkbookPdfContentBuilder",
                 "PortablePdfPageContentPlanner.CreatePlan(workbook, request)",
-                "PortablePdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength)"
+                "PdfWinAnsiTextCapability.Truncate(cell.DisplayText, options.MaximumCellTextLength)"
             )
             OrderedPairs = @()
         },

@@ -36,7 +36,7 @@ internal static class AvaloniaRibbonKeyTipRoutes
 /// declarative definition drives both apps.
 ///
 /// The shell still registers its command handlers under the dotted ids it has always used; each registration
-/// is translated through <see cref="AvaloniaCommandIdAdapter.ToCanonical"/> to the canonical id the shared
+/// is translated through <see cref="FreeXRibbonCommandIdentityCatalog.ToCanonical"/> to the canonical id the shared
 /// definition emits, so the renderer (which queries the registry by canonical id) finds the handler. Bold /
 /// Italic / Underline bind to the shared, platform-neutral <see cref="WorkbookFormatRibbonCommands"/> — the
 /// same command logic the WPF host uses — so clicking them formats the live selection. Every canonical id in
@@ -319,7 +319,7 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
 /// definition is <see cref="FreeXRibbon.Build"/> verbatim — the single source of truth shared with WPF — so
 /// the Avalonia and Windows ribbons render from identical declarations. All command resolution is keyed to
 /// the canonical ids the definition emits; shell handlers (registered under their historical dotted ids) are
-/// translated to canonical ids via <see cref="AvaloniaCommandIdAdapter"/>.
+/// translated to canonical ids via <see cref="FreeXRibbonCommandIdentityCatalog"/>.
 /// </summary>
 internal static class AvaloniaRibbonComposition
 {
@@ -348,7 +348,7 @@ internal static class AvaloniaRibbonComposition
     public static RibbonDefinition BuildDefinition()
     {
         var definition = FreeXRibbon.Build();
-        var numberFormatCommandId = AvaloniaCommandIdAdapter.ToCanonical("home.numberFormat");
+        var numberFormatCommandId = FreeXRibbonCommandIdentityCatalog.ToCanonical("home.numberFormat");
         var numberFormatLabels = HomeNumberFormatDropdownPlanner.Options
             .Select(option => option.Label)
             .ToArray();
@@ -423,7 +423,7 @@ internal static class AvaloniaRibbonComposition
 
     /// <summary>Registers <paramref name="command"/> under the canonical id for the Avalonia <paramref name="avaloniaId"/>.</summary>
     private static void Register(IRibbonCommandRegistry registry, string avaloniaId, IRibbonCommand command)
-        => registry.Register(new RibbonCommandId(AvaloniaCommandIdAdapter.ToCanonical(avaloniaId)), command);
+        => registry.Register(new RibbonCommandId(FreeXRibbonCommandIdentityCatalog.ToCanonical(avaloniaId)), command);
 
     /// <summary>
     /// Binds each non-null host callback to its canonical command id(s) via an <see cref="ActionRibbonCommand"/>,
@@ -439,7 +439,7 @@ internal static class AvaloniaRibbonComposition
 
         IRibbonCommand CreateRelayCommand(string avaloniaId, Action action)
         {
-            var canonicalId = AvaloniaCommandIdAdapter.ToCanonical(avaloniaId);
+            var canonicalId = FreeXRibbonCommandIdentityCatalog.ToCanonical(avaloniaId);
             if (callbacks.ExtraCommandStates?.TryGetValue(avaloniaId, out var state) == true ||
                 callbacks.ExtraCommandStates?.TryGetValue(canonicalId, out state) == true)
             {
@@ -511,7 +511,7 @@ internal static class AvaloniaRibbonComposition
 
         IRibbonCommand CreateStatefulValueRelayCommand(string avaloniaId, Action<string?> action)
         {
-            var canonicalId = AvaloniaCommandIdAdapter.ToCanonical(avaloniaId);
+            var canonicalId = FreeXRibbonCommandIdentityCatalog.ToCanonical(avaloniaId);
             if (callbacks.ExtraCommandStates?.TryGetValue(avaloniaId, out var state) == true ||
                 callbacks.ExtraCommandStates?.TryGetValue(canonicalId, out state) == true)
             {

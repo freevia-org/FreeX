@@ -53,9 +53,9 @@ public sealed class HomeFontBorderPopupCatalogTests
     [Fact]
     public void CatalogRows_DoNotRequirePlaceholderAvaloniaHandlersForEveryPopupChoice()
     {
-        AvaloniaCommandIdAdapter.ToCanonical("home.fontColor").Should().Be("Font Color");
-        AvaloniaCommandIdAdapter.ToCanonical("home.borders").Should().Be("Borders");
-        AvaloniaCommandIdAdapter.ToCanonical("home.bordersAll").Should().Be("All Borders");
+        FreeXRibbonCommandIdentityCatalog.ToCanonical("home.fontColor").Should().Be("Font Color");
+        FreeXRibbonCommandIdentityCatalog.ToCanonical("home.borders").Should().Be("Borders");
+        FreeXRibbonCommandIdentityCatalog.ToCanonical("home.bordersAll").Should().Be("All Borders");
 
         HomeFontBorderPopupCatalogPlanner.FontColorSwatches
             .Where(swatch => swatch.BoundCommandId is not null)
