@@ -88,13 +88,26 @@ public sealed class DeferredCommandMessagePlannerTests
     public void HostDeferredCommandMessages_RoutesThroughPresentationPlanner()
     {
         var hostRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Host");
-        var source = File.ReadAllText(Path.Combine(hostRoot, "DeferredCommandMessages.cs"));
+        var facadePath = Path.Combine(hostRoot, "DeferredCommandMessages.cs");
+        var resolverSource = File.ReadAllText(Path.Combine(hostRoot, "WpfResourceKeyTextResolver.cs"));
+        var consumerSources = new[]
+        {
+            "MainWindow.Backstage.cs",
+            "MainWindow.PageLayout.cs",
+            "MainWindow.ScreenshotTour.cs",
+            "OptionsDialog.xaml.cs"
+        }
+            .Select(fileName => File.ReadAllText(Path.Combine(hostRoot, fileName)))
+            .ToArray();
+        var combinedConsumers = string.Join(Environment.NewLine, consumerSources);
 
-        source.Should().Contain("DeferredCommandMessagePlanner.");
-        source.Should().NotContain("\"DeferredCommand_WorkbookTheme_Body\"");
-        source.Should().NotContain("\"DeferredCommand_UnsupportedXlsxFeatureOpenWarning_Body\"");
-        source.Should().NotContain("XlsxUnsupportedFeatureKind.Macros =>");
-        source.Should().Contain("UiText.Get(argument.ResourceKey)");
-        source.Should().Contain("UiText.Format(");
+        File.Exists(facadePath).Should().BeFalse("the WPF compatibility facade was removed");
+        resolverSource.Should().Contain("DeferredCommandMessageResolver.Resolve(");
+        consumerSources.Should().OnlyContain(source =>
+            source.Contains("WpfResourceKeyTextResolver.Resolve(", StringComparison.Ordinal));
+        combinedConsumers.Should().Contain("DeferredCommandMessagePlanner.");
+        combinedConsumers.Should().NotContain("\"DeferredCommand_WorkbookTheme_Body\"");
+        combinedConsumers.Should().NotContain("\"DeferredCommand_UnsupportedXlsxFeatureOpenWarning_Body\"");
+        combinedConsumers.Should().NotContain("XlsxUnsupportedFeatureKind.Macros =>");
     }
 }

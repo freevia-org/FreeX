@@ -42,7 +42,8 @@ public sealed class GridSelectionNavigationPlannerSourceGuardTests
         avaloniaMain.Should().Contain("StructuredTableSelectionPlanner.PlanWholeColumns(");
         avaloniaMain.Should().Contain("StructuredTableSelectionPlanner.PlanWholeRows(");
         avaloniaMain.Should().Contain("StructuredTableSelectionPlanner.TryResolveDataBodyRange(");
-        avaloniaMain.Should().Contain("StructuredTableSelectionPlanner.ContainsTableName(");
+        avaloniaMain.Should().Contain("DefinedNameUiPolicy.PlanNameBoxDefinition(");
+        avaloniaMain.Should().NotContain("StructuredTableSelectionPlanner.ContainsTableName(");
         avaloniaMain.Should().NotContain("_session.SelectedRanges.Count <= 1");
         avaloniaMain.Should().NotContain("private static CellAddress AdvanceActiveCellWithinRange(");
         avaloniaMain.Should().NotContain("private static bool IsSingleMergedCellRange(");
@@ -55,7 +56,8 @@ public sealed class GridSelectionNavigationPlannerSourceGuardTests
             "FreeX.App.Host",
             "MainWindow.Editing.cs"));
         wpfEditing.Should().Contain("StructuredTableSelectionPlanner.TryResolveDataBodyRange(");
-        wpfEditing.Should().Contain("StructuredTableSelectionPlanner.ContainsTableName(");
+        wpfEditing.Should().Contain("DefinedNameUiPolicy.PlanNameBoxDefinition(");
+        wpfEditing.Should().NotContain("StructuredTableSelectionPlanner.ContainsTableName(");
         wpfEditing.Should().NotContain("TryFindStructuredTableDataBodyRange(");
 
         var avaloniaHeaders = File.ReadAllText(Path.Combine(

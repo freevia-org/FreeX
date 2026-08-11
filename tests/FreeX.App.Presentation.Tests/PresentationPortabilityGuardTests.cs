@@ -18,7 +18,11 @@ public sealed class PresentationPortabilityGuardTests
         new("System.Printing namespace", new(@"(?<![\w.])System\.Printing(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
         new("Microsoft.Win32 namespace", new(@"(?<![\w.])Microsoft\.Win32(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
         new("WinRT Windows namespace", new(@"(?<![\w.])Windows\.[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*(?![\w.])", Options)),
-        new("Avalonia dependency", new(@"(?<![\w.])Avalonia(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
+        new(
+            "Avalonia namespace",
+            new(
+                @"(?m)(?:^\s*(?:global\s+)?using\s+(?:global::)?Avalonia(?:[.;])|(?<![\w.])(?:global::)?Avalonia\.[A-Za-z_]\w*)",
+                Options)),
         new("AppKit namespace", new(@"(?<![\w.])AppKit(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
         new("Foundation namespace", new(@"(?<![\w.])Foundation(?:\.[A-Za-z_]\w*)?(?![\w.])", Options)),
         new("FreeX.App.Host dependency", new(@"(?<![\w.])FreeX\.App\.Host(?![\w.])", Options)),

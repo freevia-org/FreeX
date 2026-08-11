@@ -22,7 +22,7 @@ public sealed class FormulaBarPlannerSourceGuardTests
     }
 
     [Fact]
-    public void Hosts_AdaptPlatformInputBeforeCallingFormulaBarPlanners()
+    public void Hosts_AdaptPlatformInputAndDelegateFormulaEditingPolicyToSession()
     {
         var hostEditing = File.ReadAllText(FindRepositoryFile("src", "FreeX.App.Host", "MainWindow.Editing.cs"));
         var hostFormulaReferenceEditing = File.ReadAllText(FindRepositoryFile("src", "FreeX.App.Host", "MainWindow.FormulaReferenceEditing.cs"));
@@ -31,13 +31,24 @@ public sealed class FormulaBarPlannerSourceGuardTests
 
         hostEditing.Should().Contain("FormulaBarWpfInputAdapter.ToFormulaEditorKey");
         hostEditing.Should().Contain("FormulaBarWpfInputAdapter.ToFormulaEditorModifiers");
-        hostEditing.Should().Contain("FormulaEditInteractionPlanner.BuildPointModeTogglePlan");
-        hostEditing.Should().Contain("FormulaEditInteractionPlanner.BuildEditStatusBarPlan");
+        hostEditing.Should().Contain("_formulaRangeEditingSession.TogglePointMode(");
+        hostEditing.Should().Contain("_formulaRangeEditingSession.BuildEditStatusBarPlan(");
         hostEditing.Should().Contain("ApplyFormulaEditStatusBarPlan");
-        hostFormulaReferenceEditing.Should().Contain("FormulaEditInteractionPlanner.BuildTextChangePlan");
-        hostSelection.Should().Contain("FormulaEditInteractionPlanner.BuildTypedEntryPlan");
+        hostFormulaReferenceEditing.Should().Contain("_formulaRangeEditingSession.ApplyTextChanged(");
+        hostSelection.Should().Contain("_formulaRangeEditingSession.ApplyTypedEntry(");
         avaloniaMain.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey");
         avaloniaMain.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers");
+        avaloniaMain.Should().Contain("_formulaRangeEditingSession.TogglePointMode(");
+
+        var rendererSources = string.Join(
+            Environment.NewLine,
+            hostEditing,
+            hostFormulaReferenceEditing,
+            hostSelection,
+            avaloniaMain);
+        rendererSources.Should().NotContain("FormulaEditInteractionPlanner.BuildPointModeTogglePlan");
+        rendererSources.Should().NotContain("FormulaEditInteractionPlanner.BuildTextChangePlan");
+        rendererSources.Should().NotContain("FormulaEditInteractionPlanner.BuildTypedEntryPlan");
     }
 
     [Fact]

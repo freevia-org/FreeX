@@ -725,7 +725,7 @@ public sealed class PageSetupDialogModelTests
         submission.Submission.FollowUpAction.Should().Be(PageSetupDialogFollowUpAction.ShowPrinterOptions);
         PageSetupSubmissionPlanner.ResolveFollowUp(PageSetupDialogAction.PrintPreview)
             .Should()
-            .Be(PageSetupDialogFollowUpAction.Print);
+            .Be(PageSetupDialogFollowUpAction.PrintPreview);
         commandBuild.Success.Should().BeTrue(commandBuild.Validation?.Message.FallbackText);
         commandBuild.Command!.Label.Should().Be(PageSetupSubmissionPlanner.DefaultCommandLabel);
 

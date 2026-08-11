@@ -17,7 +17,8 @@ public sealed class PageLayoutSourceGuardTests
                 File.ReadLines(file).Where(PortableBoundaryGuard.IsNonCommentLine));
 
             source.Should().NotContain("System.Windows");
-            source.Should().NotContain("Avalonia");
+            source.Should().NotMatchRegex(
+                @"(?m)(?:^\s*(?:global\s+)?using\s+(?:global::)?Avalonia(?:[.;])|(?<![\w.])(?:global::)?Avalonia\.[A-Za-z_]\w*)");
             source.Should().NotContain("FreeX.App.Host");
             source.Should().NotContain("FreeX.App.Avalonia");
         }
@@ -41,10 +42,16 @@ public sealed class PageLayoutSourceGuardTests
     public void WpfPrintRenderer_DelegatesCommentSummaryPlanningToPresentation()
     {
         var directory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Host");
+        var presentationDirectory = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation", "PageLayout");
         var rendererSource = File.ReadAllText(Path.Combine(directory, "PrintRenderer.cs"));
         var commentsSource = File.ReadAllText(Path.Combine(directory, "PrintRenderer.Comments.cs"));
+        var contentPlannerSource = File.ReadAllText(Path.Combine(
+            presentationDirectory,
+            "WorksheetPrintPageContentPlanner.cs"));
 
-        rendererSource.Should().Contain("PrintCommentSummaryPlanner.BuildPages(");
+        rendererSource.Should().Contain("WorksheetPrintPageContentPlanner.BuildCommentSummaryPages(");
+        rendererSource.Should().NotContain("PrintCommentSummaryPlanner.BuildPages(");
+        contentPlannerSource.Should().Contain("PrintCommentSummaryPlanner.BuildPages(");
         commentsSource.Should().Contain("PrintCommentSummaryPlanner.WrapOverlayText(");
         commentsSource.Should().NotContain("CommentNavigationPlanner.FormatThreadedComment(");
         commentsSource.Should().NotContain("result.Sort(static (left, right) =>");

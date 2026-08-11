@@ -57,8 +57,8 @@ public sealed class RendererValidationPresentationOwnershipSourceGuardTests
         var print = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Print.cs");
 
         fill.Should().Contain("FillSeriesPlanner.DescribeNoSeed");
-        fill.Should().Contain("FillSeriesPlanner.DescribeCommandFailure");
-        fill.Should().Contain("FillSeriesPlanner.DescribeSuccess");
+        fill.Should().MatchRegex(@"FillSeriesPlanner\s*\.DescribeCommandFailure");
+        fill.Should().MatchRegex(@"FillSeriesPlanner\s*\.DescribeSuccess");
         fill.Should().NotContain("\"FillSeries_NoSeed\"");
         fill.Should().NotContain("\"FillSeries_Failed\"");
         fill.Should().NotContain("\"FillSeries_Filled\"");
@@ -67,8 +67,8 @@ public sealed class RendererValidationPresentationOwnershipSourceGuardTests
         main.Should().NotContain("Goal Seek request for {setCell} is invalid.");
         main.Should().NotContain("Goal Seek result for {changingCell} could not be applied.");
 
-        chartLayout.Should().Contain("ChartWorkflowCommandCatalog.DescribeCommandResult");
-        chartQuick.Should().Contain("ChartWorkflowCommandCatalog.DescribeCommandResult");
+        chartLayout.Should().MatchRegex(@"ChartWorkflowCommandCatalog\s*\.DescribeCommandResult");
+        chartQuick.Should().MatchRegex(@"ChartWorkflowCommandCatalog\s*\.DescribeCommandResult");
         (chartLayout + chartQuick).Should().NotContain("CommandAppliedStatusResourceKey");
         (chartLayout + chartQuick).Should().NotContain("CommandFailedStatusResourceKey");
 
