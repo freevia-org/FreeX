@@ -370,6 +370,13 @@ public sealed class SlideShowPresenterSessionDedupTests
     }
 
     [Fact]
+    public void PresenterViewSession_DefinesSharedRefreshCadence()
+    {
+        SlideShowPresenterViewSession.RefreshInterval.Should()
+            .Be(TimeSpan.FromMilliseconds(250));
+    }
+
+    [Fact]
     public void PresenterViewSurface_OwnsLabelsActionsAndAccessibilitySemantics()
     {
         var surface = SlideShowPresenterViewSurfaceCatalog.Surface;
@@ -478,7 +485,17 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("AutomationProperties.SetName(");
             source.Should().Contain("AutomationProperties.SetAutomationId(");
             source.Should().Contain("DispatcherTimer");
+            source.Should().Contain("Interval = SlideShowPresenterViewSession.RefreshInterval");
             source.Should().Contain("SlideCanvas");
+            source.Should().Contain("if (refresh.ShouldUpdateNotesText)");
+            source.Should().Contain("if (refresh.ShouldUpdateSlideNumber");
+            source.Should().Contain("_pointerModeCombo.SelectedItem = plan.PointerMode;");
+            source.Should().NotContain("TimeSpan.FromMilliseconds(250)");
+            source.Should().NotContain("if (!_notesText.IsFocused");
+            source.Should().NotContain("if (!_notesText.IsKeyboardFocusWithin");
+            source.Should().NotContain("if (!_slideNumberBox.IsFocused");
+            source.Should().NotContain("if (!_slideNumberBox.IsKeyboardFocusWithin");
+            source.Should().NotContain("SlideShowPresenterPointerMode.");
             source.Should().NotContain("SlideShowSlideNumberPlanner");
             source.Should().NotContain("BuildRecordingSummary");
             source.Should().NotContain("TotalArtifactCount");

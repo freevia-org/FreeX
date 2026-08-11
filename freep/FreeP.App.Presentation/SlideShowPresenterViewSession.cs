@@ -29,8 +29,8 @@ public sealed record SlideShowPresenterViewRefreshPlan(
 
 /// <summary>
 /// Renderer-neutral presenter-window interaction session. Native adapters provide
-/// controls, focus state, and refresh timing while this class owns command intent,
-/// note commits, and presenter view-state composition.
+/// controls, focus state, and timer scheduling while this class owns refresh cadence,
+/// command intent, note commits, and presenter view-state composition.
 /// </summary>
 public sealed class SlideShowPresenterViewSession
 {
@@ -102,6 +102,8 @@ public sealed class SlideShowPresenterViewSession
     public bool CanClearInk => _clearInk is not null;
 
     public bool CanSetNotes => _setNotesText is not null;
+
+    public static TimeSpan RefreshInterval { get; } = TimeSpan.FromMilliseconds(250);
 
     public SlideShowPresenterViewSurfacePlan Surface =>
         SlideShowPresenterViewSurfaceCatalog.Surface;

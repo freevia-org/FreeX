@@ -238,7 +238,7 @@ public sealed class PresenterViewWindow : Window
 
         _refreshTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = TimeSpan.FromMilliseconds(250),
+            Interval = SlideShowPresenterViewSession.RefreshInterval,
         };
         _refreshTimer.Tick += (_, _) => RefreshFromState();
         Loaded += (_, _) =>
