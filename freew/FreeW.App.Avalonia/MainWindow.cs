@@ -33,6 +33,7 @@ using FreeW.App.Presentation.ContextMenus;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentFragments;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
