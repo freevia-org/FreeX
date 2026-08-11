@@ -44,8 +44,10 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
 
         source.Should().Contain("target?.Parent is not Panel field");
         source.Should().Contain("if (field is Grid parentGrid)");
-        source.Should().Contain("ScenarioManagerChangingCellsPickerButton");
-        source.Should().Contain("ScenarioManagerResultCellsPickerButton");
+        source.Should().Contain("FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsPickerButton");
+        source.Should().Contain("FreeXAutomationIdCatalog.ScenarioManager.ResultCellsPickerButton");
+        source.Should().NotContain("\"ScenarioManagerChangingCellsPickerButton\"");
+        source.Should().NotContain("\"ScenarioManagerResultCellsPickerButton\"");
         source.Should().Contain("owner.AttachDialogRangePicker(dialog, picker, target, targetId);");
     }
 

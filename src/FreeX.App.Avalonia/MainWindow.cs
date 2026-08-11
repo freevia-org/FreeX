@@ -8785,22 +8785,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         dialog.Opened += (_, _) => passwordBox.Focus();
         dialog.Closed += (_, _) => done = true;
 
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
+        AvaloniaSynchronousDialogHost.Show(this, dialog, () => done);
 
         return entered;
     }
@@ -8850,22 +8835,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         dialog.Opened += (_, _) => okButton.Focus();
         dialog.Closed += (_, _) => done = true;
 
-        var wasEnabled = IsEnabled;
-        IsEnabled = false;
-        try
-        {
-            dialog.Show(this);
-            while (!done)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!done)
-                    System.Threading.Thread.Sleep(1);
-            }
-        }
-        finally
-        {
-            IsEnabled = wasEnabled;
-        }
+        AvaloniaSynchronousDialogHost.Show(this, dialog, () => done);
     }
 
     /// <summary>

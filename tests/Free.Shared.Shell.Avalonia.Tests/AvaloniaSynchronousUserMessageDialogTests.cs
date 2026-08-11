@@ -18,6 +18,41 @@ public sealed class AvaloniaSynchronousUserMessageDialogTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(ShellHeadlessApp).Assembly);
 
     [Fact]
+    public async Task SynchronousHost_DisablesAndRestoresOwnerAroundOwnedDialog()
+    {
+        await Session.Dispatch(() =>
+        {
+            var owner = new Window();
+            var dialog = new Window();
+            var completed = false;
+            var ownerWasDisabled = false;
+            dialog.Opened += (_, _) =>
+            {
+                ownerWasDisabled = !owner.IsEnabled;
+                completed = true;
+                dialog.Close();
+            };
+
+            try
+            {
+                owner.Show();
+                AvaloniaSynchronousDialogHost.Show(owner, dialog, () => completed);
+
+                ownerWasDisabled.Should().BeTrue();
+                owner.IsEnabled.Should().BeTrue();
+                dialog.IsVisible.Should().BeFalse();
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task YesNo_PreservesExistingOwnedWindowLayoutFocusAndDismissalPolicy()
     {
         await Session.Dispatch(() =>

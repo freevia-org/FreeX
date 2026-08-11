@@ -2,7 +2,6 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
 
@@ -83,26 +82,8 @@ public sealed class AvaloniaSynchronousUserMessageDialog : Window
         ArgumentNullException.ThrowIfNull(request);
 
         var dialog = new AvaloniaSynchronousUserMessageDialog(request, dismissedResult);
-        var wasEnabled = owner.IsEnabled;
-        owner.IsEnabled = false;
-        try
-        {
-            dialog.Show(owner);
-            while (!dialog._completed)
-            {
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                if (!dialog._completed)
-                    Thread.Sleep(1);
-            }
-
-            return dialog.Result;
-        }
-        finally
-        {
-            if (dialog.IsVisible)
-                dialog.Close();
-            owner.IsEnabled = wasEnabled;
-        }
+        AvaloniaSynchronousDialogHost.Show(owner, dialog, () => dialog._completed);
+        return dialog.Result;
     }
 
     internal static AvaloniaSynchronousUserMessageDialog CreateForTests(

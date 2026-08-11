@@ -76,10 +76,10 @@ public sealed class FreeXPracticalResidualOwnershipTests
         var wpfBackstage = Read("src", "FreeX.App.Host", "MainWindow.Backstage.cs");
         var wpfUpdate = Read("src", "FreeX.App.Host", "MainWindow.Update.cs");
         var wpfFormatting = Read("src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs");
-        var synchronousRealizer = Read(
+        var synchronousHost = Read(
             "shared",
             "Free.Shared.Shell.Avalonia",
-            "AvaloniaSynchronousUserMessageDialog.cs");
+            "AvaloniaSynchronousDialogHost.cs");
         var pairedMergeRenderers = wpfFormatting + Environment.NewLine + avalonia;
 
         avalonia.Should().Contain("AvaloniaSynchronousUserMessageDialog.ShowMessage(");
@@ -88,9 +88,10 @@ public sealed class FreeXPracticalResidualOwnershipTests
         avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForExternallyModifiedFile(");
         avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForLossyFormatFeatureLoss(");
         avalonia.Should().Contain("FreeXSynchronousPromptCatalog.ForUpdateReady(");
+        avalonia.Should().Contain("AvaloniaSynchronousDialogHost.Show(this, dialog, () => done);");
         avalonia.Should().NotContain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
         avalonia.Should().NotContain("private UserMessageResult ShowDataValidationPromptDialog");
-        synchronousRealizer.Should().Contain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
+        synchronousHost.Should().Contain("Dispatcher.UIThread.RunJobs(DispatcherPriority.Input)");
 
         wpfEditing.Should().Contain("FreeXSynchronousPromptCatalog.ForDataValidation(");
         wpfBackstage.Should().Contain("FreeXSynchronousPromptCatalog.ForReadOnlyRecommended(");
