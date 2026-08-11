@@ -1075,6 +1075,28 @@ public sealed class DocumentView : Control
     /// </summary>
     internal AccessibleDocumentSnapshot AutomationSnapshot()
     {
+        if (_hfCaret is { } headerFooterCaret
+            && ResolveHfStore(headerFooterCaret.Target) is { } store
+            && GetHfSlot(store, headerFooterCaret.Target.Slot) is { } story)
+        {
+            var sectionNumber = Math.Max(0, headerFooterCaret.Target.SectionIndex) + 1;
+            var storyName = headerFooterCaret.Target.Slot switch
+            {
+                HfSlot.Header => "default header",
+                HfSlot.Footer => "default footer",
+                HfSlot.EvenHeader => "even-page header",
+                HfSlot.EvenFooter => "even-page footer",
+                HfSlot.FirstHeader => "first-page header",
+                HfSlot.FirstFooter => "first-page footer",
+                _ => "header or footer"
+            };
+            return AccessibleDocumentSnapshotPlanner.BuildHeaderFooter(
+                story,
+                headerFooterCaret.Target.ParaIdx,
+                headerFooterCaret.Offset,
+                $"Section {sectionNumber} {storyName}");
+        }
+
         var caret = _cellCaret is { } cell
             ? AccessibleDocumentLocation.TableCell(cell.TableBlock, cell.Row, cell.Col, cell.ParaIdx, cell.Offset)
             : AccessibleDocumentLocation.Body(_caret.Block, _caret.Offset);
@@ -1147,6 +1169,21 @@ public sealed class DocumentView : Control
 
     internal void AutomationFocusNode(DocumentAccessibilityNode node)
     {
+        if (node.StoryKind != DocumentAccessibilityStoryKind.Body
+            && AutomationHeaderFooterContext(node) is { } storyContext)
+        {
+            var paragraph = storyContext.Paragraph ?? storyContext.Story.Paragraphs.FirstOrDefault();
+            var paragraphIndex = paragraph is null ? 0 : storyContext.Story.Paragraphs.IndexOf(paragraph);
+            if (paragraphIndex < 0)
+                paragraphIndex = 0;
+            Focus();
+            PlaceCaretInHeaderFooter(
+                MakeHfTarget(storyContext.Store, storyContext.Slot, paragraphIndex),
+                Math.Max(0, node.TextStart));
+            ScrollToCaretRequested?.Invoke();
+            return;
+        }
+
         if (IsAutomationDrawingNode(node.Kind))
         {
             Focus();
@@ -1210,6 +1247,17 @@ public sealed class DocumentView : Control
     {
         if (!IsKeyboardFocusWithin)
             return false;
+        if (node.StoryKind != DocumentAccessibilityStoryKind.Body)
+        {
+            if (_hfCaret is not { } headerFooterCaret
+                || AutomationHeaderFooterContext(node) is not { } storyContext
+                || headerFooterCaret.Target.Slot != storyContext.Slot
+                || !ReferenceEquals(ResolveHfStore(headerFooterCaret.Target), storyContext.Store))
+                return false;
+            if (storyContext.Paragraph is null)
+                return true;
+            return storyContext.Story.Paragraphs.IndexOf(storyContext.Paragraph) == headerFooterCaret.Target.ParaIdx;
+        }
         if (IsAutomationDrawingNode(node.Kind) && node.IsFloatingObject)
         {
             if (_selectedFloating is not { } selected
@@ -1312,6 +1360,24 @@ public sealed class DocumentView : Control
     private Rect AutomationNodeBoundsLocal(DocumentAccessibilityNode node)
     {
         var rectangles = new List<Rect>();
+        if (node.StoryKind != DocumentAccessibilityStoryKind.Body
+            && node.Kind is DocumentAccessibilityNodeKind.Paragraph
+                or DocumentAccessibilityNodeKind.Heading
+                or DocumentAccessibilityNodeKind.Hyperlink
+            && AutomationHeaderFooterContext(node) is { Paragraph: not null } storyContext)
+        {
+            var paragraphIndex = storyContext.Story.Paragraphs.IndexOf(storyContext.Paragraph);
+            rectangles.AddRange(_headerFooterItems
+                .Where(item => item.Target is { } target
+                    && target.Slot == storyContext.Slot
+                    && target.ParaIdx == paragraphIndex
+                    && ReferenceEquals(ResolveHfStore(target), storyContext.Store))
+                .Select(item => new Rect(
+                    item.X,
+                    item.Y,
+                    Math.Max(1, item.Width > 0 ? item.Width : item.AvailableWidth),
+                    Math.Max(1, item.Height > 0 ? item.Height : item.LineHeight))));
+        }
         if (node.ObjectPath is { Count: > 0 } objectPath
             && TryGetFloatingGroupChildGeometry(node.BlockIndex, node.RunIndex, objectPath, out var groupChild))
         {
@@ -1405,9 +1471,12 @@ public sealed class DocumentView : Control
             case DocumentAccessibilityNodeKind.Paragraph:
             case DocumentAccessibilityNodeKind.Heading:
             case DocumentAccessibilityNodeKind.Hyperlink:
-                rectangles.AddRange(_placed
-                    .Where(placed => AutomationPlacedCharBelongsToNode(placed, node))
-                    .Select(placed => new Rect(placed.X, placed.Y, Math.Max(1, placed.W), Math.Max(1, placed.LineHeight))));
+                if (node.StoryKind == DocumentAccessibilityStoryKind.Body)
+                {
+                    rectangles.AddRange(_placed
+                        .Where(placed => AutomationPlacedCharBelongsToNode(placed, node))
+                        .Select(placed => new Rect(placed.X, placed.Y, Math.Max(1, placed.W), Math.Max(1, placed.LineHeight))));
+                }
                 break;
         }
 
@@ -1477,6 +1546,8 @@ public sealed class DocumentView : Control
 
     private Paragraph? AutomationNodeParagraph(DocumentAccessibilityNode node)
     {
+        if (node.StoryKind != DocumentAccessibilityStoryKind.Body)
+            return AutomationHeaderFooterContext(node)?.Paragraph;
         if (node.BlockIndex < 0 || node.BlockIndex >= _doc.Blocks.Count)
             return null;
         if (node.RowIndex < 0)
@@ -1485,6 +1556,43 @@ public sealed class DocumentView : Control
         return cell is not null && node.ParagraphIndex >= 0 && node.ParagraphIndex < cell.Paragraphs.Count
             ? cell.Paragraphs[node.ParagraphIndex]
             : null;
+    }
+
+    private (SectionHeadersFooters Store, HfSlot Slot, HeaderFooter Story, Paragraph? Paragraph)?
+        AutomationHeaderFooterContext(DocumentAccessibilityNode node)
+    {
+        if (node.StoryKind == DocumentAccessibilityStoryKind.Body)
+            return null;
+        var sections = _doc.Sections;
+        if (node.SectionIndex < 0 || node.SectionIndex >= sections.Count)
+            return null;
+        var store = sections[node.SectionIndex].HeadersFooters;
+        var slot = node.StoryKind switch
+        {
+            DocumentAccessibilityStoryKind.Header => HfSlot.Header,
+            DocumentAccessibilityStoryKind.Footer => HfSlot.Footer,
+            DocumentAccessibilityStoryKind.EvenHeader => HfSlot.EvenHeader,
+            DocumentAccessibilityStoryKind.EvenFooter => HfSlot.EvenFooter,
+            DocumentAccessibilityStoryKind.FirstHeader => HfSlot.FirstHeader,
+            DocumentAccessibilityStoryKind.FirstFooter => HfSlot.FirstFooter,
+            _ => throw new ArgumentOutOfRangeException(nameof(node), node.StoryKind, null)
+        };
+        var story = GetHfSlot(store, slot);
+        if (story is null)
+            return null;
+
+        Paragraph? paragraph = null;
+        if (node.RowIndex >= 0 && story.Table is { } table)
+        {
+            var cell = GetCellModelGridCol(table, node.RowIndex, node.ColumnIndex);
+            if (cell is not null && node.ParagraphIndex >= 0 && node.ParagraphIndex < cell.Paragraphs.Count)
+                paragraph = cell.Paragraphs[node.ParagraphIndex];
+        }
+        else if (node.ParagraphIndex >= 0 && node.ParagraphIndex < story.Paragraphs.Count)
+        {
+            paragraph = story.Paragraphs[node.ParagraphIndex];
+        }
+        return (store, slot, story, paragraph);
     }
 
     private static int AutomationRunLayoutLength(Run run)

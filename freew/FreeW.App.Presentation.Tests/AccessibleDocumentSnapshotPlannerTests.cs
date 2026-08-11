@@ -95,4 +95,24 @@ public sealed class AccessibleDocumentSnapshotPlannerTests
         snapshot.LogicalLine.Should().Be(new AccessibleTextRange(0, 0));
         snapshot.Word.Should().BeNull();
     }
+
+    [Fact]
+    public void BuildHeaderFooter_reports_story_local_text_position_and_label()
+    {
+        var story = new HeaderFooter();
+        story.Paragraphs.Add(new Paragraph("Chapter title"));
+        story.Paragraphs.Add(new Paragraph("Page 4"));
+
+        var snapshot = AccessibleDocumentSnapshotPlanner.BuildHeaderFooter(
+            story,
+            paragraphIndex: 1,
+            offset: 5,
+            storyLabel: "Section 2 default footer");
+
+        snapshot.Text.Should().Be("Chapter title\nPage 4");
+        snapshot.CaretOffset.Should().Be(19);
+        snapshot.ParagraphNumber.Should().Be(2);
+        snapshot.Word.Should().Be(new AccessibleTextRange(19, 1));
+        snapshot.Status.Should().StartWith("Section 2 default footer; Caret 19 of 20;");
+    }
 }

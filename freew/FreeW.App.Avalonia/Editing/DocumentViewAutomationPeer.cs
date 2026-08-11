@@ -237,6 +237,8 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
             ? new DocumentDrawingObjectAutomationPeer(this, node.Id)
             : node.Kind switch
         {
+            DocumentAccessibilityNodeKind.HeaderFooterStory =>
+                new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.Paragraph or DocumentAccessibilityNodeKind.Heading =>
                 new DocumentValueAutomationPeer(this, node.Id),
             DocumentAccessibilityNodeKind.TableCell => new DocumentValueAutomationPeer(this, node.Id),
@@ -299,6 +301,7 @@ internal abstract class DocumentVirtualAutomationPeer(
 
     protected override AutomationControlType GetAutomationControlTypeCore() => Node.Kind switch
     {
+        DocumentAccessibilityNodeKind.HeaderFooterStory => AutomationControlType.Group,
         DocumentAccessibilityNodeKind.Paragraph or DocumentAccessibilityNodeKind.Heading => AutomationControlType.Text,
         DocumentAccessibilityNodeKind.Table => AutomationControlType.DataGrid,
         DocumentAccessibilityNodeKind.TableRow => AutomationControlType.Group,

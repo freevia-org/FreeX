@@ -4,6 +4,7 @@ namespace FreeW.App.Presentation.DocumentView;
 
 public enum DocumentAccessibilityNodeKind
 {
+    HeaderFooterStory,
     Paragraph,
     Heading,
     Table,
@@ -17,6 +18,17 @@ public enum DocumentAccessibilityNodeKind
     SmartArt,
     DrawingGroup,
     EmbeddedObject
+}
+
+public enum DocumentAccessibilityStoryKind
+{
+    Body,
+    Header,
+    Footer,
+    EvenHeader,
+    EvenFooter,
+    FirstHeader,
+    FirstFooter
 }
 
 /// <summary>
@@ -44,9 +56,11 @@ public sealed record DocumentAccessibilityNode(
     bool IsHeader = false,
     bool IsFloatingObject = false,
     IReadOnlyList<int>? ObjectPath = null,
+    int SectionIndex = -1,
+    DocumentAccessibilityStoryKind StoryKind = DocumentAccessibilityStoryKind.Body,
     IReadOnlyList<DocumentAccessibilityNode>? Children = null)
 {
-    public IReadOnlyList<DocumentAccessibilityNode> SemanticChildren { get; init; } = Children ?? [];
+    public IReadOnlyList<DocumentAccessibilityNode> SemanticChildren => Children ?? [];
 }
 
 public sealed record DocumentAccessibilityTree(IReadOnlyList<DocumentAccessibilityNode> Children)
@@ -93,8 +107,83 @@ public static class DocumentAccessibilityNodePlanner
             }
         }
 
+        var sections = document.Sections;
+        for (var sectionIndex = 0; sectionIndex < sections.Count; sectionIndex++)
+            AddHeaderFooterStories(children, sections[sectionIndex].HeadersFooters, sectionIndex);
+
         return new DocumentAccessibilityTree(children);
     }
+
+    private static void AddHeaderFooterStories(
+        ICollection<DocumentAccessibilityNode> children,
+        SectionHeadersFooters stories,
+        int sectionIndex)
+    {
+        AddStory(stories.Header, DocumentAccessibilityStoryKind.Header, "default-header", "Default header");
+        AddStory(stories.Footer, DocumentAccessibilityStoryKind.Footer, "default-footer", "Default footer");
+        AddStory(stories.EvenHeader, DocumentAccessibilityStoryKind.EvenHeader, "even-header", "Even-page header");
+        AddStory(stories.EvenFooter, DocumentAccessibilityStoryKind.EvenFooter, "even-footer", "Even-page footer");
+        AddStory(stories.FirstHeader, DocumentAccessibilityStoryKind.FirstHeader, "first-header", "First-page header");
+        AddStory(stories.FirstFooter, DocumentAccessibilityStoryKind.FirstFooter, "first-footer", "First-page footer");
+
+        void AddStory(
+            HeaderFooter? story,
+            DocumentAccessibilityStoryKind storyKind,
+            string idPart,
+            string label)
+        {
+            if (story is null || story.IsEmpty)
+                return;
+
+            var id = $"section:{sectionIndex}:story:{idPart}";
+            IReadOnlyList<DocumentAccessibilityNode> storyChildren;
+            if (story.Table is { } table)
+            {
+                storyChildren =
+                [StampStory(BuildTable(table, -1, 1, $"{id}:table"), sectionIndex, storyKind)];
+            }
+            else
+            {
+                storyChildren = story.Paragraphs
+                    .Select((paragraph, paragraphIndex) => StampStory(
+                        BuildParagraph(
+                            paragraph,
+                            -1,
+                            -1,
+                            -1,
+                            paragraphIndex,
+                            $"{id}:paragraph:{paragraphIndex}",
+                            $"Paragraph {paragraphIndex + 1}"),
+                        sectionIndex,
+                        storyKind))
+                    .ToArray();
+            }
+
+            children.Add(new DocumentAccessibilityNode(
+                id,
+                DocumentAccessibilityNodeKind.HeaderFooterStory,
+                $"Section {sectionIndex + 1} {label}",
+                story.PlainText,
+                $"{label} for section {sectionIndex + 1}",
+                -1,
+                SectionIndex: sectionIndex,
+                StoryKind: storyKind,
+                Children: storyChildren));
+        }
+    }
+
+    private static DocumentAccessibilityNode StampStory(
+        DocumentAccessibilityNode node,
+        int sectionIndex,
+        DocumentAccessibilityStoryKind storyKind) =>
+        node with
+        {
+            SectionIndex = sectionIndex,
+            StoryKind = storyKind,
+            Children = node.SemanticChildren
+                .Select(child => StampStory(child, sectionIndex, storyKind))
+                .ToArray()
+        };
 
     private static DocumentAccessibilityNode BuildTable(Table table, int blockIndex, int tableNumber, string id)
     {

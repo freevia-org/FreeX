@@ -111,6 +111,26 @@ public sealed record AccessibleDocumentSnapshot(
 /// </summary>
 public static class AccessibleDocumentSnapshotPlanner
 {
+    public static AccessibleDocumentSnapshot BuildHeaderFooter(
+        HeaderFooter story,
+        int paragraphIndex,
+        int offset,
+        string storyLabel)
+    {
+        ArgumentNullException.ThrowIfNull(story);
+        ArgumentException.ThrowIfNullOrWhiteSpace(storyLabel);
+
+        var storyDocument = new TextDocument();
+        storyDocument.Blocks.AddRange(story.Paragraphs);
+        var clampedParagraph = story.Paragraphs.Count == 0
+            ? 0
+            : Math.Clamp(paragraphIndex, 0, story.Paragraphs.Count - 1);
+        var snapshot = Build(
+            storyDocument,
+            AccessibleDocumentLocation.Body(clampedParagraph, offset));
+        return snapshot with { Status = $"{storyLabel}; {snapshot.Status}" };
+    }
+
     public static AccessibleDocumentSnapshot Build(
         TextDocument document,
         AccessibleDocumentLocation caret,

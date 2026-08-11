@@ -203,4 +203,34 @@ public sealed class DocumentAccessibilityNodePlannerTests
         objects[4].SemanticChildren[1].ObjectPath.Should().Equal(1);
         objects[5].Name.Should().Be("Excel.Sheet.12");
     }
+
+    [Fact]
+    public void Build_projects_each_section_header_footer_story_with_stable_context()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Header = new HeaderFooter("Default heading");
+        document.FirstFooter = new HeaderFooter("First-page footer");
+        var earlierSection = new Section(new PageSettings(), SectionBreakKind.NextPage);
+        earlierSection.HeadersFooters.EvenHeader = new HeaderFooter("Earlier even heading");
+        ((Paragraph)document.Blocks[0]).SectionBreak = earlierSection;
+
+        var tree = DocumentAccessibilityNodePlanner.Build(document);
+        var stories = tree.Children
+            .Where(node => node.Kind == DocumentAccessibilityNodeKind.HeaderFooterStory)
+            .ToArray();
+
+        stories.Select(node => node.Id).Should().Equal(
+            "section:0:story:even-header",
+            "section:1:story:default-header",
+            "section:1:story:first-footer");
+        stories.Select(node => node.Value).Should().Equal(
+            "Earlier even heading",
+            "Default heading",
+            "First-page footer");
+        var finalHeaderParagraph = stories[1].SemanticChildren.Should().ContainSingle().Subject;
+        finalHeaderParagraph.SectionIndex.Should().Be(1);
+        finalHeaderParagraph.StoryKind.Should().Be(DocumentAccessibilityStoryKind.Header);
+        finalHeaderParagraph.Id.Should().Be("section:1:story:default-header:paragraph:0");
+        tree.ById.Should().ContainKey(finalHeaderParagraph.Id);
+    }
 }

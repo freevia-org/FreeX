@@ -292,4 +292,38 @@ public sealed class DocumentSemanticAutomationPeerTests
             helpChanges.Should().Be(1);
         });
     }
+
+    [Fact]
+    public async Task Header_footer_stories_are_named_bounded_and_focus_the_real_story_caret()
+    {
+        await Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Header = new HeaderFooter("Confidential draft");
+            document.FirstFooter = new HeaderFooter("First page only");
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(900, 1200));
+
+            var root = ControlAutomationPeer.CreatePeerForElement(view);
+            var stories = root.GetChildren()
+                .Where(peer => peer.GetAutomationId()?.Contains(":story:", StringComparison.Ordinal) == true)
+                .ToArray();
+
+            stories.Select(peer => peer.GetAutomationId()).Should().Equal(
+                "section:0:story:default-header",
+                "section:0:story:first-footer");
+            stories.Should().OnlyContain(peer => peer.GetAutomationControlType() == AutomationControlType.Group);
+            stories[0].GetName().Should().Be("Section 1 Default header");
+            stories[0].GetProvider<IValueProvider>()!.Value.Should().Be("Confidential draft");
+
+            var headerParagraph = stories[0].GetChildren().Should().ContainSingle().Subject;
+            headerParagraph.GetProvider<IValueProvider>()!.Value.Should().Be("Confidential draft");
+            headerParagraph.GetBoundingRectangle().Width.Should().BeGreaterThan(0);
+            headerParagraph.BringIntoView();
+
+            view.HeaderFooterCaretInfo.Should().Be((0, false, "Header", 0, 0));
+            root.GetItemStatus().Should().StartWith("Section 1 default header; Caret 0 of 18;");
+        });
+    }
 }
