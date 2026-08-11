@@ -387,7 +387,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("NativeMenuItemId.Subtotal => _subtotalMenuItem,");
         script.Should().Contain("_subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();");
         script.Should().Contain("private async Task ShowSubtotalDialogAsync()");
-        script.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(");
+        script.Should().Contain("private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(");
         script.Should().Contain("_session.ExecuteSubtotalOptions(selection.Options!)");
         script.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
         script.Should().Contain("SubtotalDialogPlanner.TryCreateResult(");
@@ -2590,7 +2590,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     private NativeMenu CreateNativeWhatIfAnalysisMenu()
                         => CreateNativeMenu(NativeMenuCatalog.WhatIfAnalysisMenuEntries);
                     private async Task ShowSubtotalDialogAsync()
-                    private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()
+                    private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync()
                     _session.ExecuteSubtotalOptions(selection.Options!)
                     _session.RemoveSelectedRangeSubtotals()
                     SubtotalDialogPlanner.TryCreateResult(

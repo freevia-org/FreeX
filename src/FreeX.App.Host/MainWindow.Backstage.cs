@@ -658,7 +658,7 @@ public partial class MainWindow
             ShowOpenProgress(CreateOpenProgress("preparing", TimeSpan.Zero, 1));
 
             var progress = new Progress<WorkbookOpenProgressUpdate>(update =>
-                ShowOpenProgress(FromSharedOpenProgressText(WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get))));
+                ShowOpenProgress(WorkbookProgressTextFormatter.FormatOpen(update, UiText.Get)));
             var workflowResult = await _fileWorkflow.OpenAsync(new WorkbookOpenWorkflowRequest(
                 target,
                 ApplyOpenedWorkbookAsync,
@@ -721,7 +721,7 @@ public partial class MainWindow
                 FeatureReport: plan.FeatureReport,
                 LoadWarnings: result.LoadWarnings,
                 SourceFileAccessIdentity: plan.SourceFileAccessIdentity));
-            // OpenWorkbookLoader only recalculates (and thereby rebuilds the dependency graph) when
+            // WorkbookOpenService only recalculates (and thereby rebuilds the dependency graph) when
             // the file demands a full recalc on load; most real-world workbooks trust their cached
             // values and skip that branch entirely (WorkbookOpenService.ShouldRecalculateLoadedFormulas).
             // Without this, _recalcEngine's single persistent graph stays empty for every formula in
@@ -818,13 +818,10 @@ public partial class MainWindow
         }
     }
 
-    private static OpenProgressUpdate CreateOpenProgress(string phase, TimeSpan elapsed, double? percent) =>
-        FromSharedOpenProgressText(WorkbookProgressTextFormatter.FormatOpen(phase, elapsed, percent, UiText.Get));
+    private static WorkbookProgressText CreateOpenProgress(string phase, TimeSpan elapsed, double? percent) =>
+        WorkbookProgressTextFormatter.FormatOpen(phase, elapsed, percent, UiText.Get);
 
-    private static OpenProgressUpdate FromSharedOpenProgressText(WorkbookProgressText text) =>
-        new(text.Title, text.Detail, text.Percent);
-
-    private void ShowOpenProgress(OpenProgressUpdate update) =>
+    private void ShowOpenProgress(WorkbookProgressText update) =>
         ShowOpenProgress(update.Title, update.Detail, update.Percent);
 
     private void ApplyOpenedWorksheetViewState()
@@ -1317,8 +1314,9 @@ public partial class MainWindow
             _windowRegistry?.BroadcastSaveInProgress(this, inProgress: true);
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowSaveProgress(CreateSaveProgress("preparing", TimeSpan.Zero, 1));
-            var progress = new Progress<SaveProgressUpdate>(
-                update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
+            var progress = new Progress<WorkbookSaveProgressUpdate>(update =>
+                ShowSaveProgress(WorkbookProgressTextFormatter.FormatSave(update, UiText.Get)));
+            var saveService = new WorkbookSaveService();
             var workflowResult = await _fileWorkflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(
                 _workbookDirty,
                 _currentFilePath,
@@ -1328,7 +1326,7 @@ public partial class MainWindow
                 GetDirtyGeneration: () => _workbookDirtyGeneration,
                 ConfirmExternallyModifiedOverwrite: ConfirmExternallyModifiedFileOverwrite,
                 ProjectViewStateForSave: ReconcileViewStateForSave,
-                SaveAsync: invocation => new SaveWorkbookWriter().SaveAsync(
+                SaveAsync: invocation => saveService.SaveAsync(
                     invocation.Target.Path,
                     invocation.Target.Adapter,
                     invocation.Workbook,
@@ -1441,14 +1439,11 @@ public partial class MainWindow
         ShowOperationFooterProgress(title, detail, percent);
     }
 
-    private void ShowSaveProgress(SaveProgressUpdate update) =>
+    private void ShowSaveProgress(WorkbookProgressText update) =>
         ShowSaveProgress(update.Title, update.Detail, update.Percent);
 
-    private static SaveProgressUpdate CreateSaveProgress(string phase, TimeSpan elapsed, double? percent) =>
-        FromSharedSaveProgressText(WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent, UiText.Get));
-
-    private static SaveProgressUpdate FromSharedSaveProgressText(WorkbookProgressText text) =>
-        new(text.Title, text.Detail, text.Percent);
+    private static WorkbookProgressText CreateSaveProgress(string phase, TimeSpan elapsed, double? percent) =>
+        WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent, UiText.Get);
 
     private void HideSaveProgress()
     {

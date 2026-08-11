@@ -5,7 +5,7 @@ using System.IO;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class OpenWorkbookLoaderTests
+public sealed partial class WorkbookOpenServiceTests
 {
     [Theory]
     [InlineData(".csv")]
@@ -25,14 +25,14 @@ public sealed partial class OpenWorkbookLoaderTests
             workbook.AddSheet("Sheet1");
             return workbook;
         });
-        var loader = new OpenWorkbookLoader(_ => { });
+        var loader = new WorkbookOpenService(_ => { });
 
         var result = await loader.LoadAsync(
             tempPath,
             adapter,
             extension,
             new FileFormatDescriptor(extension, "Text", CanOpen: true, CanSave: false),
-            new TestProgress<OpenProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
         result.Workbook.Sheets.Single().Name.Should().Be("Very Long Sales _Draft_ Import");
     }

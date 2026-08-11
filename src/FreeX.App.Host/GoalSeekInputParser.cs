@@ -5,8 +5,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record GoalSeekDialogInput(CellAddress SetCell, double TargetValue, CellAddress ChangingCell);
-
 public static class GoalSeekInputParser
 {
     public static bool TryParse(
@@ -14,7 +12,7 @@ public static class GoalSeekInputParser
         string setCellText,
         string targetValueText,
         string changingCellText,
-        out GoalSeekDialogInput input,
+        out GoalSeekRequest input,
         out string error)
     {
         var success = TryParseWithPresentation(
@@ -33,7 +31,7 @@ public static class GoalSeekInputParser
         string setCellText,
         string targetValueText,
         string changingCellText,
-        out GoalSeekDialogInput input,
+        out GoalSeekRequest input,
         out ValidationPresentationDescriptor<GoalSeekValidationFocusTarget>? presentation)
     {
         var result = GoalSeekRequestParser.Parse(
@@ -43,7 +41,7 @@ public static class GoalSeekInputParser
             changingCellText);
         if (result.Request is { } request)
         {
-            input = new GoalSeekDialogInput(request.SetCell, request.TargetValue, request.ChangingCell);
+            input = request;
             presentation = null;
             return true;
         }

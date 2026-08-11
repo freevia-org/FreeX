@@ -10,6 +10,7 @@ using System.Windows.Media;
 using FreeX.App.Presentation.DefinedNames;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
@@ -1669,7 +1670,7 @@ public partial class MainWindow
 
     private bool TryHandleTopLevelRibbonKeyTip(string keyTip)
     {
-        return RibbonTopLevelKeyTipRouter.Resolve(keyTip, EnumerateVisibleTopLevelRibbonKeyTipEntries()) switch
+        return FreeXRibbonKeyTipRoutePlanner.ResolveTopLevel(keyTip, EnumerateVisibleTopLevelRibbonKeyTipEntries()) switch
         {
             { Kind: RibbonTopLevelKeyTipActionKind.BackstageFile } => OpenFileBackstageFromKeyTip(),
             { Kind: RibbonTopLevelKeyTipActionKind.RibbonTab, RibbonTabHeader: { } header } => SelectRibbonTabByHeader(header),

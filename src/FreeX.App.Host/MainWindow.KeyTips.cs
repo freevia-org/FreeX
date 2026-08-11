@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.Ribbon;
 
 namespace FreeX.App.Host;
 
@@ -486,7 +487,7 @@ public partial class MainWindow
         RibbonKeyTipRouting.HasKeyTipPrefix(GetRoutableKeyTipElements(RibbonKeyTipScope.Commands), keyTipPrefix);
 
     private bool HasVisibleTopLevelKeyTipLongerPrefix(string keyTipPrefix) =>
-        RibbonTopLevelKeyTipRouter.HasLongerKeyTipPrefix(
+        FreeXRibbonKeyTipRoutePlanner.HasLongerTopLevelKeyTipPrefix(
             keyTipPrefix,
             GetVisibleKeyTipElements(RibbonKeyTipScope.TopLevel)
                 .Select(RibbonTooltip.GetKeyTip));

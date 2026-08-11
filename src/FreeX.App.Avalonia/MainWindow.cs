@@ -233,9 +233,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Button ApplyButton,
         Button ClearButton,
         Button CancelButton);
-    private sealed record SubtotalDialogResult(
-        SubtotalDialogPlanAction Action,
-        SubtotalInputOptions? Options);
     private sealed record SortDialogResult(
         IReadOnlyList<SortDialogLevel> Levels,
         bool HasHeaders,
@@ -21364,7 +21361,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var result = selection.Action == SubtotalDialogPlanAction.RemoveAll
             ? _session.RemoveSelectedRangeSubtotals()
-            : _session.ExecuteSubtotalOptions(selection.Options!);
+            : _session.ExecuteSubtotalOptions(selection.ToInputOptions());
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SubtotalFailed"));
@@ -21376,10 +21373,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : UiText.Format("MainLoc_AddedSubtotalsTo", rangeReference));
     }
 
-    private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(
+    private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(
         SubtotalParityFixtureState? parityFixture = null)
     {
-        SubtotalDialogResult? result = null;
+        SubtotalDialogPlanResult? result = null;
         var range = parityFixture?.SelectedRange ?? _session.SelectedRange;
         var columns = parityFixture?.Columns ?? SubtotalDialogPlanner.BuildColumnChoices(
             range,
@@ -21585,7 +21582,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 return;
             }
 
-            result = new SubtotalDialogResult(plan.Action, plan.ToInputOptions());
+            result = plan;
             dialog.Close();
         }
 
@@ -21593,7 +21590,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         removeAllButton.Click += (_, _) =>
         {
             var plan = SubtotalDialogPlanner.CreateRemoveAllResult();
-            result = new SubtotalDialogResult(plan.Action, Options: null);
+            result = plan;
             dialog.Close();
         };
         cancelButton.Click += (_, _) => dialog.Close();

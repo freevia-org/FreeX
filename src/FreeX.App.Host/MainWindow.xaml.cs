@@ -164,7 +164,7 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     // _currentFilePath is declared as a delegating property in the dirty/save-state cluster above.
     private XlsxFeatureReport? _currentXlsxFeatureReport;
     // Snapshot of _currentFilePath's on-disk write time taken at open (OpenWorkbookResult.
-    // SourceLastWriteTimeUtc), threaded into SaveWorkbookWriter.SaveAsync's expectedLastWriteTimeUtc
+    // SourceLastWriteTimeUtc), threaded into WorkbookSaveService.SaveAsync's expectedLastWriteTimeUtc
     // so a save detects the file having been changed externally since open and warns instead of
     // silently overwriting (WorkbookExternallyModifiedException). Null disables the guard (new/
     // recovery-opened workbooks that have no meaningful "loaded from disk at time T" to compare).

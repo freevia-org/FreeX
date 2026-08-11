@@ -11,7 +11,7 @@ public sealed partial class CustomViewsDialog : Window
 {
     private readonly Workbook _workbook;
     private readonly Func<IWorkbookCommand, CommandOutcome> _executeCommand;
-    private readonly ObservableCollection<CustomViewViewModel> _items = [];
+    private readonly ObservableCollection<CustomViewsPlanner.DialogRow> _items = [];
 
     public bool ViewApplied { get; private set; }
 
@@ -29,7 +29,10 @@ public sealed partial class CustomViewsDialog : Window
     private void RefreshList()
     {
         _items.Clear();
-        foreach (var item in CustomViewsDialogPlanner.BuildItems(_workbook))
+        foreach (var item in CustomViewsPlanner.BuildDialogRows(
+                     _workbook,
+                     UiText.Get("CustomViews_Included"),
+                     UiText.Get("CustomViews_NotIncluded")))
             _items.Add(item);
 
         if (_items.Count > 0 && ViewsList.SelectedIndex < 0)
@@ -42,7 +45,7 @@ public sealed partial class CustomViewsDialog : Window
 
     private void ViewsList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (ViewsList.SelectedItem is not CustomViewViewModel)
+        if (ViewsList.SelectedItem is not CustomViewsPlanner.DialogRow)
             return;
 
         ShowButton_Click(sender, e);
@@ -51,7 +54,7 @@ public sealed partial class CustomViewsDialog : Window
 
     private void UpdateButtons()
     {
-        var hasSelection = ViewsList?.SelectedItem is CustomViewViewModel;
+        var hasSelection = ViewsList?.SelectedItem is CustomViewsPlanner.DialogRow;
         if (ShowButton is not null)
             ShowButton.IsEnabled = hasSelection;
         if (DeleteButton is not null)
@@ -60,7 +63,7 @@ public sealed partial class CustomViewsDialog : Window
 
     private void ShowButton_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }
+        if (ViewsList.SelectedItem is not CustomViewsPlanner.DialogRow vm) { FocusViewsList(); return; }
         var outcome = _executeCommand(CustomViewsPlanner.BuildApplyCommand(vm.Name));
         if (!outcome.Success)
         {
@@ -75,7 +78,9 @@ public sealed partial class CustomViewsDialog : Window
 
     private void AddButton_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new CustomViewNameDialog(CustomViewsDialogPlanner.CreateDefaultViewName(_workbook.CustomViews.Count)) { Owner = this };
+        var dialog = new CustomViewNameDialog(CustomViewsPlanner.SuggestDefaultName(
+            _workbook.CustomViews.Count,
+            UiText.Get("CustomViews_DefaultName"))) { Owner = this };
         if (dialog.ShowDialog() != true)
             return;
 
@@ -99,7 +104,7 @@ public sealed partial class CustomViewsDialog : Window
 
     private void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
-        if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }
+        if (ViewsList.SelectedItem is not CustomViewsPlanner.DialogRow vm) { FocusViewsList(); return; }
 
         var outcome = _executeCommand(CustomViewsPlanner.BuildDeleteCommand(vm.Name));
         if (!outcome.Success)

@@ -99,7 +99,8 @@ public sealed class FreeXRibbonKeyTipRoutePlannerTests
     public void NativeShells_DelegateRoutePolicyToPresentationPlanner()
     {
         var avalonia = ReadSource("src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaRibbonHost.cs");
-        var wpf = ReadSource("src", "FreeX.App.Host", "RibbonTopLevelKeyTipRouter.cs");
+        var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.Editing.cs")
+            + ReadSource("src", "FreeX.App.Host", "MainWindow.KeyTips.cs");
 
         avalonia.Should().Contain("FreeXRibbonKeyTipRoutePlanner.Build");
         avalonia.Should().NotContain("ContextualTabInputs");
@@ -107,6 +108,10 @@ public sealed class FreeXRibbonKeyTipRoutePlannerTests
         wpf.Should().Contain("FreeXRibbonKeyTipRoutePlanner.ResolveTopLevel");
         wpf.Should().Contain("FreeXRibbonKeyTipRoutePlanner.HasLongerTopLevelKeyTipPrefix");
         wpf.Should().NotContain("string.Equals(normalizedKeyTip, \"D\"");
+        File.Exists(Path.Combine(
+                RepositoryFileLocator.FindDirectory("src", "FreeX.App.Host"),
+                "RibbonTopLevelKeyTipRouter.cs"))
+            .Should().BeFalse();
     }
 
     private static RibbonDefinition BuildDefinition()

@@ -64,7 +64,7 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
 
         var subtotalDialog = ExtractMethodSource(
             mainWindowSource,
-            "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(",
+            "private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(",
             "private static StackPanel CreateSubtotalField(string label, Control control, double topMargin = 0)");
         subtotalDialog.Should().Contain("Width = SubtotalParityDialogWidth,");
         subtotalDialog.Should().Contain("Height = SubtotalParityDialogHeight,");
@@ -88,7 +88,7 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var subtotalDialog = ExtractMethodSource(
             source,
-            "private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(",
+            "private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(",
             "private static StackPanel CreateSubtotalField(string label, Control control, double topMargin = 0)");
 
         subtotalDialog.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, SubtotalDialogChromeStyle);");

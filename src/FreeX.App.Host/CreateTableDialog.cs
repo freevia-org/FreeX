@@ -6,7 +6,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record CreateTableDialogResult(GridRange Range, bool FirstRowHasHeaders, string TableStyleName);
 public sealed record CreateTableRangeSelectionRequest(string CurrentText, bool CollapseDialog = true);
 
 public sealed class CreateTableDialog : Window
@@ -21,7 +20,7 @@ public sealed class CreateTableDialog : Window
     private readonly string _tableStyleName;
     private readonly Action<CreateTableRangeSelectionRequest>? _requestRangeSelection;
 
-    public CreateTableDialogResult? Result { get; private set; }
+    public CreateTableDialogPlan? Result { get; private set; }
     public CreateTableRangeSelectionRequest? RangeSelectionRequest { get; private set; }
 
     public CreateTableDialog(
@@ -69,7 +68,7 @@ public sealed class CreateTableDialog : Window
         string rangeText,
         bool firstRowHasHeaders,
         string tableStyleName,
-        out CreateTableDialogResult result,
+        out CreateTableDialogPlan result,
         out string? error)
     {
         if (CreateTableDialogPlanner.TryParse(
@@ -80,7 +79,7 @@ public sealed class CreateTableDialog : Window
                 out var plan,
                 out var errorKey))
         {
-            result = new CreateTableDialogResult(plan.Range, plan.FirstRowHasHeaders, plan.TableStyleName);
+            result = plan;
             error = null;
             return true;
         }

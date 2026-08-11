@@ -7764,8 +7764,9 @@ public partial class MainWindow
             openDialog = null;
 
             openDialog = new RemoveDuplicatesDialog(
-                RemoveDuplicatesDialog.BuildColumnChoices(context.Sheet, context.RemoveDuplicatesRange),
-                RemoveDuplicatesDialog.BuildColumnChoices(context.Sheet, context.RemoveDuplicatesRange, hasHeaders: false),
+                context.RemoveDuplicatesRange,
+                RemoveDuplicatesPlanner.BuildColumnChoices(context.Sheet, context.RemoveDuplicatesRange, hasHeaders: true, RemoveDuplicatesText),
+                RemoveDuplicatesPlanner.BuildColumnChoices(context.Sheet, context.RemoveDuplicatesRange, hasHeaders: false, RemoveDuplicatesText),
                 hasHeaders: true)
             {
                 Owner = this

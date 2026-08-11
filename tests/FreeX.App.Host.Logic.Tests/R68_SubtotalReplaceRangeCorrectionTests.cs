@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -36,7 +37,7 @@ public sealed class R68_SubtotalReplaceRangeCorrectionTests
 
                 var ctx = new TestCommandContext(workbook);
                 var firstRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 7, 2));
-                var applyResult = new SubtotalDialogResult(
+                var applyResult = new SubtotalDialogPlanResult(
                     GroupColumnOffset: 0,
                     SubtotalColumnOffsets: [1],
                     FunctionNumber: 9,
@@ -98,7 +99,7 @@ public sealed class R68_SubtotalReplaceRangeCorrectionTests
 
                 var ctx = new TestCommandContext(workbook);
                 var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 7, 2));
-                var applyResult = new SubtotalDialogResult(0, [1], 9, false, false, true);
+                var applyResult = new SubtotalDialogPlanResult(0, [1], 9, false, false, true);
 
                 var command = (IWorkbookCommand)R49MainWindowTestHarness.Invoke(
                     window, "CreateSubtotalApplyCommand", sheetId, range, applyResult)!;

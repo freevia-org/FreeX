@@ -18,11 +18,11 @@ public sealed class HeavyWorkbookRetestTests
             ?? throw SkipException.ForSkip(HeavyWorkbookRetestFactAttribute.SkipReasonWhenMissing);
 
         var adapter = new XlsxFileAdapter();
-        var loader = new OpenWorkbookLoader(_ => { });
-        var openProgress = new List<OpenProgressUpdate>();
+        var loader = new WorkbookOpenService(_ => { });
+        var openProgress = new List<WorkbookOpenProgressUpdate>();
 
         var openStopwatch = Stopwatch.StartNew();
-        OpenWorkbookResult openResult;
+        WorkbookOpenResult openResult;
         try
         {
             openResult = await loader.LoadAsync(
@@ -30,7 +30,7 @@ public sealed class HeavyWorkbookRetestTests
                 adapter,
                 ".xlsx",
                 new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
-                new TestProgress<OpenProgressUpdate>(openProgress.Add));
+                new TestProgress<WorkbookOpenProgressUpdate>(openProgress.Add));
         }
         catch (Exception ex) when (!configuredByEnvironment)
         {
@@ -41,24 +41,26 @@ public sealed class HeavyWorkbookRetestTests
         openStopwatch.Stop();
 
         openResult.Workbook.SheetCount.Should().BeGreaterThan(0);
-        openProgress.Should().Contain(update => update.Detail.StartsWith("Loading file (reading)", StringComparison.Ordinal));
+        openProgress.Should().Contain(update => WorkbookProgressTextFormatter
+            .FormatOpen(update, UiText.Get).Detail.StartsWith("Loading file (reading)", StringComparison.Ordinal));
         openProgress.Should().Contain(update => update.Percent == 98);
         openStopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(60));
 
         using var temp = new TestTemporaryDirectory();
         var savePath = Path.Combine(temp.Path, "heavy-retest.xlsx");
-        var saveProgress = new List<SaveProgressUpdate>();
+        var saveProgress = new List<WorkbookSaveProgressUpdate>();
         var saveStopwatch = Stopwatch.StartNew();
-        await new SaveWorkbookWriter().SaveAsync(
+        await new WorkbookSaveService().SaveAsync(
             savePath,
             adapter,
             openResult.Workbook,
-            new TestProgress<SaveProgressUpdate>(saveProgress.Add));
+            new TestProgress<WorkbookSaveProgressUpdate>(saveProgress.Add));
         saveStopwatch.Stop();
 
         File.Exists(savePath).Should().BeTrue();
         new FileInfo(savePath).Length.Should().BeGreaterThan(0);
-        saveProgress.Should().Contain(update => update.Detail.StartsWith("Saving file (writing)", StringComparison.Ordinal));
+        saveProgress.Should().Contain(update => WorkbookProgressTextFormatter
+            .FormatSave(update, UiText.Get).Detail.StartsWith("Saving file (writing)", StringComparison.Ordinal));
         saveProgress.Should().Contain(update => update.Percent == 100);
         saveStopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(90));
     }

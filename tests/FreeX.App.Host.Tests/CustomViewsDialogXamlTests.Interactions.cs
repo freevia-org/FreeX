@@ -108,15 +108,13 @@ public sealed partial class CustomViewsDialogXamlTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("CustomViewsDialog.xaml.cs");
 
-        source.Should().Contain("if (ViewsList.SelectedItem is not CustomViewViewModel vm) { FocusViewsList(); return; }");
+        source.Should().Contain("if (ViewsList.SelectedItem is not CustomViewsPlanner.DialogRow vm) { FocusViewsList(); return; }");
     }
 
     [Fact]
     public void CustomViewsDialog_ThreadsAddViewIncludeOptionsIntoCommandAndIndicators()
     {
-        var source = DialogSourceTestSupport.ReadHostSources(
-            "CustomViewsDialog.xaml.cs",
-            "CustomViewsDialog.Planning.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("CustomViewsDialog.xaml.cs");
 
         source.Should().Contain("dialog.Result.IncludePrintSettings");
         source.Should().Contain("dialog.Result.IncludeHiddenRowsColumnsAndFilterSettings");

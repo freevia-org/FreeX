@@ -5,6 +5,7 @@ using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using SubtotalColumnChoice = FreeX.App.Presentation.DataTools.SubtotalDialogColumnChoice;
+using SubtotalDialogPlanAction = FreeX.App.Presentation.DataTools.SubtotalDialogPlanAction;
 
 namespace FreeX.App.Host.Tests;
 
@@ -27,7 +28,7 @@ public sealed partial class DataToolDialogTests
         result.ReplaceCurrentSubtotals.Should().BeTrue();
         result.PageBreakBetweenGroups.Should().BeTrue();
         result.SummaryBelowData.Should().BeFalse();
-        result.Action.Should().Be(SubtotalDialogAction.Apply);
+        result.Action.Should().Be(SubtotalDialogPlanAction.Apply);
     }
 
     [Fact]
@@ -35,7 +36,7 @@ public sealed partial class DataToolDialogTests
     {
         var result = SubtotalDialog.CreateRemoveAllResult();
 
-        result.Action.Should().Be(SubtotalDialogAction.RemoveAll);
+        result.Action.Should().Be(SubtotalDialogPlanAction.RemoveAll);
         result.SubtotalColumnOffsets.Should().BeEmpty();
         result.ReplaceCurrentSubtotals.Should().BeFalse();
         result.PageBreakBetweenGroups.Should().BeFalse();
@@ -267,7 +268,7 @@ public sealed partial class DataToolDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
 
-        source.Should().Contain("SubtotalDialogAction.RemoveAll");
+        source.Should().Contain("SubtotalDialogPlanAction.RemoveAll");
         source.Should().Contain("TryExecuteRepeatableGroupedSheetCommand(");
         source.Should().Contain("new RemoveSubtotalRowsCommand(");
         source.Should().Contain("SubtotalPlanner.TryCreateSourceRange(");

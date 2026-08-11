@@ -156,7 +156,7 @@ public partial class MainWindow
                         dialog.Result.Target,
                         dialog.Result.DisplayText,
                         new HyperlinkMetadata(
-                            ToCoreHyperlinkTargetKind(dialog.Result.LinkType),
+                            dialog.Result.LinkType,
                             dialog.Result.ScreenTip,
                             dialog.Result.Bookmark));
                 }))
@@ -267,15 +267,6 @@ public partial class MainWindow
         NavigateNameBoxTo(range);
         return true;
     }
-
-    private static HyperlinkTargetKind ToCoreHyperlinkTargetKind(HyperlinkLinkType linkType) =>
-        linkType switch
-        {
-            HyperlinkLinkType.CreateNewDocument => HyperlinkTargetKind.CreateNewDocument,
-            HyperlinkLinkType.PlaceInThisDocument => HyperlinkTargetKind.PlaceInThisDocument,
-            HyperlinkLinkType.EmailAddress => HyperlinkTargetKind.EmailAddress,
-            _ => HyperlinkTargetKind.ExistingFileOrWebPage
-        };
 
     private void InsertCommentBtn_Click(object sender, RoutedEventArgs e) => ReviewNewThreadedCommentBtn_Click(sender, e);
 

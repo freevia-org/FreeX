@@ -689,10 +689,10 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RibbonKeytipRouter_SupportsTopLevelTabsAndBackstageFile()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonTopLevelKeyTipRouter.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.Editing.cs", "MainWindow.KeyTips.cs");
 
-        source.Should().Contain("BackstageFile");
-        source.Should().Contain("RibbonTab");
+        source.Should().Contain("FreeXRibbonKeyTipRoutePlanner.ResolveTopLevel");
+        source.Should().Contain("FreeXRibbonKeyTipRoutePlanner.HasLongerTopLevelKeyTipPrefix");
     }
 
     [Fact]

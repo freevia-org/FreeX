@@ -6,7 +6,7 @@ using System.IO.Compression;
 
 namespace FreeX.App.Host.Tests;
 
-public sealed partial class OpenWorkbookLoaderTests
+public sealed partial class WorkbookOpenServiceTests
 {
     [Theory]
     [InlineData(".xlt", "XLT 97-2003 Template")]
@@ -23,7 +23,7 @@ public sealed partial class OpenWorkbookLoaderTests
             workbook.AddSheet("Sheet1");
             return workbook;
         });
-        var loader = new OpenWorkbookLoader(
+        var loader = new WorkbookOpenService(
             _ => { },
             inspectXlsx: _ => new XlsxFeatureReport([]));
 
@@ -32,7 +32,7 @@ public sealed partial class OpenWorkbookLoaderTests
             adapter,
             extension,
             new FileFormatDescriptor(extension, formatName, CanOpen: true, CanSave: false, OpensAsTemplate: true),
-            new TestProgress<OpenProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
         result.OpenedAsTemplate.Should().BeTrue();
     }
@@ -64,7 +64,7 @@ public sealed partial class OpenWorkbookLoaderTests
             return workbook;
         });
         var inspected = false;
-        var loader = new OpenWorkbookLoader(
+        var loader = new WorkbookOpenService(
             _ => { },
             inspectXlsx: stream =>
             {
@@ -79,7 +79,7 @@ public sealed partial class OpenWorkbookLoaderTests
             adapter,
             extension,
             new FileFormatDescriptor(extension, "Excel Open XML", CanOpen: true, CanSave: canSave, opensAsTemplate),
-            new TestProgress<OpenProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
         inspected.Should().BeTrue();
         result.FeatureReport.Should().BeSameAs(expectedReport);
@@ -104,14 +104,14 @@ public sealed partial class OpenWorkbookLoaderTests
             macroStream.WriteByte(1);
         }
 
-        var loader = new OpenWorkbookLoader(_ => { });
+        var loader = new WorkbookOpenService(_ => { });
 
         var result = await loader.LoadAsync(
             tempPath,
             adapter,
             ".xlsx",
             new FileFormatDescriptor(".xlsx", "XLSX Workbook", CanOpen: true, CanSave: true),
-            new TestProgress<OpenProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
         result.FeatureReport.Should().NotBeNull();
         result.FeatureReport!.Features.Should().Contain(feature =>
@@ -141,7 +141,7 @@ public sealed partial class OpenWorkbookLoaderTests
             workbook.AddSheet("Sheet1");
             return workbook;
         });
-        var loader = new OpenWorkbookLoader(
+        var loader = new WorkbookOpenService(
             _ => { },
             inspectXlsx: _ =>
             {
@@ -154,7 +154,7 @@ public sealed partial class OpenWorkbookLoaderTests
             adapter,
             extension,
             new FileFormatDescriptor(extension, "XLSB Binary", CanOpen: true, CanSave: false, opensAsTemplate),
-            new TestProgress<OpenProgressUpdate>(_ => { }));
+            new TestProgress<WorkbookOpenProgressUpdate>(_ => { }));
 
         inspected.Should().BeFalse();
         result.FeatureReport.Should().BeNull();

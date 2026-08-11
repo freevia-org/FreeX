@@ -3399,8 +3399,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task ShowSubtotalDialogAsync()");
         source.Should().Contain("var selection = await ShowSubtotalInputDialogAsync();");
         source.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
-        source.Should().Contain("_session.ExecuteSubtotalOptions(selection.Options!)");
-        source.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(");
+        source.Should().Contain("_session.ExecuteSubtotalOptions(selection.ToInputOptions())");
+        source.Should().Contain("private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(");
         source.Should().Contain("SubtotalParityFixtureState? parityFixture = null");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SubtotalCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(groupColumnBox, \"SubtotalGroupColumnBox\");");
@@ -3417,7 +3417,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("SubtotalDialogPlanner.BuildColumnChoices(");
         source.Should().Contain("SubtotalDialogPlanner.CreateFunctionChoices(plannerText)");
         source.Should().Contain("SubtotalDialogPlanner.TryCreateResult(");
-        source.Should().Contain("plan.ToInputOptions()");
+        source.Should().Contain("result = plan;");
+        source.Should().NotContain("private sealed record SubtotalDialogResult");
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ExecuteSubtotalOptions(SubtotalInputOptions options)");
         sessionSource.Should().Contain("public WorkbookCellEditResult RemoveSelectedRangeSubtotals()");

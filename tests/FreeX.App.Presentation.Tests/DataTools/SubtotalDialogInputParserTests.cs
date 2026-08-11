@@ -43,6 +43,14 @@ public sealed class SubtotalDialogInputParserTests
     }
 
     [Fact]
+    public void FindFunctionChoice_MapsPersistedFunctionNumberToLocalizedChoice()
+    {
+        SubtotalDialogPlanner.FindFunctionChoice(1)!
+            .FunctionText.Should().Be("Average");
+        SubtotalDialogPlanner.FindFunctionChoice(999).Should().BeNull();
+    }
+
+    [Fact]
     public void TryCreateResult_CreatesApplyPlanAndInputOptions()
     {
         SubtotalDialogPlanner.TryCreateResult(

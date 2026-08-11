@@ -334,31 +334,16 @@ public partial class MainWindow
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         var columns = sheet is null
-            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
-            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range);
+            ? RemoveDuplicatesPlanner.BuildColumnChoices(range, RemoveDuplicatesText)
+            : RemoveDuplicatesPlanner.BuildColumnChoices(sheet, range, hasHeaders: true, RemoveDuplicatesText);
         var genericColumns = sheet is null
-            ? RemoveDuplicatesDialog.BuildColumnChoices(range)
-            : RemoveDuplicatesDialog.BuildColumnChoices(sheet, range, hasHeaders: false);
-        var hasHeaders = sheet is not null && RemoveDuplicatesDialog.GuessHasHeaders(sheet, range);
-        var dialog = new RemoveDuplicatesDialog(columns, genericColumns, hasHeaders) { Owner = this };
+            ? RemoveDuplicatesPlanner.BuildColumnChoices(range, RemoveDuplicatesText)
+            : RemoveDuplicatesPlanner.BuildColumnChoices(sheet, range, hasHeaders: false, RemoveDuplicatesText);
+        var hasHeaders = sheet is not null && RemoveDuplicatesPlanner.GuessHasHeaders(sheet, range);
+        var dialog = new RemoveDuplicatesDialog(range, columns, genericColumns, hasHeaders) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        var currentRange = SheetGrid.SelectedRange ?? range;
-        var planResult = RemoveDuplicatesPlanner.CreatePlan(
-            currentRange,
-            dialog.Result.HasHeaders,
-            dialog.Result.SelectedColumnOffsets);
-        if (!planResult.IsReady || planResult.Plan is null)
-        {
-            ShowOwnedMessage(
-                planResult.StatusText,
-                UiText.Get("MainWindowMessage_RemoveDuplicatesTitle"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
-        var plan = planResult.Plan;
+        var plan = dialog.Result;
         RemoveDuplicateRowsCommand? activeSheetCommand = null;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Remove Duplicates",
@@ -379,6 +364,9 @@ public partial class MainWindow
         UpdateViewport();
         PruneCorrectedValidationCircles();
     }
+
+    private static RemoveDuplicatesPlannerText RemoveDuplicatesText =>
+        new(UiText.Get("RemoveDuplicates_ColumnLabel"));
 
     private void AdvancedFilterBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -842,7 +830,7 @@ public partial class MainWindow
         var dialog = new SubtotalDialog(SubtotalDialog.BuildColumnChoices(sheet, sourceRange), sheet.OutlineSummaryBelow ?? true) { Owner = this };
         if (dialog.ShowDialog() != true || dialog.Result is null) return;
 
-        if (dialog.Result.Action == SubtotalDialogAction.RemoveAll)
+        if (dialog.Result.Action == SubtotalDialogPlanAction.RemoveAll)
         {
             if (!TryExecuteRepeatableGroupedSheetCommand(
                     "Remove Subtotals",
@@ -877,7 +865,7 @@ public partial class MainWindow
     /// subtotals" range-correction fix (R68-commands-group-outline-6-1) is directly testable without
     /// driving the real SubtotalDialog.
     /// </summary>
-    private IWorkbookCommand CreateSubtotalApplyCommand(SheetId sheetId, GridRange sheetRange, SubtotalDialogResult result)
+    private IWorkbookCommand CreateSubtotalApplyCommand(SheetId sheetId, GridRange sheetRange, SubtotalDialogPlanResult result)
     {
         if (!result.ReplaceCurrentSubtotals)
         {

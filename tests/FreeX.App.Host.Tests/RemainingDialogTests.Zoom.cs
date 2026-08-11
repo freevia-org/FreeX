@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using static FreeX.App.Host.Tests.DispatcherTestPump;
+using FreeX.App.Services;
 
 namespace FreeX.App.Host.Tests;
 
@@ -15,7 +16,7 @@ public sealed partial class RemainingDialogTests
     {
         ZoomDialog.TryCreateResult("125", out var result, out _).Should().BeTrue();
 
-        result.Should().Be(new ZoomDialogResult(125));
+        result.Should().Be(new ZoomDialogSelection(125));
     }
 
     [Fact]
@@ -209,7 +210,7 @@ public sealed partial class RemainingDialogTests
     {
         ZoomDialog.CreateFitSelectionResult(125)
             .Should()
-            .Be(new ZoomDialogResult(125, FitSelection: true));
+            .Be(new ZoomDialogSelection(125, FitSelection: true));
     }
 
     private static int CountNonWhitePixels(BitmapSource bitmap, Rect bounds)

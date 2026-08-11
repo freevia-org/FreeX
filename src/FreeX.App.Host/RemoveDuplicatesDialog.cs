@@ -2,16 +2,14 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record RemoveDuplicateColumnChoice(uint Offset, string Header, bool IsSelected);
-
-public sealed record RemoveDuplicatesDialogResult(IReadOnlyList<uint> SelectedColumnOffsets, bool HasHeaders = false);
-
-public sealed partial class RemoveDuplicatesDialog : Window
+public sealed class RemoveDuplicatesDialog : Window
 {
+    private readonly GridRange _sourceRange;
     private readonly List<CheckBox> _boxes = [];
     private readonly CheckBox _hasHeadersBox = new() { Content = UiText.Get("RemoveDuplicates_MyDataHasHeaders"), IsChecked = true, Margin = new Thickness(0, 0, 0, 8) };
     private readonly StackPanel _columnsPanel = new();
@@ -20,13 +18,15 @@ public sealed partial class RemoveDuplicatesDialog : Window
     private readonly Button _selectAllButton = new() { Content = UiText.Get("RemoveDuplicates_SelectAll"), Width = 88, Margin = new Thickness(0, 0, 8, 0) };
     private readonly Button _unselectAllButton = new() { Content = UiText.Get("RemoveDuplicates_UnselectAll"), Width = 88 };
 
-    public RemoveDuplicatesDialogResult? Result { get; private set; }
+    public RemoveDuplicatesPlan? Result { get; private set; }
 
     public RemoveDuplicatesDialog(
+        GridRange sourceRange,
         IEnumerable<RemoveDuplicateColumnChoice> columns,
         IEnumerable<RemoveDuplicateColumnChoice>? genericColumns = null,
         bool hasHeaders = true)
     {
+        _sourceRange = sourceRange;
         _headerColumns = columns.ToList();
         _genericColumns = genericColumns?.ToList() ?? _headerColumns;
         _hasHeadersBox.IsChecked = hasHeaders;
@@ -63,7 +63,7 @@ public sealed partial class RemoveDuplicatesDialog : Window
         {
             var box = new CheckBox
             {
-                Content = column.Header,
+                Content = column.Label,
                 Tag = column.Offset,
                 IsChecked = column.IsSelected,
                 Margin = new Thickness(0, 0, 0, 4)
@@ -136,8 +136,8 @@ public sealed partial class RemoveDuplicatesDialog : Window
             var label = FindColumnChoiceByOffset(labels, offset);
             if (label is not null)
             {
-                box.Content = label.Header;
-                AutomationProperties.SetName(box, UiText.Format("RemoveDuplicates_ColumnAutomationNameFormat", label.Header));
+                box.Content = label.Label;
+                AutomationProperties.SetName(box, UiText.Format("RemoveDuplicates_ColumnAutomationNameFormat", label.Label));
             }
         }
     }
@@ -179,17 +179,20 @@ public sealed partial class RemoveDuplicatesDialog : Window
 
     private void Accept()
     {
-        var selected = CreateResult(_boxes.Select(box => new RemoveDuplicateColumnChoice(
+        var planResult = RemoveDuplicatesPlanner.CreatePlan(
+            _sourceRange,
+            _hasHeadersBox.IsChecked == true,
+            _boxes.Select(box => new RemoveDuplicateColumnChoice(
             (uint)box.Tag,
             box.Content?.ToString() ?? "",
             box.IsChecked == true)));
-        Result = selected with { HasHeaders = _hasHeadersBox.IsChecked == true };
-        if (Result.SelectedColumnOffsets.Count == 0)
+        if (!planResult.IsReady || planResult.Plan is null)
         {
             DialogMessageHelper.ShowWarning(this, UiText.Get("RemoveDuplicates_SelectAtLeastOneColumn"), Title);
             FocusFirstColumnChoice();
             return;
         }
+        Result = planResult.Plan;
         DialogResult = true;
     }
 }

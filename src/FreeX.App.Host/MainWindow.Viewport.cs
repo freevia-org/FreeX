@@ -385,7 +385,7 @@ public partial class MainWindow
     /// ever reads the shared fields. Without this reconciliation, Ctrl+S from a window whose own
     /// view has diverged from the shared fields would silently persist whichever sibling window's
     /// view last touched them instead of this window's own. Call this once, right before handing
-    /// the workbook to <c>SaveWorkbookWriter</c>/<c>WorkbookSaveService</c>.
+    /// the workbook to <c>WorkbookSaveService</c>.
     /// </para>
     /// </summary>
     private void ReconcileViewStateForSave()

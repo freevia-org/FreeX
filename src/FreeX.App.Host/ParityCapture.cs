@@ -656,7 +656,7 @@ internal static class ParityCapture
         CaptureConsolidateDialogDirect(results, outDir, sheet.Id, ResolveSheetId(workbook));
 
         CaptureDialog(results, "dialog.RemoveDuplicates", outDir, () =>
-            new RemoveDuplicatesDialog(CreateColumnChoices("Region", "Product", "Revenue", "Units")));
+            new RemoveDuplicatesDialog(range, CreateColumnChoices("Region", "Product", "Revenue", "Units")));
 
         CaptureDialog(results, "dialog.GoalSeek", outDir, () =>
             CreateGoalSeekParityDialog(sheet.Id));

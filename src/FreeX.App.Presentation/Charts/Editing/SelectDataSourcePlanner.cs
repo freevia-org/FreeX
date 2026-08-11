@@ -24,7 +24,10 @@ public readonly record struct SelectDataSourcePreview(
 public readonly record struct SelectDataSourceResult(
     string SourceRangeText,
     bool FirstColumnIsCategories,
-    bool SwitchRowColumn = false);
+    bool SwitchRowColumn = false,
+    IReadOnlyList<int>? PendingSeriesRemovals = null,
+    ChartBlankDisplayMode BlankDisplayMode = ChartBlankDisplayMode.Gap,
+    bool ShowDataInHiddenRowsAndColumns = false);
 
 /// <summary>A shell request to pick a replacement chart data range.</summary>
 public readonly record struct SelectDataSourceRangeSelectionRequest(string CurrentText, bool CollapseDialog = true);

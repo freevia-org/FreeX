@@ -5,13 +5,10 @@ using System.Windows.Input;
 
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
+using PivotCalculatedFieldResult = FreeX.App.Presentation.PivotUI.PivotCalculatedFieldPlanner.PivotCalculatedFieldResult;
+using PivotCalculatedItemResult = FreeX.App.Presentation.PivotUI.PivotCalculatedItemPlanner.PivotCalculatedItemResult;
 
 namespace FreeX.App.Host;
-
-public sealed record PivotCalculatedFieldDialogResult(string Name, string Formula)
-{
-    public PivotCalculatedFieldModel ToModel() => new(Name, Formula);
-}
 
 public sealed class PivotCalculatedFieldDialog : Window
 {
@@ -20,7 +17,7 @@ public sealed class PivotCalculatedFieldDialog : Window
     private readonly ListBox _fieldList = new() { Height = 92 };
     private readonly PivotCalculatedFieldSession _session;
 
-    public PivotCalculatedFieldDialogResult Result { get; private set; }
+    public PivotCalculatedFieldResult Result { get; private set; }
 
     public PivotCalculatedFieldDialog(string name = "", string formula = "", IEnumerable<string>? fieldNames = null)
     {
@@ -46,10 +43,10 @@ public sealed class PivotCalculatedFieldDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static PivotCalculatedFieldDialogResult CreateResult(string name, string formula)
+    public static PivotCalculatedFieldResult CreateResult(string name, string formula)
     {
         var draft = PivotCalculatedDraft.Normalize(name, formula);
-        return new PivotCalculatedFieldDialogResult(draft.Name, draft.Formula);
+        return new PivotCalculatedFieldResult(draft.Name, draft.Formula);
     }
 
     public static string InsertFormulaReference(string formula, string reference, int selectionStart, int selectionLength) =>
@@ -94,7 +91,7 @@ public sealed class PivotCalculatedFieldDialog : Window
         }
 
         var result = plan.Submission!.Result!;
-        Result = new PivotCalculatedFieldDialogResult(result.Name, result.Formula);
+        Result = result;
         DialogResult = true;
     }
 
@@ -145,15 +142,6 @@ public sealed class PivotCalculatedFieldDialog : Window
     }
 }
 
-public sealed record PivotCalculatedItemDialogResult(
-    string SourceFieldName,
-    int SourceFieldIndex,
-    string Name,
-    string Formula)
-{
-    public PivotCalculatedItemModel ToModel() => new(SourceFieldIndex, Name, Formula);
-}
-
 public sealed class PivotCalculatedItemDialog : Window
 {
     private readonly ComboBox _fieldBox = new();
@@ -163,7 +151,7 @@ public sealed class PivotCalculatedItemDialog : Window
     private readonly TextBox _formulaBox = new();
     private readonly PivotCalculatedItemSession _session;
 
-    public PivotCalculatedItemDialogResult Result { get; private set; }
+    public PivotCalculatedItemResult Result { get; private set; }
 
     public PivotCalculatedItemDialog(
         IEnumerable<string> fieldNames,
@@ -185,7 +173,6 @@ public sealed class PivotCalculatedItemDialog : Window
             itemNamesBySourceFieldIndex,
             text);
         Result = CreateResult(
-            _session.SelectedSourceField?.Caption ?? "",
             _session.SelectedSourceFieldIndex,
             name,
             formula);
@@ -201,15 +188,13 @@ public sealed class PivotCalculatedItemDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static PivotCalculatedItemDialogResult CreateResult(
-        string sourceFieldName,
+    public static PivotCalculatedItemResult CreateResult(
         int sourceFieldIndex,
         string name,
         string formula)
     {
         var draft = PivotCalculatedDraft.Normalize(name, formula);
-        return new PivotCalculatedItemDialogResult(
-            sourceFieldName.Trim(),
+        return new PivotCalculatedItemResult(
             Math.Max(0, sourceFieldIndex),
             draft.Name,
             draft.Formula);
@@ -247,7 +232,7 @@ public sealed class PivotCalculatedItemDialog : Window
         return stack;
     }
 
-    private void Load(PivotCalculatedItemDialogResult result)
+    private void Load(PivotCalculatedItemResult result)
     {
         _fieldBox.SelectedItem = _session.Fields.FirstOrDefault(
             field => field.SourceFieldIndex == result.SourceFieldIndex) ?? _session.Fields.FirstOrDefault();
@@ -273,11 +258,7 @@ public sealed class PivotCalculatedItemDialog : Window
         }
 
         var result = plan.Submission!.Result!;
-        Result = new PivotCalculatedItemDialogResult(
-            _session.SelectedSourceField?.Caption ?? "",
-            result.SourceFieldIndex,
-            result.Name,
-            result.Formula);
+        Result = result;
         DialogResult = true;
     }
 

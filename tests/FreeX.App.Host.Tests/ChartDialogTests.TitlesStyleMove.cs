@@ -134,7 +134,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("Loaded += (_, _) => FocusInitialKeyboardTarget();");
         dialogSource.Should().Contain("private void FocusInitialKeyboardTarget()");
@@ -159,7 +159,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("catch (ArgumentException ex)");
         dialogSource.Should().Contain("DialogMessageHelper.ShowWarning(this, ex.Message, Title);");
@@ -175,7 +175,7 @@ public sealed partial class ChartDialogTests
         var source = ReadChartDialogSource();
         var dialogSource = source[
             source.IndexOf("public sealed class MoveChartDialog", StringComparison.Ordinal)..
-            source.IndexOf("public sealed record SelectDataSourceDialogResult", StringComparison.Ordinal)];
+            source.IndexOf("public sealed partial class SelectDataSourceDialog", StringComparison.Ordinal)];
 
         dialogSource.Should().Contain("var targetField = ChartMovePlanner.GetTargetNameField();");
         dialogSource.Should().Contain("new Label { Content = UiText.Get(targetField.LabelResourceKey), Target = _targetBox");

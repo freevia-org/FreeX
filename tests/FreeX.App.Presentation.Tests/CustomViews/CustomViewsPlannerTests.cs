@@ -147,11 +147,6 @@ public sealed class CustomViewsPlannerTests
         var presentationRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Presentation");
         var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var plannerSource = File.ReadAllText(Path.Combine(presentationRoot, "CustomViews", "CustomViewsPlanner.cs"));
-        var hostPlanningSource = File.ReadAllText(Path.Combine(
-            repoRoot,
-            "src",
-            "FreeX.App.Host",
-            "CustomViewsDialog.Planning.cs"));
         var hostDialogSource = File.ReadAllText(Path.Combine(
             repoRoot,
             "src",
@@ -170,12 +165,12 @@ public sealed class CustomViewsPlannerTests
         plannerSource.Should().Contain("public static NameSubmission CreateNameSubmission(");
         plannerSource.Should().NotContain("UiText");
 
-        hostPlanningSource.Should().Contain("CustomViewsPlanner.BuildDialogRows(");
-        hostPlanningSource.Should().Contain("UiText.Get(\"CustomViews_Included\")");
-        hostPlanningSource.Should().Contain("UiText.Get(\"CustomViews_NotIncluded\")");
-        hostPlanningSource.Should().Contain("CustomViewsPlanner.SuggestDefaultName(");
-        hostPlanningSource.Should().NotContain("GetIncludedIndicator");
-        hostPlanningSource.Should().NotContain("view.IncludePrintSettings");
+        hostDialogSource.Should().Contain("CustomViewsPlanner.BuildDialogRows(");
+        hostDialogSource.Should().Contain("UiText.Get(\"CustomViews_Included\")");
+        hostDialogSource.Should().Contain("UiText.Get(\"CustomViews_NotIncluded\")");
+        hostDialogSource.Should().Contain("CustomViewsPlanner.SuggestDefaultName(");
+        hostDialogSource.Should().NotContain("GetIncludedIndicator");
+        hostDialogSource.Should().NotContain("CustomViewViewModel");
 
         hostDialogSource.Should().Contain("CustomViewsPlanner.BuildApplyCommand(vm.Name)");
         hostDialogSource.Should().Contain("CustomViewsPlanner.BuildSaveCommand(");

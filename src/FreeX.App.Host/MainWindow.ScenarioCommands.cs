@@ -272,13 +272,13 @@ public partial class MainWindow
         Workbook sourceWorkbook;
         try
         {
-            var loader = new OpenWorkbookLoader(recalculateAllFormulas: _ => { });
+            var loader = new WorkbookOpenService(recalculateAllFormulas: _ => { });
             var result = await loader.LoadAsync(
                 target!.Path,
                 target.Adapter,
                 FileFormatResolver.NormalizeExtension(target.Extension),
                 target.Format,
-                new Progress<OpenProgressUpdate>(_ => { }));
+                new Progress<WorkbookOpenProgressUpdate>(_ => { }));
             sourceWorkbook = result.Workbook;
         }
         catch (Exception)
