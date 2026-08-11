@@ -24,17 +24,32 @@ public sealed class AvaloniaKeyTipTokenFormatterTests
         var root = FindRepositoryRoot();
         var hostSources = new[]
         {
-            Read(root, "src", "FreeX.App.Avalonia", "MainWindow.DesktopChrome.cs") +
-            Read(root, "src", "FreeX.App.Avalonia", "MainWindow.LegacyShortcutSequences.cs"),
+            Read(root, "src", "FreeX.App.Avalonia", "MainWindow.DesktopChrome.cs"),
             Read(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"),
             Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"),
         };
 
         foreach (var source in hostSources)
         {
-            source.Should().Contain("AvaloniaKeyTipTokenFormatter.Format(")
+            source.Should().Contain("AvaloniaRibbonKeyTipInputPlanner.Resolve(")
+                .And.NotContain("AvaloniaKeyTipTokenFormatter.Format(")
                 .And.NotContain("ToRibbonKeyTipToken");
         }
+
+        var inputPlanner = Read(
+            root,
+            "shared",
+            "Free.Shared.Ribbon.Avalonia",
+            "AvaloniaRibbonKeyTipInputPlanner.cs");
+        inputPlanner.Should().Contain("AvaloniaKeyTipTokenFormatter.Format(");
+
+        var legacySequences = Read(
+            root,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.LegacyShortcutSequences.cs");
+        legacySequences.Should().Contain("AvaloniaKeyTipTokenFormatter.Format(")
+            .And.NotContain("ToRibbonKeyTipToken");
 
         var renderer = Read(
             root,
@@ -45,8 +60,16 @@ public sealed class AvaloniaKeyTipTokenFormatterTests
             .And.NotContain("keyTip.Trim().ToUpperInvariant()");
 
         var routes = Read(root, "src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaRibbonHost.cs");
-        routes.Should().Contain("RibbonKeyTipText.NormalizeOrEmpty(input)")
+        routes.Should().Contain("Routes.Value.Match(input)")
             .And.NotContain("private static string Normalize(string value)");
+
+        var routeCatalog = Read(
+            root,
+            "src",
+            "FreeX.App.Presentation",
+            "Ribbon",
+            "FreeXRibbonKeyTipRoutePlanner.cs");
+        routeCatalog.Should().Contain("RibbonKeyTipText.Normalize(input)");
     }
 
     private static string Read(string root, params string[] parts) =>

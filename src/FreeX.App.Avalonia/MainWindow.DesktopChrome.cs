@@ -36,32 +36,32 @@ public sealed partial class MainWindow
             return true;
         }
 
-        if (args.Key is Key.LeftAlt or Key.RightAlt ||
-            args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None)
+        var input = AvaloniaRibbonKeyTipInputPlanner.Resolve(
+            args.Key,
+            args.KeyModifiers,
+            _ribbonKeyTipsVisible,
+            acceptDirectAltToken: true);
+        if (input.Action == AvaloniaRibbonKeyTipInputAction.ToggleMode)
         {
             SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
             args.Handled = true;
             return true;
         }
 
-        var directAltToken = args.KeyModifiers == KeyModifiers.Alt
-            ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
-            : null;
-        if (!_ribbonKeyTipsVisible && directAltToken is null)
+        if (input.Action == AvaloniaRibbonKeyTipInputAction.Ignore)
             return false;
 
-        if (args.Key == Key.Escape)
+        if (input.Action == AvaloniaRibbonKeyTipInputAction.DismissMode)
         {
             SetRibbonKeyTipsVisible(false);
             args.Handled = true;
             return true;
         }
 
-        var token = directAltToken ?? AvaloniaKeyTipTokenFormatter.Format(args.Key);
-        if (token is null || _ribbonControl is null)
+        if (_ribbonControl is null)
             return false;
 
-        var activated = AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, token);
+        var activated = AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, input.Token!);
         SetRibbonKeyTipsVisible(false);
         args.Handled = activated;
         return activated;

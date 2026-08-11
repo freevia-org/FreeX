@@ -5,6 +5,25 @@ namespace Free.Shared.Ribbon.Tests;
 
 public sealed class AvaloniaRibbonKeyTipInputPlannerTests
 {
+    [Fact]
+    public void AllAvaloniaProductHostsDelegateCommonInputDecisionsToThePlanner()
+    {
+        var root = FindRepositoryRoot();
+        var hostSources = new[]
+        {
+            Read(root, "src", "FreeX.App.Avalonia", "MainWindow.DesktopChrome.cs"),
+            Read(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"),
+            Read(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"),
+        };
+
+        foreach (var source in hostSources)
+        {
+            source.Should().Contain("AvaloniaRibbonKeyTipInputPlanner.Resolve(")
+                .And.NotContain("args.Key is Key.LeftAlt or Key.RightAlt")
+                .And.NotContain("args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None");
+        }
+    }
+
     [Theory]
     [InlineData(Key.LeftAlt, KeyModifiers.None)]
     [InlineData(Key.RightAlt, KeyModifiers.Control)]
@@ -81,5 +100,21 @@ public sealed class AvaloniaRibbonKeyTipInputPlannerTests
                 KeyModifiers.Alt,
                 modeVisible: false)
             .Action.Should().Be(AvaloniaRibbonKeyTipInputAction.Ignore);
+    }
+
+    private static string Read(string root, params string[] parts) =>
+        File.ReadAllText(Path.Combine([root, .. parts]));
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the repository root.");
     }
 }
