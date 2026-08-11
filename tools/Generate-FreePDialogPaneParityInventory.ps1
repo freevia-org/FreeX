@@ -173,8 +173,8 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/FindReplaceDialog.cs", "freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FindReplaceDialogPolicySourceTests.cs", "freep/FreeP.App.Host.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/DialogLifecycleParityTests.cs", "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs", "freep/FreeP.App.Avalonia.Tests/KeyboardContextParityTests.cs") `
         -VisualEvidenceStatus "none; Find and Replace mode screenshots remain" `
-        -RequiredWpfTokens @("PresentationWorkareaNativeCommand.Find => OpenFindDialog", "PresentationWorkareaNativeCommand.Replace => OpenFindReplaceDialog", "_findReplaceDialog?.Close()") `
-        -RequiredAvaloniaTokens @("PresentationWorkareaNativeCommand.Find => OpenFindDialog", "PresentationWorkareaNativeCommand.Replace => OpenFindReplaceDialog", "_findReplaceDialog?.Close()") `
+        -RequiredWpfTokens @("Find = OpenFindDialog", "Replace = OpenFindReplaceDialog", "_findReplaceDialog?.Close()") `
+        -RequiredAvaloniaTokens @("Find = OpenFindDialog", "Replace = OpenFindReplaceDialog", "_findReplaceDialog?.Close()") `
         -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.Find", "FreePKeyboardCommand.Replace")
 
     New-Route -Id "insert.hyperlink" -Area "Insert or edit hyperlink" `
@@ -324,8 +324,8 @@ $routes = @(
         -ExistingVisualEvidence @("docs/parity/freep-print-output-option-choice-ui-2026-07-03.md", "docs/parity/freep-export-backstage-evidence-2026-07-05.md") `
         -VisualEvidenceStatus "package/workflow evidence only; paired app-pane screenshots remain" `
         -Status "behavior-aligned-host-shape-differs" -Notes "Avalonia has an additional compact print-options pane for direct command/keyboard routing; shared option and result policy is the same." `
-        -RequiredWpfTokens @("PresentationWorkareaNativeCommand.PrintPresentation => ShowPrintBackstage", "RefreshPrintBackstagePlan") `
-        -RequiredAvaloniaTokens @("PresentationWorkareaNativeCommand.PrintPresentation => ShowPrintBackstage", "ShowPrintOptionsPane") `
+        -RequiredWpfTokens @("PrintPresentation = ShowPrintBackstage", "RefreshPrintBackstagePlan") `
+        -RequiredAvaloniaTokens @("PrintPresentation = ShowPrintBackstage", "ShowPrintOptionsPane") `
         -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.PrintPresentation")
 
     New-Route -Id "file.open-picker" -Area "Open presentation" `
@@ -339,8 +339,8 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FileLifecycleTests.cs", "freep/FreeP.App.Avalonia.Tests/FileLifecycleWorkflowSourceTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationFileDialogPlannerTests.cs") `
         -VisualEvidenceStatus "native platform visual; exact cross-platform pixel parity is not applicable" `
-        -RequiredWpfTokens @("PresentationWorkareaNativeCommand.OpenPresentation => () => _file.Open()") `
-        -RequiredAvaloniaTokens @("PresentationWorkareaNativeCommand.OpenPresentation => () => _ = FileOpenAsync()") `
+        -RequiredWpfTokens @("OpenPresentation = () => _file.Open()") `
+        -RequiredAvaloniaTokens @("OpenPresentation = () => _ = FileOpenAsync()") `
         -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.OpenPresentation")
 
     New-Route -Id "file.save-as-picker" -Area "Save presentation as" `
@@ -354,8 +354,8 @@ $routes = @(
         -AvaloniaSources @("freep/FreeP.App.Avalonia/MainWindow.cs") `
         -Tests @("freep/FreeP.App.Host.Tests/FileLifecycleTests.cs", "freep/FreeP.App.Avalonia.Tests/FileLifecycleWorkflowSourceTests.cs", "freep/FreeP.App.Presentation.Tests/PresentationFileDialogPlannerTests.cs") `
         -VisualEvidenceStatus "native platform visual; exact cross-platform pixel parity is not applicable" `
-        -RequiredWpfTokens @("PresentationWorkareaNativeCommand.SavePresentationAs => () => _file.SaveAs()") `
-        -RequiredAvaloniaTokens @("PresentationWorkareaNativeCommand.SavePresentationAs => () => _ = FileSaveAsAsync()") `
+        -RequiredWpfTokens @("SavePresentationAs = () => _file.SaveAs()") `
+        -RequiredAvaloniaTokens @("SavePresentationAs = () => _ = FileSaveAsAsync()") `
         -RequiredWorkareaSessionTokens @("FreePKeyboardCommand.SavePresentationAs")
 )
 
