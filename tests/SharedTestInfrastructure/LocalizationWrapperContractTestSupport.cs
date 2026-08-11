@@ -12,7 +12,7 @@ internal static class LocalizationWrapperContractTestSupport
         typeof(TUiText).BaseType.Should().Be(typeof(LocalizedUiTextCatalog<TLoc>));
         typeof(TLanguageCatalog).BaseType.Should().Be(typeof(LocalizedAppLanguageCatalog<TLoc>));
         typeof(AppLanguageOption).Namespace.Should().Be(typeof(LocalizedAppLanguageCatalog<>).Namespace);
-        typeof(AppLanguageOption).Assembly.Should().Be(typeof(LocalizedAppLanguageCatalog<>).Assembly);
+        typeof(AppLanguageOption).Assembly.Should().BeSameAs(typeof(LocalizedAppLanguageCatalog<>).Assembly);
 
         var definition = typeof(TLoc).GetCustomAttribute<LocalizedResourceCatalogAttribute>();
         definition.Should().BeNull("app catalogs follow the shared namespace and assembly convention");
