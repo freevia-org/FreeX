@@ -189,14 +189,14 @@ public sealed class R163_HeaderDoubleClickAutoFitTests
             "if (drag.Kind == HeaderResizeKind.Column)", noOpGuard, StringComparison.Ordinal);
         commandPath.Should().BeGreaterThan(noOpGuard);
         commitResize[noOpGuard..commandPath]
-            .Should().NotContain("new SetColumnWidthCommand(")
-            .And.NotContain("new SetRowHeightCommand(")
+            .Should().NotContain("_session.SetColumnsWidthPixels(")
+            .And.NotContain("_session.SetRowsHeightPixels(")
             .And.NotContain("RefreshShell(")
             .And.Contain("return;");
         commitResize.IndexOf("drag.Pointer.Capture(null);", StringComparison.Ordinal)
             .Should().BeLessThan(noOpGuard,
                 "a no-movement click must release capture before taking the no-op return");
-        var firstCommand = commitResize.IndexOf("new SetColumnWidthCommand(", StringComparison.Ordinal);
+        var firstCommand = commitResize.IndexOf("_session.SetColumnsWidthPixels(", StringComparison.Ordinal);
         firstCommand.Should().BeGreaterThan(noOpGuard,
             "a no-movement collapsed click must exit before issuing a resize command");
     }

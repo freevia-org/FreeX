@@ -23,9 +23,17 @@ public sealed class PivotFieldFilterSourceTests
     public void ItemFilterDialog_DelegatesSelectionStateToPortablePivotUi()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
+        var applicationSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "PivotUI",
+            "PivotApplicationSession.Configuration.cs"));
 
-        source.Should().Contain(".CreateFieldSelectionState(");
         source.Should().Contain("PivotFieldFilterSummary.CreateState(");
+        source.Should().Contain("PivotApplication.PlanFieldItemSelection(");
+        source.Should().NotContain(".CreateFieldSelectionState(");
+        applicationSource.Should().Contain(".CreateFieldSelectionState(pivot, area, sourceFieldIndex)");
+        applicationSource.Should().Contain(".WithSelectedItems(selectedItems)");
         source.Should().NotContain("CloneFieldsWithSelection");
         source.Should().NotContain("FindFieldSelection");
         source.Should().NotContain("field with { SelectedItem");
@@ -89,11 +97,18 @@ public sealed class PivotFieldFilterSourceTests
     {
         var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var filterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
+        var itemReaderSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Presentation",
+            "SlicerTimeline",
+            "PivotFieldItemsReader.cs"));
 
         captureSource.Should().Contain("new PivotFieldModel(0, SelectedItems: [\"North\", \"South\"])");
         captureSource.Should().Contain("exposeActiveFilterActions: false");
         filterSource.Should().Contain("ResolveSelectAllState(");
-        filterSource.Should().Contain("members.OrderBy(item => item, StringComparer.CurrentCultureIgnoreCase)");
+        filterSource.Should().Contain("PivotApplication.ReadSourceItems(");
+        itemReaderSource.Should().Contain("new HashSet<string>(StringComparer.CurrentCultureIgnoreCase)");
+        itemReaderSource.Should().Contain("values.OrderBy(value => value, StringComparer.CurrentCultureIgnoreCase)");
     }
 
     private static string RepoFile(params string[] parts) =>

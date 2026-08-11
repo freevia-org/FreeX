@@ -648,9 +648,9 @@ public sealed class AvaloniaRibbonRendererTests
         var definition = new RibbonDefinitionBuilder()
             .Tab("HomeTab", "Home", "H", t => t.Group("g", "G", "G", 1, g => g.Button("b", "B")))
             .Tab("HelpTab", "Help", "Y", t => t.Group("hg", "HG", "Y", 1, g => g.Button("hb", "HB")))
-            .ContextualTab("ChartFormatTab", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green),
+            .ContextualTab("ChartFormatTab", "Chart Format", new RibbonTabContext("chart.selected", "Chart Format", RibbonContextColor.Green, DisplayOrder: 3),
                 t => t.Group("cfg", "CFG", "F", 1, g => g.Button("cfb", "CFB")))
-            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green),
+            .ContextualTab("ChartDesignTab", "Chart Design", new RibbonTabContext("chart.selected", "Chart Design", RibbonContextColor.Green, DisplayOrder: 2),
                 t => t.Group("cdg", "CDG", "C", 1, g => g.Button("cdb", "CDB")))
             .Build();
 

@@ -116,8 +116,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("_formulaBox.TextChanged += FormulaBox_TextChanged;");
         source.Should().Contain("FormulaReferenceHighlightPlanner.GetHighlights(");
         source.Should().Contain("ResolveStructuredFormulaReference");
-        source.Should().Contain("StructuredReferenceResolver.ResolveCurrentRowColumn");
-        source.Should().Contain("StructuredReferenceResolver.Resolve(");
+        source.Should().Contain("StructuredReferenceResolver.ResolveEditorReference(");
         source.Should().Contain("AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);");
         source.Should().Contain("TryGetDisplayedRangeBounds(");
         source.Should().Contain("IsHitTestVisible = false");
@@ -207,7 +206,8 @@ public sealed class AvaloniaGridInputSourceTests
         appendIndex.Should().BeLessThan(
             hyperlinkIndex,
             "WPF/Excel must append a formula area before Ctrl+click hyperlink navigation is considered");
-        pointerHandler.Should().Contain("IsFormulaDisjointReferenceModifier(args.KeyModifiers)");
+        pointerHandler.Should().Contain("_formulaRangeEditingSession.ShouldAppendDisjointReference(");
+        pointerHandler.Should().Contain("FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers)");
     }
 
     [Fact]

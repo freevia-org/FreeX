@@ -102,7 +102,6 @@ public sealed class Wave103_SlicerTimelinePaneProductionHostTests
             finally
             {
                 window.AllowCloseWithoutDirtyPromptForParityCapture();
-
                 if (window.IsVisible)
                     window.Close();
             }
@@ -132,6 +131,7 @@ public sealed class Wave103_SlicerTimelinePaneProductionHostTests
             }
             finally
             {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
                 if (window.IsVisible)
                     window.Close();
             }

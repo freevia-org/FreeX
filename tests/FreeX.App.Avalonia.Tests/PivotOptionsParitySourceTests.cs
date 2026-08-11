@@ -8,6 +8,8 @@ public sealed class PivotOptionsParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs"));
 
         source.Should().Contain("PivotOptionsPlanner.CaptureDialogValues(pivot, cache)");
+        source.Should().Contain("PivotOptionsPlanner.CreateDialogValues(");
+        source.Should().Contain("PivotApplication.PlanDialogOptions(");
         source.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(values.StyleName)");
         source.Should().Contain("MissingItemsLimitLabels");
         source.Should().Contain("TryParsePageWrap(pageWrapBox.Text");
@@ -34,25 +36,26 @@ public sealed class PivotOptionsParitySourceTests
 
         foreach (var argument in new[]
                  {
-                     "updateEmptyValueText: true",
-                     "refreshOnOpen: values.RefreshOnOpen",
-                     "saveSourceData: values.SaveSourceData",
-                     "enableRefresh: values.EnableRefresh",
-                     "preserveSourceSortFilter: values.PreserveSourceSortFilter",
-                     "updateMissingItemsLimit: true",
-                     "printTitles: values.PrintTitles",
-                     "printExpandCollapseButtons: values.PrintExpandCollapseButtons",
-                     "updateAltText: true",
-                     "autofitColumnsOnUpdate: values.AutofitColumnsOnUpdate",
-                     "preserveFormattingOnUpdate: values.PreserveFormattingOnUpdate",
-                     "showFieldHeaders: values.ShowFieldHeaders",
-                     "showContextualTooltips: values.ShowContextualTooltips",
-                     "showPropertiesInTooltips: values.ShowPropertiesInTooltips",
-                     "showClassicLayout: values.ShowClassicLayout",
-                     "showItemsWithNoDataOnRows: values.ShowItemsWithNoDataOnRows",
-                     "showItemsWithNoDataOnColumns: values.ShowItemsWithNoDataOnColumns",
-                     "errorCaption: values.ErrorValueText",
-                     "enableDrill: values.EnableDrill"
+                     "emptyValueText: emptyCellsBox.Text",
+                     "refreshOnOpen: refreshOnOpenBox.IsChecked == true",
+                     "saveSourceData: saveSourceDataBox.IsChecked == true",
+                     "enableRefresh: enableRefreshBox.IsChecked == true",
+                     "preserveSourceSortFilter: preserveSourceSortFilterBox.IsChecked == true",
+                     "missingItemsLimit: MissingItemsLimitForIndex(missingItemsLimitBox.SelectedIndex)",
+                     "printTitles: printTitlesBox.IsChecked == true",
+                     "printExpandCollapseButtons: printExpandCollapseBox.IsChecked == true",
+                     "altTextTitle: altTextTitleBox.Text",
+                     "altTextDescription: altTextDescriptionBox.Text",
+                     "autofitColumnsOnUpdate: autofitColumnsBox.IsChecked == true",
+                     "preserveFormattingOnUpdate: preserveFormattingBox.IsChecked == true",
+                     "showFieldHeaders: fieldHeadersBox.IsChecked == true",
+                     "showContextualTooltips: contextualTooltipsBox.IsChecked == true",
+                     "showPropertiesInTooltips: propertiesInTooltipsBox.IsChecked == true",
+                     "showClassicLayout: classicLayoutBox.IsChecked == true",
+                     "showItemsWithNoDataOnRows: showItemsWithNoDataRowsBox.IsChecked == true",
+                     "showItemsWithNoDataOnColumns: showItemsWithNoDataColumnsBox.IsChecked == true",
+                     "errorValueText: errorValuesBox.Text",
+                     "enableDrill: enableShowDetailsBox.IsChecked == true"
                  })
             source.Should().Contain(argument);
     }

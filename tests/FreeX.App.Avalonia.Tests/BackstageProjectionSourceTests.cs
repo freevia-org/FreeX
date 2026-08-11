@@ -182,6 +182,10 @@ public sealed class BackstageProjectionSourceTests
             "shared",
             "Free.Shared.Shell.Avalonia",
             "AvaloniaBackstageFrame.cs"));
+        var sharedSessionSource = File.ReadAllText(RepoFile(
+            "shared",
+            "Free.Shared.Shell",
+            "BackstageFrameSession.cs"));
 
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("FreeXBackstageFramePlan LiveBackstageFramePlan");
@@ -207,11 +211,12 @@ public sealed class BackstageProjectionSourceTests
         source.Should().NotContain("button.PointerEntered");
         source.Should().NotContain("button.PointerExited");
 
-        sharedFrameSource.Should().Contain("public string? CurrentEntryId { get; private set; }");
+        sharedFrameSource.Should().Contain("public string? CurrentEntryId => _session.CurrentEntryId;");
+        sharedSessionSource.Should().Contain("public string? CurrentEntryId { get; private set; }");
         sharedFrameSource.Should().Contain("public Button? GetEntryButton(string idOrLabel)");
         sharedFrameSource.Should().Contain("if (!button.IsVisible || !button.IsEffectivelyEnabled)");
-        sharedFrameSource.Should().Contain("if (entry.DismissOnActivate)");
-        sharedFrameSource.Should().Contain("entry.AutomationId ?? \"BackstageNav_\"");
+        sharedSessionSource.Should().Contain("if (entry.DismissOnActivate)");
+        sharedFrameSource.Should().Contain("BackstageFrameEntryIdentity.From(entry).ResolveAutomationId()");
         sharedFrameSource.Should().Contain("ToolTip.SetTip(button, tooltip)");
     }
 

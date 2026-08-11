@@ -6,6 +6,8 @@ using Avalonia.Headless;
 
 using FluentAssertions;
 
+using FreeX.App.Services;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 using Xunit;
@@ -65,15 +67,16 @@ public sealed class R129_ClipboardMarqueeChokePointTests
             var sheet = window.Session.Workbook.AddSheet("SpellingMarquee");
             window.Session.SelectSheet(sheet.Id);
             var address = new CellAddress(sheet.Id, 1, 1);
-            sheet.SetCell(address, new TextValue("helo world"));
+            sheet.SetCell(address, new TextValue("teh world"));
             window.Session.SelectRange(new GridRange(address, address));
 
             var copiedRange = new GridRange(new CellAddress(sheet.Id, 4, 4), new CellAddress(sheet.Id, 4, 4));
             window.SetClipboardMarqueeForTest(copiedRange, isCut: true);
 
-            // ApplySpellingCorrection itself doesn't call RefreshShell -- the Spelling dialog caller
-            // does after each Change/Change All decision -- so drive the same choke point directly.
-            InvokePrivate(window, "ApplySpellingCorrection", address, "helo world", 0, 4, "hello");
+            var issue = SpellCheckService.FindIssues(window.Session.Workbook, sheet.Id).Single();
+            var result = window.Session.ExecuteReviewCommand(
+                SpellCheckWorkflowPlanner.BuildReplacementCommand(issue, "the"));
+            result.Success.Should().BeTrue();
             InvokePrivate(window, "RefreshShell", "Ready");
 
             window.ClipboardMarqueeRangeForTest.Should().BeNull(

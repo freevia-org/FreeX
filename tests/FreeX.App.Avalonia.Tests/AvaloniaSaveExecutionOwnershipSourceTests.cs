@@ -9,8 +9,7 @@ public sealed class AvaloniaSaveExecutionOwnershipSourceTests
     {
         var source = File.ReadAllText(RepoFile("MainWindow.cs"));
 
-        source.Should().Contain("WorkbookSaveExecutionCoordinator.Begin(");
-        source.Should().Contain("saveExecution.ExecuteAsync(");
+        source.Should().Contain("_fileWorkflow.SaveTargetAsync(new WorkbookSaveWorkflowRequest(");
         source.Should().NotContain("generationAtSaveStart");
         source.Should().NotContain("_session.TryMarkSavedIfNoEditsArrived(");
         source.Should().NotContain("catch (WorkbookExternallyModifiedException)");
@@ -23,5 +22,9 @@ public sealed class AvaloniaSaveExecutionOwnershipSourceTests
     }
 
     private static string RepoFile(string fileName) =>
-        TestWorkspaceFileLocator.Find(fileName);
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeX.slnx",
+            "src",
+            "FreeX.App.Avalonia",
+            fileName);
 }

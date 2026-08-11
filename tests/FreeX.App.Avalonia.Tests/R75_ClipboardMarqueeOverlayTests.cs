@@ -240,7 +240,7 @@ public sealed class R75_ClipboardMarqueeOverlayTests
         var source = MainWindowSource();
         const string escapeClipboardGuard =
             "if (e.Key == Key.Escape &&\n" +
-            "                (_clipboardMarqueeRange is not null || _internalObjectClipboard is not null))";
+            "                (_clipboardMarqueeRange is not null || _drawingObjectClipboard.HasContent))";
 
         source.Should().Contain(
             escapeClipboardGuard,
@@ -250,7 +250,7 @@ public sealed class R75_ClipboardMarqueeOverlayTests
         var guardIndex = source.IndexOf(escapeClipboardGuard, StringComparison.Ordinal);
         var body = source.Substring(guardIndex, 300);
         body.Should().Contain("SetClipboardMarquee(null, isCut: false);");
-        body.Should().Contain("_internalObjectClipboard = null;");
+        body.Should().Contain("_drawingObjectClipboard.Clear();");
     }
 
     [Fact]

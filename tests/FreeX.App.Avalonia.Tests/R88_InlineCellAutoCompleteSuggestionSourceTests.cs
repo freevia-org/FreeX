@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Linq;
 using FluentAssertions;
 
@@ -67,6 +66,8 @@ public sealed class R88_InlineCellAutoCompleteSuggestionSourceTests
     public void ApplyInlineCellValueAutoCompleteSuggestion_GatesOnOptionRangeModeAndForwardCaret()
     {
         var source = ReadMainWindowSource();
+        var sessionSource = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Presentation", "FormulaBar", "FormulaRangeEditingSession.cs");
         var methodStart = source.IndexOf("private void ApplyInlineCellValueAutoCompleteSuggestion(", StringComparison.Ordinal);
         methodStart.Should().BeGreaterThanOrEqualTo(0, "the ported AutoComplete method must exist");
 
@@ -78,9 +79,13 @@ public sealed class R88_InlineCellAutoCompleteSuggestionSourceTests
         // end with nothing selected, then the shared portable suggester (no reinvented matching
         // logic) collects candidates and offers a suggestion.
         method.Should().Contain("EnableAutoCompleteForCellValues");
-        method.Should().Contain("_formulaRangeEditingSession.PointMode");
-        method.Should().Contain("CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(sheet, address)");
-        method.Should().Contain("CellValueAutoCompleteSuggester.Suggest(candidates, text)");
+        method.Should().Contain("_formulaRangeEditingSession.PlanCellValueAutocomplete(");
+        sessionSource.Should().Contain("ShouldOfferCellValueAutoComplete(enabled)");
+        sessionSource.Should().Contain("IsFormulaText(text)");
+        sessionSource.Should().Contain("selectionLength != 0");
+        sessionSource.Should().Contain("caretIndex != text.Length");
+        sessionSource.Should().Contain("CellValueAutoCompleteSuggester.CollectContiguousColumnTextEntries(");
+        sessionSource.Should().Contain("CellValueAutoCompleteSuggester.Suggest(candidates, text)");
     }
 
     [Fact]
@@ -89,8 +94,11 @@ public sealed class R88_InlineCellAutoCompleteSuggestionSourceTests
         // No-regression sibling: Backspace/Delete must still be able to reject a live suggestion
         // (Excel behavior) rather than the AutoComplete instantly re-offering the same completion.
         var source = ReadMainWindowSource();
+        var sessionSource = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "src", "FreeX.App.Presentation", "FormulaBar", "FormulaRangeEditingSession.cs");
 
-        source.Should().Contain("_suppressNextInlineCellValueAutoCompleteSuggestion = true;");
         source.Should().Contain("if (args.Key is Key.Back or Key.Delete)");
+        source.Should().Contain("_formulaRangeEditingSession.SuppressNextCellValueAutocomplete();");
+        sessionSource.Should().Contain("_suppressNextCellValueAutocomplete = true;");
     }
 }

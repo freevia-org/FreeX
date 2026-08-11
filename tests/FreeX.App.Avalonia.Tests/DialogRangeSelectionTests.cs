@@ -118,7 +118,7 @@ public sealed class DialogRangeSelectionTests
         consolidate.Should().Contain("ConsolidateDialogInitialState? initialState = null");
         consolidate.Should().Contain("initialState?.SourceReference ?? FormatRangeReference(selectedRange)");
         consolidate.Should().Contain("initialState?.DestinationReference ?? FormatCellReference(selectedRange.Start)");
-        consolidate.Should().Contain("ConsolidateDeleteReferenceButton");
+        consolidate.Should().Contain("FreeXAutomationIdCatalog.Consolidate.DeleteReferenceButton");
         consolidate.Should().Contain("ConsolidateDialogPlanner.HasPendingReferenceText(references, referenceBox.Text)");
         consolidate.Should().Contain("rejectDuplicateReferences: false");
         parityCapture.Should().Contain("ConsolidateParityFixture.CreateDialogInitialState()");

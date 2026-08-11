@@ -61,8 +61,8 @@ public sealed class R68_PasteDestinationCaptureOrderTests
     [Fact]
     public void TryPasteClipboardImageAsync_CapturesDestination_AfterTheBitmapAwait_NotBeforeIt()
     {
-        // ExtractMethodBody itself only matches the NEW single-parameter signature (ending in
-        // "clipboard)") -- the OLD signature ended in ", CellAddress destination)", so this whole
+        // ExtractMethodBody itself only matches the NEW parameterless signature -- the OLD signature
+        // accepted a clipboard and destination, so this whole
         // test fails at signature-lookup before the fix, proving the destination PARAMETER (the
         // caller used to capture it before awaiting the bitmap read) was removed.
         var body = ExtractMethodBody(TryPasteClipboardImageAsyncSignature);
@@ -89,8 +89,8 @@ public sealed class R68_PasteDestinationCaptureOrderTests
 
         // Both call sites must compile against the new (destination-less) signature.
         var source = MainWindowSource();
-        source.Should().Contain("await TryPasteClipboardImageAsync(clipboard))");
-        source.Should().Contain("return await TryPasteClipboardImageAsync(clipboard);");
+        source.Should().Contain("await TryPasteClipboardImageAsync())");
+        source.Should().Contain("return await TryPasteClipboardImageAsync();");
     }
 
     private static string ExtractMethodBody(string signature)

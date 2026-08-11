@@ -36,10 +36,18 @@ public sealed class R87_MainWindowPerViewShowHeadingsGridlinesFrozenPanesSourceT
         source.Should().Contain(
             "private Canvas BuildDrawingObjectOverlay(ViewportModel viewport)\n    {\n        var showHeadings = _session.IsShowingHeadings;");
 
-        // The overflow-clip frozen-column computations (were lines ~6709/~6739) now read the
-        // per-view frozen-column cache via the (Wave1-made-public) GetEffectiveFrozenCols().
-        source.Should().Contain("var limit = cellRight;\n        var frozenCols = _session.GetEffectiveFrozenCols();");
-        source.Should().Contain("var limit = cellLeft;\n        var frozenCols = _session.GetEffectiveFrozenCols();");
+        // Both overflow directions delegate geometry to the shared planner while supplying the
+        // per-view frozen-column cache.
+        var rightOverflow = source[
+            source.IndexOf("private double ResolveOverflowRightLimit(", StringComparison.Ordinal)..
+            source.IndexOf("private double ResolveOverflowLeftLimit(", StringComparison.Ordinal)];
+        var leftOverflow = source[
+            source.IndexOf("private double ResolveOverflowLeftLimit(", StringComparison.Ordinal)..
+            source.IndexOf("private bool IsOverflowOccupied(", StringComparison.Ordinal)];
+        rightOverflow.Should().Contain("ViewportGeometryPlanner.CalculateOverflowAvailability(");
+        rightOverflow.Should().Contain("_session.GetEffectiveFrozenCols()");
+        leftOverflow.Should().Contain("ViewportGeometryPlanner.CalculateOverflowAvailability(");
+        leftOverflow.Should().Contain("_session.GetEffectiveFrozenCols()");
 
         // The column/row header hit-test gates (were lines ~7320/~7347).
         source.Should().Contain(

@@ -95,7 +95,7 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
         var source = MainWindowSource();
 
         source.Should().Contain(
-            "if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !CellRichTextInlinesBuilder.HasRuns(richRuns))",
+            "if (style?.ShrinkToFit == true && textWrapping != TextWrapping.Wrap && !isFillAlign && !textMaterialization.HasRichText)",
             "Shrink to fit must be gated the same way Excel gates it: off when WrapText is on, and independent of Fill alignment / rich runs");
         source.Should().Contain("adjustedFontSize = ResolveShrinkToFitFontSize(effectiveText, fontWeight, fontStyle, adjustedFontSize, availableWidth);");
     }
