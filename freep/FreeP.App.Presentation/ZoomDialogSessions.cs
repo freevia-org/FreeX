@@ -336,7 +336,10 @@ public sealed record ZoomObjectPropertiesDialogControlPlan(
 public sealed record ZoomObjectPropertiesDialogFieldState(
     ZoomObjectPropertiesDialogField Field,
     object? Value,
-    bool IsEnabled);
+    bool IsEnabled)
+{
+    public string TextValue => Value as string ?? Value?.ToString() ?? string.Empty;
+}
 
 public sealed record ZoomObjectPropertiesDialogState(
     int SelectedSummaryTileIndex,
@@ -349,6 +352,80 @@ public sealed record ZoomObjectPropertiesDialogState(
 public sealed record ZoomObjectPropertiesDialogAction(
     ZoomObjectPropertiesDialogField Field,
     object? Value);
+
+/// <summary>
+/// Owns renderer-neutral zoom-properties field registration, re-entrant state application,
+/// dispatch, and validation focus policy. Native hosts map field values to native controls.
+/// </summary>
+public sealed class ZoomObjectPropertiesDialogFormSession<TControl>
+    where TControl : class
+{
+    private readonly Dictionary<ZoomObjectPropertiesDialogField, TControl> _controls = [];
+    private readonly Dictionary<ZoomObjectPropertiesDialogField, bool> _selectAllOnFocus = [];
+    private readonly Func<ZoomObjectPropertiesDialogAction, ZoomObjectPropertiesDialogState> _dispatch;
+    private readonly Action<TControl, ZoomObjectPropertiesDialogFieldState> _applyFieldState;
+    private readonly Action<TControl, bool> _focus;
+
+    public ZoomObjectPropertiesDialogFormSession(
+        Func<ZoomObjectPropertiesDialogAction, ZoomObjectPropertiesDialogState> dispatch,
+        Action<TControl, ZoomObjectPropertiesDialogFieldState> applyFieldState,
+        Action<TControl, bool> focus)
+    {
+        _dispatch = dispatch ?? throw new ArgumentNullException(nameof(dispatch));
+        _applyFieldState = applyFieldState ?? throw new ArgumentNullException(nameof(applyFieldState));
+        _focus = focus ?? throw new ArgumentNullException(nameof(focus));
+    }
+
+    public bool IsApplyingState { get; private set; }
+
+    public void Register(
+        ZoomObjectPropertiesDialogField field,
+        TControl control,
+        bool selectAllOnFocus)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        _controls.Add(field, control);
+        _selectAllOnFocus.Add(field, selectAllOnFocus);
+    }
+
+    public TControl Control(ZoomObjectPropertiesDialogField field) =>
+        _controls.TryGetValue(field, out var control)
+            ? control
+            : throw new KeyNotFoundException($"The zoom properties form does not define {field}.");
+
+    public void Dispatch(ZoomObjectPropertiesDialogField field, object? value)
+    {
+        if (!IsApplyingState)
+            ApplyState(_dispatch(new ZoomObjectPropertiesDialogAction(field, value)));
+    }
+
+    public void ApplyState(ZoomObjectPropertiesDialogState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        IsApplyingState = true;
+        try
+        {
+            foreach (var fieldState in state.Fields)
+            {
+                if (_controls.TryGetValue(fieldState.Field, out var control))
+                    _applyFieldState(control, fieldState);
+            }
+        }
+        finally
+        {
+            IsApplyingState = false;
+        }
+    }
+
+    public bool Focus(ZoomObjectPropertiesDialogField field)
+    {
+        if (!_controls.TryGetValue(field, out var control))
+            return false;
+
+        _focus(control, _selectAllOnFocus[field]);
+        return true;
+    }
+}
 
 public enum ZoomObjectPropertiesBorderMode
 {

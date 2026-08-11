@@ -118,6 +118,23 @@ public sealed class DialogTailSessionTests
             out var error,
             CultureInfo.InvariantCulture).Should().BeFalse();
         error.Should().Be("X must be a number.");
+
+        var session = new MotionPathEditorDialogSession(
+            MakeMotionPathEditor(),
+            0,
+            CultureInfo.InvariantCulture);
+        var rowPlan = MotionPathEditorRowProjection.BuildPlan(
+            session.Surface,
+            new MotionPathSegmentEdit(MotionPathSegmentKind.Cubic, 1.5, 2.5, 0.5, 0.75, 1, 1.25),
+            rowIndex: 2,
+            CultureInfo.InvariantCulture);
+        rowPlan.RowLabel.Should().Be("Segment");
+        rowPlan.X.Should().Be("1.5");
+        rowPlan.Enablement.Should().Be(new MotionPathEditorRowEnablement(true, true, true, true));
+        session.Surface.Field(MotionPathEditorDialogField.X, rowPlan.RowIndex).AutomationId
+            .Should().Be("FreeP.MotionPath.X.2");
+        session.Surface.Action(MotionPathEditorDialogAction.Delete, rowPlan.RowIndex).AutomationId
+            .Should().Be("FreeP.MotionPath.Delete.2");
     }
 
     [Fact]
@@ -197,6 +214,36 @@ public sealed class DialogTailSessionTests
         });
         permissiveParse.Settings.ShowType.Should().Be(PresentationShowType.PresentedBySpeaker);
         permissiveParse.Settings.KioskRestartAfterMilliseconds.Should().BeNull();
+    }
+
+    [Fact]
+    public void SlideShowSettingsFormSession_OwnsPortableCaptureAndApplication()
+    {
+        var controls = Enum.GetValues<SlideShowSettingsDialogField>()
+            .ToDictionary(field => field, _ => new FakeSettingsControl());
+        var form = new SlideShowSettingsDialogFormSession<FakeSettingsControl>(
+            static control => control.Value,
+            static (control, value) => control.Value = value);
+        foreach (var (field, control) in controls)
+            form.Register(field, control);
+
+        var expected = SlideShowSettingsDialogSession.CreateInput(
+            useSlideTimings: false,
+            showWithoutAnimation: true,
+            loopUntilStopped: true,
+            showTypeIndex: 2,
+            showBrowseScrollbar: false,
+            kioskRestartMilliseconds: "9000",
+            showWithNarration: false,
+            showMediaControls: true,
+            showMasterShapes: false);
+
+        form.ApplyInput(expected);
+
+        form.CaptureInput().Should().Be(expected);
+        controls[SlideShowSettingsDialogField.ShowType].Value.SelectedIndex.Should().Be(2);
+        controls[SlideShowSettingsDialogField.KioskRestartMilliseconds].Value.Text.Should().Be("9000");
+        controls[SlideShowSettingsDialogField.ShowWithoutAnimation].Value.IsChecked.Should().BeTrue();
     }
 
     [Fact]
@@ -281,4 +328,9 @@ public sealed class DialogTailSessionTests
 
     private static EditingSession MakeEditor(Presentation presentation) =>
         new(presentation, new PresentationCommandBus(presentation));
+
+    private sealed class FakeSettingsControl
+    {
+        public SlideShowSettingsDialogFieldValue Value { get; set; }
+    }
 }

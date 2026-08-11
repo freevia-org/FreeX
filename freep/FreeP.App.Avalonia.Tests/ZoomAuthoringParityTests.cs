@@ -14,12 +14,13 @@ public sealed class ZoomAuthoringParityTests
 
         source.Should().Contain("ZoomObjectPropertiesDialogSession");
         source.Should().Contain("_surface = _session.Surface");
+        source.Should().Contain("ZoomObjectPropertiesDialogFormSession<Control>");
         source.Should().Contain("foreach (var plan in _session.FieldCatalog)");
         source.Should().Contain("ZoomObjectPropertiesDialogControlKind.Toggle");
-        source.Should().Contain("new ZoomObjectPropertiesDialogAction(field, value)");
+        source.Should().Contain("_formSession.Dispatch(field, value)");
         source.Should().Contain("_session.TryAccept(out var validation)");
-        source.Should().Contain("ApplyState(_session.State)");
-        source.Should().Contain("FocusValidationField(validation.Field)");
+        source.Should().Contain("_formSession.ApplyState(_session.State)");
+        source.Should().Contain("_formSession.Focus(validation.Field)");
         source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
         source.Should().Contain("AutomationProperties.SetName(");
         source.Should().Contain("AutomationProperties.SetAutomationId(");
@@ -34,6 +35,9 @@ public sealed class ZoomAuthoringParityTests
         source.Should().NotContain("LoadSummaryTileFields");
         source.Should().NotContain("SyncFrameBorderState");
         source.Should().NotContain("private readonly CheckBox _returnToParent");
+        source.Should().NotContain("Dictionary<ZoomObjectPropertiesDialogField");
+        source.Should().NotContain("foreach (var fieldState in state.Fields)");
+        source.Should().NotContain("_applyingState");
     }
 
     [Fact]
@@ -85,6 +89,7 @@ public sealed class ZoomAuthoringParityTests
 
         source.Should().Contain("validation!.Message");
         source.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
+        source.Should().Contain("_formSession.Focus(validation.Field)");
         source.Should().NotContain("InvalidTransitionDurationMessage");
         source.Should().NotContain("InvalidFrameBorderShadowMessage");
         source.Should().NotContain("InvalidFrameBorderGlowMessage");

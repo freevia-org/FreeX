@@ -421,6 +421,51 @@ public sealed class ZoomDialogSessionTests
     }
 
     [Fact]
+    public void PropertiesFormSession_OwnsStateDispatchReentrancyAndFocusPolicy()
+    {
+        var dispatchCount = 0;
+        ZoomObjectPropertiesDialogFormSession<FakeZoomControl>? form = null;
+        var toggle = new FakeZoomControl();
+        var duration = new FakeZoomControl();
+        form = new(
+            action =>
+            {
+                dispatchCount++;
+                return BuildZoomState(action.Value is true);
+            },
+            (control, state) =>
+            {
+                control.State = state;
+                form!.Dispatch(ZoomObjectPropertiesDialogField.TransitionDuration, "nested");
+            },
+            static (control, selectAll) =>
+            {
+                control.IsFocused = true;
+                control.IsTextSelected = selectAll;
+            });
+        form.Register(
+            ZoomObjectPropertiesDialogField.TransitionEnabled,
+            toggle,
+            selectAllOnFocus: false);
+        form.Register(
+            ZoomObjectPropertiesDialogField.TransitionDuration,
+            duration,
+            selectAllOnFocus: true);
+
+        form.ApplyState(BuildZoomState(enabled: false));
+
+        dispatchCount.Should().Be(0);
+        duration.State!.TextValue.Should().BeEmpty();
+        form.Dispatch(ZoomObjectPropertiesDialogField.TransitionEnabled, true);
+        dispatchCount.Should().Be(1);
+        duration.State!.IsEnabled.Should().BeTrue();
+        form.Focus(ZoomObjectPropertiesDialogField.TransitionDuration).Should().BeTrue();
+        duration.IsFocused.Should().BeTrue();
+        duration.IsTextSelected.Should().BeTrue();
+        form.Focus(ZoomObjectPropertiesDialogField.FrameBorderColor).Should().BeFalse();
+    }
+
+    [Fact]
     public void Properties_surface_plan_owns_localized_chrome_text_and_shared_metrics()
     {
         var originalCulture = CultureInfo.CurrentCulture;
@@ -484,6 +529,21 @@ public sealed class ZoomDialogSessionTests
         int scaleX = 100000,
         int scaleY = 100000) =>
         new("section-a", "Section A", string.Empty, offsetX, offsetY, scaleX, scaleY);
+
+    private static ZoomObjectPropertiesDialogState BuildZoomState(bool enabled) =>
+        new(
+            SelectedSummaryTileIndex: -1,
+            [
+                new(ZoomObjectPropertiesDialogField.TransitionEnabled, enabled, true),
+                new(ZoomObjectPropertiesDialogField.TransitionDuration, null, enabled),
+            ]);
+
+    private sealed class FakeZoomControl
+    {
+        public ZoomObjectPropertiesDialogFieldState? State { get; set; }
+        public bool IsFocused { get; set; }
+        public bool IsTextSelected { get; set; }
+    }
 
     private static IEnumerable<string> RendererSources(string fileName)
     {

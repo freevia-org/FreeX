@@ -1,7 +1,14 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using Free.Shared.Shell;
 
 namespace FreeP.App.Compositor;
+
+public enum ChartOptionsDialogActionId
+{
+    Accept,
+    Cancel,
+}
 
 public enum ChartOptionsDialogFieldId
 {
@@ -235,6 +242,19 @@ public sealed class ChartOptionsDialogPlan
         Hint = hint;
         AcceptLabel = acceptLabel;
         CancelLabel = cancelLabel;
+        var automationToken = AutomationIdToken.KeepLettersAndDigits(commandId);
+        AcceptAction = new(
+            ChartOptionsDialogActionId.Accept,
+            acceptLabel,
+            $"Apply {title}",
+            $"FreeP.ChartOptions.{automationToken}.Accept",
+            IsDefault: true);
+        CancelAction = new(
+            ChartOptionsDialogActionId.Cancel,
+            cancelLabel,
+            $"Cancel {title}",
+            $"FreeP.ChartOptions.{automationToken}.Cancel",
+            IsCancel: true);
         Groups = new ReadOnlyCollection<ChartOptionsDialogGroupPlan>(groups.ToArray());
         _fields = new ReadOnlyDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldPlan>(
             fields.ToDictionary(field => field.Id));
@@ -251,6 +271,8 @@ public sealed class ChartOptionsDialogPlan
     public string? Hint { get; }
     public string AcceptLabel { get; }
     public string CancelLabel { get; }
+    public PresentationDialogActionPlan<ChartOptionsDialogActionId> AcceptAction { get; }
+    public PresentationDialogActionPlan<ChartOptionsDialogActionId> CancelAction { get; }
     public IReadOnlyList<ChartOptionsDialogGroupPlan> Groups { get; }
     public IReadOnlyDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldPlan> Fields => _fields;
 

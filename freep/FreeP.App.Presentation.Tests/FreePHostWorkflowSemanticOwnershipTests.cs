@@ -1,5 +1,3 @@
-using Free.Shared.Shell;
-
 namespace FreeP.App.Compositor.Tests;
 
 public sealed class FreePHostWorkflowSemanticOwnershipTests
@@ -49,24 +47,36 @@ public sealed class FreePHostWorkflowSemanticOwnershipTests
     }
 
     [Fact]
-    public void DynamicDialogAutomationIdsUseSharedSegmentComposition()
+    public void DynamicDialogAutomationIdsComeFromSharedSurfacePlans()
     {
-        AutomationIdToken.AppendSegment("FreeP.Dialog.Field", null)
-            .Should().Be("FreeP.Dialog.Field");
-        AutomationIdToken.AppendSegment("FreeP.Dialog.Field", "row-2")
-            .Should().Be("FreeP.Dialog.Field.row-2");
+        SlideShowCustomShowDialogSurfaceCatalog.Surface
+            .Field(SlideShowCustomShowDialogField.AvailableSlides, "slide-2")
+            .AutomationId.Should().Be("FreeP.CustomShows.AvailableSlides.slide-2");
+        SlideShowCustomShowDialogSurfaceCatalog.Surface
+            .Action(SlideShowCustomShowDialogAction.AddSlide, "slide-2")
+            .AutomationId.Should().Be("FreeP.CustomShows.AddSlide.slide-2");
 
         foreach (var source in new[]
         {
             ReadWorkspaceFile("freep", "FreeP.App.Host", "CustomShowDialog.cs"),
-            ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "CustomShowDialog.cs"),
+            ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "CustomShowDialog.cs")
+        })
+        {
+            source.Should().Contain("Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId)");
+            source.Should().Contain("Surface.Action(actionId, automationSuffix)");
+            source.Should().NotContain("AutomationIdToken.AppendSegment(");
+        }
+
+        foreach (var source in new[]
+        {
             ReadWorkspaceFile("freep", "FreeP.App.Host", "MotionPathEditorDialog.cs"),
             ReadWorkspaceFile("freep", "FreeP.App.Avalonia", "MotionPathEditorDialog.cs")
         })
         {
-            source.Should().Contain("AutomationIdToken.AppendSegment(");
-            source.Should().NotContain("$\"{field.AutomationId}.{automationSuffix}\"");
-            source.Should().NotContain("$\"{action.AutomationId}.{automationSuffix}\"");
+            source.Should().Contain("_surface.Field(MotionPathEditorDialogField.X, plan.RowIndex)");
+            source.Should().Contain("_surface.Action(MotionPathEditorDialogAction.Delete, plan.RowIndex)");
+            source.Should().NotContain("AutomationIdToken.AppendSegment(");
+            source.Should().NotContain("rowIndex.ToString()");
         }
     }
 

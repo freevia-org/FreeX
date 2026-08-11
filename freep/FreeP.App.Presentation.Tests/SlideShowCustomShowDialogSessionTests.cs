@@ -214,6 +214,72 @@ public sealed class SlideShowCustomShowDialogSessionTests
         calls.Should().Equal("selected", "validation:none");
     }
 
+    [Fact]
+    public void FormSession_OwnsSelectionDefaultsChecksActionsAndValidationProjection()
+    {
+        var presentation = MakePresentation();
+        AddShow(presentation, "Review", "appendix", "intro");
+        var session = CreateSession(presentation, out _);
+        var showList = new FakeControl();
+        var orderedSlides = new FakeControl();
+        var name = new FakeControl();
+        var validation = new FakeControl();
+        var form = new SlideShowCustomShowDialogFormSession<FakeControl>(
+            showList,
+            orderedSlides,
+            name,
+            validation,
+            static (control, items) => control.ItemsSource = items,
+            SetSelectedIndex,
+            static control => control.SelectedIndex,
+            static control => control.SelectedItem,
+            static (control, text) => control.Text = text,
+            static (control, isChecked) => control.IsChecked = isChecked,
+            static control => control.IsChecked,
+            static (control, isEnabled) => control.IsEnabled = isEnabled);
+        var actions = new Dictionary<SlideShowCustomShowDialogAction, FakeControl>();
+        foreach (var action in new[]
+                 {
+                     SlideShowCustomShowDialogAction.Rename,
+                     SlideShowCustomShowDialogAction.UpdateSlides,
+                     SlideShowCustomShowDialogAction.Delete,
+                     SlideShowCustomShowDialogAction.StartShow,
+                     SlideShowCustomShowDialogAction.MoveUp,
+                     SlideShowCustomShowDialogAction.MoveDown,
+                     SlideShowCustomShowDialogAction.Remove,
+                 })
+        {
+            actions[action] = new FakeControl();
+            form.RegisterAction(action, actions[action]);
+        }
+
+        var available = session.Plan.AvailableSlides.ToDictionary(
+            slide => slide.SlideId,
+            _ => new FakeControl());
+        foreach (var (slideId, control) in available)
+            form.RegisterAvailableSlide(slideId, control);
+
+        form.ApplyFullPlan(session.Plan);
+
+        form.SelectedShowIndex.Should().Be(0);
+        name.Text.Should().Be("Review");
+        orderedSlides.ItemsSource.Should().BeSameAs(session.Plan.SelectedSlides);
+        orderedSlides.SelectedIndex.Should().Be(0);
+        available["appendix"].IsChecked.Should().BeTrue();
+        available["intro"].IsChecked.Should().BeTrue();
+        available["deep"].IsChecked.Should().BeFalse();
+        actions[SlideShowCustomShowDialogAction.MoveUp].IsEnabled.Should().BeFalse();
+        actions[SlideShowCustomShowDialogAction.MoveDown].IsEnabled.Should().BeTrue();
+
+        available["intro"].IsChecked = false;
+        available["deep"].IsChecked = true;
+        form.SelectedSlideIds().Should().Equal("deep", "appendix");
+        form.SetValidation("Name is required");
+        validation.Text.Should().Be("Name is required");
+        form.SetValidation(null);
+        validation.Text.Should().BeEmpty();
+    }
+
     private static SlideShowCustomShowDialogSession CreateSession(
         Presentation presentation,
         out List<SlideShowCustomShowDialogMutationRequest> requests,
@@ -253,5 +319,23 @@ public sealed class SlideShowCustomShowDialogSessionTests
         var show = new PresentationCustomShow { Name = name };
         show.SlideIds.AddRange(slideIds);
         presentation.CustomShows.Add(show);
+    }
+
+    private static void SetSelectedIndex(FakeControl control, int index)
+    {
+        control.SelectedIndex = index;
+        control.SelectedItem = control.ItemsSource is System.Collections.IEnumerable items && index >= 0
+            ? items.Cast<object>().ElementAtOrDefault(index)
+            : null;
+    }
+
+    private sealed class FakeControl
+    {
+        public object? ItemsSource { get; set; }
+        public object? SelectedItem { get; set; }
+        public int SelectedIndex { get; set; } = -1;
+        public string Text { get; set; } = string.Empty;
+        public bool IsChecked { get; set; }
+        public bool IsEnabled { get; set; }
     }
 }

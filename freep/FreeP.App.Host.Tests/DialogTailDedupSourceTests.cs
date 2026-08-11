@@ -10,11 +10,14 @@ public sealed class DialogTailDedupSourceTests
         var motion = ReadHostSource("MotionPathEditorDialog.cs");
         motion.Should().Contain("MotionPathEditorDialogSession");
         motion.Should().Contain("MotionPathEditorRowProjection");
+        motion.Should().Contain("MotionPathEditorRowProjection.BuildPlan(");
         motion.Should().Contain("_session.Surface");
         motion.Should().Contain("AutomationProperties.SetName(");
         motion.Should().Contain("AutomationProperties.SetAutomationId(");
         motion.Should().NotContain("MotionPathEditingPlanner.");
         motion.Should().NotContain("double.TryParse");
+        motion.Should().NotContain("AutomationIdToken.AppendSegment(");
+        motion.Should().NotContain("rowIndex.ToString()");
 
         var rotation = ReadHostSource("RotationOptionsDialog.cs");
         rotation.Should().Contain("RotationOptionsDialogSession");
@@ -27,6 +30,9 @@ public sealed class DialogTailDedupSourceTests
 
         var slideShow = ReadHostSource("SlideShowSettingsDialog.cs");
         slideShow.Should().Contain("SlideShowSettingsDialogSession");
+        slideShow.Should().Contain("SlideShowSettingsDialogFormSession<Control>");
+        slideShow.Should().Contain("_formSession.CaptureInput()");
+        slideShow.Should().Contain("_formSession.ApplyInput(");
         slideShow.Should().Contain("SlideShowSettingsDialogSession.ShowTypeOptions");
         slideShow.Should().Contain("SlideShowSettingsDialogSession.CreateInput");
         slideShow.Should().NotContain("SlideShowSettingsPlanner.");
@@ -37,11 +43,15 @@ public sealed class DialogTailDedupSourceTests
 
         var customShow = ReadHostSource("CustomShowDialog.cs");
         customShow.Should().Contain("SlideShowCustomShowDialogSession");
-        customShow.Should().Contain("SlideShowCustomShowSessionShowItemPlan");
-        customShow.Should().Contain("SlideShowCustomShowSessionSlideItemPlan");
+        customShow.Should().Contain("SlideShowCustomShowDialogFormSession<FrameworkElement>");
+        customShow.Should().Contain("_formSession.ApplyFullPlan(plan)");
+        customShow.Should().Contain("_formSession.ApplySelectedShowPlan(plan)");
+        customShow.Should().Contain("_formSession.ApplySlideSelection(plan)");
         customShow.Should().NotContain("SlideShowCustomShowPlanner.");
         customShow.Should().NotContain("record CustomShowListItem");
         customShow.Should().NotContain("record CustomShowSlideListItem");
+        customShow.Should().NotContain("plan.CanRename");
+        customShow.Should().NotContain("plan.SelectedShow?.Name ?? string.Empty");
 
         var chartEx = ReadHostSource("ChartExSeriesLayoutDialog.cs");
         chartEx.Should().Contain("ChartExSeriesLayoutDialogSession");

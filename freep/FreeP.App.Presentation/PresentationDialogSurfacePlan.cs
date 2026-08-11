@@ -88,6 +88,24 @@ public sealed class PresentationDialogSurfacePlan<TField, TAction> : DialogSurfa
     public new PresentationDialogFieldPlan<TField> Field(TField id) =>
         (PresentationDialogFieldPlan<TField>)base.Field(id);
 
+    public PresentationDialogFieldPlan<TField> Field(TField id, string? automationSuffix)
+    {
+        var field = Field(id);
+        return field with
+        {
+            AutomationId = AutomationIdToken.AppendSegment(field.AutomationId, automationSuffix)
+        };
+    }
+
     public new PresentationDialogActionPlan<TAction> Action(TAction id) =>
         (PresentationDialogActionPlan<TAction>)base.Action(id);
+
+    public PresentationDialogActionPlan<TAction> Action(TAction id, string? automationSuffix)
+    {
+        var action = Action(id);
+        return action with
+        {
+            AutomationId = AutomationIdToken.AppendSegment(action.AutomationId, automationSuffix)
+        };
+    }
 }

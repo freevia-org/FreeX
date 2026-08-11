@@ -42,6 +42,73 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
             .And.NotContain("Avalonia");
     }
 
+    [Fact]
+    public void PortableFormSession_NormalizesNativeTextAndOwnsTypedAccessors()
+    {
+        var text = new FakeControl
+        {
+            Value = new ChartOptionsDialogFieldValue(Text: null!),
+        };
+        var choice = new FakeControl
+        {
+            Value = new ChartOptionsDialogFieldValue(SelectedIndex: 2),
+        };
+        var toggle = new FakeControl
+        {
+            Value = new ChartOptionsDialogFieldValue(IsChecked: null),
+        };
+        var form = new ChartOptionsDialogFormSession<FakeControl, FakeRow>(
+            static control => control.Value,
+            static (control, value) => control.Value = value,
+            static (control, field) => control.Value = new(
+                field.Text,
+                field.SelectedIndex,
+                field.IsChecked),
+            static (row, visible) => row.IsVisible = visible);
+        form.Register(ChartOptionsDialogFieldId.FontFamily, text, new FakeRow());
+        form.Register(ChartOptionsDialogFieldId.ScatterStyle, choice, new FakeRow());
+        form.Register(ChartOptionsDialogFieldId.Bold, toggle, new FakeRow());
+
+        form.Text(ChartOptionsDialogFieldId.FontFamily).Should().BeEmpty();
+        form.SelectedIndex(ChartOptionsDialogFieldId.ScatterStyle).Should().Be(2);
+        form.NullableChecked(ChartOptionsDialogFieldId.Bold).Should().BeNull();
+        form.CaptureValues().Text(ChartOptionsDialogFieldId.FontFamily).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ChartPlan_OwnsStableActionSemantics()
+    {
+        var plan = new ChartOptionsDialogPlan(
+            commandId: "Chart.Format.Axis",
+            title: "Format Axis",
+            width: 420,
+            height: 300,
+            minimumWidth: 320,
+            minimumHeight: 220,
+            isResizable: true,
+            isScrollable: false,
+            hint: null,
+            acceptLabel: "OK",
+            cancelLabel: "Cancel",
+            groups: Array.Empty<ChartOptionsDialogGroupPlan>());
+
+        plan.AcceptAction.IsDefault.Should().BeTrue();
+        plan.AcceptAction.AccessibleName.Should().Be("Apply Format Axis");
+        plan.AcceptAction.AutomationId.Should().Be("FreeP.ChartOptions.ChartFormatAxis.Accept");
+        plan.CancelAction.IsCancel.Should().BeTrue();
+        plan.CancelAction.AutomationId.Should().Be("FreeP.ChartOptions.ChartFormatAxis.Cancel");
+    }
+
     private static string Read(string root, params string[] relativeParts) =>
         File.ReadAllText(Path.Combine(new[] { root }.Concat(relativeParts).ToArray()));
+
+    private sealed class FakeControl
+    {
+        public ChartOptionsDialogFieldValue Value { get; set; } = new();
+    }
+
+    private sealed class FakeRow
+    {
+        public bool IsVisible { get; set; }
+    }
 }

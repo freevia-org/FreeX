@@ -66,7 +66,8 @@ public sealed class ChartDataDialogDedupSourceTests
             source.Should().Contain("_session.Remove(ReadRowInputs(), rowIndex)");
             source.Should().Contain("_session.Submit(ReadRowInputs())");
             source.Should().Contain("MotionPathEditorRowProjection.BuildEnablement(");
-            source.Should().Contain("MotionPathEditorRowProjection.Format(");
+            source.Should().Contain("MotionPathEditorRowProjection.BuildPlan(");
+            source.Should().NotContain("MotionPathEditorRowProjection.Format(");
             source.Should().NotContain("MotionPathEditorRowProjection.TryParse(");
             source.Should().NotContain("MotionPathEditingPlanner.");
             source.Should().NotContain("Enum.GetValues<MotionPathSegmentKind>()");

@@ -64,9 +64,9 @@ internal static class ChartOptionsDialogChrome
     }
 
     public static StackPanel CreateActionRow(
-        string acceptLabel,
+        PresentationDialogActionPlan<ChartOptionsDialogActionId> acceptPlan,
         Action accept,
-        string cancelLabel,
+        PresentationDialogActionPlan<ChartOptionsDialogActionId> cancelPlan,
         Action cancel,
         Thickness rowMargin)
     {
@@ -76,25 +76,27 @@ internal static class ChartOptionsDialogChrome
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = rowMargin,
         };
-        var ok = new Button
-        {
-            Content = acceptLabel,
-            IsDefault = true,
-            MinWidth = 80,
-            Margin = new Thickness(4),
-        };
-        var cancelButton = new Button
-        {
-            Content = cancelLabel,
-            IsCancel = true,
-            MinWidth = 80,
-            Margin = new Thickness(4),
-        };
-        ok.Click += (_, _) => accept();
-        cancelButton.Click += (_, _) => cancel();
-        row.Children.Add(ok);
-        row.Children.Add(cancelButton);
+        row.Children.Add(CreateButton(acceptPlan, accept));
+        row.Children.Add(CreateButton(cancelPlan, cancel));
         return row;
+    }
+
+    private static Button CreateButton(
+        PresentationDialogActionPlan<ChartOptionsDialogActionId> plan,
+        Action action)
+    {
+        var button = new Button
+        {
+            Content = plan.Label,
+            IsDefault = plan.IsDefault,
+            IsCancel = plan.IsCancel,
+            MinWidth = 80,
+            Margin = new Thickness(4),
+        };
+        AutomationProperties.SetName(button, plan.AccessibleName);
+        AutomationProperties.SetAutomationId(button, plan.AutomationId);
+        button.Click += (_, _) => action();
+        return button;
     }
 }
 
@@ -161,9 +163,9 @@ internal sealed class ChartOptionsDialogForm
         root.Children.Add(bodyHost);
 
         var actions = ChartOptionsDialogChrome.CreateActionRow(
-            plan.AcceptLabel,
+            plan.AcceptAction,
             accept,
-            plan.CancelLabel,
+            plan.CancelAction,
             cancel,
             new Thickness(8, 14, 8, 0));
         Grid.SetRow(actions, 1);
@@ -177,16 +179,16 @@ internal sealed class ChartOptionsDialogForm
     public ChartOptionsDialogValues CaptureValues() => _formSession.CaptureValues();
 
     public string Text(ChartOptionsDialogFieldId fieldId) =>
-        Control<TextBox>(fieldId).Text;
+        _formSession.Text(fieldId);
 
     public int SelectedIndex(ChartOptionsDialogFieldId fieldId) =>
-        Control<ComboBox>(fieldId).SelectedIndex;
+        _formSession.SelectedIndex(fieldId);
 
     public bool IsChecked(ChartOptionsDialogFieldId fieldId) =>
-        Control<CheckBox>(fieldId).IsChecked == true;
+        _formSession.IsChecked(fieldId);
 
     public bool? NullableChecked(ChartOptionsDialogFieldId fieldId) =>
-        Control<CheckBox>(fieldId).IsChecked;
+        _formSession.NullableChecked(fieldId);
 
     public void ApplyValues(ChartOptionsDialogValues values)
         => _formSession.ApplyValues(values);
@@ -239,12 +241,6 @@ internal sealed class ChartOptionsDialogForm
         combo.SelectionChanged += (_, _) => RaiseValueChanged(field.Id);
         return combo;
     }
-
-    private TControl Control<TControl>(ChartOptionsDialogFieldId fieldId)
-        where TControl : Control =>
-        _formSession.TryGetControl(fieldId, out var control) && control is TControl typed
-            ? typed
-            : throw new InvalidOperationException($"{fieldId} is not a {typeof(TControl).Name} field.");
 
     private void RaiseValueChanged(ChartOptionsDialogFieldId fieldId)
     {

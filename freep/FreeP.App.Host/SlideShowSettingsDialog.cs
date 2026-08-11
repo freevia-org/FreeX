@@ -9,6 +9,7 @@ namespace FreeP.App.Host;
 internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly SlideShowSettingsDialogSession _session;
+    private readonly SlideShowSettingsDialogFormSession<Control> _formSession;
     private readonly CheckBox _useTimingsCheck;
     private readonly CheckBox _showAnimationCheck;
     private readonly CheckBox _showNarrationCheck;
@@ -102,6 +103,17 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         };
         ApplySemantic(_kioskRestartText, surface.Field(SlideShowSettingsDialogField.KioskRestartMilliseconds));
 
+        _formSession = new(CaptureValue, ApplyValue);
+        _formSession.Register(SlideShowSettingsDialogField.UseTimings, _useTimingsCheck);
+        _formSession.Register(SlideShowSettingsDialogField.ShowWithoutAnimation, _showAnimationCheck);
+        _formSession.Register(SlideShowSettingsDialogField.PlayNarration, _showNarrationCheck);
+        _formSession.Register(SlideShowSettingsDialogField.ShowMediaControls, _showMediaControlsCheck);
+        _formSession.Register(SlideShowSettingsDialogField.ShowMasterGraphics, _showMasterShapesCheck);
+        _formSession.Register(SlideShowSettingsDialogField.LoopUntilStopped, _loopCheck);
+        _formSession.Register(SlideShowSettingsDialogField.ShowType, _showTypeCombo);
+        _formSession.Register(SlideShowSettingsDialogField.ShowBrowseScrollbar, _showScrollbarCheck);
+        _formSession.Register(SlideShowSettingsDialogField.KioskRestartMilliseconds, _kioskRestartText);
+
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(_useTimingsCheck);
         panel.Children.Add(_showAnimationCheck);
@@ -165,31 +177,22 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         bool showMediaControls = true,
         bool showMasterShapes = true)
     {
-        _useTimingsCheck.IsChecked = useSlideTimings;
-        _showAnimationCheck.IsChecked = !showWithAnimation;
-        _loopCheck.IsChecked = loopUntilStopped;
-        _showNarrationCheck.IsChecked = showWithNarration;
-        _showMediaControlsCheck.IsChecked = showMediaControls;
-        _showMasterShapesCheck.IsChecked = showMasterShapes;
-        _showTypeCombo.SelectedIndex = SlideShowSettingsDialogSession.ShowTypeIndex(showType);
-        _showScrollbarCheck.IsChecked = showBrowseScrollbar;
-        _kioskRestartText.Text = SlideShowSettingsDialogSession.FormatRestartMilliseconds(
-            kioskRestartAfterMilliseconds);
+        _formSession.ApplyInput(SlideShowSettingsDialogSession.CreateInput(
+            useSlideTimings,
+            !showWithAnimation,
+            loopUntilStopped,
+            SlideShowSettingsDialogSession.ShowTypeIndex(showType),
+            showBrowseScrollbar,
+            SlideShowSettingsDialogSession.FormatRestartMilliseconds(kioskRestartAfterMilliseconds),
+            showWithNarration,
+            showMediaControls,
+            showMasterShapes));
         return Apply();
     }
 
     private bool Apply()
     {
-        var applied = _session.TryApply(SlideShowSettingsDialogSession.CreateInput(
-            _useTimingsCheck.IsChecked == true,
-            _showAnimationCheck.IsChecked == true,
-            _loopCheck.IsChecked == true,
-            _showTypeCombo.SelectedIndex,
-            _showScrollbarCheck.IsChecked == true,
-            _kioskRestartText.Text ?? string.Empty,
-            _showNarrationCheck.IsChecked == true,
-            _showMediaControlsCheck.IsChecked == true,
-            _showMasterShapesCheck.IsChecked == true));
+        var applied = _session.TryApply(_formSession.CaptureInput());
         if (applied && IsLoaded)
             DialogResult = true;
         return applied;
@@ -201,6 +204,30 @@ internal sealed class SlideShowSettingsDialog : Free.Shared.Ribbon.Wpf.DialogWin
     {
         AutomationProperties.SetName(control, field.AccessibleName);
         AutomationProperties.SetAutomationId(control, field.AutomationId);
+    }
+
+    private static SlideShowSettingsDialogFieldValue CaptureValue(Control control) => control switch
+    {
+        CheckBox checkBox => new(IsChecked: checkBox.IsChecked),
+        ComboBox comboBox => new(SelectedIndex: comboBox.SelectedIndex),
+        TextBox textBox => new(Text: textBox.Text ?? string.Empty),
+        _ => throw new InvalidOperationException($"Unsupported slide show settings control: {control.GetType().Name}.")
+    };
+
+    private static void ApplyValue(Control control, SlideShowSettingsDialogFieldValue value)
+    {
+        switch (control)
+        {
+            case CheckBox checkBox:
+                checkBox.IsChecked = value.IsChecked;
+                break;
+            case ComboBox comboBox:
+                comboBox.SelectedIndex = value.SelectedIndex;
+                break;
+            case TextBox textBox:
+                textBox.Text = value.Text;
+                break;
+        }
     }
 
 }

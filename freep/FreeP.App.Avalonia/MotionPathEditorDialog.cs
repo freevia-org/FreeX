@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
@@ -127,8 +126,7 @@ internal sealed class MotionPathEditorDialog : Window
 
     private static Button Button(
         PresentationDialogActionPlan<MotionPathEditorDialogAction> action,
-        double minWidth,
-        string? automationSuffix = null)
+        double minWidth)
     {
         var button = new Button
         {
@@ -138,7 +136,7 @@ internal sealed class MotionPathEditorDialog : Window
             Margin = new Thickness(4),
             MinWidth = minWidth,
         };
-        ApplyAction(button, action, automationSuffix);
+        ApplyAction(button, action);
         AvaloniaCompactDialogChrome.ApplyButton(
             button,
             DialogChromeStyle,
@@ -149,24 +147,18 @@ internal sealed class MotionPathEditorDialog : Window
 
     private static void ApplySemantic(
         Control control,
-        PresentationDialogFieldPlan<MotionPathEditorDialogField> field,
-        string? automationSuffix = null)
+        PresentationDialogFieldPlan<MotionPathEditorDialogField> field)
     {
         AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(
-            control,
-            AutomationIdToken.AppendSegment(field.AutomationId, automationSuffix));
+        AutomationProperties.SetAutomationId(control, field.AutomationId);
     }
 
     private static void ApplyAction(
         Control control,
-        PresentationDialogActionPlan<MotionPathEditorDialogAction> action,
-        string? automationSuffix = null)
+        PresentationDialogActionPlan<MotionPathEditorDialogAction> action)
     {
         AutomationProperties.SetName(control, action.AccessibleName);
-        AutomationProperties.SetAutomationId(
-            control,
-            AutomationIdToken.AppendSegment(action.AutomationId, automationSuffix));
+        AutomationProperties.SetAutomationId(control, action.AutomationId);
     }
 
     private sealed class Row
@@ -193,35 +185,32 @@ internal sealed class MotionPathEditorDialog : Window
 
         public void Build(int rowIndex, Action remove)
         {
-            var first = rowIndex == 0;
-            _isFirst = first;
+            var plan = MotionPathEditorRowProjection.BuildPlan(_surface, _value, rowIndex);
+            _isFirst = plan.RowIndex == 0;
             _kind.ItemsSource = _surface.SegmentKinds;
-            _kind.SelectedItem = _value.Kind;
-            _kind.IsEnabled = MotionPathEditorRowProjection
-                .BuildEnablement(_value.Kind, first)
-                .KindEnabled;
+            _kind.SelectedItem = plan.Kind;
+            _kind.IsEnabled = plan.Enablement.KindEnabled;
             _kind.Width = 78;
             _kind.Margin = new Thickness(2);
             _kind.SelectionChanged += (_, _) => UpdateControlState();
             ApplySemantic(
                 _kind,
-                _surface.Field(MotionPathEditorDialogField.SegmentKind),
-                rowIndex.ToString());
-            Set(_x, _value.X);
-            Set(_y, _value.Y);
-            Set(_x1, _value.X1);
-            Set(_y1, _value.Y1);
-            Set(_x2, _value.X2);
-            Set(_y2, _value.Y2);
-            ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X), rowIndex.ToString());
-            ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y), rowIndex.ToString());
-            ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1), rowIndex.ToString());
-            ApplySemantic(_y1, _surface.Field(MotionPathEditorDialogField.Y1), rowIndex.ToString());
-            ApplySemantic(_x2, _surface.Field(MotionPathEditorDialogField.X2), rowIndex.ToString());
-            ApplySemantic(_y2, _surface.Field(MotionPathEditorDialogField.Y2), rowIndex.ToString());
+                _surface.Field(MotionPathEditorDialogField.SegmentKind, plan.RowIndex));
+            Set(_x, plan.X);
+            Set(_y, plan.Y);
+            Set(_x1, plan.X1);
+            Set(_y1, plan.Y1);
+            Set(_x2, plan.X2);
+            Set(_y2, plan.Y2);
+            ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X, plan.RowIndex));
+            ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y, plan.RowIndex));
+            ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1, plan.RowIndex));
+            ApplySemantic(_y1, _surface.Field(MotionPathEditorDialogField.Y1, plan.RowIndex));
+            ApplySemantic(_x2, _surface.Field(MotionPathEditorDialogField.X2, plan.RowIndex));
+            ApplySemantic(_y2, _surface.Field(MotionPathEditorDialogField.Y2, plan.RowIndex));
 
             var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2) };
-            panel.Children.Add(new TextBlock { Text = first ? _surface.StartRowLabel : _surface.SegmentRowLabel, Width = 62, VerticalAlignment = VerticalAlignment.Center });
+            panel.Children.Add(new TextBlock { Text = plan.RowLabel, Width = 62, VerticalAlignment = VerticalAlignment.Center });
             panel.Children.Add(_kind);
             panel.Children.Add(Labeled(_surface.XLabel, _x));
             panel.Children.Add(Labeled(_surface.YLabel, _y));
@@ -230,12 +219,9 @@ internal sealed class MotionPathEditorDialog : Window
             panel.Children.Add(Labeled(_surface.X2Label, _x2));
             panel.Children.Add(Labeled(_surface.Y2Label, _y2));
             var delete = Button(
-                _surface.Action(MotionPathEditorDialogAction.Delete),
-                58,
-                rowIndex.ToString());
-            delete.IsEnabled = MotionPathEditorRowProjection
-                .BuildEnablement(_value.Kind, first)
-                .DeleteEnabled;
+                _surface.Action(MotionPathEditorDialogAction.Delete, plan.RowIndex),
+                58);
+            delete.IsEnabled = plan.Enablement.DeleteEnabled;
             delete.Click += (_, _) => remove();
             panel.Children.Add(delete);
             Control = new Border
@@ -272,8 +258,7 @@ internal sealed class MotionPathEditorDialog : Window
         }
 
         private static TextBox Box() => new() { Width = 54, Margin = new Thickness(1) };
-        private static void Set(TextBox box, double value) =>
-            box.Text = MotionPathEditorRowProjection.Format(value);
+        private static void Set(TextBox box, string value) => box.Text = value;
 
         private static StackPanel Labeled(string label, TextBox box) => new() { Orientation = Orientation.Horizontal, Children = { new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center }, box } };
     }

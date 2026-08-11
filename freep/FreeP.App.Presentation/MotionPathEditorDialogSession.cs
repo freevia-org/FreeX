@@ -66,8 +66,20 @@ public sealed record MotionPathEditorDialogSurfacePlan(
     public PresentationDialogFieldPlan<MotionPathEditorDialogField> Field(
         MotionPathEditorDialogField field) => Schema.Field(field);
 
+    public PresentationDialogFieldPlan<MotionPathEditorDialogField> Field(
+        MotionPathEditorDialogField field,
+        int rowIndex) => Schema.Field(
+            field,
+            rowIndex.ToString(CultureInfo.InvariantCulture));
+
     public PresentationDialogActionPlan<MotionPathEditorDialogAction> Action(
         MotionPathEditorDialogAction action) => Schema.Action(action);
+
+    public PresentationDialogActionPlan<MotionPathEditorDialogAction> Action(
+        MotionPathEditorDialogAction action,
+        int rowIndex) => Schema.Action(
+            action,
+            rowIndex.ToString(CultureInfo.InvariantCulture));
 }
 
 public sealed record MotionPathEditorRowInput(
@@ -86,6 +98,18 @@ public sealed record MotionPathEditorDialogTransition(
     bool ShouldClose,
     string ValidationMessage);
 
+public sealed record MotionPathEditorRowPlan(
+    int RowIndex,
+    string RowLabel,
+    MotionPathSegmentKind Kind,
+    string X,
+    string Y,
+    string X1,
+    string Y1,
+    string X2,
+    string Y2,
+    MotionPathEditorRowEnablement Enablement);
+
 public static class MotionPathEditorRowProjection
 {
     public static string Format(double value, CultureInfo? culture = null) =>
@@ -99,6 +123,28 @@ public static class MotionPathEditorRowProjection
             DeleteEnabled: !isFirstRow,
             EndpointEnabled: kind != MotionPathSegmentKind.Close,
             ControlPointsEnabled: kind == MotionPathSegmentKind.Cubic);
+
+    public static MotionPathEditorRowPlan BuildPlan(
+        MotionPathEditorDialogSurfacePlan surface,
+        MotionPathSegmentEdit segment,
+        int rowIndex,
+        CultureInfo? culture = null)
+    {
+        ArgumentNullException.ThrowIfNull(surface);
+        ArgumentNullException.ThrowIfNull(segment);
+        var isFirstRow = rowIndex == 0;
+        return new(
+            rowIndex,
+            isFirstRow ? surface.StartRowLabel : surface.SegmentRowLabel,
+            segment.Kind,
+            Format(segment.X, culture),
+            Format(segment.Y, culture),
+            Format(segment.X1, culture),
+            Format(segment.Y1, culture),
+            Format(segment.X2, culture),
+            Format(segment.Y2, culture),
+            BuildEnablement(segment.Kind, isFirstRow));
+    }
 
     public static bool CanRemove(int rowIndex) => rowIndex > 0;
 

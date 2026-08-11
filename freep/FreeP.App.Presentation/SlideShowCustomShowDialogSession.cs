@@ -248,6 +248,151 @@ public static class SlideShowCustomShowDialogTransitionDispatcher
     }
 }
 
+/// <summary>
+/// Applies custom-show session plans to renderer-owned controls. The callbacks are deliberately
+/// limited to native value transport; selection defaulting and action enablement stay shared.
+/// </summary>
+public sealed class SlideShowCustomShowDialogFormSession<TControl>
+    where TControl : class
+{
+    private readonly TControl _showList;
+    private readonly TControl _orderedSlideList;
+    private readonly TControl _nameControl;
+    private readonly TControl _validationControl;
+    private readonly Action<TControl, object?> _setItemsSource;
+    private readonly Action<TControl, int> _setSelectedIndex;
+    private readonly Func<TControl, int> _getSelectedIndex;
+    private readonly Func<TControl, object?> _getSelectedItem;
+    private readonly Action<TControl, string> _setText;
+    private readonly Action<TControl, bool> _setChecked;
+    private readonly Func<TControl, bool> _isChecked;
+    private readonly Action<TControl, bool> _setEnabled;
+    private readonly List<(string SlideId, TControl Control)> _availableSlides = [];
+    private readonly Dictionary<SlideShowCustomShowDialogAction, TControl> _actions = [];
+
+    public SlideShowCustomShowDialogFormSession(
+        TControl showList,
+        TControl orderedSlideList,
+        TControl nameControl,
+        TControl validationControl,
+        Action<TControl, object?> setItemsSource,
+        Action<TControl, int> setSelectedIndex,
+        Func<TControl, int> getSelectedIndex,
+        Func<TControl, object?> getSelectedItem,
+        Action<TControl, string> setText,
+        Action<TControl, bool> setChecked,
+        Func<TControl, bool> isChecked,
+        Action<TControl, bool> setEnabled)
+    {
+        _showList = showList ?? throw new ArgumentNullException(nameof(showList));
+        _orderedSlideList = orderedSlideList ?? throw new ArgumentNullException(nameof(orderedSlideList));
+        _nameControl = nameControl ?? throw new ArgumentNullException(nameof(nameControl));
+        _validationControl = validationControl ?? throw new ArgumentNullException(nameof(validationControl));
+        _setItemsSource = setItemsSource ?? throw new ArgumentNullException(nameof(setItemsSource));
+        _setSelectedIndex = setSelectedIndex ?? throw new ArgumentNullException(nameof(setSelectedIndex));
+        _getSelectedIndex = getSelectedIndex ?? throw new ArgumentNullException(nameof(getSelectedIndex));
+        _getSelectedItem = getSelectedItem ?? throw new ArgumentNullException(nameof(getSelectedItem));
+        _setText = setText ?? throw new ArgumentNullException(nameof(setText));
+        _setChecked = setChecked ?? throw new ArgumentNullException(nameof(setChecked));
+        _isChecked = isChecked ?? throw new ArgumentNullException(nameof(isChecked));
+        _setEnabled = setEnabled ?? throw new ArgumentNullException(nameof(setEnabled));
+    }
+
+    public int SelectedShowIndex =>
+        _getSelectedItem(_showList) is SlideShowCustomShowSessionShowItemPlan selected
+            ? selected.Index
+            : -1;
+
+    public int SelectedSlideIndex => _getSelectedIndex(_orderedSlideList);
+
+    public void SelectSlide(int index) => _setSelectedIndex(_orderedSlideList, index);
+
+    public void RegisterAction(SlideShowCustomShowDialogAction action, TControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        _actions[action] = control;
+    }
+
+    public void ClearAvailableSlides() => _availableSlides.Clear();
+
+    public void RegisterAvailableSlide(string slideId, TControl control)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(slideId);
+        ArgumentNullException.ThrowIfNull(control);
+        _availableSlides.Add((slideId, control));
+    }
+
+    public IReadOnlyList<string> SelectedSlideIds() =>
+        _availableSlides
+            .Where(entry => _isChecked(entry.Control))
+            .Select(entry => entry.SlideId)
+            .ToArray();
+
+    public void ApplyFullPlan(SlideShowCustomShowSessionPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        _setItemsSource(_showList, plan.CustomShows);
+        var selectedListIndex = plan.SelectedShow is null
+            ? plan.CustomShows.Count == 0 ? -1 : 0
+            : FindShowListIndex(plan.CustomShows, plan.SelectedShow.Index);
+        _setSelectedIndex(_showList, selectedListIndex);
+        ApplySelectedShowPlan(plan);
+    }
+
+    public void ApplySelectedShowPlan(SlideShowCustomShowSessionPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        _setText(_nameControl, plan.SelectedShow?.Name ?? string.Empty);
+        var selectedIds = plan.SelectedSlideIds.ToHashSet(StringComparer.Ordinal);
+        foreach (var (slideId, control) in _availableSlides)
+            _setChecked(control, selectedIds.Contains(slideId));
+
+        _setItemsSource(_orderedSlideList, plan.SelectedSlides);
+        SetEnabled(SlideShowCustomShowDialogAction.Rename, plan.CanRename);
+        SetEnabled(SlideShowCustomShowDialogAction.UpdateSlides, plan.CanUpdateSlides);
+        SetEnabled(SlideShowCustomShowDialogAction.Delete, plan.CanDelete);
+        SetEnabled(SlideShowCustomShowDialogAction.StartShow, plan.CanStart);
+        ApplySlideSelection(plan);
+    }
+
+    public void ApplySlideSelection(SlideShowCustomShowSessionPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var selectedIndex = plan.SelectedSlideIndex >= 0 &&
+            plan.SelectedSlideIndex < plan.SelectedSlides.Count
+                ? plan.SelectedSlideIndex
+                : -1;
+        if (_getSelectedIndex(_orderedSlideList) != selectedIndex)
+            _setSelectedIndex(_orderedSlideList, selectedIndex);
+
+        SetEnabled(SlideShowCustomShowDialogAction.MoveUp, plan.CanMoveUp);
+        SetEnabled(SlideShowCustomShowDialogAction.MoveDown, plan.CanMoveDown);
+        SetEnabled(SlideShowCustomShowDialogAction.Remove, plan.CanRemove);
+    }
+
+    public void SetValidation(string? message) =>
+        _setText(_validationControl, message ?? string.Empty);
+
+    private void SetEnabled(SlideShowCustomShowDialogAction action, bool isEnabled)
+    {
+        if (_actions.TryGetValue(action, out var control))
+            _setEnabled(control, isEnabled);
+    }
+
+    private static int FindShowListIndex(
+        IReadOnlyList<SlideShowCustomShowSessionShowItemPlan> shows,
+        int showIndex)
+    {
+        for (var index = 0; index < shows.Count; index++)
+        {
+            if (shows[index].Index == showIndex)
+                return index;
+        }
+
+        return shows.Count == 0 ? -1 : 0;
+    }
+}
+
 public sealed record SlideShowCustomShowDialogReorderTransition(
     SlideShowCustomShowDragReorderPlan ReorderPlan,
     SlideShowCustomShowDialogSessionTransition SessionTransition);

@@ -82,6 +82,110 @@ public sealed record SlideShowSettingsDialogInput(
     bool ShowMediaControls,
     bool ShowMasterShapes);
 
+public readonly record struct SlideShowSettingsDialogFieldValue(
+    bool? IsChecked = null,
+    int SelectedIndex = -1,
+    string Text = "");
+
+public sealed class SlideShowSettingsDialogInputProjection
+{
+    private readonly IReadOnlyDictionary<
+        SlideShowSettingsDialogField,
+        SlideShowSettingsDialogFieldValue> _fields;
+
+    public SlideShowSettingsDialogInputProjection(
+        IReadOnlyDictionary<SlideShowSettingsDialogField, SlideShowSettingsDialogFieldValue> fields)
+    {
+        ArgumentNullException.ThrowIfNull(fields);
+        _fields = new Dictionary<SlideShowSettingsDialogField, SlideShowSettingsDialogFieldValue>(fields);
+    }
+
+    public IReadOnlyDictionary<
+        SlideShowSettingsDialogField,
+        SlideShowSettingsDialogFieldValue> Fields => _fields;
+
+    public static SlideShowSettingsDialogInputProjection FromInput(
+        SlideShowSettingsDialogInput input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        return new(new Dictionary<SlideShowSettingsDialogField, SlideShowSettingsDialogFieldValue>
+        {
+            [SlideShowSettingsDialogField.UseTimings] = new(IsChecked: input.UseSlideTimings),
+            [SlideShowSettingsDialogField.ShowWithoutAnimation] = new(IsChecked: input.ShowWithoutAnimation),
+            [SlideShowSettingsDialogField.PlayNarration] = new(IsChecked: input.ShowWithNarration),
+            [SlideShowSettingsDialogField.ShowMediaControls] = new(IsChecked: input.ShowMediaControls),
+            [SlideShowSettingsDialogField.ShowMasterGraphics] = new(IsChecked: input.ShowMasterShapes),
+            [SlideShowSettingsDialogField.LoopUntilStopped] = new(IsChecked: input.LoopUntilStopped),
+            [SlideShowSettingsDialogField.ShowType] = new(SelectedIndex: input.ShowTypeIndex),
+            [SlideShowSettingsDialogField.ShowBrowseScrollbar] = new(IsChecked: input.ShowBrowseScrollbar),
+            [SlideShowSettingsDialogField.KioskRestartMilliseconds] = new(Text: input.KioskRestartMilliseconds),
+        });
+    }
+
+    public SlideShowSettingsDialogInput ToInput() =>
+        SlideShowSettingsDialogSession.CreateInput(
+            IsChecked(SlideShowSettingsDialogField.UseTimings),
+            IsChecked(SlideShowSettingsDialogField.ShowWithoutAnimation),
+            IsChecked(SlideShowSettingsDialogField.LoopUntilStopped),
+            Value(SlideShowSettingsDialogField.ShowType).SelectedIndex,
+            IsChecked(SlideShowSettingsDialogField.ShowBrowseScrollbar),
+            Value(SlideShowSettingsDialogField.KioskRestartMilliseconds).Text,
+            IsChecked(SlideShowSettingsDialogField.PlayNarration),
+            IsChecked(SlideShowSettingsDialogField.ShowMediaControls),
+            IsChecked(SlideShowSettingsDialogField.ShowMasterGraphics));
+
+    private SlideShowSettingsDialogFieldValue Value(SlideShowSettingsDialogField field) =>
+        _fields.TryGetValue(field, out var value)
+            ? value
+            : default;
+
+    private bool IsChecked(SlideShowSettingsDialogField field) =>
+        Value(field).IsChecked == true;
+}
+
+/// <summary>
+/// Owns renderer-neutral slide-show-settings form capture and application. Native hosts retain
+/// control construction and the small value adapters required by each UI framework.
+/// </summary>
+public sealed class SlideShowSettingsDialogFormSession<TControl>
+    where TControl : class
+{
+    private readonly Dictionary<SlideShowSettingsDialogField, TControl> _controls = [];
+    private readonly Func<TControl, SlideShowSettingsDialogFieldValue> _captureValue;
+    private readonly Action<TControl, SlideShowSettingsDialogFieldValue> _applyValue;
+
+    public SlideShowSettingsDialogFormSession(
+        Func<TControl, SlideShowSettingsDialogFieldValue> captureValue,
+        Action<TControl, SlideShowSettingsDialogFieldValue> applyValue)
+    {
+        _captureValue = captureValue ?? throw new ArgumentNullException(nameof(captureValue));
+        _applyValue = applyValue ?? throw new ArgumentNullException(nameof(applyValue));
+    }
+
+    public void Register(SlideShowSettingsDialogField field, TControl control)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        _controls.Add(field, control);
+    }
+
+    public SlideShowSettingsDialogInput CaptureInput() =>
+        new SlideShowSettingsDialogInputProjection(
+            _controls.ToDictionary(
+                pair => pair.Key,
+                pair => _captureValue(pair.Value)))
+            .ToInput();
+
+    public void ApplyInput(SlideShowSettingsDialogInput input)
+    {
+        var projection = SlideShowSettingsDialogInputProjection.FromInput(input);
+        foreach (var (field, value) in projection.Fields)
+        {
+            if (_controls.TryGetValue(field, out var control))
+                _applyValue(control, value);
+        }
+    }
+}
+
 public sealed record SlideShowSettingsShowTypeOption(
     PresentationShowType ShowType,
     string Label)

@@ -42,7 +42,20 @@ public sealed class ChartOptionsDialogFormSession<TControl, TRow>
     public ChartOptionsDialogValues CaptureValues() => new(
         _controls.ToDictionary(
             pair => pair.Key,
-            pair => _captureValue(pair.Value)));
+            pair => Normalize(_captureValue(pair.Value))));
+
+    public ChartOptionsDialogFieldValue Value(ChartOptionsDialogFieldId fieldId) =>
+        _controls.TryGetValue(fieldId, out var control)
+            ? Normalize(_captureValue(control))
+            : throw new KeyNotFoundException($"The chart options form does not define {fieldId}.");
+
+    public string Text(ChartOptionsDialogFieldId fieldId) => Value(fieldId).Text;
+
+    public int SelectedIndex(ChartOptionsDialogFieldId fieldId) => Value(fieldId).SelectedIndex;
+
+    public bool IsChecked(ChartOptionsDialogFieldId fieldId) => Value(fieldId).IsChecked == true;
+
+    public bool? NullableChecked(ChartOptionsDialogFieldId fieldId) => Value(fieldId).IsChecked;
 
     public void ApplyValues(ChartOptionsDialogValues values)
     {
@@ -77,4 +90,9 @@ public sealed class ChartOptionsDialogFormSession<TControl, TRow>
 
     public bool TryGetControl(ChartOptionsDialogFieldId fieldId, out TControl control) =>
         _controls.TryGetValue(fieldId, out control!);
+
+    private static ChartOptionsDialogFieldValue Normalize(ChartOptionsDialogFieldValue value) =>
+        value.Text is null
+            ? value with { Text = string.Empty }
+            : value;
 }

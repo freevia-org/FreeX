@@ -10,8 +10,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
 {
     private readonly ZoomObjectPropertiesDialogSession _session;
     private readonly ZoomObjectPropertiesDialogSurfacePlan _surface;
-    private readonly Dictionary<ZoomObjectPropertiesDialogField, Control> _controls = [];
-    private bool _applyingState;
+    private readonly ZoomObjectPropertiesDialogFormSession<Control> _formSession;
 
     internal ZoomObjectProperties Properties => _session.CommitPlan.Properties;
     internal ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit? SummaryTileLayout =>
@@ -28,6 +27,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     {
         _session = new ZoomObjectPropertiesDialogSession(current, summaryTargets, summaryTileProperties);
         _surface = _session.Surface;
+        _formSession = new(_session.Dispatch, ApplyFieldState, FocusControl);
         var layout = _surface.Layout;
         Title = _surface.Chrome.Title;
         Width = _surface.Chrome.Width;
@@ -38,7 +38,13 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         AutomationProperties.SetAutomationId(this, _surface.Chrome.AutomationId);
 
         foreach (var plan in _session.FieldCatalog)
-            _controls.Add(plan.Field, CreateControl(plan, layout.InputMinWidth));
+        {
+            var control = CreateControl(plan, layout.InputMinWidth);
+            _formSession.Register(
+                plan.Field,
+                control,
+                selectAllOnFocus: plan.Kind == ZoomObjectPropertiesDialogControlKind.Text);
+        }
 
         var grid = new Grid { Margin = new Thickness(layout.ContentMargin) };
         for (var index = 0; index <= _session.FieldCatalog.Count; index++)
@@ -49,7 +55,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         var row = 0;
         foreach (var plan in _session.FieldCatalog)
         {
-            var control = _controls[plan.Field];
+            var control = _formSession.Control(plan.Field);
             if (plan.Kind == ZoomObjectPropertiesDialogControlKind.Toggle)
                 AddToggleRow(grid, row++, control);
             else
@@ -88,7 +94,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         Grid.SetColumnSpan(buttons, 2);
         grid.Children.Add(buttons);
         Content = grid;
-        ApplyState(_session.State);
+        _formSession.ApplyState(_session.State);
     }
 
     private Control CreateControl(
@@ -157,49 +163,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     }
 
     private void Dispatch(ZoomObjectPropertiesDialogField field, object? value)
-    {
-        if (_applyingState)
-            return;
-
-        ApplyState(_session.Dispatch(new ZoomObjectPropertiesDialogAction(field, value)));
-    }
-
-    private void ApplyState(ZoomObjectPropertiesDialogState state)
-    {
-        _applyingState = true;
-        try
-        {
-            foreach (var fieldState in state.Fields)
-            {
-                if (!_controls.TryGetValue(fieldState.Field, out var control))
-                    continue;
-
-                control.IsEnabled = fieldState.IsEnabled;
-                switch (control)
-                {
-                    case CheckBox checkBox when fieldState.Value is bool isChecked:
-                        if (checkBox.IsChecked != isChecked)
-                            checkBox.IsChecked = isChecked;
-                        break;
-                    case TextBox textBox:
-                    {
-                        var text = fieldState.Value?.ToString() ?? string.Empty;
-                        if (!string.Equals(textBox.Text, text, StringComparison.Ordinal))
-                            textBox.Text = text;
-                        break;
-                    }
-                    case ComboBox comboBox:
-                        if (!Equals(comboBox.SelectedItem, fieldState.Value))
-                            comboBox.SelectedItem = fieldState.Value;
-                        break;
-                }
-            }
-        }
-        finally
-        {
-            _applyingState = false;
-        }
-    }
+        => _formSession.Dispatch(field, value);
 
     private void Apply()
     {
@@ -209,20 +173,39 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 this,
                 validation!.Message,
                 _surface.Chrome.Title);
-            FocusValidationField(validation.Field);
+            _formSession.Focus(validation.Field);
             return;
         }
 
         DialogResult = true;
     }
 
-    private void FocusValidationField(ZoomObjectPropertiesDialogField field)
+    private static void ApplyFieldState(
+        Control control,
+        ZoomObjectPropertiesDialogFieldState fieldState)
     {
-        if (!_controls.TryGetValue(field, out var control))
-            return;
+        control.IsEnabled = fieldState.IsEnabled;
+        switch (control)
+        {
+            case CheckBox checkBox when fieldState.Value is bool isChecked:
+                if (checkBox.IsChecked != isChecked)
+                    checkBox.IsChecked = isChecked;
+                break;
+            case TextBox textBox:
+                if (!string.Equals(textBox.Text, fieldState.TextValue, StringComparison.Ordinal))
+                    textBox.Text = fieldState.TextValue;
+                break;
+            case ComboBox comboBox:
+                if (!Equals(comboBox.SelectedItem, fieldState.Value))
+                    comboBox.SelectedItem = fieldState.Value;
+                break;
+        }
+    }
 
+    private static void FocusControl(Control control, bool selectAll)
+    {
         control.Focus();
-        if (control is TextBox textBox)
+        if (selectAll && control is TextBox textBox)
             textBox.SelectAll();
     }
 
