@@ -1293,30 +1293,28 @@ internal static class ParityCapture
                 treeHeight);
 
             var y = treeTop + 7;
-            foreach (var section in plan.Sections)
+            foreach (var section in plan.TreeNodes)
             {
-                graphics.DrawString($"v {section.Header} ({section.IssueCount})", headerFont, textBrush, 24, y);
+                graphics.DrawString($"v {section.Header}", headerFont, textBrush, 24, y);
                 y += 22;
 
-                foreach (var group in section.Groups)
+                foreach (var group in section.Children)
                 {
-                    graphics.DrawString($"v {group.Label} ({group.Items.Count})", bodyFont, textBrush, 38, y);
+                    graphics.DrawString($"v {group.Header}", bodyFont, textBrush, 38, y);
                     y += 20;
 
-                    foreach (var item in group.Items)
+                    foreach (var item in group.Children)
                     {
-                        if (y < treeTop + treeHeight - 24 && y < treeTop + 55)
+                        if (item.IsInitialSelection && y < treeTop + treeHeight - 24)
                             graphics.FillRectangle(selectionBrush, 50, y - 2, 286, 20);
 
-                        graphics.DrawString(item.ObjectLabel, bodyFont, textBrush, 58, y);
+                        graphics.DrawString(item.Header, bodyFont, textBrush, 58, y);
                         y += 20;
                     }
                 }
             }
 
-            var selectedGroup = plan.Sections.SelectMany(section => section.Groups).FirstOrDefault();
-            var selectedItem = selectedGroup?.Items.FirstOrDefault();
-            var selection = AccessibilityCheckerDialogPlanner.CreateSelection(selectedItem, null, plan);
+            var selection = AccessibilityCheckerDialogPlanner.CreateSelection(plan.InitialItem, null, plan);
 
             y = (float)AccessibilityCheckerDialogMetrics.AdditionalInformationTop;
             graphics.DrawString(plan.AdditionalInformationHeader, headerFont, textBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, y);

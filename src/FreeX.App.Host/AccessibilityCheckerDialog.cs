@@ -119,7 +119,6 @@ public sealed class AccessibilityCheckerDialog : Window
 
         root.Children.Add(body);
 
-        SelectFirstIssue();
         OnSelectionChanged();
         return root;
     }
@@ -150,55 +149,35 @@ public sealed class AccessibilityCheckerDialog : Window
 
     private void PopulateTree()
     {
-        foreach (var section in _plan.Sections)
-        {
-            var sectionNode = new TreeViewItem
-            {
-                Header = $"{section.Header} ({section.IssueCount})",
-                FontWeight = FontWeights.SemiBold,
-                IsExpanded = true,
-            };
+        TreeViewItem? initialNode = null;
+        foreach (var node in _plan.TreeNodes)
+            _resultsTree.Items.Add(CreateTreeNode(node, ref initialNode));
 
-            foreach (var group in section.Groups)
-            {
-                var groupNode = new TreeViewItem
-                {
-                    Header = $"{group.Label} ({group.Items.Count})",
-                    FontWeight = FontWeights.Normal,
-                    IsExpanded = true,
-                    Tag = group,
-                };
-
-                foreach (var item in group.Items)
-                {
-                    groupNode.Items.Add(new TreeViewItem
-                    {
-                        Header = item.ObjectLabel,
-                        FontWeight = FontWeights.Normal,
-                        Tag = item,
-                    });
-                }
-
-                sectionNode.Items.Add(groupNode);
-            }
-
-            _resultsTree.Items.Add(sectionNode);
-        }
+        if (initialNode is not null)
+            initialNode.IsSelected = true;
     }
 
-    private void SelectFirstIssue()
+    private static TreeViewItem CreateTreeNode(
+        AccessibilityCheckerTreeNodePlan plan,
+        ref TreeViewItem? initialNode)
     {
-        foreach (TreeViewItem section in _resultsTree.Items)
+        var node = new TreeViewItem
         {
-            foreach (TreeViewItem group in section.Items)
-            {
-                if (group.Items.Count > 0 && group.Items[0] is TreeViewItem leaf)
-                {
-                    leaf.IsSelected = true;
-                    return;
-                }
-            }
-        }
+            Header = plan.Header,
+            FontWeight = plan.Kind == AccessibilityCheckerTreeNodeKind.Section
+                ? FontWeights.SemiBold
+                : FontWeights.Normal,
+            IsExpanded = plan.IsExpanded,
+            Tag = plan.Item is not null ? plan.Item : plan.Group,
+        };
+
+        if (plan.IsInitialSelection)
+            initialNode = node;
+
+        foreach (var child in plan.Children)
+            node.Items.Add(CreateTreeNode(child, ref initialNode));
+
+        return node;
     }
 
     private AccessibilityCheckerItemPlan? SelectedItem()

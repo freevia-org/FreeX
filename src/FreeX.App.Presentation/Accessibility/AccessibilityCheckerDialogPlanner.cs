@@ -51,6 +51,22 @@ public sealed record AccessibilityCheckerSectionPlan(
     public int IssueCount => Groups.Sum(group => group.Items.Count);
 }
 
+public enum AccessibilityCheckerTreeNodeKind
+{
+    Section,
+    Group,
+    Item,
+}
+
+public sealed record AccessibilityCheckerTreeNodePlan(
+    AccessibilityCheckerTreeNodeKind Kind,
+    string Header,
+    bool IsExpanded,
+    bool IsInitialSelection,
+    AccessibilityCheckerGroupPlan? Group,
+    AccessibilityCheckerItemPlan? Item,
+    IReadOnlyList<AccessibilityCheckerTreeNodePlan> Children);
+
 public sealed record AccessibilityCheckerDialogPlan(
     AccessibilityCheckerDialogState State,
     string Title,
@@ -66,7 +82,9 @@ public sealed record AccessibilityCheckerDialogPlan(
     AccessibilityCheckerAutomationSpec IssueListAutomation,
     AccessibilityCheckerActionSpec GoToAction,
     AccessibilityCheckerActionSpec CloseAction,
-    IReadOnlyList<AccessibilityCheckerSectionPlan> Sections);
+    IReadOnlyList<AccessibilityCheckerSectionPlan> Sections,
+    IReadOnlyList<AccessibilityCheckerTreeNodePlan> TreeNodes,
+    AccessibilityCheckerItemPlan? InitialItem);
 
 public sealed record AccessibilityCheckerSelectionPlan(
     bool HasAdditionalInformation,
@@ -90,6 +108,11 @@ public static class AccessibilityCheckerDialogPlanner
         var state = sections.Count == 0
             ? AccessibilityCheckerDialogState.Clean
             : AccessibilityCheckerDialogState.Issues;
+        var initialItem = sections
+            .SelectMany(section => section.Groups)
+            .SelectMany(group => group.Items)
+            .FirstOrDefault();
+        var treeNodes = CreateTreeNodes(sections, initialItem);
 
         return new AccessibilityCheckerDialogPlan(
             state,
@@ -145,7 +168,9 @@ public static class AccessibilityCheckerDialogPlanner
                         getText)),
                 IsDefault: false,
                 IsCancel: true),
-            sections);
+            sections,
+            treeNodes,
+            initialItem);
     }
 
     public static string CreateMessage(IReadOnlyList<AccessibilityIssue> issues, Func<string, string> getText)
@@ -203,6 +228,32 @@ public static class AccessibilityCheckerDialogPlanner
             ? address
             : new CellAddress(issue.SheetId, 1, 1);
     }
+
+    private static IReadOnlyList<AccessibilityCheckerTreeNodePlan> CreateTreeNodes(
+        IReadOnlyList<AccessibilityCheckerSectionPlan> sections,
+        AccessibilityCheckerItemPlan? initialItem) =>
+        sections.Select(section => new AccessibilityCheckerTreeNodePlan(
+            AccessibilityCheckerTreeNodeKind.Section,
+            $"{section.Header} ({section.IssueCount})",
+            IsExpanded: true,
+            IsInitialSelection: false,
+            Group: null,
+            Item: null,
+            Children: section.Groups.Select(group => new AccessibilityCheckerTreeNodePlan(
+                AccessibilityCheckerTreeNodeKind.Group,
+                $"{group.Label} ({group.Items.Count})",
+                IsExpanded: true,
+                IsInitialSelection: false,
+                Group: group,
+                Item: null,
+                Children: group.Items.Select(item => new AccessibilityCheckerTreeNodePlan(
+                    AccessibilityCheckerTreeNodeKind.Item,
+                    item.ObjectLabel,
+                    IsExpanded: false,
+                    IsInitialSelection: ReferenceEquals(item, initialItem),
+                    Group: null,
+                    Item: item,
+                    Children: [])).ToArray())).ToArray())).ToArray();
 
     private static List<AccessibilityCheckerSectionPlan> CreateSections(
         IReadOnlyList<AccessibilityIssue> issues,
