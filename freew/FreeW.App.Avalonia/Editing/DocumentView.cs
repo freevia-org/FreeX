@@ -21736,14 +21736,7 @@ public sealed class DocumentView : Control
             return;
 
         var delimiter = paragraph.PlainText.Contains('\t', StringComparison.Ordinal) ? '\t' : ',';
-        var table = TextTableConvert.TextToTable([paragraph], delimiter);
-        table.Formatting = TableFormatting.Default with { Borders = true };
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, [table]));
-        _cellCaret = (block, 0, 0, 0, 0);
-        _hfCaret = null;
-        _selectionAnchor = _caret = new DocPosition(block, 0);
-        InvalidateLayoutAndVisual();
-        CaretMoved?.Invoke();
+        ExecuteTextToTablePlan([block], delimiter);
     }
 
     public void ConvertSelectedParagraphsToTable(char delimiter)
@@ -21752,20 +21745,19 @@ public sealed class DocumentView : Control
             return;
 
         var indices = SelectedParagraphIndices();
-        if (indices.Count == 0)
-            return;
-        var first = indices[0];
-        var last = indices[^1];
-        if (indices.Count != last - first + 1)
+        ExecuteTextToTablePlan(indices, delimiter);
+    }
+
+    private void ExecuteTextToTablePlan(IReadOnlyList<int> paragraphIndices, char delimiter)
+    {
+        var plan = DocumentTableConversionMutationPlanner.PlanTextToTable(_doc, paragraphIndices, delimiter);
+        if (plan is null)
             return;
 
-        var paragraphs = indices.Select(index => (Paragraph)_doc.Blocks[index]).ToArray();
-        var table = TextTableConvert.TextToTable(paragraphs, delimiter);
-        table.Formatting = TableFormatting.Default with { Borders = true };
-        _bus.Execute(new ReplaceBlocksCommand(first, paragraphs.Length, [table]));
-        _cellCaret = (first, 0, 0, 0, 0);
+        _bus.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
+        _cellCaret = (plan.StartIndex, 0, 0, 0, 0);
         _hfCaret = null;
-        _selectionAnchor = _caret = new DocPosition(first, 0);
+        _selectionAnchor = _caret = new DocPosition(plan.StartIndex, 0);
         InvalidateLayoutAndVisual();
         CaretMoved?.Invoke();
     }
@@ -21786,13 +21778,15 @@ public sealed class DocumentView : Control
         if (!CanConvertTableToText || _cellCaret is not { } cellCaret)
             return;
 
-        var block = cellCaret.TableBlock;
-        var table = (Table)_doc.Blocks[block];
-        var paragraphs = TextTableConvert.TableToText(table, delimiter);
-        _bus.Execute(new ReplaceBlocksCommand(block, 1, [.. paragraphs]));
+        var plan = DocumentTableConversionMutationPlanner.PlanTableToText(
+            _doc, cellCaret.TableBlock, delimiter);
+        if (plan is null)
+            return;
+
+        _bus.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
         _cellCaret = null;
         _hfCaret = null;
-        _selectionAnchor = _caret = new DocPosition(block, 0);
+        _selectionAnchor = _caret = new DocPosition(plan.StartIndex, 0);
         InvalidateLayoutAndVisual();
         CaretMoved?.Invoke();
     }

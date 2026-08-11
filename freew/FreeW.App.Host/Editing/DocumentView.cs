@@ -4444,26 +4444,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var indices = SelectedModelParagraphIndices();
-        if (indices.Count == 0)
-            return;
-
-        var first = indices[0];
-        var last = indices[indices.Count - 1];
-        if (first < 0 || last >= _model.Blocks.Count)
-            return;
-
-        // Only paragraphs convert; if the span contains no paragraph there is nothing to turn into a table.
-        var paragraphs = new List<ModelParagraph>();
-        for (var i = first; i <= last; i++)
-        {
-            if (_model.Blocks[i] is ModelParagraph paragraph)
-                paragraphs.Add(paragraph);
-        }
-        if (paragraphs.Count == 0)
-            return;
-
-        var table = TextTableConvert.TextToTable(paragraphs, delimiter);
-        _commands.Execute(new ReplaceBlocksCommand(first, last - first + 1, new ModelBlock[] { table }));
+        var plan = DocumentTableConversionMutationPlanner.PlanTextToTable(_model, indices, delimiter);
+        if (plan is not null)
+            _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
     }
 
     /// <summary>
@@ -4478,11 +4461,9 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-
-        var paragraphs = TextTableConvert.TableToText(table, delimiter);
-        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, [.. paragraphs]));
+        var plan = DocumentTableConversionMutationPlanner.PlanTableToText(_model, blockIndex, delimiter);
+        if (plan is not null)
+            _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
     }
 
     /// <summary>True while Format Painter is armed (captured formatting waiting to be stamped).</summary>
