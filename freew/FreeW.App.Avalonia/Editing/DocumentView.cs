@@ -22759,21 +22759,14 @@ public sealed class DocumentView : Control
     public void MarkIndexEntry(IndexMark mark)
     {
         ArgumentNullException.ThrowIfNull(mark);
-        var markRun = DocumentIndex.MarkRun(mark);
-        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
-            return;
-
         var hostIndex = ResolveReferenceHostBlock();
-        if (hostIndex < 0
-            || _doc.Blocks[hostIndex] is not Paragraph paragraph
-            || paragraph.Runs.Any(run => DocumentIndex.MarksEquivalent(DocumentIndex.MarkedEntry(run), normalized)))
-        {
+        if (hostIndex < 0)
             return;
-        }
 
         var offset = ReferenceInsertionOffset(hostIndex);
-        _bus.Execute(new ReplaceParagraphRunsCommand(hostIndex, target =>
-            InsertRunAtOffset(target, offset, markRun)));
+        if (!IndexMarkMutationCoordinator.TryMark(_doc, _bus, hostIndex, offset, mark))
+            return;
+
         _cellCaret = null;
         _caret = new DocPosition(hostIndex, Math.Clamp(offset, 0, BlockLength(hostIndex)));
         _selectionAnchor = _caret;
@@ -22783,45 +22776,13 @@ public sealed class DocumentView : Control
     public int MarkAllIndexEntries(string sourceText, IndexMark mark)
     {
         ArgumentNullException.ThrowIfNull(mark);
-        var markRun = DocumentIndex.MarkRun(mark);
-        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
+        var marked = IndexMarkMutationCoordinator.MarkAll(_doc, _bus, sourceText, mark);
+        if (marked == 0)
             return 0;
-        var targets = DocumentIndex.MarkAllTargets(_doc, sourceText, normalized);
-        if (targets.Count == 0)
-            return 0;
-
-        _bus.BeginUndoGroup();
-        try
-        {
-            foreach (var target in targets)
-            {
-                if (target.TableParagraph is { } tableParagraph)
-                {
-                    _bus.Execute(new ReplaceTableCellParagraphRunsCommand(
-                        target.BlockIndex,
-                        tableParagraph,
-                        paragraph => InsertRunAtOffset(
-                            paragraph,
-                            target.TextOffset,
-                            DocumentIndex.MarkRun(normalized))));
-                }
-                else
-                {
-                    _bus.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
-                        InsertRunAtOffset(paragraph, target.TextOffset, DocumentIndex.MarkRun(normalized))));
-                }
-            }
-            _bus.CommitUndoGroup("Mark All Index Entries");
-        }
-        catch
-        {
-            _bus.AbortUndoGroup();
-            throw;
-        }
 
         InvalidateLayoutAndVisual();
         Focus();
-        return targets.Count;
+        return marked;
     }
 
     public void InsertIndex() => InsertIndex(identifier: null);

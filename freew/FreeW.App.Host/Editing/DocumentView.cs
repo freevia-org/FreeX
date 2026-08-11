@@ -16809,18 +16809,15 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(mark);
         CommitToModel();
-        var markRun = DocumentIndex.MarkRun(mark);
-        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
-            return;
         if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset)
-            || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph
-            || paragraph.Runs.Any(run => DocumentIndex.MarksEquivalent(DocumentIndex.MarkedEntry(run), normalized)))
-        {
+            || !IndexMarkMutationCoordinator.TryMark(
+                _model,
+                _commands,
+                paragraphIndex,
+                textOffset,
+                mark))
             return;
-        }
 
-        _commands.Execute(new ReplaceParagraphRunsCommand(paragraphIndex, target =>
-            RevisionEditPlanner.InsertRunAtOffset(target, textOffset, markRun)));
         PlaceCaretAtModelTextOffset(paragraphIndex, textOffset);
     }
 
@@ -16829,46 +16826,7 @@ public sealed class DocumentView : RichTextBox
     {
         ArgumentNullException.ThrowIfNull(mark);
         CommitToModel();
-        var markRun = DocumentIndex.MarkRun(mark);
-        if (DocumentIndex.MarkedEntry(markRun) is not { MainEntry.Length: > 0 } normalized)
-            return 0;
-        var targets = DocumentIndex.MarkAllTargets(_model, sourceText, normalized);
-        if (targets.Count == 0)
-            return 0;
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var target in targets)
-            {
-                if (target.TableParagraph is { } tableParagraph)
-                {
-                    _commands.Execute(new ReplaceTableCellParagraphRunsCommand(
-                        target.BlockIndex,
-                        tableParagraph,
-                        paragraph => RevisionEditPlanner.InsertRunAtOffset(
-                            paragraph,
-                            target.TextOffset,
-                            DocumentIndex.MarkRun(normalized))));
-                }
-                else
-                {
-                    _commands.Execute(new ReplaceParagraphRunsCommand(target.BlockIndex, paragraph =>
-                        RevisionEditPlanner.InsertRunAtOffset(
-                            paragraph,
-                            target.TextOffset,
-                            DocumentIndex.MarkRun(normalized))));
-                }
-            }
-            _commands.CommitUndoGroup("Mark All Index Entries");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
-
-        return targets.Count;
+        return IndexMarkMutationCoordinator.MarkAll(_model, _commands, sourceText, mark);
     }
 
     /// <summary>
