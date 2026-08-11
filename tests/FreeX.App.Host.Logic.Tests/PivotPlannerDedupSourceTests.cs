@@ -72,8 +72,22 @@ public sealed class PivotPlannerDedupSourceTests
         var hostModelsPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "PivotUiHostModels.cs");
         var pivotCommandsSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotCommands.cs");
         var deferredLayoutSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotFieldListDeferredLayout.cs");
-        var headerSource = DialogSourceTestSupport.ReadHostSourceFile("PivotHeaderDropdownPlanner.cs");
-        var adornmentSource = DialogSourceTestSupport.ReadHostSourceFile("PivotRowLabelAdornmentPlanner.cs");
+        var hostHeaderPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "PivotHeaderDropdownPlanner.cs");
+        var hostAdornmentPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "PivotRowLabelAdornmentPlanner.cs");
+        var uiHeaderRecordPath = Path.Combine(repoRoot, "src", "FreeX.App.UI", "PivotHeaderDropdownButton.cs");
+        var uiAdornmentRecordPath = Path.Combine(repoRoot, "src", "FreeX.App.UI", "PivotRowLabelAdornment.cs");
+        var imageCompareProjectSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "tools",
+            "FreeX.SheetGridImageCompare",
+            "FreeX.SheetGridImageCompare.csproj"));
+        var imageCompareSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "tools",
+            "FreeX.SheetGridImageCompare",
+            "Program.cs"));
+        var viewportSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.Viewport.cs");
+        var headerRoutingSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotHeaderDropdowns.cs");
         var valueFieldPlannerPath = Path.Combine(
             repoRoot,
             "src",
@@ -96,14 +110,20 @@ public sealed class PivotPlannerDedupSourceTests
         sharedFieldListSource.Should().Contain("public static IReadOnlyList<PivotAvailableFieldItemModel> BuildAvailableFields(");
         sharedLayoutSource.Should().Contain("public static PivotFieldLayoutDropPlan PlanDrop(");
 
-        headerSource.Should().Contain("using SharedPivotGridAdornmentPlanner = FreeX.App.Presentation.PivotUI.PivotGridAdornmentPlanner;");
-        headerSource.Should().Contain("SharedPivotGridAdornmentPlanner.BuildHeaderTargets(workbook, sheet)");
-        headerSource.Should().NotContain("private static void AddTargets");
-        headerSource.Should().NotContain("private static IReadOnlyList<string> ReadHeaders");
-
-        adornmentSource.Should().Contain("SharedPivotGridAdornmentPlanner.BuildRowLabelAdornments(workbook, sheet)");
-        adornmentSource.Should().NotContain("private static void AddAdornments");
-        adornmentSource.Should().NotContain("private static bool HasChildRowsBeforeNextPeer");
+        File.Exists(hostHeaderPlannerPath).Should().BeFalse("WPF should consume the canonical header targets directly");
+        File.Exists(hostAdornmentPlannerPath).Should().BeFalse("WPF should consume the canonical row adornments directly");
+        File.Exists(uiHeaderRecordPath).Should().BeFalse("the WPF renderer accepts the canonical header target record");
+        File.Exists(uiAdornmentRecordPath).Should().BeFalse("the WPF renderer accepts the canonical row adornment record");
+        viewportSource.Should().Contain("PivotGridAdornmentPlanner.BuildHeaderTargets(_workbook, sheet)");
+        viewportSource.Should().Contain("SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets;");
+        viewportSource.Should().Contain("PivotGridAdornmentPlanner.BuildRowLabelAdornments(_workbook, sheet)");
+        viewportSource.Should().NotContain("new FreeX.App.UI.PivotHeaderDropdownButton");
+        headerRoutingSource.Should().Contain("target.MenuTarget.PivotTableName");
+        headerRoutingSource.Should().Contain("target.MenuTarget.Area switch");
+        imageCompareProjectSource.Should().NotContain("FreeX.App.Host");
+        imageCompareSource.Should().Contain("PivotGridAdornmentPlanner.BuildHeaderTargets(workbook, sheet)");
+        imageCompareSource.Should().Contain("PivotGridAdornmentPlanner.BuildRowLabelAdornments(workbook, sheet)");
+        imageCompareSource.Should().NotContain("FreeX.App.Host.PivotHeaderDropdownPlanner");
 
         File.Exists(valueFieldPlannerPath).Should().BeFalse();
         valueFieldDialogSource.Should().Contain("PivotValueFieldPlanner.GetSummaryFunctions(WpfResourceKeyTextResolver.Instance)");

@@ -8,8 +8,6 @@
     <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
-    <!-- Additional references for ViewportService + App.Host -->
-    <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />

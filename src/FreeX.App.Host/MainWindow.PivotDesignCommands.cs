@@ -108,50 +108,11 @@ public partial class MainWindow
                 });
     }
 
-    private void ApplyPivotOptions(PivotTableModel pivotTable, PivotTableOptionsDialogResult result)
+    private void ApplyPivotOptions(PivotTableModel pivotTable, PivotOptionsDialogValues values)
     {
         var sheet = _workbook.GetSheet(_currentSheetId);
         if (sheet is null)
             return;
-
-        var values = PivotOptionsPlanner.CreateDialogValues(
-            result.ShowRowGrandTotals,
-            result.ShowColumnGrandTotals,
-            result.ShowSubtotals,
-            result.SubtotalPlacement,
-            result.RepeatItemLabels,
-            result.BlankLineAfterItems,
-            result.StyleName,
-            result.ShowRowHeaders,
-            result.ShowColumnHeaders,
-            result.ShowRowStripes,
-            result.ShowColumnStripes,
-            result.ReportLayout,
-            emptyValueText: result.EmptyValueText,
-            refreshOnOpen: result.RefreshOnOpen,
-            saveSourceData: result.SaveSourceData,
-            enableRefresh: result.EnableRefresh,
-            preserveSourceSortFilter: result.PreserveSourceSortFilter,
-            missingItemsLimit: result.MissingItemsLimit,
-            printTitles: result.PrintTitles,
-            printExpandCollapseButtons: result.PrintExpandCollapseButtons,
-            altTextTitle: result.AltTextTitle,
-            altTextDescription: result.AltTextDescription,
-            compactRowLabelIndent: result.CompactRowLabelIndent,
-            showExpandCollapseButtons: result.ShowExpandCollapseButtons,
-            autofitColumnsOnUpdate: result.AutofitColumnsOnUpdate,
-            preserveFormattingOnUpdate: result.PreserveFormattingOnUpdate,
-            showFieldHeaders: result.ShowFieldHeaders,
-            showContextualTooltips: result.ShowContextualTooltips,
-            showPropertiesInTooltips: result.ShowPropertiesInTooltips,
-            showClassicLayout: result.ShowClassicLayout,
-            mergeAndCenterLabels: result.MergeAndCenterLabels,
-            showItemsWithNoDataOnRows: result.ShowItemsWithNoDataOnRows,
-            showItemsWithNoDataOnColumns: result.ShowItemsWithNoDataOnColumns,
-            pageOverThenDown: result.PageOverThenDown,
-            pageWrap: result.PageWrap,
-            errorValueText: result.ErrorValueText,
-            enableDrill: result.EnableDrill);
 
         ApplyPivotApplicationPlan(
             PivotApplication.PlanDialogOptions(

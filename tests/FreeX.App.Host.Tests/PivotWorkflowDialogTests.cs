@@ -21,7 +21,7 @@ public sealed partial class PivotWorkflowDialogTests
             "PivotCalculatedDialogs.cs",
             "PivotStyleGalleryDialog.cs",
             "PivotTableOptionsDialog.cs",
-            "PivotTableOptionsDialog.Result.cs");
+            "PivotTableOptionsDialog.Choices.cs");
     }
 
     private static string ReadClassSource(string fileName, string startMarker, string endMarker)

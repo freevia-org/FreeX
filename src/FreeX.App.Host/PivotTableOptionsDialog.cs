@@ -6,45 +6,6 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record PivotTableOptionsDialogResult(
-    bool ShowRowGrandTotals,
-    bool ShowColumnGrandTotals,
-    bool ShowSubtotals,
-    PivotSubtotalPlacement SubtotalPlacement,
-    bool RepeatItemLabels,
-    bool BlankLineAfterItems,
-    string StyleName,
-    bool ShowRowHeaders,
-    bool ShowColumnHeaders,
-    bool ShowRowStripes,
-    bool ShowColumnStripes,
-    PivotReportLayout ReportLayout,
-    string? EmptyValueText = null,
-    bool RefreshOnOpen = false,
-    bool SaveSourceData = true,
-    bool EnableRefresh = true,
-    bool PreserveSourceSortFilter = true,
-    int? MissingItemsLimit = null,
-    bool PrintTitles = false,
-    bool PrintExpandCollapseButtons = false,
-    string? AltTextTitle = null,
-    string? AltTextDescription = null,
-    int CompactRowLabelIndent = 1,
-    bool ShowExpandCollapseButtons = true,
-    bool AutofitColumnsOnUpdate = true,
-    bool PreserveFormattingOnUpdate = true,
-    bool ShowFieldHeaders = true,
-    bool ShowContextualTooltips = true,
-    bool ShowPropertiesInTooltips = true,
-    bool ShowClassicLayout = false,
-    bool MergeAndCenterLabels = false,
-    bool ShowItemsWithNoDataOnRows = false,
-    bool ShowItemsWithNoDataOnColumns = false,
-    bool PageOverThenDown = false,
-    int PageWrap = 0,
-    string? ErrorValueText = null,
-    bool EnableDrill = true);
-
 public sealed partial class PivotTableOptionsDialog : Window
 {
     private readonly CheckBox _rowGrandTotalsBox = new() { Content = UiText.Get("PivotTableOptions_ShowRowGrandTotals") };
@@ -91,11 +52,11 @@ public sealed partial class PivotTableOptionsDialog : Window
     private readonly TabControl _tabs = new() { Margin = new Thickness(0, 0, 0, 12) };
     private readonly TabItem _layoutTab = new() { Header = UiText.Get("PivotTableOptions_LayoutAndFormat") };
 
-    public PivotTableOptionsDialogResult Result { get; private set; }
+    public PivotOptionsDialogValues Result { get; private set; }
 
     public PivotTableOptionsDialog(PivotTableModel pivotTable, PivotCacheModel? cache = null)
     {
-        Result = FromPivotTable(pivotTable, cache);
+        Result = PivotOptionsPlanner.CaptureDialogValues(pivotTable, cache);
         Title = UiText.Get("PivotTableOptions_PivotTableOptions");
         DialogSizing.ApplyContentHeight(this, width: PivotOptionsPlanner.DialogWidth, minHeight: PivotOptionsPlanner.DialogMinHeight);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -252,7 +213,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         AddLabeledControl(stack, label, comboBox);
     }
 
-    private void Load(PivotTableOptionsDialogResult result)
+    private void Load(PivotOptionsDialogValues result)
     {
         _rowGrandTotalsBox.IsChecked = result.ShowRowGrandTotals;
         _columnGrandTotalsBox.IsChecked = result.ShowColumnGrandTotals;
@@ -303,7 +264,7 @@ public sealed partial class PivotTableOptionsDialog : Window
         PivotOptionsPlanner.TryParseCompactRowLabelIndent(_compactIndentBox.Text, out var compactIndent, out _);
         PivotOptionsPlanner.TryParsePageWrap(_pageWrapBox.Text, out var pageWrap, out _);
 
-        Result = CreateResult(
+        Result = PivotOptionsPlanner.CreateDialogValues(
             _rowGrandTotalsBox.IsChecked == true,
             _columnGrandTotalsBox.IsChecked == true,
             _subtotalsBox.IsChecked == true,

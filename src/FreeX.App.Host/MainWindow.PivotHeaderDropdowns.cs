@@ -15,15 +15,15 @@ public partial class MainWindow
         if (sheet is null)
             return;
 
-        var pivotTable = FindPivotTableByName(sheet, target.PivotTableName);
+        var pivotTable = FindPivotTableByName(sheet, target.MenuTarget.PivotTableName);
         if (pivotTable is null)
             return;
 
-        _pivotFieldMenuContextCaption = target.FieldCaption;
-        _pivotFieldMenuContextZone = target.Axis switch
+        _pivotFieldMenuContextCaption = target.MenuTarget.FieldCaption;
+        _pivotFieldMenuContextZone = target.MenuTarget.Area switch
         {
-            PivotHeaderDropdownAxis.Column => PivotFieldDropZone.Columns,
-            PivotHeaderDropdownAxis.Page => PivotFieldDropZone.Filters,
+            PivotHeaderArea.Column => PivotFieldDropZone.Columns,
+            PivotHeaderArea.Page => PivotFieldDropZone.Filters,
             _ => PivotFieldDropZone.Rows
         };
         SetActiveCell(headerCell);

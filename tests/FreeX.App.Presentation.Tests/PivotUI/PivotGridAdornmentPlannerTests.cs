@@ -13,7 +13,7 @@ namespace FreeX.App.Presentation.Tests.PivotUI;
 public sealed class PivotGridAdornmentPlannerTests
 {
     // ---------------------------------------------------------------------------
-    // Helpers — mirror FreeX.App.Host.Logic.Tests.PivotHeaderDropdownPlannerTests helpers
+    // Helpers for the canonical cross-renderer pivot adornment planner.
     // ---------------------------------------------------------------------------
 
     private static GridRange Range(Sheet sheet, uint r1, uint c1, uint r2, uint c2) =>
@@ -38,14 +38,14 @@ public sealed class PivotGridAdornmentPlannerTests
     }
 
     // ---------------------------------------------------------------------------
-    // Header dropdown targets — mirrors PivotHeaderDropdownPlannerTests in App.Host
+    // Header dropdown targets
     // ---------------------------------------------------------------------------
 
     [Fact]
     public void BuildHeaderTargets_ReturnsRowAndColumnDropdownsMatchingWpfPlannerOutput()
     {
         // This test verifies that PivotGridAdornmentPlanner.BuildHeaderTargets produces the SAME
-        // cell addresses as the WPF PivotHeaderDropdownPlanner for a basic row+column pivot.
+        // cell addresses for a basic row+column pivot.
         var workbook = new Workbook("PivotGridAdornmentPlannerTest");
         var sheet    = workbook.AddSheet("Data");
         SeedSalesData(sheet);
@@ -66,7 +66,7 @@ public sealed class PivotGridAdornmentPlannerTests
         var targets = PivotGridAdornmentPlanner.BuildHeaderTargets(workbook, sheet);
 
         targets.Should().HaveCount(2);
-        // Row header — same coordinates as WPF PivotHeaderDropdownPlannerTests assertion.
+        // Row header coordinates.
         targets.Should().Contain(t =>
             t.HeaderCell == new CellAddress(sheet.Id, 2, 5) &&
             t.IsActive &&

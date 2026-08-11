@@ -501,14 +501,12 @@ public partial class MainWindow
             : null;
         IReadOnlyList<PivotHeaderDropdownTarget> pivotHeaderDropdownTargets = sheet is null
             ? []
-            : PivotHeaderDropdownPlanner.BuildTargets(_workbook, sheet);
+            : PivotGridAdornmentPlanner.BuildHeaderTargets(_workbook, sheet);
         _pivotHeaderDropdownTargets = BuildPivotHeaderDropdownTargetLookup(pivotHeaderDropdownTargets);
-        SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets
-            .Select(target => new FreeX.App.UI.PivotHeaderDropdownButton(target.HeaderCell, target.IsActive))
-            .ToList();
+        SheetGrid.PivotHeaderDropdowns = pivotHeaderDropdownTargets;
         SheetGrid.PivotRowLabelAdornments = sheet is null
             ? []
-            : PivotRowLabelAdornmentPlanner.BuildAdornments(_workbook, sheet);
+            : PivotGridAdornmentPlanner.BuildRowLabelAdornments(_workbook, sheet);
         SheetGrid.FormulaTraceSheetId = _currentSheetId;
         SheetGrid.FormulaTraceArrows = _formulaTraceArrows;
         SheetGrid.HyperlinkCells = sheet is null
