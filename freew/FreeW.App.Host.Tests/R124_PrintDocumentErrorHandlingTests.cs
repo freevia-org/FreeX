@@ -74,20 +74,17 @@ public sealed class R124_PrintDocumentErrorHandlingTests
     [Fact]
     public void ExportToPdfAndExportToXps_StillWrapWorkInTryCatchAndShowOwnedErrorMessage()
     {
-        var source = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+        var host = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
+        var workflow = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWOutputWorkflow.cs");
 
-        source.Should().Contain("could not be exported to PDF");
-        source.Should().Contain("could not be exported to XPS");
-
-        var pdfCatchIndex = source.IndexOf(
-            "\"The document could not be exported to PDF.",
-            StringComparison.Ordinal);
-        pdfCatchIndex.Should().BeGreaterThan(-1);
-
-        var xpsCatchIndex = source.IndexOf(
-            "\"The document could not be exported to XPS.",
-            StringComparison.Ordinal);
-        xpsCatchIndex.Should().BeGreaterThan(-1);
+        host.Should().Contain("FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Pdf");
+        host.Should().Contain("FreeWExportWorkflow.CreatePlan(FreeWExportFormat.Xps");
+        host.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
+        host.Should().Contain("DialogMessageHelper.ShowError(");
+        host.Should().Contain("execution.Message");
+        workflow.Should().Contain("catch (Exception ex)");
+        workflow.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
+        workflow.Should().Contain("FreeWExportExecutionOutcome.Failed");
     }
 
     private static string ReadSource(params string[] parts) =>

@@ -12,6 +12,8 @@ public sealed class FreeWRibbonCommandMessageSourceTests
             "DocumentFragments", "FreeWPictureImportWorkflow.cs");
         var fragmentWorkflow = ReadPresentationSource(
             "DocumentFragments", "FreeWDocumentFragmentImportWorkflow.cs");
+        var mailMergeMetadata = ReadPresentationSource(
+            "Ribbon", "MailMergeDialogMetadata.cs");
 
         source.Should().Contain("DialogMessageHelper.ShowInfo(");
         source.Should().Contain("DialogMessageHelper.ShowError(");
@@ -21,7 +23,8 @@ public sealed class FreeWRibbonCommandMessageSourceTests
         source.Should().Contain("\"Could not capture the screen clip:");
         source.Should().Contain("\"Could not compare the documents:");
         source.Should().Contain("\"Could not combine the documents:");
-        source.Should().Contain("\"Mail Merge\"");
+        source.Should().Contain("MailMergeDialogMetadata.MailMergeTitle");
+        mailMergeMetadata.Should().Contain("public const string MailMergeTitle = \"Mail Merge\";");
         source.Should().NotContain("MessageBox.Show(");
         source.Should().NotContain("MessageBoxButton.");
         source.Should().NotContain("MessageBoxImage.");

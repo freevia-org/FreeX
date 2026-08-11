@@ -1,6 +1,6 @@
 using System.Linq;
-using System.Reflection;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 using WpfTable = System.Windows.Documents.Table;
 
@@ -61,15 +61,12 @@ public sealed class DocumentViewTableMergeGridColumnTests
     private static WpfTable RenderedTable(DocumentView view) =>
         view.Document.Blocks.OfType<WpfTable>().Single();
 
-    // Invokes DocumentView's private H8 helper via reflection so the test proves the exact conversion
-    // the fix's call sites (MergeSelectedCells' vertical branch, InsertTableColumnLeft/InsertTableColumn/
-    // DeleteTableColumn) depend on, without needing the flaky WPF multi-row Selection machinery.
-    private static int InvokeGridColumnAt(DocumentView view, int blockIndex, int rowIndex, int cellIndex)
+    // Exercises the portable owner used by both renderers without relying on WPF selection machinery.
+    private static int ResolveGridColumn(TextDocument document, int blockIndex, int rowIndex, int cellIndex)
     {
-        var method = typeof(DocumentView).GetMethod("GridColumnAt", BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(
-                "DocumentView.GridColumnAt not found — the H8 grid-column conversion helper is missing.");
-        return (int)method.Invoke(view, [blockIndex, rowIndex, cellIndex])!;
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+        return session.Tables.AddressFromCellIndex(blockIndex, rowIndex, cellIndex)!.Value.GridColumn;
     }
 
     [StaFact]
@@ -79,9 +76,11 @@ public sealed class DocumentViewTableMergeGridColumnTests
         // cell-list index straight to MergeCellsVerticalCommand as if it were the table-wide grid
         // column. Row 0's "B0" cell sits at cell-list index 1 but — because the preceding "A0" cell
         // has GridSpan=2 — at true GRID column 2. GridColumnAt must return 2, not 1.
-        var view = Load(TwoRowsPreMergedAtGridColumnZero());
-
-        var gridColumn = InvokeGridColumnAt(view, blockIndex: 0, rowIndex: 0, cellIndex: 1);
+        var gridColumn = ResolveGridColumn(
+            TwoRowsPreMergedAtGridColumnZero(),
+            blockIndex: 0,
+            rowIndex: 0,
+            cellIndex: 1);
 
         gridColumn.Should().Be(2,
             "cell-list index 1 in row 0 sits at grid column 2 because the preceding A0 cell has GridSpan=2");
@@ -99,9 +98,7 @@ public sealed class DocumentViewTableMergeGridColumnTests
         table.Rows[0].Cells[1] = new TableCell("Top");
         table.Rows[1].Cells[1] = new TableCell("Bottom");
         document.Blocks.Add(table);
-        var view = Load(document);
-
-        var gridColumn = InvokeGridColumnAt(view, blockIndex: 0, rowIndex: 0, cellIndex: 1);
+        var gridColumn = ResolveGridColumn(document, blockIndex: 0, rowIndex: 0, cellIndex: 1);
 
         gridColumn.Should().Be(1, "with no preceding GridSpan, cell-list index and grid column coincide");
     }
@@ -119,12 +116,10 @@ public sealed class DocumentViewTableMergeGridColumnTests
         table.Rows[0].Cells[1] = new TableCell("Y") { GridSpan = 2 };
         table.Rows[0].Cells.RemoveAt(2); // absorbed by Y's GridSpan=2 (grid columns 1-2)
         document.Blocks.Add(table);
-        var view = Load(document);
-
         // "X" is cell-list index 0 = grid column 0 (nothing precedes it): conversion is a no-op here.
-        InvokeGridColumnAt(view, blockIndex: 0, rowIndex: 0, cellIndex: 0).Should().Be(0);
+        ResolveGridColumn(document, blockIndex: 0, rowIndex: 0, cellIndex: 0).Should().Be(0);
         // "Y" is cell-list index 1 = grid column 1 (only X, GridSpan=1, precedes it).
-        InvokeGridColumnAt(view, blockIndex: 0, rowIndex: 0, cellIndex: 1).Should().Be(1);
+        ResolveGridColumn(document, blockIndex: 0, rowIndex: 0, cellIndex: 1).Should().Be(1);
     }
 
     [StaFact]

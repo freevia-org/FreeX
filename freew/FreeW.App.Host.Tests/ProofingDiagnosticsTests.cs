@@ -6,6 +6,8 @@ namespace FreeW.App.Host.Tests;
 
 public sealed class ProofingDiagnosticsTests
 {
+    private const string NativeSpellCheckChildEnvironmentVariable = "FREEW_NATIVE_SPELLCHECK_TEST_CHILD";
+
     [StaFact]
     public void SharedGrammarDiagnostics_surface_repeated_word_from_committed_model()
     {
@@ -45,6 +47,13 @@ public sealed class ProofingDiagnosticsTests
     [StaFact]
     public void Document_proofing_visibility_flags_hide_only_their_indicators()
     {
+        if (IsolatedTestProcess.RunIfNeeded(
+                NativeSpellCheckChildEnvironmentVariable,
+                "FreeW.App.Host.Tests.ProofingDiagnosticsTests.Document_proofing_visibility_flags_hide_only_their_indicators"))
+        {
+            return;
+        }
+
         var hiddenSpelling = TextDocument.CreateEmpty();
         hiddenSpelling.Blocks.Clear();
         hiddenSpelling.Blocks.Add(new Paragraph("teh the the"));

@@ -61,6 +61,10 @@ public sealed class DocumentView : RichTextBox
     // real interactive usage never has two DocumentViews racing to swap Document at the same instant).
     private static readonly object SpellCheckDocumentAssignmentGate = new();
 
+    // The WPF spell-checker is process-global COM state and cannot be shared reliably by the many
+    // short-lived STA threads in the host test runner. Production never sets this test seam.
+    internal static bool SuppressNativeSpellCheckForTests { get; set; }
+
     private const double PxPerPoint = 96.0 / 72.0;
     // TableCell and BlockUIContainer already contribute this much horizontal content inset.
     private const double WpfTableCellContentInsetDip = 6.0;
@@ -309,7 +313,7 @@ public sealed class DocumentView : RichTextBox
         _editingSession = new DocumentEditingSession(() => CurrentRevisionAuthor());
         AcceptsTab = true;
         IsDocumentEnabled = true;
-        SpellCheck.IsEnabled = true;
+        SpellCheck.IsEnabled = !SuppressNativeSpellCheckForTests;
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         BorderThickness = new Thickness(1);
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
@@ -480,7 +484,9 @@ public sealed class DocumentView : RichTextBox
     internal bool NativeSpellCheckEnabledForTest => SpellCheck.IsEnabled;
 
     private void ApplySpellCheckVisibility() =>
-        SpellCheck.IsEnabled = _spellCheckEnabled && !_model.HideSpellingErrors;
+        SpellCheck.IsEnabled = !SuppressNativeSpellCheckForTests
+            && _spellCheckEnabled
+            && !_model.HideSpellingErrors;
 
     /// <summary>
     /// Register a custom dictionary (<c>.lex</c>) file with this control's spell checker so the words it
@@ -4276,6 +4282,13 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void SetCharacterBorder(ParagraphBorder? border)
     {
+        if (TrySetSelectedRunFormatting(
+                formatting => Equals(formatting.CharacterBorder, border),
+                formatting => formatting with { CharacterBorder = border }))
+        {
+            return;
+        }
+
         FormatSelectedModelRuns(formatting => formatting with { CharacterBorder = border });
     }
 
@@ -4287,6 +4300,21 @@ public sealed class DocumentView : RichTextBox
     {
         var normalizedColor = string.IsNullOrEmpty(colorHex) ? null : colorHex;
         var normalizedPattern = normalizedColor is null ? ShadingPattern.Clear : pattern;
+        if (TrySetSelectedRunFormatting(
+                formatting => string.Equals(
+                        formatting.CharacterShadingHex,
+                        normalizedColor,
+                        StringComparison.OrdinalIgnoreCase)
+                    && formatting.CharacterShadingPattern == normalizedPattern,
+                formatting => formatting with
+                {
+                    CharacterShadingHex = normalizedColor,
+                    CharacterShadingPattern = normalizedPattern,
+                }))
+        {
+            return;
+        }
+
         FormatSelectedModelRuns(formatting => formatting with
         {
             CharacterShadingHex = normalizedColor,

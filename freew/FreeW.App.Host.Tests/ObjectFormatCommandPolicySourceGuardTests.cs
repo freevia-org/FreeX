@@ -8,14 +8,18 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
     public void WpfRibbonCommands_RoutePictureAndShapeObjectFormatPolicyThroughPresentationPlanner()
     {
         var source = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var profile = ReadSource("freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonEditorExecutionProfile.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Ribbon;");
-        source.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Picture)");
-        source.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Picture)");
-        source.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Picture)");
-        source.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Shape)");
-        source.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Shape)");
-        source.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Shape)");
+        source.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
+        source.Should().Contain("CreateFloatingExecutionPorts(editor)");
+        profile.Should().Contain("foreach (var target in ObjectFormatCommandPlanner.Targets)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.SizeCommands(target)");
+        source.Should().NotContain("ObjectFormatCommandPlanner.WrapCommands(");
+        source.Should().NotContain("ObjectFormatCommandPlanner.TransformCommands(");
         source.Should().NotContain("new ImageWrapCommand(editor, ImageWrapping.");
         source.Should().NotContain("new ShapeWrapCommand(editor, ImageWrapping.");
         source.Should().NotContain("new ImageZOrderCommand(editor, ZOrderOperation.");
@@ -27,16 +31,19 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
     public void AvaloniaRibbonCommands_RouteFloatingObjectFormatPolicyThroughPresentationPlanner()
     {
         var source = ReadSource("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var profile = ReadSource("freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonEditorExecutionProfile.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Ribbon;");
-        source.Should().Contain("foreach (var target in ObjectFormatCommandPlanner.Targets)");
-        source.Should().Contain("ObjectFormatCommandPlanner.WrapDropdownCommandId(target)");
-        source.Should().Contain("ObjectFormatCommandPlanner.TransformDropdownCommandId(target)");
-        source.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(target)");
-        source.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(target)");
-        source.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(target)");
-        source.Should().Contain("ObjectFormatCommandPlanner.SizeCommands(target)");
-        source.Should().Contain("ObjectFormatCommandPlanner.TryParseSizePoints(value, out var pt)");
+        source.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
+        source.Should().Contain("CreateFloatingExecutionPorts(editor)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.WrapDropdownCommandId(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.TransformDropdownCommandId(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.SizeCommands(target)");
+        profile.Should().Contain("ObjectFormatCommandPlanner.TryParseSizePoints(context.SelectedValue, out var points)");
+        source.Should().NotContain("ObjectFormatCommandPlanner.WrapCommands(");
         source.Should().NotContain("foreach (var prefix in new[] { \"image\", \"shape\" })");
         source.Should().NotContain("SetFloatingWrap(ImageWrapping.");
         source.Should().NotContain("double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var pt) && pt > 0");
@@ -49,6 +56,7 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
         var wpfRibbon = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
         var avaloniaEditor = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
         var avaloniaRibbon = ReadSource("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var profile = ReadSource("freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonEditorExecutionProfile.cs");
 
         wpfEditor.Should().Contain("public bool RotateSelectedFloating(double angleDeg)");
         wpfEditor.Should().Contain("ObjectEdits.RotateBy(target, angleDeg)");
@@ -56,15 +64,20 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
         wpfEditor.Should().Contain("ObjectEdits.ChangeZOrder(");
         wpfEditor.Should().NotContain("new SetDrawingGroupChildRotationCommand(");
         wpfEditor.Should().NotContain("new ChangeDrawingGroupChildZOrderCommand(");
-        wpfRibbon.Should().Contain("new FloatingTransformCommand(editor, command)");
+        wpfRibbon.Should().Contain("editor.RotateSelectedFloating(command.RotationDeltaDegrees)");
+        wpfRibbon.Should().Contain("editor.FlipSelectedFloating(horizontal: true)");
+        wpfRibbon.Should().Contain("editor.ChangeSelectedFloatingZOrder(operation)");
         avaloniaEditor.Should().Contain("ObjectEdits.RotateBy(target, angleDeg)");
         avaloniaEditor.Should().Contain("ObjectEdits.Flip(target, horizontal)");
         avaloniaEditor.Should().Contain("ObjectEdits.ChangeZOrder(");
         avaloniaEditor.Should().NotContain("new SetDrawingGroupChildRotationCommand(");
         avaloniaEditor.Should().NotContain("new ChangeDrawingGroupChildZOrderCommand(");
-        avaloniaRibbon.Should().Contain("editor.ChangeSelectedFloatingZOrder(operation, requiredKind)");
+        avaloniaRibbon.Should().Contain("editor.ChangeSelectedFloatingZOrder(");
+        avaloniaRibbon.Should().Contain("target == ObjectFormatTarget.Picture ? \"Image\" : \"Shape\"");
         avaloniaRibbon.Should().Contain("editor.RotateSelectedFloating(command.RotationDeltaDegrees)");
         avaloniaRibbon.Should().Contain("editor.FlipSelectedFloating(horizontal: true)");
+        profile.Should().Contain("ports.ApplyTransform(target, captured)");
+        profile.Should().Contain("ports.ApplyZOrder(target, captured.Operation)");
     }
 
     [Fact]

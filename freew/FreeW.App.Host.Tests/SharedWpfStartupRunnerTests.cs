@@ -8,6 +8,7 @@ namespace FreeW.App.Host.Tests;
 
 public sealed class SharedWpfStartupRunnerTests : IDisposable
 {
+    private const string IsolatedRunEnvironmentVariable = "FREEW_SHARED_WPF_STARTUP_TEST_CHILD";
     private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeW.SharedWpfStartupRunnerTests-");
     private string _tempDir => _temporaryDirectory.Path;
 
@@ -16,6 +17,13 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
     [StaFact]
     public void Run_InstallsIdentityLoadsOptionsAndRecordsLifecycleAroundWindowRun()
     {
+        if (IsolatedTestProcess.RunIfNeeded(
+                IsolatedRunEnvironmentVariable,
+                "FreeW.App.Host.Tests.SharedWpfStartupRunnerTests.Run_InstallsIdentityLoadsOptionsAndRecordsLifecycleAroundWindowRun"))
+        {
+            return;
+        }
+
         var optionsPath = Path.Combine(_tempDir, "settings.json");
         File.WriteAllText(optionsPath, """{"Marker":" loaded ","RecentFilesLimit":999,"UiLanguage":" qps-ploc "}""");
         var originalProduct = AppProduct.Current;

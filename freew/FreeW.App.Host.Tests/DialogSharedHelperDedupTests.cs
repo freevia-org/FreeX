@@ -91,11 +91,17 @@ public sealed class DialogSharedHelperDedupTests
     {
         var source = ReadDialogSource("MainWindow.cs");
         var exportBlock = ExtractBlock(source, "private void ExportToPdf()", "private void OpenFindReplace()");
+        var workflow = ReadPresentationSource("Shell", "FreeWOutputWorkflow.cs");
 
         exportBlock.Should().Contain("DialogMessageHelper.ShowInfo(");
         exportBlock.Should().Contain("DialogMessageHelper.ShowError(");
-        exportBlock.Should().Contain("\"Export to PDF\"");
-        exportBlock.Should().Contain("\"Export to XPS\"");
+        exportBlock.Should().Contain("execution.Message");
+        exportBlock.Should().Contain("plan.PickerTitle");
+        exportBlock.Should().NotContain("\"Export to PDF\"");
+        exportBlock.Should().NotContain("\"Export to XPS\"");
+        workflow.Should().Contain("FreeWFileTextResources.ExportPdfPickerTitle");
+        workflow.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");
+        workflow.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");
         exportBlock.Should().NotContain("MessageBox.Show(");
         exportBlock.Should().NotContain("MessageBoxButton.");
         exportBlock.Should().NotContain("MessageBoxImage.");
@@ -172,6 +178,15 @@ public sealed class DialogSharedHelperDedupTests
     {
         var path = Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", fileName);
         return File.ReadAllText(path);
+    }
+
+    private static string ReadPresentationSource(params string[] relativeParts)
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        return File.ReadAllText(Path.Combine(
+            new[] { root, "freew", "FreeW.App.Presentation" }
+                .Concat(relativeParts)
+                .ToArray()));
     }
 
     private static string ExtractBlock(string source, string start, string end)
