@@ -35,6 +35,7 @@ static async Task<int> Main(string[] args)
     var inventoryPath = Required(args, "--inventory");
     var output = Path.GetFullPath(Required(args, "--output"));
     var scenarioFilter = Optional(args, "--scenario");
+    var routeFilter = Optional(args, "--route");
     var wpfAuthorityPath = Optional(args, "--wpf-authority");
     var inventory = JsonSerializer.Deserialize<RouteInventory>(File.ReadAllText(inventoryPath), JsonOptions())
         ?? throw new InvalidOperationException("Invalid inventory.");
@@ -48,7 +49,9 @@ static async Task<int> Main(string[] args)
     File.WriteAllText(progressPath, string.Empty);
     var session = HeadlessUnitTestSession.GetOrStartForAssembly(typeof(HarnessApp).Assembly);
     var captures = new List<Capture>();
-    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "avalonia" && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))))
+    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "avalonia"
+        && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))
+        && (routeFilter is null || s.RouteId.Equals(routeFilter, StringComparison.OrdinalIgnoreCase))))
     {
         File.AppendAllText(progressPath, $"start {scenario.Id}{Environment.NewLine}");
         Capture? result = null;

@@ -27,6 +27,7 @@ static int Main(string[] args)
     var inventory = JsonSerializer.Deserialize<RouteInventory>(File.ReadAllText(inventoryPath), JsonOptions())
         ?? throw new InvalidOperationException("Invalid inventory.");
     var scenarioFilter = Optional(args, "--scenario");
+    var routeFilter = Optional(args, "--route");
     Directory.CreateDirectory(output);
     var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
     // Capture the same resource graph as the production WPF bootstrap. DialogResources.xaml
@@ -34,7 +35,9 @@ static int Main(string[] args)
     // legacy system chrome and makes that fallback the visual "authority".
     WpfThemeApplier.Apply(application, BrandThemes.FreeW, "FreeW");
     var captures = new List<Capture>();
-    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "wpf" && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))))
+    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "wpf"
+        && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))
+        && (routeFilter is null || s.RouteId.Equals(routeFilter, StringComparison.OrdinalIgnoreCase))))
     {
         if (!TryCapture(scenario, output, out var capture))
             capture = Unsupported(scenario, "No constructible app-owned WPF route adapter was available for this source family.");

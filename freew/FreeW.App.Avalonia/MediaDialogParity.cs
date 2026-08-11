@@ -301,6 +301,10 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
 
 internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 {
+    // Avalonia's compact TextBox/button templates paint three pixels less vertical chrome between
+    // the editor and inline actions than WPF. Keep the shared semantic margins authoritative and
+    // compensate only this host template so the action and footer baselines remain aligned.
+    internal const double InlineActionTemplateTopCompensation = 3;
     private readonly ComboBox _kind;
     private readonly ListBox _nodes;
     private readonly TextBox _edit;
@@ -309,19 +313,34 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 
     private InsertSmartArtDialog(SmartArt? seed)
     {
+        var metrics = SmartArtDialogPlanner.VisualMetrics;
         Title = seed is null ? "Insert SmartArt" : "Edit SmartArt Text";
-        Width = 460;
+        Width = metrics.DialogWidth;
+        MinHeight = metrics.MinimumDialogHeight;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
         var state = SmartArtDialogPlanner.BuildInitialState(seed);
-        _kind = new ComboBox { ItemsSource = Enum.GetValues<SmartArtKind>(), SelectedItem = state.Kind, MinWidth = 180 };
-        _nodes = new ListBox { MinHeight = 130, MaxHeight = 220 };
+        _kind = new ComboBox
+        {
+            ItemsSource = Enum.GetValues<SmartArtKind>(),
+            SelectedItem = state.Kind,
+            MinWidth = 180,
+            Margin = new Thickness(0, 0, 0, metrics.LayoutControlBottomMargin),
+        };
+        _nodes = new ListBox
+        {
+            Height = metrics.NodeListHeight,
+            MinHeight = metrics.NodeListHeight,
+            MaxHeight = metrics.NodeListHeight,
+            Margin = new Thickness(0, 0, 0, metrics.NodeListBottomMargin),
+        };
         foreach (var text in state.NodeTexts)
             _nodes.Items.Add(text);
         _nodes.SelectedIndex = 0;
         _edit = Chrome.TextBox(state.NodeTexts[0], 300);
+        _edit.Margin = new Thickness(0, 0, 0, metrics.EditorBottomMargin);
         _nodes.SelectionChanged += (_, _) =>
         {
             if (_updating || _nodes.SelectedItem is not string text)
@@ -338,24 +357,39 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
         };
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
-        var add = Chrome.Button("Add Shape", AddNode);
-        var remove = Chrome.Button("Remove Shape", RemoveNode);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
+        var add = Chrome.Button("Add Shape", AddNode, minWidth: 0);
+        var remove = Chrome.Button("Remove Shape", RemoveNode, minWidth: 0);
+        add.Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding);
+        remove.Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding);
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = metrics.InlineActionSpacing,
+            Margin = new Thickness(
+                0,
+                InlineActionTemplateTopCompensation,
+                0,
+                metrics.InlineActionBottomMargin),
+        };
         actions.Children.Add(add);
         actions.Children.Add(remove);
+        var ok = Chrome.Button("OK", Accept, isDefault: true, minWidth: metrics.FooterButtonWidth);
+        var cancel = Chrome.Button("Cancel", () => Close(null), isCancel: true, minWidth: metrics.FooterButtonWidth);
         Content = new StackPanel
         {
-            Margin = new Thickness(14),
+            Margin = new Thickness(metrics.OuterMargin),
             Children =
             {
-                new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, 4) },
+                new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) },
                 _kind,
-                new TextBlock { Text = SmartArtDialogPlanner.NodeTextLabel, Margin = new Thickness(0, 10, 0, 4) },
+                new TextBlock { Text = SmartArtDialogPlanner.NodeTextLabel, Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) },
                 _nodes,
                 _edit,
                 actions,
                 _status,
-                Chrome.ActionRow(Accept, () => Close(null)),
+                AvaloniaCompactDialogChrome.CreateActionRow(
+                    [ok, cancel],
+                    new Thickness(0, metrics.FooterTopMargin, 0, 0)),
             },
         };
         Opened += (_, _) => Chrome.FocusAndSelect(_edit);

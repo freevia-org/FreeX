@@ -25,8 +25,9 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         Owner = owner;
         Title = seed is null ? "Insert SmartArt" : "Edit SmartArt Text";
-        Width = 440;
-        MinHeight = 360;
+        var metrics = SmartArtDialogPlanner.VisualMetrics;
+        Width = metrics.DialogWidth;
+        MinHeight = metrics.MinimumDialogHeight;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -34,11 +35,11 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var state = SmartArtDialogPlanner.BuildInitialState(seed);
 
-        var panel = new StackPanel { Margin = new Thickness(14) };
+        var panel = new StackPanel { Margin = new Thickness(metrics.OuterMargin) };
 
         // ── Layout picker ────────────────────────────────────────────────────────────────────────
-        panel.Children.Add(new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, 4) });
-        _kindBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+        panel.Children.Add(new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) });
+        _kindBox = new ComboBox { Margin = new Thickness(0, 0, 0, metrics.LayoutControlBottomMargin) };
         foreach (SmartArtKind kind in Enum.GetValues<SmartArtKind>())
             _kindBox.Items.Add(KindLabel(kind));
         _kindBox.SelectedIndex = (int)state.Kind;
@@ -49,13 +50,13 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             Text = SmartArtDialogPlanner.NodeTextLabel,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 4)
+            Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin)
         });
 
         _nodeList = new ListBox
         {
-            Height = 130,
-            Margin = new Thickness(0, 0, 0, 6),
+            Height = metrics.NodeListHeight,
+            Margin = new Thickness(0, 0, 0, metrics.NodeListBottomMargin),
             SelectionMode = SelectionMode.Single
         };
         foreach (var text in state.NodeTexts)
@@ -67,7 +68,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // Edit box for the selected item
         _nodeTextBox = new TextBox
         {
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = new Thickness(0, 0, 0, metrics.EditorBottomMargin),
             IsEnabled = _nodeList.SelectedItem is not null
         };
         if (_nodeList.SelectedItem is string first)
@@ -103,11 +104,20 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, metrics.InlineActionBottomMargin),
             HorizontalAlignment = HorizontalAlignment.Left
         };
-        var addBtn = new Button { Content = "Add Shape", Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 6, 0) };
-        var removeBtn = new Button { Content = "Remove Shape", Padding = new Thickness(8, 3, 8, 3) };
+        var addBtn = new Button
+        {
+            Content = "Add Shape",
+            Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding, metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding),
+            Margin = new Thickness(0, 0, metrics.InlineActionSpacing, 0)
+        };
+        var removeBtn = new Button
+        {
+            Content = "Remove Shape",
+            Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding, metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding)
+        };
         addBtn.Click += (_, _) =>
         {
             var idx = _nodeList.Items.Add("New Item");
@@ -126,7 +136,10 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(buttonRow);
 
         // ── OK / Cancel ──────────────────────────────────────────────────────────────────────────
-        var okCancel = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 4, 0, 0));
+        var okCancel = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: metrics.FooterButtonWidth,
+            rowMargin: new Thickness(0, metrics.FooterTopMargin, 0, 0));
         panel.Children.Add(okCancel);
 
         Content = panel;
