@@ -3522,36 +3522,7 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
         var indices = SelectedModelParagraphIndices();
-        if (indices.Count == 0)
-            return;
-
-        _commands.BeginUndoGroup();
-        try
-        {
-            foreach (var index in indices)
-            {
-                if (_model.Blocks[index] is not ModelParagraph paragraph)
-                    continue;
-
-                var updated = MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition);
-                _commands.Execute(new SetParagraphFormattingCommand(
-                    index,
-                    updated));
-                var linkedStyleId = MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(
-                    updated.ListLevel,
-                    definition);
-                if (linkedStyleId is not null && _model.Styles.ContainsKey(linkedStyleId))
-                    _commands.Execute(new SetParagraphStyleCommand(index, linkedStyleId));
-            }
-
-            _commands.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
-            _commands.CommitUndoGroup("Define Multilevel List");
-        }
-        catch
-        {
-            _commands.AbortUndoGroup();
-            throw;
-        }
+        MultilevelListMutationCoordinator.ApplyDefinition(_model, _commands, indices, definition);
     }
 
     /// <summary>

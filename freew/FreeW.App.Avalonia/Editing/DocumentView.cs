@@ -21261,33 +21261,7 @@ public sealed class DocumentView : Control
     {
         ArgumentNullException.ThrowIfNull(definition);
         var indices = SelectedParagraphIndices();
-        if (indices.Count == 0)
-            return;
-
-        _bus.BeginUndoGroup();
-        try
-        {
-            foreach (var index in indices)
-            {
-                var paragraph = (Paragraph)_doc.Blocks[index];
-                var updated = MultilevelListDialogPlanner.ApplyDefinition(paragraph.Formatting, definition);
-                _bus.Execute(new SetParagraphFormattingCommand(
-                    index,
-                    updated));
-                var linkedStyleId = MultilevelListDialogPlanner.ResolveLinkedHeadingStyleId(
-                    updated.ListLevel,
-                    definition);
-                if (linkedStyleId is not null && _doc.Styles.ContainsKey(linkedStyleId))
-                    _bus.Execute(new SetParagraphStyleCommand(index, linkedStyleId));
-            }
-            _bus.Execute(new SetMultiLevelNumberFormatsCommand(definition.NumberFormats));
-            _bus.CommitUndoGroup("Define Multilevel List");
-        }
-        catch
-        {
-            _bus.AbortUndoGroup();
-            throw;
-        }
+        MultilevelListMutationCoordinator.ApplyDefinition(_doc, _bus, indices, definition);
     }
 
     public void ApplyMultiLevelListStartOverrides(int? level0StartAt, int? level1StartAt)
