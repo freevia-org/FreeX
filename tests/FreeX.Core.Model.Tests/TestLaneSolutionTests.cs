@@ -34,9 +34,11 @@ public sealed class TestLaneSolutionTests
             "tests/FreeX.Fixtures/FreeX.Fixtures.csproj",
             "tests/FreeX.Integration.Tests/FreeX.Integration.Tests.csproj",
             "tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj",
+            "tests/Free.Shared.AppServices.Tests/Free.Shared.AppServices.Tests.csproj",
             "tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj",
             "tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj",
             "tests/Free.Shared.Shell.Avalonia.Tests/Free.Shared.Shell.Avalonia.Tests.csproj",
+            "tests/Free.Shared.Shell.Wpf.Tests/Free.Shared.Shell.Wpf.Tests.csproj",
             "tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj",
             "freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj",
             "freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj",
@@ -51,7 +53,8 @@ public sealed class TestLaneSolutionTests
         {
             "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj",
             "tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj",
-            "tests/Free.Shared.Ribbon.Wpf.Tests/Free.Shared.Ribbon.Wpf.Tests.csproj"
+            "tests/Free.Shared.Ribbon.Wpf.Tests/Free.Shared.Ribbon.Wpf.Tests.csproj",
+            "tests/Free.Shared.Shell.Wpf.Tests/Free.Shared.Shell.Wpf.Tests.csproj"
         });
     }
 
