@@ -36,6 +36,9 @@ public static class RtfReader
     }
 
     public static TextDocument Read(Stream stream)
+        => Read(stream, rejectOutOfRangeControlWordParameters: false);
+
+    internal static TextDocument Read(Stream stream, bool rejectOutOfRangeControlWordParameters)
     {
         ArgumentNullException.ThrowIfNull(stream);
 
@@ -44,7 +47,7 @@ public static class RtfReader
         using var reader = new StreamReader(stream, Encoding.Latin1, detectEncodingFromByteOrderMarks: false, bufferSize: 4096, leaveOpen: true);
         var text = reader.ReadToEnd();
 
-        var parser = new Parser(text);
+        var parser = new Parser(text, rejectOutOfRangeControlWordParameters);
         return parser.Parse();
     }
 
@@ -79,6 +82,7 @@ public static class RtfReader
     private sealed class Parser
     {
         private readonly string _rtf;
+        private readonly bool _rejectOutOfRangeControlWordParameters;
         private int _pos;
 
         private readonly TextDocument _document = new();
@@ -90,20 +94,40 @@ public static class RtfReader
         private readonly List<byte> _pendingBytes = new();
 
         /// <summary>
-        /// Reads a control-word numeric parameter, clamping instead of throwing.
+        /// Reads a signed control-word numeric parameter without overflowing.
         /// <para>
         /// The digit run comes straight from the RTF source — a pasted clipboard payload or an
         /// opened file — and nothing bounds its length, so <c>int.Parse</c> raised OverflowException
         /// on a control word like <c>\f99999999999</c>. That escaped the paste path entirely: its
         /// guard catches InvalidDataException and ArgumentException, and OverflowException derives
-        /// from ArithmeticException, so pasting such text crashed the app. A parameter this far out
-        /// of range is malformed either way; clamping keeps the rest of the document readable.
+        /// from ArithmeticException, so pasting such text crashed the app. File reads retain the tolerant
+        /// clamping behavior, while strict boundaries such as clipboard paste reject malformed parameters.
         /// </para>
         /// </summary>
-        private static int ParseControlWordParameter(ReadOnlySpan<char> digits) =>
-            int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var value)
-                ? value
-                : int.MaxValue;
+        private int ParseControlWordParameter(ReadOnlySpan<char> digits, bool negative = false)
+        {
+            if (uint.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out var magnitude))
+            {
+                if (!negative && magnitude <= int.MaxValue)
+                    return (int)magnitude;
+
+                if (negative && magnitude <= 2147483648u)
+                    return magnitude == 2147483648u ? int.MinValue : -(int)magnitude;
+            }
+
+            if (_rejectOutOfRangeControlWordParameters)
+                throw new InvalidDataException("RTF control-word parameter is outside the supported 32-bit range.");
+
+            return negative ? int.MinValue : int.MaxValue;
+        }
+
+        public Parser(string rtf, bool rejectOutOfRangeControlWordParameters)
+        {
+            _rtf = rtf;
+            _rejectOutOfRangeControlWordParameters = rejectOutOfRangeControlWordParameters;
+            _state = new State(Encoding.GetEncoding(1252));
+            _document.Blocks.Clear();
+        }
 
         // Accumulated content for the current paragraph being built.
         private readonly List<Run> _currentRuns = new();
@@ -123,13 +147,6 @@ public static class RtfReader
         private readonly Dictionary<int, string> _fontTable = new();
         // \listtable: maps \listid → ListKind, populated by ParseListTable.
         private readonly Dictionary<int, ListKind> _listTable = new();
-
-        public Parser(string rtf)
-        {
-            _rtf = rtf;
-            _state = new State(Encoding.GetEncoding(1252));
-            _document.Blocks.Clear();
-        }
 
         public TextDocument Parse()
         {
@@ -213,7 +230,7 @@ public static class RtfReader
             }
 
             // Control word: letters then an optional (signed) numeric parameter, then an optional single space.
-            // (Parameters go through ParseControlWordParameter, which clamps rather than throwing.)
+            // Strict callers reject out-of-range parameters; tolerant file reads clamp them.
             var start = _pos;
             while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
                 _pos++;
@@ -231,8 +248,7 @@ public static class RtfReader
                 var numStart = _pos;
                 while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
                     _pos++;
-                var n = ParseControlWordParameter(_rtf.AsSpan(numStart, _pos - numStart));
-                param = negative ? -n : n;
+                param = ParseControlWordParameter(_rtf.AsSpan(numStart, _pos - numStart), negative);
             }
 
             // A single trailing space is the control-word delimiter and is consumed (not content).
@@ -692,8 +708,7 @@ public static class RtfReader
                         var ns = _pos;
                         while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
                             _pos++;
-                        val = ParseControlWordParameter(_rtf.AsSpan(ns, _pos - ns));
-                        if (negative) val = -val;
+                        val = ParseControlWordParameter(_rtf.AsSpan(ns, _pos - ns), negative);
                     }
                     if (_pos < _rtf.Length && _rtf[_pos] == ' ')
                         _pos++;
@@ -759,10 +774,19 @@ public static class RtfReader
             // Consume control-word letters + optional numeric param + optional trailing space.
             while (_pos < _rtf.Length && char.IsLetter(_rtf[_pos]))
                 _pos++;
+            var negative = false;
             if (_pos < _rtf.Length && _rtf[_pos] == '-')
+            {
+                negative = true;
                 _pos++;
-            while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
-                _pos++;
+            }
+            if (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
+            {
+                var numStart = _pos;
+                while (_pos < _rtf.Length && char.IsDigit(_rtf[_pos]))
+                    _pos++;
+                _ = ParseControlWordParameter(_rtf.AsSpan(numStart, _pos - numStart), negative);
+            }
             if (_pos < _rtf.Length && _rtf[_pos] == ' ')
                 _pos++;
         }

@@ -22,9 +22,21 @@ public sealed class RtfClipboardDocumentParserTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData(@"{\rtf1\ansi\fs999999999999999999 text}")]
+    [InlineData(@"{\rtf1\ansi\li-999999999999999999 text}")]
+    [InlineData(@"{\rtf1\ansi{\fonttbl{\f0\fcharset999999999999999999 Arial;}}text}")]
     public void TryParse_MissingOrMalformedPayloadReturnsFalse(string? rtf)
     {
         RtfClipboardDocumentParser.TryParse(rtf, out var document).Should().BeFalse();
         document.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(@"{\rtf1\ansi\fs48 text}")]
+    [InlineData(@"{\rtf1\ansi\li-2147483648 text}")]
+    public void TryParse_InRangeControlWordParametersRemainValid(string rtf)
+    {
+        RtfClipboardDocumentParser.TryParse(rtf, out var document).Should().BeTrue();
+        document.Should().NotBeNull();
+        document!.PlainText.Should().Contain("text");
     }
 }

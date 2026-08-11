@@ -23,7 +23,7 @@ public static class RtfClipboardDocumentParser
             // RTF control syntax is ASCII. Latin-1 preserves every supplied code unit so RtfReader can
             // apply the payload's own code-page declarations to escaped source bytes.
             using var stream = new MemoryStream(Encoding.Latin1.GetBytes(rtf));
-            var parsed = RtfReader.Read(stream);
+            var parsed = RtfReader.Read(stream, rejectOutOfRangeControlWordParameters: true);
             if (parsed.Blocks.Count == 0)
                 return false;
 
