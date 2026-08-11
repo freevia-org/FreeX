@@ -640,21 +640,13 @@ public sealed partial class MainWindow : Window
     private Task OpenSortDialogAsync() =>
         SortDialog.ShowAndApplyAsync(this, _editor);
 
-    private async Task OpenImageCropDialogAsync()
-    {
-        if (_editor.SelectedFloatingImage() is not { } image)
-            return;
-
-        var result = await ImageCropDialog.ShowAsync(
+    private ValueTask<ImageCropDialogResult?> ShowImageCropDialogAsync(InlineImage image) =>
+        new(ImageCropDialog.ShowAsync(
             this,
             image.CropLeft,
             image.CropRight,
             image.CropTop,
-            image.CropBottom);
-        if (result is not null)
-            _editor.SetSelectedImageCrop(result.Left, result.Right, result.Top, result.Bottom);
-        _editor.Focus();
-    }
+            image.CropBottom));
 
     private async Task OpenImageSizeDialogAsync()
     {
@@ -727,35 +719,14 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenChartTitleDialogAsync()
-    {
-        if (_editor.SelectedFloatingChart() is not { } chart)
-            return;
-        var result = await ChartTitleDialog.ShowAsync(this, chart.Title);
-        if (result is not null)
-            _editor.SetChartTitle(result.NewTitle);
-        _editor.Focus();
-    }
+    private ValueTask<ChartTitleDialogResult?> ShowChartTitleDialogAsync(Chart chart) =>
+        new(ChartTitleDialog.ShowAsync(this, chart.Title));
 
-    private async Task OpenChartAxisTitlesDialogAsync()
-    {
-        if (_editor.SelectedFloatingChart() is not { } chart)
-            return;
-        var result = await ChartAxisTitlesDialog.ShowAsync(this, chart.CategoryAxisTitle, chart.ValueAxisTitle);
-        if (result is not null)
-            _editor.SetChartAxisTitles(result.CategoryTitle, result.ValueTitle);
-        _editor.Focus();
-    }
+    private ValueTask<ChartAxisTitlesDialogResult?> ShowChartAxisTitlesDialogAsync(Chart chart) =>
+        new(ChartAxisTitlesDialog.ShowAsync(this, chart.CategoryAxisTitle, chart.ValueAxisTitle));
 
-    private async Task OpenChartSizeDialogAsync()
-    {
-        if (_editor.SelectedFloatingChart() is not { } chart)
-            return;
-        var result = await ChartSizeDialog.ShowAsync(this, chart.WidthPt, chart.HeightPt);
-        if (result is not null)
-            _editor.SetSelectedChartSize(result.WidthPt, result.HeightPt);
-        _editor.Focus();
-    }
+    private ValueTask<ChartSizeDialogResult?> ShowChartSizeDialogAsync(Chart chart) =>
+        new(ChartSizeDialog.ShowAsync(this, chart.WidthPt, chart.HeightPt));
 
     private async Task OpenInsertSmartArtDialogAsync()
     {
@@ -811,18 +782,10 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenTableToTextDialogAsync()
-    {
-        if (!_editor.CanConvertTableToText)
-            return;
-
-        var delimiter = await TableTextConversionDialog.ShowAsync(
+    private ValueTask<char?> ShowTableToTextDialogAsync() =>
+        new(TableTextConversionDialog.ShowAsync(
             this,
-            TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle);
-        if (delimiter is { } value)
-            _editor.ConvertTableToText(value);
-        _editor.Focus();
-    }
+            TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle));
 
     private async Task OpenTextToTableDialogAsync()
     {
@@ -892,16 +855,8 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenSmartArtEditDialogAsync()
-    {
-        if (_editor.SelectedFloatingSmartArt() is not { } smartArt)
-            return;
-
-        var replacement = await SmartArtEditDialog.ShowAsync(this, smartArt);
-        if (replacement is not null)
-            _editor.ReplaceSelectedSmartArt(replacement);
-        _editor.Focus();
-    }
+    private ValueTask<SmartArt?> ShowSmartArtEditDialogAsync(SmartArt smartArt) =>
+        new(SmartArtEditDialog.ShowAsync(this, smartArt));
 
     /// <summary>
     /// Opens the Page Setup dialog (modal). Pre-populates from the document's current page
@@ -1031,15 +986,8 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenChartEditDataDialogAsync()
-    {
-        if (_editor.SelectedFloatingChart() is not { } chart)
-            return;
-        var replacement = await InsertChartDialog.ShowAsync(this, chart);
-        if (replacement is not null)
-            _editor.ReplaceSelectedChartData(replacement);
-        _editor.Focus();
-    }
+    private ValueTask<Chart?> ShowChartDataDialogAsync(Chart chart) =>
+        new(InsertChartDialog.ShowAsync(this, chart));
 
     private async Task OpenCaptionDialogAsync()
     {
@@ -1915,7 +1863,7 @@ public sealed partial class MainWindow : Window
             OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
             AskHeaderFooterText: _askHeaderFooterText ??
                 ((footer, initial) => HeaderFooterTextDialog.ShowAsync(this, footer, initial)),
-            OpenImageCropDialog: () => _ = OpenImageCropDialogAsync(),
+            ShowImageCropDialogAsync: ShowImageCropDialogAsync,
             OpenImageSizeDialog: () => _ = OpenImageSizeDialogAsync(),
             OpenImageAltTextDialog: () => _ = OpenImageAltTextDialogAsync(),
             OpenImageBorderDialog: () => _ = OpenImageBorderDialogAsync(),
@@ -1925,15 +1873,15 @@ public sealed partial class MainWindow : Window
             OpenShapeSizeDialog: () => _ = OpenShapeSizeDialogAsync(),
             OpenShapeAltTextDialog: () => _ = OpenShapeAltTextDialogAsync(),
             OpenInsertChartDialog: () => _ = OpenInsertChartDialogAsync(),
-            OpenChartEditDataDialog: () => _ = OpenChartEditDataDialogAsync(),
-            OpenChartTitleDialog: () => _ = OpenChartTitleDialogAsync(),
-            OpenChartAxisTitlesDialog: () => _ = OpenChartAxisTitlesDialogAsync(),
-            OpenChartSizeDialog: () => _ = OpenChartSizeDialogAsync(),
+            ShowChartDataDialogAsync: ShowChartDataDialogAsync,
+            ShowChartTitleDialogAsync: ShowChartTitleDialogAsync,
+            ShowChartAxisTitlesDialogAsync: ShowChartAxisTitlesDialogAsync,
+            ShowChartSizeDialogAsync: ShowChartSizeDialogAsync,
             OpenInsertSmartArtDialog: () => _ = OpenInsertSmartArtDialogAsync(),
             OpenIconPickerDialog: () => _ = OpenIconPickerDialogAsync(),
             OpenTextToTableDialog: () => _ = OpenTextToTableDialogAsync(),
-            OpenTableToTextDialog: () => _ = OpenTableToTextDialogAsync(),
-            OpenSmartArtEditDialog: () => _ = OpenSmartArtEditDialogAsync(),
+            ShowTableToTextDialogAsync: ShowTableToTextDialogAsync,
+            ShowSmartArtEditDialogAsync: ShowSmartArtEditDialogAsync,
             OpenDateTimeDialog: () => _ = OpenDateTimeDialogAsync(),
             OpenMultilevelListDialog: () => _ = OpenMultilevelListDialogAsync(),
             ToggleOrientation:   ToggleOrientation,
@@ -1943,8 +1891,8 @@ public sealed partial class MainWindow : Window
             InsertObject:        () => _ = InsertEmbeddedObjectAsync(),
             OpenSymbolPickerDialog: () => _ = OpenSymbolPickerAsync(),
             CaptureScreenClip: () => _ = InsertScreenClipAsync(),
-            OpenTablePropertiesDialog: context => _ = OpenTablePropertiesDialogAsync(context),
-            OpenTableFormulaDialog: state => _ = OpenTableFormulaDialogAsync(state),
+            ShowTablePropertiesDialogAsync: ShowTablePropertiesDialogAsync,
+            ShowTableFormulaDialogAsync: ShowTableFormulaDialogAsync,
             OpenWordCountDialog: () => _ = OpenWordCountDialogAsync(),
             OpenCaptionDialog: () => _ = OpenCaptionDialogAsync(),
             OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
@@ -3602,12 +3550,12 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
-    private async Task OpenTableFormulaDialogAsync(TableFormulaDialogInitialState initialState)
+    private async ValueTask<TableFormulaField?> ShowTableFormulaDialogAsync(
+        TableFormulaDialogInitialState initialState)
     {
         var dialog = new TableFormulaDialog(initialState);
         await dialog.ShowDialog(this);
-        ApplyTableFormulaResult(_editor, dialog.Result);
-        _editor.Focus();
+        return dialog.Result;
     }
 
     internal static void ApplyTableFormulaResult(DocumentView editor, TableFormulaField? formula)
@@ -3617,13 +3565,12 @@ public sealed partial class MainWindow : Window
             editor.InsertTableFormula(formula);
     }
 
-    private async Task OpenTablePropertiesDialogAsync(ModelTableContext context)
+    private async ValueTask<TablePropertiesValues?> ShowTablePropertiesDialogAsync(ModelTableContext context)
     {
         var dialog = new TablePropertiesDialog(context);
         await dialog.ShowDialog(this);
-        ApplyTablePropertiesResult(_editor, dialog.Result);
         WriteTablePropertiesX11ValidationResult(context, dialog);
-        _editor.Focus();
+        return dialog.Result;
     }
 
     private async Task RunTablePropertiesX11ValidationSeedAsync()
@@ -3647,7 +3594,7 @@ public sealed partial class MainWindow : Window
         _editor.PlaceCaretInCell(tableBlock, 0, 0, 0, 0);
         var context = _editor.CaretTableContext()
             ?? throw new InvalidOperationException("Table Properties X11 validation seed did not select cell A1.");
-        await OpenTablePropertiesDialogAsync(context);
+        ApplyTablePropertiesResult(_editor, await ShowTablePropertiesDialogAsync(context));
     }
 
     private static void WriteTablePropertiesX11ValidationResult(

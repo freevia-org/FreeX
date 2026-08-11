@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -49,7 +50,11 @@ public sealed class CommandParityCropTableToTextTests
             editor.Measure(new Size(800, 1200));
             var callbacks = NoopCallbacks() with
             {
-                OpenImageCropDialog = () => editor.SetSelectedImageCrop(0.1, 0.2, 0.15, 0.05),
+                ShowImageCropDialogAsync = selected =>
+                {
+                    selected.Should().BeSameAs(image);
+                    return ValueTask.FromResult<ImageCropDialogResult?>(new(0.1, 0.2, 0.15, 0.05));
+                },
             };
             var registry = FreeWRibbon.BuildRegistry(editor, callbacks);
             var command = Stateful(registry, "freew.image-crop");
@@ -86,7 +91,7 @@ public sealed class CommandParityCropTableToTextTests
             editor.Measure(new Size(800, 1200));
             var callbacks = NoopCallbacks() with
             {
-                OpenTableToTextDialog = () => editor.ConvertTableToText(';'),
+                ShowTableToTextDialogAsync = () => ValueTask.FromResult<char?>(';'),
             };
             var registry = FreeWRibbon.BuildRegistry(editor, callbacks);
             var command = Stateful(registry, "freew.table-to-text");

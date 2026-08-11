@@ -1,4 +1,6 @@
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.Editing;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Ribbon;
@@ -75,23 +77,54 @@ public sealed record FreeWRibbonFloatingExecutionPorts(
 
 public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action PrepareExecution,
+    Action CompleteExecution,
     Func<Chart?> SelectedChart,
     Action<ChartKind> SetChartKind,
     Action<ChartStyle> ApplyChartStyle,
     Action<ChartColorScheme> ApplyChartColorScheme,
     Action<ChartQuickLayout> ApplyChartQuickLayout,
     Action ToggleChartLegend,
-    IRibbonCommand ChartTitleCommand,
-    IRibbonCommand ChartAxisTitlesCommand,
-    IRibbonCommand ChartEditDataCommand,
-    IRibbonCommand ChartSizeCommand,
+    Func<Chart, ValueTask<ChartTitleDialogResult?>>? ShowChartTitleDialogAsync,
+    Action<ChartTitleDialogResult> ApplyChartTitleOutcome,
+    Action? ToggleChartTitleFallback,
+    Func<Chart, ValueTask<ChartAxisTitlesDialogResult?>>? ShowChartAxisTitlesDialogAsync,
+    Action<ChartAxisTitlesDialogResult> ApplyChartAxisTitlesOutcome,
+    Action? ToggleChartAxisTitlesFallback,
+    Func<Chart, ValueTask<Chart?>>? ShowChartDataDialogAsync,
+    Action<Chart> ApplyChartDataOutcome,
+    Func<Chart, ValueTask<ChartSizeDialogResult?>>? ShowChartSizeDialogAsync,
+    Action<ChartSizeDialogResult> ApplyChartSizeOutcome,
     Func<SmartArt?> SelectedSmartArt,
     Action<SmartArtStructureOperation> MutateSmartArt,
     Action<SmartArtLayoutPreset> ApplySmartArtLayout,
     Action<SmartArtColorScheme> ApplySmartArtColorScheme,
     Action<SmartArtStyle> ApplySmartArtStyle,
-    IRibbonCommand SmartArtEditTextCommand,
+    Func<SmartArt, ValueTask<SmartArt?>>? ShowSmartArtEditDialogAsync,
+    Action<SmartArt> ApplySmartArtEditOutcome,
     string ChartColorCommandPrefix = "freew.chart-colors");
+
+public sealed record FreeWRibbonImageExecutionPorts(
+    Action PrepareExecution,
+    Action CompleteExecution,
+    Func<InlineImage?> SelectedImage,
+    Func<InlineImage, ValueTask<ImageCropDialogResult?>>? ShowCropDialogAsync,
+    Action<ImageCropDialogResult> ApplyCropOutcome,
+    Action ResetImage);
+
+public sealed record FreeWRibbonTableCellSelection(Table Table, int RowIndex, int ColumnIndex);
+
+public sealed record FreeWRibbonTableExecutionPorts(
+    Action PrepareExecution,
+    Action CompleteExecution,
+    Func<FreeWRibbonTableCellSelection?> SelectedCell,
+    Func<ModelTableContext?> SelectedContext,
+    Func<bool> CanConvertToText,
+    Func<TableFormulaDialogInitialState, ValueTask<TableFormulaField?>>? ShowFormulaDialogAsync,
+    Action<TableFormulaField> ApplyFormulaOutcome,
+    Func<ModelTableContext, ValueTask<TablePropertiesValues?>>? ShowPropertiesDialogAsync,
+    Action<TablePropertiesValues> ApplyPropertiesOutcome,
+    Func<ValueTask<char?>>? ShowTableToTextDialogAsync,
+    Action<char> ApplyTableToTextOutcome);
 
 public static class FreeWRibbonEditorExecutionProfile
 {
@@ -422,11 +455,36 @@ public static class FreeWRibbonEditorExecutionProfile
             ports.ToggleChartLegend,
             () => ports.SelectedChart() is not null,
             ports.PrepareExecution));
-        bindings.Bind(FreeWRibbonCommandAction.ChartTitle, ports.ChartTitleCommand);
-        bindings.Bind(FreeWRibbonCommandAction.ChartAxisTitles, ports.ChartAxisTitlesCommand);
-        bindings.Bind(FreeWRibbonCommandAction.ChartEditData, ports.ChartEditDataCommand);
-        bindings.Bind(FreeWRibbonCommandAction.ChartSize, ports.ChartSizeCommand);
-        bindings.Bind(FreeWRibbonCommandAction.ChartSizeDialog, ports.ChartSizeCommand);
+        bindings.Bind(FreeWRibbonCommandAction.ChartTitle, AsyncStateful(
+            _ => ExecuteSelectedDialogAsync(
+                ports.SelectedChart,
+                ports.ShowChartTitleDialogAsync,
+                ports.ApplyChartTitleOutcome,
+                ports.CompleteExecution,
+                ports.ToggleChartTitleFallback),
+            () => ports.SelectedChart() is not null
+                && (ports.ShowChartTitleDialogAsync is not null || ports.ToggleChartTitleFallback is not null),
+            ports.PrepareExecution));
+        bindings.Bind(FreeWRibbonCommandAction.ChartAxisTitles, AsyncStateful(
+            _ => ExecuteSelectedDialogAsync(
+                ports.SelectedChart,
+                ports.ShowChartAxisTitlesDialogAsync,
+                ports.ApplyChartAxisTitlesOutcome,
+                ports.CompleteExecution,
+                ports.ToggleChartAxisTitlesFallback),
+            () => ports.SelectedChart() is not null
+                && (ports.ShowChartAxisTitlesDialogAsync is not null || ports.ToggleChartAxisTitlesFallback is not null),
+            ports.PrepareExecution));
+        bindings.Bind(FreeWRibbonCommandAction.ChartEditData, AsyncStateful(
+            context => ExecuteChartDataAsync(ports, context.SelectedValue),
+            () => ports.SelectedChart() is not null,
+            ports.PrepareExecution));
+        var chartSizeCommand = AsyncStateful(
+            context => ExecuteChartSizeAsync(ports, context.SelectedValue),
+            () => ports.SelectedChart() is not null,
+            ports.PrepareExecution);
+        bindings.Bind(FreeWRibbonCommandAction.ChartSize, chartSizeCommand);
+        bindings.Bind(FreeWRibbonCommandAction.ChartSizeDialog, chartSizeCommand);
 
         bindings.Register("freew.smartart-layout", EmptyRibbonCommand.Instance);
         foreach (var preset in SmartArtLayoutPreset.Catalog)
@@ -458,7 +516,10 @@ public static class FreeWRibbonEditorExecutionProfile
         BindSmartArtStructure(bindings, ports, FreeWRibbonCommandAction.SmartartDemote, SmartArtStructureOperation.Demote);
         BindSmartArtStructure(bindings, ports, FreeWRibbonCommandAction.SmartartMoveUp, SmartArtStructureOperation.MoveUp);
         BindSmartArtStructure(bindings, ports, FreeWRibbonCommandAction.SmartartMoveDown, SmartArtStructureOperation.MoveDown);
-        bindings.Bind(FreeWRibbonCommandAction.SmartartEditText, ports.SmartArtEditTextCommand);
+        bindings.Bind(FreeWRibbonCommandAction.SmartartEditText, AsyncStateful(
+            context => ExecuteSmartArtEditAsync(ports, context.SelectedValue),
+            () => SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt()),
+            ports.PrepareExecution));
         bindings.Bind(FreeWRibbonCommandAction.SmartartChangeStyle, new FreeWRibbonStatefulPortCommand(
             context =>
             {
@@ -467,6 +528,182 @@ public static class FreeWRibbonEditorExecutionProfile
             },
             () => new RibbonCommandState(IsEnabled: SmartArtCommandPlanner.CanEdit(ports.SelectedSmartArt())),
             ports.PrepareExecution));
+    }
+
+    public static void RegisterImageTableWorkflows(
+        FreeWRibbonCommandBindingPorts bindings,
+        FreeWRibbonImageExecutionPorts imagePorts,
+        FreeWRibbonTableExecutionPorts tablePorts)
+    {
+        ArgumentNullException.ThrowIfNull(bindings);
+        ArgumentNullException.ThrowIfNull(imagePorts);
+        ArgumentNullException.ThrowIfNull(tablePorts);
+
+        bindings.Bind(FreeWRibbonCommandAction.ImageCrop, AsyncStateful(
+            _ => ExecuteSelectedDialogAsync(
+                imagePorts.SelectedImage,
+                imagePorts.ShowCropDialogAsync,
+                imagePorts.ApplyCropOutcome,
+                imagePorts.CompleteExecution),
+            () => imagePorts.SelectedImage() is not null && imagePorts.ShowCropDialogAsync is not null,
+            imagePorts.PrepareExecution));
+        bindings.Bind(FreeWRibbonCommandAction.ImageReset, Stateful(
+            imagePorts.ResetImage,
+            () => imagePorts.SelectedImage() is not null,
+            imagePorts.PrepareExecution));
+
+        bindings.Bind(FreeWRibbonCommandAction.TableFormula, AsyncStateful(
+            _ => ExecuteTableFormulaAsync(tablePorts),
+            () => tablePorts.SelectedCell() is not null && tablePorts.ShowFormulaDialogAsync is not null,
+            tablePorts.PrepareExecution));
+        var propertiesCommand = AsyncStateful(
+            _ => ExecuteSelectedDialogAsync(
+                tablePorts.SelectedContext,
+                tablePorts.ShowPropertiesDialogAsync,
+                tablePorts.ApplyPropertiesOutcome,
+                tablePorts.CompleteExecution),
+            () => tablePorts.SelectedContext() is not null && tablePorts.ShowPropertiesDialogAsync is not null,
+            tablePorts.PrepareExecution);
+        bindings.Bind(FreeWRibbonCommandAction.TableProperties, propertiesCommand);
+        bindings.Bind(FreeWRibbonCommandAction.TableRowHeight, propertiesCommand);
+        bindings.Bind(FreeWRibbonCommandAction.TableColWidth, propertiesCommand);
+        bindings.Bind(FreeWRibbonCommandAction.TableCellMargins, propertiesCommand);
+        bindings.Bind(FreeWRibbonCommandAction.TableToText, AsyncStateful(
+            _ => ExecuteTableToTextAsync(tablePorts),
+            () => tablePorts.CanConvertToText() && tablePorts.ShowTableToTextDialogAsync is not null,
+            tablePorts.PrepareExecution));
+    }
+
+    private static ValueTask ExecuteChartDataAsync(
+        FreeWRibbonChartSmartArtExecutionPorts ports,
+        string? selectedValue)
+    {
+        if (ports.SelectedChart() is not { } chart)
+            return Complete(ports.CompleteExecution);
+        if (ChartDataPresetCatalog.TryCreateNamedReplacement(selectedValue, out var preset))
+        {
+            ports.ApplyChartDataOutcome(preset);
+            return Complete(ports.CompleteExecution);
+        }
+        return !string.IsNullOrWhiteSpace(selectedValue) || ports.ShowChartDataDialogAsync is null
+            ? Complete(ports.CompleteExecution)
+            : ApplyDialogOutcomeAsync(
+                ports.ShowChartDataDialogAsync(chart),
+                ports.ApplyChartDataOutcome,
+                ports.CompleteExecution);
+    }
+
+    private static ValueTask ExecuteChartSizeAsync(
+        FreeWRibbonChartSmartArtExecutionPorts ports,
+        string? selectedValue)
+    {
+        if (ports.SelectedChart() is not { } chart)
+            return Complete(ports.CompleteExecution);
+        if (FreeWRibbonNumericValueParser.TryParseChartSize(
+                selectedValue,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed))
+        {
+            ports.ApplyChartSizeOutcome(new ChartSizeDialogResult(parsed.WidthPt, parsed.HeightPt));
+            return Complete(ports.CompleteExecution);
+        }
+        return !string.IsNullOrWhiteSpace(selectedValue) || ports.ShowChartSizeDialogAsync is null
+            ? Complete(ports.CompleteExecution)
+            : ApplyDialogOutcomeAsync(
+                ports.ShowChartSizeDialogAsync(chart),
+                ports.ApplyChartSizeOutcome,
+                ports.CompleteExecution);
+    }
+
+    private static ValueTask ExecuteSmartArtEditAsync(
+        FreeWRibbonChartSmartArtExecutionPorts ports,
+        string? selectedValue)
+    {
+        if (ports.SelectedSmartArt() is not { } smartArt)
+            return Complete(ports.CompleteExecution);
+        if (selectedValue is not null)
+        {
+            if (SmartArtCommandPlanner.BuildEditedContent(smartArt.Kind, selectedValue) is { } replacement)
+                ports.ApplySmartArtEditOutcome(replacement);
+            return Complete(ports.CompleteExecution);
+        }
+        return ports.ShowSmartArtEditDialogAsync is null
+            ? Complete(ports.CompleteExecution)
+            : ApplyDialogOutcomeAsync(
+                ports.ShowSmartArtEditDialogAsync(smartArt),
+                ports.ApplySmartArtEditOutcome,
+                ports.CompleteExecution);
+    }
+
+    private static ValueTask ExecuteTableFormulaAsync(FreeWRibbonTableExecutionPorts ports)
+    {
+        if (ports.SelectedCell() is not { } cell || ports.ShowFormulaDialogAsync is null)
+            return Complete(ports.CompleteExecution);
+        var initialState = TableFormulaDialogPlanner.BuildInitialState(
+            cell.Table,
+            cell.RowIndex,
+            cell.ColumnIndex);
+        return ApplyDialogOutcomeAsync(
+            ports.ShowFormulaDialogAsync(initialState),
+            ports.ApplyFormulaOutcome,
+            ports.CompleteExecution);
+    }
+
+    private static async ValueTask ExecuteTableToTextAsync(FreeWRibbonTableExecutionPorts ports)
+    {
+        try
+        {
+            if (ports.ShowTableToTextDialogAsync is null)
+                return;
+            if (await ports.ShowTableToTextDialogAsync() is { } outcome)
+                ports.ApplyTableToTextOutcome(outcome);
+        }
+        finally
+        {
+            ports.CompleteExecution();
+        }
+    }
+
+    private static ValueTask ExecuteSelectedDialogAsync<TSelection, TOutcome>(
+        Func<TSelection?> selected,
+        Func<TSelection, ValueTask<TOutcome?>>? showDialogAsync,
+        Action<TOutcome> applyOutcome,
+        Action completeExecution,
+        Action? fallback = null)
+        where TSelection : class
+        where TOutcome : class
+    {
+        var selection = selected();
+        if (selection is not null && showDialogAsync is not null)
+            return ApplyDialogOutcomeAsync(showDialogAsync(selection), applyOutcome, completeExecution);
+
+        if (selection is not null)
+            fallback?.Invoke();
+        completeExecution();
+        return ValueTask.CompletedTask;
+    }
+
+    private static async ValueTask ApplyDialogOutcomeAsync<TOutcome>(
+        ValueTask<TOutcome?> pendingOutcome,
+        Action<TOutcome> applyOutcome,
+        Action completeExecution)
+        where TOutcome : class
+    {
+        try
+        {
+            if (await pendingOutcome is { } outcome)
+                applyOutcome(outcome);
+        }
+        finally
+        {
+            completeExecution();
+        }
+    }
+
+    private static ValueTask Complete(Action completeExecution)
+    {
+        completeExecution();
+        return ValueTask.CompletedTask;
     }
 
     private static void RegisterShapeFillOutline(
@@ -661,6 +898,15 @@ public static class FreeWRibbonEditorExecutionProfile
         Action? prepareExecution = null) =>
         new FreeWRibbonStatefulPortCommand(
             _ => execute(),
+            () => new RibbonCommandState(IsEnabled: isEnabled()),
+            prepareExecution);
+
+    private static IRibbonStatefulCommand AsyncStateful(
+        Func<RibbonCommandContext, ValueTask> executeAsync,
+        Func<bool> isEnabled,
+        Action? prepareExecution = null) =>
+        new FreeWRibbonAsyncStatefulPortCommand(
+            executeAsync,
             () => new RibbonCommandState(IsEnabled: isEnabled()),
             prepareExecution);
 }

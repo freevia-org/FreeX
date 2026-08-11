@@ -285,10 +285,6 @@ internal static class FreeWAvaloniaRibbonCommands
         {
             editor.ViewTableGridlines = !editor.ViewTableGridlines;
         }));
-        IRibbonCommand tablePropertiesCommand = callbacks.OpenTablePropertiesDialog is { } openTableProperties
-            ? new TablePropertiesCommand(editor, openTableProperties)
-            : FreeWRibbonExecutionProfile.UnavailableCommand;
-        tableCommands.Bind(FreeWRibbonCommandAction.TableProperties, tablePropertiesCommand);
         tableCommands.Bind(FreeWRibbonCommandAction.TableSelectTable, new ActionRibbonCommand(() =>
         {
             if (editor.CellCaretInfo is { } cc)
@@ -341,8 +337,6 @@ internal static class FreeWAvaloniaRibbonCommands
         tableCommands.Bind(FreeWRibbonCommandAction.SplitTable, new ActionRibbonCommand(editor.SplitTable));
 
         // Cell size.
-        tableCommands.Bind(FreeWRibbonCommandAction.TableRowHeight, tablePropertiesCommand);
-        tableCommands.Bind(FreeWRibbonCommandAction.TableColWidth, tablePropertiesCommand);
         tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeRows, new ActionRibbonCommand(editor.DistributeTableRows));
         tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeCols, new ActionRibbonCommand(editor.DistributeTableColumns));
         tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitContents, new ActionRibbonCommand(() => editor.SetTableAutoFit(AutoFitMode.Contents)));
@@ -352,17 +346,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // Cell alignment — 9 = 3 vertical (Top/Center/Bottom) × 3 horizontal (Left/Center/Right).
         // BY2: parity with WPF's table-layout Alignment group (FreeWRibbon.cs ~1201-1219).
         RegisterCellAlignmentCommands(tableCommands, editor);
-        tableCommands.Bind(FreeWRibbonCommandAction.TableCellMargins, tablePropertiesCommand);
         tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionHorizontal, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Horizontal)));
         tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate90, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate90)));
         tableCommands.Bind(FreeWRibbonCommandAction.CellTextDirectionRotate270, new ActionRibbonCommand(() => editor.SetCaretCellTextDirection(CellTextDirection.Rotate270)));
 
         // Data.
         tableCommands.Bind(FreeWRibbonCommandAction.TableRepeatHeader, new ActionRibbonCommand(editor.ToggleTableRepeatHeaderRow));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableFormula, callbacks.OpenTableFormulaDialog is { } openTableFormula
-            ? new TableFormulaCommand(editor, openTableFormula)
-            : FreeWRibbonExecutionProfile.UnavailableCommand);
-        tableCommands.Bind(FreeWRibbonCommandAction.TableToText, new TableToTextCommand(editor, callbacks));
 
         // ── Layout / Page Setup (AV-PAGE) ────────────────────────────────────
         // Dialog launcher: opens the Page Setup modal (margins + paper + orientation).
@@ -569,6 +558,10 @@ internal static class FreeWAvaloniaRibbonCommands
         FreeWRibbonEditorExecutionProfile.RegisterFloating(
             r,
             CreateFloatingExecutionPorts(editor));
+        FreeWRibbonEditorExecutionProfile.RegisterImageTableWorkflows(
+            r,
+            CreateImageExecutionPorts(editor, callbacks),
+            CreateTableExecutionPorts(editor, callbacks));
         RegisterShapeTextDirectionSelectionGuards(r, editor);
 
         // ── AV-CHARTTAB: Chart Design/Format + SmartArt Design contextual tabs ─
@@ -1133,36 +1126,6 @@ internal static class FreeWAvaloniaRibbonCommands
             new(IsEnabled: true, IsChecked: callbacks.IsReviewBalloonsActive?.Invoke() ?? editor.ShowMarkupBalloons);
     }
 
-    private sealed class TablePropertiesCommand(
-        DocumentView editor,
-        Action<ModelTableContext> openDialog) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (editor.CaretTableContext() is not { } tableContext)
-                return;
-
-            openDialog(tableContext);
-        }
-    }
-
-    private sealed class TableFormulaCommand(
-        DocumentView editor,
-        Action<TableFormulaDialogInitialState> openDialog) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (editor.CaretTableCell() is not { } caret)
-                return;
-
-            var initialState = TableFormulaDialogPlanner.BuildInitialState(
-                caret.Table,
-                caret.RowIndex,
-                caret.ColumnIndex);
-            openDialog(initialState);
-        }
-    }
-
     /// <summary>
     /// AV-REF: Registers the References-tab commands — footnote / endnote, Table of Contents
     /// (insert + update), caption (Figure / Table), cross-reference, and citation / bibliography.
@@ -1265,7 +1228,7 @@ internal static class FreeWAvaloniaRibbonCommands
     }
 
     /// <summary>
-    /// Registers only renderer-native dialogs and presets that are outside the shared floating profile:
+    /// Registers renderer-native dialogs and presets outside the shared image/floating profiles:
     /// image adjustments, position/size/alt-text dialogs, picture styles, and shape position/size/alt text.
     /// </summary>
     private static void RegisterNativeFloatingCommands(
@@ -1277,7 +1240,6 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Bind(FreeWRibbonCommandAction.ImageAdjustDialog, new SelectedImageDialogCommand(
             editor,
             callbacks.OpenImageAdjustDialog));
-        r.Bind(FreeWRibbonCommandAction.ImageCrop, new ImageCropCommand(editor, callbacks));
         r.Bind(FreeWRibbonCommandAction.ImageSize, new SelectedImageDialogCommand(
             editor,
             callbacks.OpenImageSizeDialog));
@@ -1288,7 +1250,6 @@ internal static class FreeWAvaloniaRibbonCommands
             editor,
             callbacks.OpenImageBorderDialog));
         RegisterImageAdjustmentCommands(r, editor, callbacks);
-        r.Bind(FreeWRibbonCommandAction.ImageReset, new ImageResetCommand(editor));
         foreach (var preset in PictureStyleCatalog.Catalog)
         {
             var captured = preset;
@@ -1450,20 +1411,6 @@ internal static class FreeWAvaloniaRibbonCommands
         }
     }
 
-    private sealed class ImageCropCommand(
-        DocumentView editor,
-        RibbonHostCallbacks callbacks) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                callbacks.OpenImageCropDialog?.Invoke();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingImage() is not null && callbacks.OpenImageCropDialog is not null);
-    }
-
     private sealed class SelectedImageDialogCommand(
         DocumentView editor,
         Action? openDialog) : IRibbonStatefulCommand
@@ -1492,23 +1439,6 @@ internal static class FreeWAvaloniaRibbonCommands
             new(IsEnabled: editor.SelectedFloatingImage() is not null);
     }
 
-    private sealed class SelectedFloatingDialogCommand(
-        DocumentView editor,
-        string requiredKind,
-        Action? openDialog,
-        Action? fallbackAction = null) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                (openDialog ?? fallbackAction)!.Invoke();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingInfo?.Kind == requiredKind
-                && (openDialog is not null || fallbackAction is not null));
-    }
-
     private sealed class EditingActionCommand(
         DocumentView editor,
         Action? hostAction,
@@ -1522,32 +1452,6 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: !editor.IsEditingLocked);
-    }
-
-    private sealed class ImageResetCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                editor.ResetSelectedImage();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingImage() is not null);
-    }
-
-    private sealed class TableToTextCommand(
-        DocumentView editor,
-        RibbonHostCallbacks callbacks) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (GetState().IsEnabled)
-                callbacks.OpenTableToTextDialog?.Invoke();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.CanConvertTableToText && callbacks.OpenTableToTextDialog is not null);
     }
 
     private sealed class FloatingObjectPositionCommand(
@@ -1818,93 +1722,70 @@ internal static class FreeWAvaloniaRibbonCommands
                 () => editor.Focus()));
     }
 
+    private static FreeWRibbonImageExecutionPorts CreateImageExecutionPorts(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            CompleteExecution: () => editor.Focus(),
+            SelectedImage: editor.SelectedFloatingImage,
+            ShowCropDialogAsync: callbacks.ShowImageCropDialogAsync,
+            ApplyCropOutcome: crop => editor.SetSelectedImageCrop(
+                crop.Left,
+                crop.Right,
+                crop.Top,
+                crop.Bottom),
+            ResetImage: editor.ResetSelectedImage);
+
+    private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(
+        DocumentView editor,
+        RibbonHostCallbacks callbacks) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            CompleteExecution: () => editor.Focus(),
+            SelectedCell: () => editor.CaretTableCell() is { } cell
+                ? new FreeWRibbonTableCellSelection(cell.Table, cell.RowIndex, cell.ColumnIndex)
+                : null,
+            SelectedContext: editor.CaretTableContext,
+            CanConvertToText: () => editor.CanConvertTableToText,
+            ShowFormulaDialogAsync: callbacks.ShowTableFormulaDialogAsync,
+            ApplyFormulaOutcome: editor.InsertTableFormula,
+            ShowPropertiesDialogAsync: callbacks.ShowTablePropertiesDialogAsync,
+            ApplyPropertiesOutcome: editor.ApplyTableProperties,
+            ShowTableToTextDialogAsync: callbacks.ShowTableToTextDialogAsync,
+            ApplyTableToTextOutcome: editor.ConvertTableToText);
+
     private static FreeWRibbonChartSmartArtExecutionPorts CreateChartSmartArtExecutionPorts(
         DocumentView editor,
-        RibbonHostCallbacks callbacks)
-    {
-        var chartSize = new ChartSizeCommand(editor, callbacks.OpenChartSizeDialog);
-        return new(
+        RibbonHostCallbacks callbacks) =>
+        new(
             PrepareExecution: () => editor.Focus(),
+            CompleteExecution: () => editor.Focus(),
             SelectedChart: editor.SelectedFloatingChart,
             SetChartKind: editor.SetChartType,
             ApplyChartStyle: style => editor.SetChartStyle(style.Id),
             ApplyChartColorScheme: scheme => editor.SetChartColorScheme(scheme.Id),
             ApplyChartQuickLayout: editor.SetChartQuickLayout,
             ToggleChartLegend: editor.ToggleChartLegend,
-            ChartTitleCommand: new SelectedFloatingDialogCommand(
-                editor,
-                "Chart",
-                callbacks.OpenChartTitleDialog,
-                editor.ToggleChartTitle),
-            ChartAxisTitlesCommand: new SelectedFloatingDialogCommand(
-                editor,
-                "Chart",
-                callbacks.OpenChartAxisTitlesDialog,
-                editor.ToggleChartAxisTitles),
-            ChartEditDataCommand: new ContextRibbonCommand(context =>
-            {
-                if (ChartDataPresetCatalog.TryCreateNamedReplacement(context.SelectedValue, out var chart))
-                    editor.ReplaceSelectedChartData(chart);
-                else if (string.IsNullOrWhiteSpace(context.SelectedValue)
-                         && editor.SelectedFloatingChart() is not null)
-                    callbacks.OpenChartEditDataDialog?.Invoke();
-            }),
-            ChartSizeCommand: chartSize,
+            ShowChartTitleDialogAsync: callbacks.ShowChartTitleDialogAsync,
+            ApplyChartTitleOutcome: result => editor.SetChartTitle(result.NewTitle),
+            ToggleChartTitleFallback: editor.ToggleChartTitle,
+            ShowChartAxisTitlesDialogAsync: callbacks.ShowChartAxisTitlesDialogAsync,
+            ApplyChartAxisTitlesOutcome: result => editor.SetChartAxisTitles(
+                result.CategoryTitle,
+                result.ValueTitle),
+            ToggleChartAxisTitlesFallback: editor.ToggleChartAxisTitles,
+            ShowChartDataDialogAsync: callbacks.ShowChartDataDialogAsync,
+            ApplyChartDataOutcome: editor.ReplaceSelectedChartData,
+            ShowChartSizeDialogAsync: callbacks.ShowChartSizeDialogAsync,
+            ApplyChartSizeOutcome: result => editor.SetSelectedChartSize(result.WidthPt, result.HeightPt),
             SelectedSmartArt: editor.SelectedFloatingSmartArt,
             MutateSmartArt: editor.MutateSelectedSmartArt,
             ApplySmartArtLayout: editor.SetSmartArtLayout,
             ApplySmartArtColorScheme: scheme => editor.SetSmartArtColor(scheme.Id),
             ApplySmartArtStyle: editor.SetSmartArtStyle,
-            SmartArtEditTextCommand: new SmartArtEditTextRibbonCommand(
-                editor,
-                callbacks.OpenSmartArtEditDialog));
-    }
-
-    private sealed class SmartArtEditTextRibbonCommand(
-        DocumentView editor,
-        Action? openDialog) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var selected = editor.SelectedFloatingSmartArt();
-            if (!SmartArtCommandPlanner.CanEdit(selected))
-                return;
-
-            if (context.SelectedValue is { } nodeText)
-            {
-                if (SmartArtCommandPlanner.BuildEditedContent(selected!.Kind, nodeText) is { } replacement)
-                    editor.ReplaceSelectedSmartArt(replacement);
-                return;
-            }
-
-            openDialog?.Invoke();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedFloatingSmartArt()));
-    }
-
-    private sealed class ChartSizeCommand(DocumentView editor, Action? openDialog) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!GetState().IsEnabled)
-                return;
-
-            if (FreeWRibbonNumericValueParser.TryParseChartSize(
-                    context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    out var size))
-            {
-                editor.SetSelectedChartSize(size.WidthPt, size.HeightPt);
-            }
-            else if (string.IsNullOrWhiteSpace(context.SelectedValue))
-                openDialog?.Invoke();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: editor.SelectedFloatingChart() is not null);
-    }
+            ShowSmartArtEditDialogAsync: callbacks.ShowSmartArtEditDialogAsync,
+            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt);
 
     /// <summary>
     /// AV-MAIL: Registers the Mailings-tab commands over the portable <see cref="MailMerge"/> engine. The

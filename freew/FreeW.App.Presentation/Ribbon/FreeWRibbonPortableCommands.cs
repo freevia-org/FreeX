@@ -202,3 +202,32 @@ public sealed class FreeWRibbonStatefulPortCommand(
 
     public RibbonCommandState GetState() => getState();
 }
+
+/// <summary>
+/// Stateful ribbon command for native dialogs whose completion can be synchronous (WPF) or
+/// asynchronous (Avalonia). The ribbon contract is synchronous, so incomplete operations resume on
+/// the captured UI context just like an async event handler.
+/// </summary>
+public sealed class FreeWRibbonAsyncStatefulPortCommand(
+    Func<RibbonCommandContext, ValueTask> executeAsync,
+    Func<RibbonCommandState> getState,
+    Action? prepareExecution = null) : IRibbonStatefulCommand
+{
+    public void Execute(RibbonCommandContext context)
+    {
+        if (!getState().IsEnabled)
+            return;
+
+        prepareExecution?.Invoke();
+        var execution = executeAsync(context);
+        if (execution.IsCompletedSuccessfully)
+            execution.GetAwaiter().GetResult();
+        else
+            CompleteAsync(execution);
+    }
+
+    public RibbonCommandState GetState() => getState();
+
+    private static async void CompleteAsync(ValueTask execution) =>
+        await execution;
+}

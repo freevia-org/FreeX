@@ -34,14 +34,21 @@ public sealed class TableFormulaDialogPolicySourceGuardTests
     [Fact]
     public void TableFormulaCommand_DelegatesDefaultFormulaPolicyToPresentationPlanner()
     {
-        var source = ReadHostSource("Ribbon", "FreeWRibbonCommands.cs");
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var host = ReadHostSource("Ribbon", "FreeWRibbonCommands.cs");
+        var profile = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "FreeWRibbonEditorExecutionProfile.cs"));
 
-        source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("TableFormulaDialogPlanner.BuildInitialState(");
-        source.Should().NotContain("private static string DefaultFormula(");
-        source.Should().NotContain("private static bool HasNumberAbove(");
-        source.Should().NotContain("private static bool HasNumberLeft(");
-        source.Should().NotContain("TableFormulaEvaluator.TryParseCellNumber(");
+        profile.Should().Contain("TableFormulaDialogPlanner.BuildInitialState(");
+        host.Should().NotContain("TableFormulaDialogPlanner.BuildInitialState(");
+        host.Should().NotContain("private static string DefaultFormula(");
+        host.Should().NotContain("private static bool HasNumberAbove(");
+        host.Should().NotContain("private static bool HasNumberLeft(");
+        host.Should().NotContain("TableFormulaEvaluator.TryParseCellNumber(");
     }
 
     private static string ReadHostSource(params string[] pathParts)

@@ -467,7 +467,8 @@ public sealed class TableContextualTabTests
                 view.PlaceCaretInCell(idx, row: 0, col: 1, paraIdx: 0, offset: 0);
                 var callbacks = NoopCallbacks() with
                 {
-                    OpenTablePropertiesDialog = _ => view.ApplyTableProperties(TablePropertyValues())
+                    ShowTablePropertiesDialogAsync = _ =>
+                        ValueTask.FromResult<TablePropertiesValues?>(TablePropertyValues())
                 };
                 var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
@@ -512,8 +513,8 @@ public sealed class TableContextualTabTests
                     view,
                     NoopCallbacks() with
                     {
-                        OpenTableFormulaDialog = state =>
-                            view.InsertTableFormula(new TableFormulaField(state.FormulaText)),
+                        ShowTableFormulaDialogAsync = state =>
+                            ValueTask.FromResult<TableFormulaField?>(new(state.FormulaText)),
                     });
                 Execute(registry, "freew.table-formula");
 

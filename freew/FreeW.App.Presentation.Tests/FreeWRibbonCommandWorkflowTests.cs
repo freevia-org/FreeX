@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.RegularExpressions;
 using Free.Shared.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
@@ -279,22 +280,30 @@ public sealed class FreeWRibbonCommandWorkflowTests
             bindings,
             new FreeWRibbonChartSmartArtExecutionPorts(
                 PrepareExecution: () => prepared++,
+                CompleteExecution: () => { },
                 SelectedChart: () => chart,
                 SetChartKind: kind => appliedKind = kind,
                 ApplyChartStyle: style => appliedChartStyle = style,
                 ApplyChartColorScheme: _ => { },
                 ApplyChartQuickLayout: _ => { },
                 ToggleChartLegend: () => { },
-                ChartTitleCommand: new RecordingCommand(),
-                ChartAxisTitlesCommand: new RecordingCommand(),
-                ChartEditDataCommand: new RecordingCommand(),
-                ChartSizeCommand: new RecordingCommand(),
+                ShowChartTitleDialogAsync: _ => ValueTask.FromResult<ChartTitleDialogResult?>(null),
+                ApplyChartTitleOutcome: _ => { },
+                ToggleChartTitleFallback: null,
+                ShowChartAxisTitlesDialogAsync: _ => ValueTask.FromResult<ChartAxisTitlesDialogResult?>(null),
+                ApplyChartAxisTitlesOutcome: _ => { },
+                ToggleChartAxisTitlesFallback: null,
+                ShowChartDataDialogAsync: _ => ValueTask.FromResult<Chart?>(null),
+                ApplyChartDataOutcome: _ => { },
+                ShowChartSizeDialogAsync: _ => ValueTask.FromResult<ChartSizeDialogResult?>(null),
+                ApplyChartSizeOutcome: _ => { },
                 SelectedSmartArt: () => smartArt,
                 MutateSmartArt: operation => structureOperation = operation,
                 ApplySmartArtLayout: _ => { },
                 ApplySmartArtColorScheme: _ => { },
                 ApplySmartArtStyle: style => appliedSmartArtStyle = style,
-                SmartArtEditTextCommand: new RecordingCommand()));
+                ShowSmartArtEditDialogAsync: _ => ValueTask.FromResult<SmartArt?>(null),
+                ApplySmartArtEditOutcome: _ => { }));
 
         bindings.TryGet("freew.chart-type-column", out var chartType).Should().BeTrue();
         chartType.Should().BeAssignableTo<IRibbonStatefulCommand>()
@@ -321,6 +330,184 @@ public sealed class FreeWRibbonCommandWorkflowTests
         smartArtStyle!.Execute(RibbonCommandContext.ForSelectedValue(SmartArtStyle.Catalog[0].Name));
         appliedSmartArtStyle.Should().BeSameAs(SmartArtStyle.Catalog[0]);
         prepared.Should().Be(4);
+    }
+
+    [Fact]
+    public void Editor_execution_profile_applies_typed_chart_and_smartart_dialog_outcomes()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A"], [1d]);
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["One"]);
+        var replacementChart = Chart.Create(ChartKind.Line, ["B"], [2d]);
+        var replacementSmartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["Two"]);
+        ChartTitleDialogResult? titleOutcome = null;
+        ChartAxisTitlesDialogResult? axisOutcome = null;
+        Chart? dataOutcome = null;
+        ChartSizeDialogResult? sizeOutcome = null;
+        SmartArt? smartArtOutcome = null;
+        var completed = 0;
+        var bindings = new FreeWRibbonCommandBindingPorts();
+
+        FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
+            bindings,
+            new FreeWRibbonChartSmartArtExecutionPorts(
+                PrepareExecution: () => { },
+                CompleteExecution: () => completed++,
+                SelectedChart: () => chart,
+                SetChartKind: _ => { },
+                ApplyChartStyle: _ => { },
+                ApplyChartColorScheme: _ => { },
+                ApplyChartQuickLayout: _ => { },
+                ToggleChartLegend: () => { },
+                ShowChartTitleDialogAsync: selected =>
+                {
+                    selected.Should().BeSameAs(chart);
+                    return ValueTask.FromResult<ChartTitleDialogResult?>(new(true, "Revenue"));
+                },
+                ApplyChartTitleOutcome: result => titleOutcome = result,
+                ToggleChartTitleFallback: null,
+                ShowChartAxisTitlesDialogAsync: _ => ValueTask.FromResult<ChartAxisTitlesDialogResult?>(
+                    new("Quarter", "Amount")),
+                ApplyChartAxisTitlesOutcome: result => axisOutcome = result,
+                ToggleChartAxisTitlesFallback: null,
+                ShowChartDataDialogAsync: _ => ValueTask.FromResult<Chart?>(replacementChart),
+                ApplyChartDataOutcome: result => dataOutcome = result,
+                ShowChartSizeDialogAsync: _ => ValueTask.FromResult<ChartSizeDialogResult?>(new(400, 300)),
+                ApplyChartSizeOutcome: result => sizeOutcome = result,
+                SelectedSmartArt: () => smartArt,
+                MutateSmartArt: _ => { },
+                ApplySmartArtLayout: _ => { },
+                ApplySmartArtColorScheme: _ => { },
+                ApplySmartArtStyle: _ => { },
+                ShowSmartArtEditDialogAsync: selected =>
+                {
+                    selected.Should().BeSameAs(smartArt);
+                    return ValueTask.FromResult<SmartArt?>(replacementSmartArt);
+                },
+                ApplySmartArtEditOutcome: result => smartArtOutcome = result));
+
+        Execute(FreeWRibbonCommandAction.ChartTitle);
+        Execute(FreeWRibbonCommandAction.ChartAxisTitles);
+        Execute(FreeWRibbonCommandAction.ChartEditData);
+        Execute(FreeWRibbonCommandAction.ChartSize);
+        Execute(FreeWRibbonCommandAction.SmartartEditText);
+
+        titleOutcome.Should().Be(new ChartTitleDialogResult(true, "Revenue"));
+        axisOutcome.Should().Be(new ChartAxisTitlesDialogResult("Quarter", "Amount"));
+        dataOutcome.Should().BeSameAs(replacementChart);
+        sizeOutcome.Should().Be(new ChartSizeDialogResult(400, 300));
+        smartArtOutcome.Should().BeSameAs(replacementSmartArt);
+        completed.Should().Be(5);
+
+        void Execute(FreeWRibbonCommandAction action)
+        {
+            var commandId = FreeWRibbonCommandWorkflow.Routes.Single(route => route.Action == action).CommandId;
+            bindings.TryGet(commandId, out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+        }
+    }
+
+    [Fact]
+    public void Editor_execution_profile_owns_image_and_table_selection_dialog_and_outcome_workflows()
+    {
+        var image = new InlineImage([0], 1, 1, ImageFormat.Png);
+        var table = Table.Create(1, 1);
+        var context = new ModelTableContext(table, table.Rows[0], table.Rows[0].Cells[0]);
+        ImageCropDialogResult? cropOutcome = null;
+        TableFormulaDialogInitialState? formulaRequest = null;
+        TableFormulaField? formulaOutcome = null;
+        TablePropertiesValues? propertiesOutcome = null;
+        char? delimiterOutcome = null;
+        var reset = 0;
+        var completed = 0;
+        var bindings = new FreeWRibbonCommandBindingPorts();
+        var properties = new TablePropertiesValues(
+            null,
+            TableAlignment.Left,
+            false,
+            null,
+            null,
+            null,
+            null,
+            TableRowHeightRule.Auto,
+            true,
+            false,
+            null,
+            null,
+            TableCellVerticalAlignment.Top,
+            null,
+            true,
+            false);
+
+        FreeWRibbonEditorExecutionProfile.RegisterImageTableWorkflows(
+            bindings,
+            new FreeWRibbonImageExecutionPorts(
+                PrepareExecution: () => { },
+                CompleteExecution: () => completed++,
+                SelectedImage: () => image,
+                ShowCropDialogAsync: selected =>
+                {
+                    selected.Should().BeSameAs(image);
+                    return ValueTask.FromResult<ImageCropDialogResult?>(new(0.1, 0.2, 0.3, 0.1));
+                },
+                ApplyCropOutcome: result => cropOutcome = result,
+                ResetImage: () => reset++),
+            new FreeWRibbonTableExecutionPorts(
+                PrepareExecution: () => { },
+                CompleteExecution: () => completed++,
+                SelectedCell: () => new FreeWRibbonTableCellSelection(table, 0, 0),
+                SelectedContext: () => context,
+                CanConvertToText: () => true,
+                ShowFormulaDialogAsync: request =>
+                {
+                    formulaRequest = request;
+                    return ValueTask.FromResult<TableFormulaField?>(new("=SUM(ABOVE)"));
+                },
+                ApplyFormulaOutcome: result => formulaOutcome = result,
+                ShowPropertiesDialogAsync: selected =>
+                {
+                    selected.Should().BeSameAs(context);
+                    return ValueTask.FromResult<TablePropertiesValues?>(properties);
+                },
+                ApplyPropertiesOutcome: result => propertiesOutcome = result,
+                ShowTableToTextDialogAsync: () => ValueTask.FromResult<char?>(';'),
+                ApplyTableToTextOutcome: result => delimiterOutcome = result));
+
+        Execute(FreeWRibbonCommandAction.ImageCrop);
+        Execute(FreeWRibbonCommandAction.ImageReset);
+        Execute(FreeWRibbonCommandAction.TableFormula);
+        Execute(FreeWRibbonCommandAction.TableProperties);
+        Execute(FreeWRibbonCommandAction.TableToText);
+
+        cropOutcome.Should().Be(new ImageCropDialogResult(0.1, 0.2, 0.3, 0.1));
+        reset.Should().Be(1);
+        formulaRequest.Should().NotBeNull();
+        formulaOutcome.Should().Be(new TableFormulaField("=SUM(ABOVE)"));
+        propertiesOutcome.Should().BeSameAs(properties);
+        delimiterOutcome.Should().Be(';');
+        completed.Should().Be(4, "reset is synchronous and has no dialog completion phase");
+
+        void Execute(FreeWRibbonCommandAction action)
+        {
+            var commandId = FreeWRibbonCommandWorkflow.Routes.Single(route => route.Action == action).CommandId;
+            bindings.TryGet(commandId, out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+        }
+    }
+
+    [Fact]
+    public async Task Async_stateful_port_command_resumes_an_incomplete_native_dialog_operation()
+    {
+        var dialog = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var applied = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var command = new FreeWRibbonAsyncStatefulPortCommand(
+            async _ => applied.SetResult(await dialog.Task),
+            () => new RibbonCommandState(IsEnabled: true));
+
+        command.Execute(RibbonCommandContext.Empty);
+        applied.Task.IsCompleted.Should().BeFalse();
+
+        dialog.SetResult("accepted");
+        (await applied.Task.WaitAsync(TimeSpan.FromSeconds(5))).Should().Be("accepted");
     }
 
     [Fact]
@@ -500,9 +687,15 @@ public sealed class FreeWRibbonCommandWorkflowTests
         wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
         avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFloating(");
         avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(");
+        wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterImageTableWorkflows(");
+        avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterImageTableWorkflows(");
         wpf.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFamilies(");
         avalonia.Should().Contain("FreeWRibbonEditorExecutionProfile.RegisterFamilies(");
         editorProfile.Should().Contain("FreeWRibbonEditorCommandFamilyBuilder");
+        editorProfile.Should().Contain("Func<Chart, ValueTask<ChartTitleDialogResult?>>?");
+        editorProfile.Should().Contain("Func<ModelTableContext, ValueTask<TablePropertiesValues?>>?");
+        editorProfile.Should().NotContain("IRibbonCommand ChartTitleCommand");
+        editorProfile.Should().NotContain("IRibbonCommand SmartArtEditTextCommand");
         editorProfile.Should().NotContain("CaptureBoundFamily");
         wpf.Should().NotContain("RegisterSharedEditorCommandFamilies");
         avalonia.Should().NotContain("RegisterSharedEditorCommandFamilies");
@@ -523,6 +716,13 @@ public sealed class FreeWRibbonCommandWorkflowTests
                      "ShapeEffectsCommand",
                      "ShapeStylesGalleryCommand",
                      "FloatingObjectArrangeCommand",
+                     "ChartSizeCommand",
+                     "SmartArtEditTextRibbonCommand",
+                     "ImageCropCommand",
+                     "ImageResetCommand",
+                     "TableFormulaCommand",
+                     "TablePropertiesCommand",
+                     "TableToTextCommand",
                  })
         {
             wpf.Should().NotContain(retiredRendererCommand);

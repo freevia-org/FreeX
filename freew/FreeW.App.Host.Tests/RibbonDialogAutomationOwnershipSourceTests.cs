@@ -9,17 +9,24 @@ public sealed class RibbonDialogAutomationOwnershipSourceTests
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var profile = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "FreeWRibbonEditorExecutionProfile.cs");
 
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("FreeWRibbonNumericValueParser.TryParseFontSize(");
             source.Should().Contain("FreeWRibbonNumericValueParser.TryParseObjectPosition(");
             source.Should().Contain("FreeWRibbonNumericValueParser.TryParseObjectSize(");
-            source.Should().Contain("FreeWRibbonNumericValueParser.TryParseChartSize(");
+            source.Should().NotContain("FreeWRibbonNumericValueParser.TryParseChartSize(");
             source.Should().NotContain("private static bool TryParsePosition(");
             source.Should().NotContain("private static bool TryParseSize(");
             source.Should().NotContain("private static bool TryParseChartSize(");
         }
+
+        profile.Should().Contain("FreeWRibbonNumericValueParser.TryParseChartSize(");
 
         wpf.Should().Contain("CultureInfo.CurrentCulture");
         avalonia.Should().Contain("CultureInfo.InvariantCulture");

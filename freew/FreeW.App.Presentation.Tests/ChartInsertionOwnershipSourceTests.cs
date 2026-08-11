@@ -15,6 +15,8 @@ public sealed class ChartInsertionOwnershipSourceTests
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
         var avaloniaRibbon = ReadSource(
             "freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+        var editorProfile = ReadSource(
+            "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonEditorExecutionProfile.cs");
 
         coordinator.Should().Contain("public static Chart PlanChartInsertion(Chart? chart = null)");
         coordinator.Should().Contain("ChartDataPresetCatalog.CreateDefaultInsertion()");
@@ -25,7 +27,8 @@ public sealed class ChartInsertionOwnershipSourceTests
 
         wpf.Should().Contain("DocumentObjectEditingCoordinator.PlanChartInsertion(chart)");
         avalonia.Should().Contain("DocumentObjectEditingCoordinator.PlanChartInsertion(chart)");
-        avaloniaRibbon.Should().Contain("ChartDataPresetCatalog.TryCreateNamedReplacement(");
+        editorProfile.Should().Contain("ChartDataPresetCatalog.TryCreateNamedReplacement(");
+        avaloniaRibbon.Should().NotContain("ChartDataPresetCatalog.TryCreateNamedReplacement(");
         avaloniaRibbon.Should().NotContain("TryBuildChartDataPreset");
         avaloniaRibbon.Should().NotContain("Quarterly Sales");
         avaloniaRibbon.Should().NotContain("Monthly Revenue");

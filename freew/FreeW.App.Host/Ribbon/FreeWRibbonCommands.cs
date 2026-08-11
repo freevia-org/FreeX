@@ -351,10 +351,6 @@ internal static class FreeWRibbonCommands
         // Insert tab — Table Tools: pick/clear a fill colour for the caret's cell (sets model + re-renders).
         tableCommands.Register("freew.cell-shading", new CellShadingCommand(editor));
         // Insert tab — Table Tools: table-style toggles applied to the caret's table (sets model + re-renders).
-        // Table Tools — Data: insert a computed formula field (=SUM(ABOVE) etc.) into the caret's cell.
-        tableCommands.Bind(FreeWRibbonCommandAction.TableFormula, new TableFormulaCommand(editor));
-        // Table Tools — Properties: open the four-tab Table Properties dialog for the caret's table.
-        tableCommands.Bind(FreeWRibbonCommandAction.TableProperties, new TablePropertiesCommand(editor));
         tableCommands.Bind(FreeWRibbonCommandAction.TableHeaderRow, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableHeaderRow(); }));
         tableCommands.Bind(FreeWRibbonCommandAction.TableBandedRows, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableBandedRows(); }));
         tableCommands.Bind(FreeWRibbonCommandAction.TableRepeatHeader, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableRepeatHeaderRow(); }));
@@ -373,8 +369,6 @@ internal static class FreeWRibbonCommands
         // Table Tools — View Gridlines (toggle; display-only)
         tableCommands.Bind(FreeWRibbonCommandAction.TableViewGridlines, new ActionRibbonCommand(() => { editor.ViewGridlines = !editor.ViewGridlines; editor.Focus(); }));
         // Table Tools — Cell Size
-        tableCommands.Bind(FreeWRibbonCommandAction.TableRowHeight, new TablePropertiesCommand(editor));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableColWidth, new TablePropertiesCommand(editor));
         tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeRows, new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableRows(); }));
         tableCommands.Bind(FreeWRibbonCommandAction.TableDistributeCols, new ActionRibbonCommand(() => { editor.Focus(); editor.DistributeTableColumns(); }));
         tableCommands.Bind(FreeWRibbonCommandAction.TableAutofitContents, new ActionRibbonCommand(() => { editor.Focus(); editor.SetTableAutoFit(AutoFitMode.Contents); }));
@@ -390,8 +384,6 @@ internal static class FreeWRibbonCommands
         tableCommands.Bind(FreeWRibbonCommandAction.CellAlignBottomLeft, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Left); }));
         tableCommands.Bind(FreeWRibbonCommandAction.CellAlignBottomCenter, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Center); }));
         tableCommands.Bind(FreeWRibbonCommandAction.CellAlignBottomRight, new ActionRibbonCommand(() => { editor.Focus(); editor.SetCaretCellAlignment(TableCellVerticalAlignment.Bottom, FreeW.Core.Model.TextAlignment.Right); }));
-        // Table Tools — Cell Margins (opens Table Properties dialog)
-        tableCommands.Bind(FreeWRibbonCommandAction.TableCellMargins, new TablePropertiesCommand(editor));
         // Table Design — Style Options toggles
         tableCommands.Bind(FreeWRibbonCommandAction.TableLastRow, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableLastRow(); }));
         tableCommands.Bind(FreeWRibbonCommandAction.TableFirstColumn, new ActionRibbonCommand(() => { editor.Focus(); editor.ToggleTableFirstColumn(); }));
@@ -443,9 +435,7 @@ internal static class FreeWRibbonCommands
                      .Where(item => item.Channel == ImageAdjustmentChannel.Transparency))
             registry.Bind(preset.Action, BuildImageAdjustmentPresetCommand(editor, preset));
         registry.Bind(FreeWRibbonCommandAction.ImageTransparencyDialog,new ImageTransparencyDialogCommand(editor));
-        // Picture Format tab — Adjust > Crop / Reset / Border.
-        registry.Bind(FreeWRibbonCommandAction.ImageCrop,   new ImageCropCommand(editor));
-        registry.Bind(FreeWRibbonCommandAction.ImageReset,  new ImageResetCommand(editor));
+        // Picture Format tab — native border dialog; crop/reset orchestration is Presentation-owned.
         registry.Bind(FreeWRibbonCommandAction.ImageBorder, new ImageBorderCommand(editor));
         // Picture Format tab — Adjust > Color > Recolor presets.
         foreach (var preset in ImageAdjustmentCommandPlanner.RecolorPresets
@@ -1133,7 +1123,6 @@ internal static class FreeWRibbonCommands
         // Layout > Table conversions: turn the selected paragraphs into a table (splitting on a chosen
         // delimiter) and turn the caret's table back into delimited paragraphs. Both route through the bus.
         registry.Bind(FreeWRibbonCommandAction.TextToTable, new TextToTableCommand(editor));
-        tableCommands.Bind(FreeWRibbonCommandAction.TableToText, new TableToTextCommand(editor));
 
         registry.Bind(FreeWRibbonCommandAction.StyleNormal, new ApplyNamedStyleCommand(editor, "Normal"));
         registry.Bind(FreeWRibbonCommandAction.StyleHeading1, new ApplyNamedStyleCommand(editor, "Heading1"));
@@ -1379,6 +1368,10 @@ internal static class FreeWRibbonCommands
         FreeWRibbonEditorExecutionProfile.RegisterFloating(
             registry,
             CreateFloatingExecutionPorts(editor));
+        FreeWRibbonEditorExecutionProfile.RegisterImageTableWorkflows(
+            registry,
+            CreateImageExecutionPorts(editor),
+            CreateTableExecutionPorts(editor));
         FreeWRibbonEditorExecutionProfile.RegisterChartSmartArt(
             registry,
             CreateChartSmartArtExecutionPorts(editor));
@@ -1546,20 +1539,98 @@ internal static class FreeWRibbonCommands
             [FreeWRibbonCommandAction.ObjectUngroup] = new ObjectUngroupCommand(editor),
         };
 
+    private static FreeWRibbonImageExecutionPorts CreateImageExecutionPorts(DocumentView editor) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            CompleteExecution: () => editor.Focus(),
+            SelectedImage: editor.SelectedImage,
+            ShowCropDialogAsync: image =>
+            {
+                var result = ImageCropDialog.Prompt(
+                    Window.GetWindow(editor),
+                    image.CropLeft,
+                    image.CropRight,
+                    image.CropTop,
+                    image.CropBottom);
+                return ValueTask.FromResult<ImageCropDialogResult?>(result is { } crop
+                    ? new ImageCropDialogResult(crop.Left, crop.Right, crop.Top, crop.Bottom)
+                    : null);
+            },
+            ApplyCropOutcome: crop => editor.SetSelectedImageCrop(
+                crop.Left,
+                crop.Right,
+                crop.Top,
+                crop.Bottom),
+            ResetImage: editor.ResetSelectedImage);
+
+    private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(DocumentView editor) =>
+        new(
+            PrepareExecution: () => editor.Focus(),
+            CompleteExecution: () => editor.Focus(),
+            SelectedCell: () => editor.CaretTableCell() is { } cell
+                ? new FreeWRibbonTableCellSelection(cell.Table, cell.RowIndex, cell.ColumnIndex)
+                : null,
+            SelectedContext: editor.CaretTableContext,
+            CanConvertToText: () => editor.CaretTableContext() is not null,
+            ShowFormulaDialogAsync: state => ValueTask.FromResult(
+                TableFormulaDialog.Prompt(Window.GetWindow(editor), state)),
+            ApplyFormulaOutcome: editor.InsertTableFormula,
+            ShowPropertiesDialogAsync: context => ValueTask.FromResult(
+                TablePropertiesDialog.Prompt(Window.GetWindow(editor), context)),
+            ApplyPropertiesOutcome: editor.ApplyTableProperties,
+            ShowTableToTextDialogAsync: () => ValueTask.FromResult(
+                DelimiterDialog.Ask(
+                    Window.GetWindow(editor),
+                    TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle)),
+            ApplyTableToTextOutcome: editor.ConvertTableToText);
+
     private static FreeWRibbonChartSmartArtExecutionPorts CreateChartSmartArtExecutionPorts(
         DocumentView editor) =>
         new(
             PrepareExecution: () => editor.Focus(),
+            CompleteExecution: () => editor.Focus(),
             SelectedChart: editor.SelectedChart,
             SetChartKind: editor.SetSelectedChartKind,
             ApplyChartStyle: editor.ApplySelectedChartStyle,
             ApplyChartColorScheme: editor.ApplySelectedChartColorScheme,
             ApplyChartQuickLayout: editor.ApplySelectedChartQuickLayout,
             ToggleChartLegend: editor.ToggleSelectedChartLegend,
-            ChartTitleCommand: CreateChartTitleCommand(editor),
-            ChartAxisTitlesCommand: CreateChartAxisTitlesCommand(editor),
-            ChartEditDataCommand: CreateChartEditDataCommand(editor),
-            ChartSizeCommand: CreateChartSizeCommand(editor),
+            ShowChartTitleDialogAsync: chart =>
+            {
+                var result = ChartTitleDialog.Prompt(Application.Current?.MainWindow, chart.Title);
+                return ValueTask.FromResult<ChartTitleDialogResult?>(
+                    result.Accepted ? new ChartTitleDialogResult(true, result.NewTitle) : null);
+            },
+            ApplyChartTitleOutcome: result => editor.SetSelectedChartTitle(result.NewTitle),
+            ToggleChartTitleFallback: null,
+            ShowChartAxisTitlesDialogAsync: chart =>
+            {
+                var result = ChartAxisTitlesDialog.Prompt(
+                    Application.Current?.MainWindow,
+                    chart.CategoryAxisTitle,
+                    chart.ValueAxisTitle);
+                return ValueTask.FromResult<ChartAxisTitlesDialogResult?>(result is { } titles
+                    ? new ChartAxisTitlesDialogResult(titles.CategoryTitle, titles.ValueTitle)
+                    : null);
+            },
+            ApplyChartAxisTitlesOutcome: result => editor.SetSelectedChartAxisTitles(
+                result.CategoryTitle,
+                result.ValueTitle),
+            ToggleChartAxisTitlesFallback: null,
+            ShowChartDataDialogAsync: chart => ValueTask.FromResult(
+                InsertChartDialog.Prompt(Application.Current?.MainWindow, chart)),
+            ApplyChartDataOutcome: editor.ReplaceSelectedChartData,
+            ShowChartSizeDialogAsync: chart =>
+            {
+                var result = ChartSizeDialog.Prompt(
+                    Application.Current?.MainWindow,
+                    chart.WidthPt,
+                    chart.HeightPt);
+                return ValueTask.FromResult<ChartSizeDialogResult?>(result is { } size
+                    ? new ChartSizeDialogResult(size.WidthPt, size.HeightPt)
+                    : null);
+            },
+            ApplyChartSizeOutcome: result => editor.SetSelectedChartSize(result.WidthPt, result.HeightPt),
             SelectedSmartArt: editor.SelectedSmartArt,
             MutateSmartArt: operation =>
             {
@@ -1577,79 +1648,10 @@ internal static class FreeWRibbonCommands
             ApplySmartArtLayout: editor.ApplySmartArtLayout,
             ApplySmartArtColorScheme: editor.ApplySmartArtColorScheme,
             ApplySmartArtStyle: editor.ApplySmartArtStyle,
-            SmartArtEditTextCommand: new SmartArtEditTextRibbonCommand(editor),
+            ShowSmartArtEditDialogAsync: smartArt => ValueTask.FromResult(
+                InsertSmartArtDialog.Prompt(Application.Current?.MainWindow, smartArt)),
+            ApplySmartArtEditOutcome: editor.ReplaceSelectedSmartArt,
             ChartColorCommandPrefix: "freew.chart-color");
-
-    private static IRibbonCommand CreateChartTitleCommand(DocumentView editor) =>
-        new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            var chart = editor.SelectedChart();
-            if (chart is null)
-                return;
-            var (accepted, newTitle) = ChartTitleDialog.Prompt(
-                Application.Current?.MainWindow,
-                chart.Title);
-            if (accepted)
-                editor.SetSelectedChartTitle(newTitle);
-        });
-
-    private static IRibbonCommand CreateChartAxisTitlesCommand(DocumentView editor) =>
-        new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            var chart = editor.SelectedChart();
-            if (chart is null)
-                return;
-            var result = ChartAxisTitlesDialog.Prompt(
-                Application.Current?.MainWindow,
-                chart.CategoryAxisTitle,
-                chart.ValueAxisTitle);
-            if (result is not null)
-                editor.SetSelectedChartAxisTitles(result.Value.CategoryTitle, result.Value.ValueTitle);
-        });
-
-    private static IRibbonCommand CreateChartEditDataCommand(DocumentView editor) =>
-        new ActionRibbonCommand(() =>
-        {
-            editor.Focus();
-            var chart = editor.SelectedChart();
-            if (chart is null)
-                return;
-            var replacement = InsertChartDialog.Prompt(Application.Current?.MainWindow, chart);
-            if (replacement is not null)
-                editor.ReplaceSelectedChartData(replacement);
-        });
-
-    private static IRibbonCommand CreateChartSizeCommand(DocumentView editor) =>
-        new ChartSizeCommand(editor);
-
-    private sealed class ChartSizeCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var chart = editor.SelectedChart();
-            if (chart is null)
-                return;
-
-            if (FreeWRibbonNumericValueParser.TryParseChartSize(
-                    context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    out var size))
-            {
-                editor.SetSelectedChartSize(size.WidthPt, size.HeightPt);
-                return;
-            }
-
-            var result = ChartSizeDialog.Prompt(
-                Application.Current?.MainWindow,
-                chart.WidthPt,
-                chart.HeightPt);
-            if (result is not null)
-                editor.SetSelectedChartSize(result.Value.WidthPt, result.Value.HeightPt);
-        }
-    }
 
     // Home > Font character effects wired by CharacterEffectCommand.
     private enum CharacterEffect { Superscript, Subscript, Strikethrough, SmallCaps, AllCaps }
@@ -2546,67 +2548,6 @@ internal static class FreeWRibbonCommands
 
     // Insert > Table Tools > Cell Shading: pick a fill colour from a small palette and apply it to the
     // caret's table cell; "No Color" clears shading. Mirrors ParagraphShadingCommand's swatch picker.
-    // Table Tools — Data > Formula (Word's Table > Data > Formula): insert a computed formula field into the
-    // caret's cell. Requires the caret to be inside a table; otherwise warns and does nothing. Seeds a
-    // default formula (=SUM(ABOVE) or =SUM(LEFT)) by looking at where numbers sit relative to the cell, opens
-    // the Formula dialog, and inserts/recomputes the field.
-    private sealed class TableFormulaCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var owner = Window.GetWindow(editor);
-            var location = editor.CaretTableCell();
-            if (location is null)
-            {
-                DialogMessageHelper.ShowWarning(
-                    owner!,
-                    TableFormulaDialogPlanner.ResolveCursorOutsideTableMessage(UiText.Get),
-                    TableFormulaDialogPlanner.Title);
-                return;
-            }
-
-            var (table, rowIndex, columnIndex) = location.Value;
-            var formula = TableFormulaDialog.Prompt(
-                owner,
-                TableFormulaDialogPlanner.BuildInitialState(table, rowIndex, columnIndex));
-            if (formula is null)
-                return; // cancelled — leave the model untouched
-
-            editor.Focus();
-            editor.InsertTableFormula(formula);
-        }
-
-    }
-
-    // Table Tools — Layout > Properties (Word's Table Properties dialog). Requires the caret to be inside a
-    // table; otherwise warns. Seeds the four-tab dialog from the caret's table/row/cell and applies the chosen
-    // values through the editor (which round-trips via w:tblPr / w:trPr / w:tcPr).
-    private sealed class TablePropertiesCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var owner = Window.GetWindow(editor);
-            var tableContext = editor.CaretTableContext();
-            if (tableContext is null)
-            {
-                DialogMessageHelper.ShowWarning(
-                    owner!,
-                    TablePropertiesDialogPlanner.ResolveCursorOutsideTableMessage(UiText.Get),
-                    TablePropertiesDialogPlanner.Title);
-                return;
-            }
-
-            var values = TablePropertiesDialog.Prompt(owner, tableContext);
-            if (values is null)
-                return; // cancelled — leave the model untouched
-
-            editor.Focus();
-            editor.ApplyTableProperties(values);
-        }
-    }
-
     private sealed class CellShadingCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -3323,41 +3264,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Picture Format > Adjust > Crop: open the numeric crop dialog.
-    private sealed class ImageCropCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var image = editor.SelectedImage();
-            if (image is null)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Crop");
-                return;
-            }
-            var result = ImageCropDialog.Prompt(
-                Window.GetWindow(editor),
-                image.CropLeft, image.CropRight, image.CropTop, image.CropBottom);
-            if (result is { } r)
-                editor.SetSelectedImageCrop(r.Left, r.Right, r.Top, r.Bottom);
-        }
-    }
-
-    // Picture Format > Adjust > Reset Picture: restore natural size, clear rotation/flip/crop.
-    private sealed class ImageResetCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            if (editor.SelectedImage() is null)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Reset Picture");
-                return;
-            }
-            editor.ResetSelectedImage();
-        }
-    }
-
     // Picture Format > Adjust > Picture Border: open the border color/width/dash dialog.
     private sealed class ImageBorderCommand(DocumentView editor) : IRibbonCommand
     {
@@ -3631,34 +3537,6 @@ internal static class FreeWRibbonCommands
             }
             editor.SetSelectedImageArtisticEffect(effect);
         }
-    }
-
-    private sealed class SmartArtEditTextRibbonCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            var current = editor.SelectedSmartArt();
-            if (!SmartArtCommandPlanner.CanEdit(current))
-                return;
-
-            SmartArt? replacement;
-            if (context.SelectedValue is { } nodeText)
-            {
-                replacement = SmartArtCommandPlanner.BuildEditedContent(current!.Kind, nodeText);
-            }
-            else
-            {
-                replacement = InsertSmartArtDialog.Prompt(Application.Current?.MainWindow, current);
-            }
-
-            if (replacement is null)
-                return;
-            editor.Focus();
-            editor.ReplaceSelectedSmartArt(replacement);
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: SmartArtCommandPlanner.CanEdit(editor.SelectedSmartArt()));
     }
 
     private sealed class ObjectGroupCommand(DocumentView editor) : IRibbonCommand
@@ -8269,22 +8147,6 @@ internal static class FreeWRibbonCommands
                 return; // cancelled
             editor.Focus();
             editor.ConvertSelectionToTable(delimiter);
-        }
-    }
-
-    // Layout > Convert Table to Text: ask for a delimiter, then turn the caret's table into delimited
-    // paragraphs (one per row). The view routes the change through its bus.
-    private sealed class TableToTextCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            if (DelimiterDialog.Ask(
-                    Window.GetWindow(editor),
-                    TableTextConversionDialogPlanner.ResolveText(UiText.Get).TableToTextTitle) is not { } delimiter)
-                return; // cancelled
-            editor.Focus();
-            editor.ConvertTableToText(delimiter);
         }
     }
 
