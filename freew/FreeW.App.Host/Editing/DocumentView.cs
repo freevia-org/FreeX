@@ -4406,35 +4406,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var indices = SelectedModelParagraphIndices();
-        if (indices.Count == 0)
-            return;
-
-        // The contiguous block span the selection covers (first..last selected index, inclusive).
-        var first = indices[0];
-        var last = indices[indices.Count - 1];
-        if (first < 0 || last >= _model.Blocks.Count)
-            return;
-
-        // The paragraph blocks within that span, in document order — only these get reordered.
-        var paragraphs = new List<ModelParagraph>();
-        for (var i = first; i <= last; i++)
-        {
-            if (_model.Blocks[i] is ModelParagraph paragraph)
-                paragraphs.Add(paragraph);
-        }
-        if (paragraphs.Count < 2)
-            return; // nothing to reorder
-
-        var sorted = ParagraphSort.Sort(paragraphs, kind, ascending, caseSensitive, hasHeaderRow);
-
-        // Rebuild the span: drop sorted paragraphs back into the paragraph slots, keeping any
-        // interleaved tables fixed at their own positions.
-        var replacement = new List<ModelBlock>(last - first + 1);
-        var nextSorted = 0;
-        for (var i = first; i <= last; i++)
-            replacement.Add(_model.Blocks[i] is ModelParagraph ? sorted[nextSorted++] : _model.Blocks[i]);
-
-        _commands.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+        var plan = DocumentSortMutationPlanner.PlanParagraphSort(
+            _model, indices, kind, ascending, caseSensitive, hasHeaderRow);
+        if (plan is not null)
+            _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
     }
 
     /// <summary>
@@ -4451,22 +4426,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var (blockIndex, _, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
-            return;
-        if (table.Rows.Count < 2)
-            return;
-
-        var keyColumn = columnIndex < 0 ? 0 : columnIndex;
-        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
-
-        // Rebuild the table preserving its formatting and column grid; only the row order changes (the
-        // same TableRow instances are reused, so cell content/shading travels with each row).
-        var replacement = new ModelTable { Formatting = table.Formatting };
-        replacement.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
-        replacement.Rows.AddRange(sorted);
-
-        _commands.Execute(new ReplaceBlocksCommand(blockIndex, 1, new ModelBlock[] { replacement }));
+        var plan = DocumentSortMutationPlanner.PlanTableRowSort(
+            _model, blockIndex, columnIndex, kind, ascending, caseSensitive, hasHeaderRow);
+        if (plan is not null)
+            _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
     }
 
     /// <summary>

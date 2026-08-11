@@ -21487,28 +21487,10 @@ public sealed class DocumentView : Control
             return;
 
         var indices = SelectedParagraphIndices();
-        if (indices.Count == 0)
-            return;
-
-        var first = indices[0];
-        var last = indices[^1];
-        if (first < 0 || last >= _doc.Blocks.Count)
-            return;
-
-        var paragraphs = new List<Paragraph>();
-        for (var i = first; i <= last; i++)
-            if (_doc.Blocks[i] is Paragraph paragraph)
-                paragraphs.Add(paragraph);
-        if (paragraphs.Count < 2)
-            return;
-
-        var sorted = ParagraphSort.Sort(paragraphs, kind, ascending, caseSensitive, hasHeaderRow);
-        var replacement = new List<Block>(last - first + 1);
-        var nextSorted = 0;
-        for (var i = first; i <= last; i++)
-            replacement.Add(_doc.Blocks[i] is Paragraph ? sorted[nextSorted++] : _doc.Blocks[i]);
-
-        _bus.Execute(new ReplaceBlocksCommand(first, replacement.Count, replacement));
+        var plan = DocumentSortMutationPlanner.PlanParagraphSort(
+            _doc, indices, kind, ascending, caseSensitive, hasHeaderRow);
+        if (plan is not null)
+            _bus.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
     }
 
     public void SortCaretTableRows(SortKind kind, bool ascending, bool caseSensitive, bool hasHeaderRow)
@@ -21517,16 +21499,17 @@ public sealed class DocumentView : Control
             return;
         if (cc.TableBlock < 0 || cc.TableBlock >= _doc.Blocks.Count ||
             _doc.Blocks[cc.TableBlock] is not Table table ||
-            table.Rows.Count < 2)
+            cc.Row < 0 || cc.Row >= table.Rows.Count)
             return;
 
         var keyColumn = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
         if (keyColumn < 0)
             keyColumn = 0;
 
-        var sorted = ParagraphSort.SortRows(table.Rows, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
-        var replacement = TableLayoutOperations.CopyTableWithRows(table, sorted);
-        _bus.Execute(new ReplaceBlocksCommand(cc.TableBlock, 1, new Block[] { replacement }));
+        var plan = DocumentSortMutationPlanner.PlanTableRowSort(
+            _doc, cc.TableBlock, keyColumn, kind, ascending, caseSensitive, hasHeaderRow);
+        if (plan is not null)
+            _bus.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
     }
 
     /// <summary>
