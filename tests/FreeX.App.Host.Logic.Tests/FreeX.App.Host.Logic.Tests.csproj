@@ -52,6 +52,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
   </ItemGroup>
 
   <ItemGroup>

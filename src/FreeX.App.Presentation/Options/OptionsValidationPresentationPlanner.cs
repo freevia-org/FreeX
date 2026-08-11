@@ -1,4 +1,4 @@
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Presentation.Options;

@@ -132,7 +132,7 @@ public sealed class LocalAccountPlannerTests
             optionsPathProvider: () => "options.json",
             fileExists: _ => true);
 
-        var textResolver = new FreeX.App.Presentation.Localization.ResourceKeyTextResolver(UiText.Get, UiText.Format);
+        var textResolver = new Free.Shared.Localization.ResourceKeyTextResolver(UiText.Get, UiText.Format);
         var message = FreeX.App.Presentation.Shell.DeferredCommandMessageResolver.Resolve(
             FreeX.App.Presentation.Shell.DeferredCommandMessagePlanner.LocalAccountInfo(),
             textResolver,

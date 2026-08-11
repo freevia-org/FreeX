@@ -5,7 +5,7 @@ namespace FreeX.App.Presentation.Tests.Calculation;
 public sealed class CommandPolicyTailOwnershipSourceGuardTests
 {
     [Fact]
-    public void OptionsRenderersDelegateFormulaErrorAndIterativeWorkflows()
+    public void OptionsRenderersDelegateFormulaErrorAndCalculationSubmissionWorkflows()
     {
         var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.Backstage.cs");
         var avalonia = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.Options.cs");
@@ -13,8 +13,8 @@ public sealed class CommandPolicyTailOwnershipSourceGuardTests
 
         wpf.Should().Contain("CalculationWorkflow.ChangeFormulaErrorRules(");
         avalonia.Should().Contain("CalculationWorkflow.ChangeFormulaErrorRules(");
-        wpf.Should().Contain("CalculationWorkflow.ChangeIterativeCalculation(");
-        avalonia.Should().Contain("CalculationWorkflow.ChangeIterativeCalculation(");
+        wpf.Should().Contain("CalculationOptionsSubmissionCoordinator.Apply(CalculationWorkflow, submission)");
+        avalonia.Should().Contain("CalculationOptionsSubmissionCoordinator.Apply(CalculationWorkflow, submission)");
         paired.Should().NotContain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
         paired.Should().NotContain("CalculationCommandPolicy.PlanIterativeCalculationChange(");
         paired.Should().NotContain("ApplyCalculationRecalculation(");

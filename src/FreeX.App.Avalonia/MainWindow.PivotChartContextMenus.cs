@@ -5,7 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeX.App.Presentation.Charts;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;

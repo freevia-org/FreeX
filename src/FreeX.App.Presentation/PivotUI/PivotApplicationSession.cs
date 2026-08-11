@@ -1,6 +1,6 @@
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.PivotUI;
 

@@ -12,7 +12,7 @@ using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.App.Services;
 using FreeX.Core.Commands;

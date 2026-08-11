@@ -1,5 +1,5 @@
 using FreeX.App.Presentation.GridInteraction;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.ConditionalFormatting;

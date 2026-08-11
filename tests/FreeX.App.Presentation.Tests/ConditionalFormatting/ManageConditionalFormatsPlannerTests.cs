@@ -1,6 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation.ConditionalFormatting;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Tests.ConditionalFormatting;

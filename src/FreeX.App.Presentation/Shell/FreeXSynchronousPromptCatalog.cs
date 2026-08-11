@@ -1,5 +1,5 @@
 using Free.Shared.AppServices;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 

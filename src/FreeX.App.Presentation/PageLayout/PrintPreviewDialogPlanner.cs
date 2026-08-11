@@ -1,5 +1,5 @@
 using System.Globalization;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 
 namespace FreeX.App.Presentation.PageLayout;
 

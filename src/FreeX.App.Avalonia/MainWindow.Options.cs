@@ -11,7 +11,7 @@ using Avalonia.Platform.Storage;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Localization;
 using FreeX.App.Presentation.Calculation;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 using FreeX.App.Presentation.Options;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;

@@ -1,5 +1,5 @@
 using FluentAssertions;
-using FreeX.App.Presentation.Localization;
+using Free.Shared.Localization;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Model;
 

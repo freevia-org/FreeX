@@ -30,7 +30,7 @@
     <Using Include="FreeX.App.Presentation.FormulaBar" />
     <Using Include="FreeX.App.Presentation.Charts.Editing" />
     <Using Include="FreeX.App.Presentation.Consolidate" />
-    <Using Include="FreeX.App.Presentation.Localization" />
+    <Using Include="Free.Shared.Localization" />
     <Using Include="FreeX.App.Presentation.PivotUI" />
     <Using Include="FreeX.App.Presentation.Shell" />
     <Using Include="FreeX.App.Presentation.TextToColumns" />
@@ -46,6 +46,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
   </ItemGroup>
 
