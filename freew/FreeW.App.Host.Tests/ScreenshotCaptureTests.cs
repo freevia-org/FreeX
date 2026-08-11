@@ -11,8 +11,8 @@ using Xunit;
 namespace FreeW.App.Host.Tests;
 
 /// <summary>
-/// Unit coverage for the testable seam of Insert &gt; Illustrations &gt; Screenshot: the
-/// bitmap-&gt;<see cref="InlineImage"/> conversion (<see cref="ScreenshotCapture.PngToInlineImage"/>).
+/// Unit coverage for the WPF adapter of Insert &gt; Illustrations &gt; Screenshot: native PNG dimension
+/// decoding followed by shared <see cref="InlineImage"/> construction.
 /// The drag-select overlay and live <see cref="Graphics.CopyFromScreen(int, int, int, int, Size)"/> path
 /// can't run headlessly, so we exercise the deterministic encode/convert helper with a known-size PNG.
 /// </summary>
@@ -42,6 +42,8 @@ public sealed class ScreenshotCaptureTests
         image.Bytes.Should().Equal(png);
         image.WidthPt.Should().BeApproximately(96 / PxPerPoint, 0.001);
         image.HeightPt.Should().BeApproximately(48 / PxPerPoint, 0.001);
+        image.OriginalPixelWidth.Should().Be(96);
+        image.OriginalPixelHeight.Should().Be(48);
     }
 
     [Fact]

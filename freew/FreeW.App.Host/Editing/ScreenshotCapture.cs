@@ -10,8 +10,8 @@ namespace FreeW.App.Host.Editing;
 /// Screen-capture helpers backing Insert &gt; Illustrations &gt; Screenshot (Screen Clipping). The
 /// region capture uses GDI+ <see cref="Graphics.CopyFromScreen(int, int, int, int, Size)"/> against the
 /// virtual screen, encodes the result to PNG, and the bytes are inserted through the exact same
-/// <see cref="DocumentView.InsertImage"/> path as Insert Picture. The bitmap→<see cref="InlineImage"/>
-/// conversion is factored out as a pure, headlessly testable helper.
+/// <see cref="DocumentView.InsertImage"/> path as Insert Picture. PNG decoding remains native while
+/// portable image-model construction is delegated to the shared presentation factory.
 /// </summary>
 internal static class ScreenshotCapture
 {
@@ -42,12 +42,7 @@ internal static class ScreenshotCapture
             throw new ArgumentException("Screenshot bytes are not a valid image.", nameof(pngBytes), ex);
         }
 
-        var plan = ScreenClipPlanner.BuildImageInsertionPlan(pixelWidth, pixelHeight);
-        return new InlineImage(pngBytes, plan.WidthPt, plan.HeightPt, plan.Format)
-        {
-            OriginalPixelWidth = plan.OriginalPixelWidth,
-            OriginalPixelHeight = plan.OriginalPixelHeight,
-        };
+        return ScreenClipImageFactory.Create(pngBytes, pixelWidth, pixelHeight);
     }
 
     /// <summary>

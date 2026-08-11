@@ -490,6 +490,8 @@ public sealed class WpfAuthoritySurfaceParityTests
             MainWindow.ApplyScreenClipCapture(editor, capture);
             var image = ((Paragraph)editor.Document.Blocks[0]).Runs
                 .Single(run => run.Image is not null).Image!;
+            image.Bytes.Should().Equal(capture.PngBytes);
+            image.Format.Should().Be(ImageFormat.Png);
             image.WidthPt.Should().Be(400);
             image.HeightPt.Should().Be(225);
             image.OriginalPixelWidth.Should().Be(1600);

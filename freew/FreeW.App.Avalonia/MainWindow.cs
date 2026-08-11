@@ -3749,19 +3749,18 @@ public sealed partial class MainWindow : Window
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(capture);
-        if (capture.PngBytes.Length == 0)
-            throw new ArgumentException("Screenshot bytes are empty.", nameof(capture));
 
-        var display = ScreenClipPlanner.BuildImageInsertionPlan(
+        var image = ScreenClipImageFactory.Create(
+            capture.PngBytes,
             capture.PixelWidth,
             capture.PixelHeight);
         editor.InsertInlineImage(
-            capture.PngBytes,
-            display.WidthPt,
-            display.HeightPt,
-            display.Format,
-            display.OriginalPixelWidth,
-            display.OriginalPixelHeight);
+            image.Bytes,
+            image.WidthPt,
+            image.HeightPt,
+            image.Format,
+            image.OriginalPixelWidth,
+            image.OriginalPixelHeight);
     }
 
     // ── AV-INSERT2: Insert depth 2 dialog launchers ─────────────────────────────
