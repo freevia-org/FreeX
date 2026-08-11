@@ -150,4 +150,24 @@ public sealed class ConditionalFormatDedupSourceTests
         iconSetPresentationSource.Should().Contain("CreateRule(string? style, GridRange range)");
         iconSetPresentationSource.Should().NotContain("UiText.Get(");
     }
+
+    [Fact]
+    public void ConditionalFormatRuleAndOperatorIdentity_IsPresentationOwned()
+    {
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var factorySource = DialogSourceTestSupport.ReadHostSourceFile("ConditionalFormatDialogFactory.cs");
+        var avaloniaSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.ConditionalFormat.cs"));
+
+        factorySource.Should().Contain("ConditionalFormatDialogCatalog.DialogFamilyForRuleType(ruleType)");
+        factorySource.Should().NotContain("\"Greater Than\" or \"Less Than\"");
+        avaloniaSource.Should().Contain("ConditionalFormatDialogCatalog.RuleEditorTypeOptions");
+        avaloniaSource.Should().Contain("ConditionalFormatDialogCatalog.RuleEditorOperatorOptions");
+        avaloniaSource.Should().Contain("UiText.Get(option.LabelKey)");
+        avaloniaSource.Should().NotContain("ConditionalFormatRuleTypeChoices");
+        avaloniaSource.Should().NotContain("ConditionalFormatOperatorChoices");
+    }
 }

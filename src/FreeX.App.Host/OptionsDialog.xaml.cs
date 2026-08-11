@@ -20,45 +20,11 @@ public enum OptionsDialogInitialSection
     FormulaErrorChecking
 }
 
-/// <summary>
-/// Snapshot of the live workbook's calculation settings (calc mode + iterative-calculation
-/// enable/max-iterations/max-change), captured just before the Options dialog opens so the
-/// Formulas panel seeds from the workbook actually being edited, not the persisted app-wide
-/// <see cref="AppOptions.AutoCalculate"/> default. Excel's Options dialog reflects the active
-/// workbook's calculation state, not a saved app preference.
-/// </summary>
-/// <param name="AutoCalculate">
-/// True when the workbook is NOT in Manual mode. The dialog only has two calc-mode radio
-/// buttons (Automatic/Manual), so <see cref="WorkbookCalculationMode.AutomaticExceptDataTables"/>
-/// must map here to "Automatic" (checked, not Manual) — never collapse it into Manual.
-/// </param>
-/// <param name="CalculationMode">
-/// The workbook's real tri-state calculation mode when known (set by <see cref="FromWorkbook"/>).
-/// Null for settings built from a dialog edit or the persisted app-wide default, which can only
-/// ever express Automatic/Manual. Callers applying an edited settings snapshot back to the
-/// workbook must compare against <see cref="AutoCalculate"/> (not this mode) so that leaving the
-/// calc-mode radios untouched never overwrites an <see cref="WorkbookCalculationMode.AutomaticExceptDataTables"/>
-/// workbook with plain Automatic or Manual as a side effect of an unrelated settings change.
-/// </param>
-public sealed record OptionsDialogCalculationSettings(
-    bool AutoCalculate,
-    bool IterativeCalculation,
-    int? MaxCalculationIterations,
-    double? MaxCalculationChange,
-    WorkbookCalculationMode? CalculationMode = null)
-{
-    public static OptionsDialogCalculationSettings FromWorkbook(Workbook workbook) => new(
-        workbook.CalculationMode != WorkbookCalculationMode.Manual,
-        workbook.IterativeCalculation,
-        workbook.MaxCalculationIterations,
-        workbook.MaxCalculationChange,
-        workbook.CalculationMode);
-}
-
+/// <summary>Native WPF Options surface backed by portable options and calculation planners.</summary>
 public partial class OptionsDialog : Window
 {
     private readonly AppOptions _opts;
-    private readonly OptionsDialogCalculationSettings _calcSettings;
+    private readonly CalculationOptionsDialogState _calculationState;
     private readonly HashSet<string> _disabledFormulaErrorCodes;
     private readonly Dictionary<string, CheckBox> _errorRuleBoxes = new(StringComparer.OrdinalIgnoreCase);
     private readonly FreeXOptionsDialogSession _dialogSession;
@@ -69,11 +35,10 @@ public partial class OptionsDialog : Window
     public IReadOnlySet<string> DisabledFormulaErrorCodesResult { get; private set; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The workbook calculation settings as edited in the dialog. Null when the user did not
-    /// change anything from <see cref="OptionsDialogCalculationSettings"/> passed in, so the
-    /// caller can apply the workbook-level change only when something actually changed.
+    /// The portable calculation submission produced by the shared planner. Null when the user
+    /// left the workbook calculation settings unchanged.
     /// </summary>
-    public OptionsDialogCalculationSettings? CalculationSettingsResult { get; private set; }
+    public CalculationOptionsSubmission? CalculationSubmission { get; private set; }
 
     private sealed record QuickAccessCommandChoice(string Id, string DisplayName);
 
@@ -87,7 +52,7 @@ public partial class OptionsDialog : Window
         AppOptions opts,
         IEnumerable<string>? disabledFormulaErrorCodes = null,
         OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General,
-        OptionsDialogCalculationSettings? calcSettings = null,
+        CalculationOptionsDialogState? calcSettings = null,
         FreeXOptionsRuntimeSession? runtimeSession = null)
     {
         _dialogSession = (runtimeSession ?? new FreeXOptionsRuntimeSession(opts)).BeginDialog(opts);
@@ -98,7 +63,7 @@ public partial class OptionsDialog : Window
         // handy (parity-capture surfaces, source-pinning unit tests). The real host call site always
         // passes the live workbook's calculation settings so the Formulas panel reflects the workbook
         // actually open, matching Excel.
-        _calcSettings = calcSettings ?? new OptionsDialogCalculationSettings(opts.AutoCalculate, false, null, null);
+        _calculationState = calcSettings ?? CalculationOptionsDialogState.FromAppDefault(opts.AutoCalculate);
         _disabledFormulaErrorCodes = new HashSet<string>(disabledFormulaErrorCodes ?? [], StringComparer.OrdinalIgnoreCase);
         DisabledFormulaErrorCodesResult = new HashSet<string>(_disabledFormulaErrorCodes, StringComparer.OrdinalIgnoreCase);
         _initialSection = initialSection;
@@ -167,11 +132,11 @@ public partial class OptionsDialog : Window
         // Formulas — seeded from the live workbook's calculation settings, not the persisted
         // app-wide default, so the dialog reflects whatever the ribbon's Calculation Options
         // last set on this workbook (matching Excel).
-        OptCalcAuto.IsChecked   =  _calcSettings.AutoCalculate;
-        OptCalcManual.IsChecked = !_calcSettings.AutoCalculate;
-        OptIterativeEnabled.IsChecked = _calcSettings.IterativeCalculation;
-        OptMaxIterations.Text = (_calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations).ToString();
-        OptMaxChange.Text = (_calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        OptCalcAuto.IsChecked   =  _calculationState.AutoCalculate;
+        OptCalcManual.IsChecked = !_calculationState.AutoCalculate;
+        OptIterativeEnabled.IsChecked = _calculationState.IterativeCalculation;
+        OptMaxIterations.Text = (_calculationState.MaxCalculationIterations ?? DefaultMaxCalculationIterations).ToString();
+        OptMaxChange.Text = (_calculationState.MaxCalculationChange ?? DefaultMaxCalculationChange).ToString(System.Globalization.CultureInfo.InvariantCulture);
         UpdateIterativeCalculationFieldsState();
         OptR1C1.IsChecked = _opts.UseR1C1ReferenceStyle;
         OptFormulasAutocomplete.IsChecked = true;
@@ -540,8 +505,8 @@ public partial class OptionsDialog : Window
                 iterativeEnabled,
                 OptMaxIterations.Text,
                 OptMaxChange.Text,
-                _calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations,
-                _calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange,
+                _calculationState.MaxCalculationIterations ?? DefaultMaxCalculationIterations,
+                _calculationState.MaxCalculationChange ?? DefaultMaxCalculationChange,
                 out var maxIterations,
                 out var maxChange,
                 out var calculationInputError))
@@ -570,25 +535,12 @@ public partial class OptionsDialog : Window
         Result = saveResult.Options;
         DisabledFormulaErrorCodesResult = CollectDisabledFormulaErrorCodes();
 
-        var editedCalcSettings = new OptionsDialogCalculationSettings(
+        CalculationSubmission = CalculationOptionsSubmissionPlanner.Plan(
+            _calculationState,
             OptCalcAuto.IsChecked == true,
             iterativeEnabled,
             maxIterations,
             maxChange);
-        // Only surface a workbook-level calculation change when the user actually changed
-        // something in this panel — an unrelated Options edit (e.g. UserName) must never force
-        // -apply stale/unseen calc settings back onto the live workbook. The max-iterations/
-        // max-change text boxes always round-trip a concrete number (they're seeded from
-        // DefaultMaxCalculationIterations/DefaultMaxCalculationChange when the workbook had no
-        // explicit value yet), so comparing the raw records would spuriously treat every dialog
-        // open+OK as an edit whenever the workbook's iterative-calc bounds are still null; compare
-        // the *effective* (null-coalesced) values instead.
-        var unchanged =
-            editedCalcSettings.AutoCalculate == _calcSettings.AutoCalculate &&
-            editedCalcSettings.IterativeCalculation == _calcSettings.IterativeCalculation &&
-            editedCalcSettings.MaxCalculationIterations == (_calcSettings.MaxCalculationIterations ?? DefaultMaxCalculationIterations) &&
-            editedCalcSettings.MaxCalculationChange == (_calcSettings.MaxCalculationChange ?? DefaultMaxCalculationChange);
-        CalculationSettingsResult = unchanged ? null : editedCalcSettings;
 
         DialogResult = true;
     }

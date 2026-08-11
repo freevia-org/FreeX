@@ -39,7 +39,9 @@ public sealed class PivotAnalyzeCommandSourceTests
         designSource.Should().Contain("ShowFieldHeaders = !pivotTable.ShowFieldHeaders");
 
         advancedSource.Should().Contain("new PivotFieldGroupingDialog(headers, currentField)");
-        advancedSource.Should().Contain("PivotFieldGroupingDialog.CreateResult(");
+        advancedSource.Should().Contain("PivotGroupFieldPlanner.CreateSubmission(");
+        advancedSource.Should().Contain("PivotGroupFieldPlanner.BuildLayout(pivotTable, submission.Field)");
+        advancedSource.Should().NotContain("PivotFieldGroupingDialogResult");
         advancedSource.Should().Contain("new PivotCalculatedFieldDialog");
         advancedSource.Should().Contain("new PivotCalculatedItemDialog(headers, sourceIndex)");
         advancedSource.Should().Contain("PivotApplication.PlanCalculatedConfiguration(");

@@ -161,7 +161,9 @@ public sealed partial class MainWindow
         // not a persisted app-wide default — seed them from the live session's workbook so the
         // dialog reflects whatever the ribbon's Calculation Options last set on this workbook
         // (matching Excel), not the stale on-disk AppOptions.AutoCalculate.
-        var workbookAutoCalculate = !CalculationModeIsManual;
+        var workbook = _session.Workbook;
+        var calculationState = CalculationOptionsDialogState.FromWorkbook(workbook);
+        var workbookAutoCalculate = calculationState.AutoCalculate;
         var calcAutoButton = new RadioButton { Content = UiText.Get("Options_CalcAutomatic"), GroupName = "OptionsCalcMode", IsChecked = workbookAutoCalculate };
         ApplyOptionsRadioButtonChrome(calcAutoButton);
         AutomationProperties.SetAutomationId(calcAutoButton, "OptionsCalcAutomaticButton");
@@ -169,7 +171,6 @@ public sealed partial class MainWindow
         ApplyOptionsRadioButtonChrome(calcManualButton);
         AutomationProperties.SetAutomationId(calcManualButton, "OptionsCalcManualButton");
 
-        var workbook = _session.Workbook;
         var iterativeBox = new CheckBox { Content = OptionsText("Options_EnableIterativeCalculation"), IsChecked = workbook.IterativeCalculation };
         ApplyOptionsCheckBoxChrome(iterativeBox);
         AutomationProperties.SetAutomationId(iterativeBox, "OptionsIterativeCalculationCheckBox");
@@ -1192,6 +1193,13 @@ public sealed partial class MainWindow
                 return false;
             }
 
+            var calculationSubmission = CalculationOptionsSubmissionPlanner.Plan(
+                calculationState,
+                input.AutoCalculate,
+                iterativeEnabled,
+                maxIterations,
+                maxChange);
+
             var saveResult = optionsDialogSession.Commit(
                 input,
                 enableFillHandleAndCellDragAndDrop: advancedFillHandleBox.IsChecked == true,
@@ -1211,7 +1219,7 @@ public sealed partial class MainWindow
                 return false;
 
             ApplyLiveOptions(input);
-            ApplyLiveIterativeCalculationOptions(iterativeEnabled, maxIterations, maxChange);
+            ApplyCalculationOptionsSubmission(calculationSubmission);
             return true;
         }
 
@@ -1287,7 +1295,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Applies the cheap, immediately-visible options to the live session: gridlines, headings,
-    /// formula-bar visibility and calculation mode. The persisted fields (default font/size/sheet-count,
+    /// and formula-bar visibility. The persisted fields (default font/size/sheet-count,
     /// default format, proofing rules) take effect on the next workbook/launch.
     /// </summary>
     private void ApplyLiveOptions(OptionsDialogPlanner.OptionsDialogInput input)
@@ -1309,10 +1317,6 @@ public sealed partial class MainWindow
             _cellAddressText.IsVisible = input.ShowFormulaBar;
         }
 
-        var wantManual = !input.AutoCalculate;
-        if (CalculationModeIsManual != wantManual)
-            SetCalculationMode(wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic);
-
         RefreshShell(UiText.Get("Options_Saved"));
     }
 
@@ -1320,20 +1324,16 @@ public sealed partial class MainWindow
     private const double DefaultMaxCalculationChange = CalculationCommandPolicy.DefaultMaxCalculationChange;
 
     /// <summary>
-    /// Applies the dialog's iterative-calculation fields to the live workbook via the undoable
-    /// <see cref="SetIterativeCalculationOptionsCommand"/>, but only when the values actually
-    /// differ from the workbook's current settings — the fields were seeded from the live
-    /// workbook, so this only fires on a genuine user edit.
+    /// Applies the shared calculation-options submission and renders its native feedback.
     /// </summary>
-    private void ApplyLiveIterativeCalculationOptions(bool enabled, int maxIterations, double maxChange)
+    private void ApplyCalculationOptionsSubmission(CalculationOptionsSubmission? submission)
     {
-        var outcome = CalculationWorkflow.ChangeIterativeCalculation(
-            enabled,
-            maxIterations,
-            maxChange);
-        if (!outcome.Success)
-            RefreshShell(outcome.ErrorMessage ?? UiText.Get(
-                outcome.FailureResourceKey ?? CalculationCommandPolicy.FailureResourceKey));
+        var outcome = CalculationOptionsSubmissionCoordinator.Apply(CalculationWorkflow, submission);
+        if (outcome.ModeOutcome is { } modeOutcome)
+            ApplyCalculationWorkflowOutcome(modeOutcome);
+        if (outcome.IterativeOutcome is { Success: false } iterativeOutcome)
+            RefreshShell(iterativeOutcome.ErrorMessage ?? UiText.Get(
+                iterativeOutcome.FailureResourceKey ?? CalculationCommandPolicy.FailureResourceKey));
     }
 
     private static void ApplyOptionsButtonChrome(Button button, double minWidth, bool isDefault = false)

@@ -41,60 +41,6 @@ public sealed partial class MainWindow
 
     private static AvaloniaCompactDialogChromeStyle ConditionalFormatDialogChromeStyle => new(FormulaBarFontFamily);
 
-    /// <summary>The rule types the Avalonia conditional-format editor exposes, in dropdown order.</summary>
-    private static readonly IReadOnlyList<(CfRuleType Type, string Label)> ConditionalFormatRuleTypeChoices =
-    [
-        (CfRuleType.CellValue, "Cell Value"),
-        (CfRuleType.Formula, "Formula"),
-        (CfRuleType.Top10, "Top / Bottom"),
-        (CfRuleType.IconSet, "Icon Set"),
-        (CfRuleType.DataBar, "Data Bar"),
-        (CfRuleType.ColorScale, "Color Scale"),
-        (CfRuleType.ContainsText, "Text Contains"),
-        (CfRuleType.DateOccurring, "Date Occurring"),
-        (CfRuleType.DuplicateValues, "Duplicate Values"),
-        (CfRuleType.UniqueValues, "Unique Values"),
-        (CfRuleType.AboveAverage, "Above Average"),
-    ];
-
-    /// <summary>
-    /// The Excel "Select a Rule Type:" list shown on the left of the New/Edit Formatting Rule dialog,
-    /// in Excel order. Each shell entry maps to the <see cref="CfRuleType"/> the right-hand description
-    /// editor pre-selects when that row is chosen.
-    /// </summary>
-    private static readonly IReadOnlyList<(string LabelKey, CfRuleType Type)> ConditionalFormatRuleShellChoices =
-    [
-        ("ConditionalFormatDialog_RuleShell_FormatAllCells", CfRuleType.ColorScale),
-        ("ConditionalFormatDialog_RuleShell_FormatContainingCells", CfRuleType.CellValue),
-        ("ConditionalFormatDialog_RuleShell_FormatTopBottom", CfRuleType.Top10),
-        ("ConditionalFormatDialog_RuleShell_FormatAboveBelowAverage", CfRuleType.AboveAverage),
-        ("ConditionalFormatDialog_RuleShell_FormatUniqueDuplicate", CfRuleType.DuplicateValues),
-        ("ConditionalFormatDialog_RuleShell_UseFormula", CfRuleType.Formula),
-    ];
-
-    /// <summary>Maps a concrete rule type to the shell row that should be highlighted for it.</summary>
-    private static int ConditionalFormatShellIndexForRuleType(CfRuleType ruleType) => ruleType switch
-    {
-        CfRuleType.ColorScale or CfRuleType.DataBar or CfRuleType.IconSet => 0,
-        CfRuleType.Top10 => 2,
-        CfRuleType.AboveAverage => 3,
-        CfRuleType.DuplicateValues or CfRuleType.UniqueValues => 4,
-        CfRuleType.Formula => 5,
-        _ => 1,
-    };
-
-    private static readonly IReadOnlyList<(CfOperator Op, string Label)> ConditionalFormatOperatorChoices =
-    [
-        (CfOperator.GreaterThan, "greater than"),
-        (CfOperator.LessThan, "less than"),
-        (CfOperator.GreaterThanOrEqual, "greater than or equal to"),
-        (CfOperator.LessThanOrEqual, "less than or equal to"),
-        (CfOperator.Equal, "equal to"),
-        (CfOperator.NotEqual, "not equal to"),
-        (CfOperator.Between, "between"),
-        (CfOperator.NotBetween, "not between"),
-    ];
-
     /// <summary>The quick presets the New Rule editor offers as a starting point, in dropdown order.</summary>
     private static readonly IReadOnlyList<(ConditionalFormatPreset Preset, string Label)> ConditionalFormatPresetChoices =
         Enum.GetValues<ConditionalFormatPreset>()
@@ -337,7 +283,9 @@ public sealed partial class MainWindow
 
         var ruleTypeBox = new ComboBox
         {
-            ItemsSource = ConditionalFormatRuleTypeChoices.Select(c => c.Label).ToList(),
+            ItemsSource = ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+                .Select(option => UiText.Get(option.LabelKey))
+                .ToList(),
             MinWidth = 220,
         };
         ApplyCfComboBoxChrome(ruleTypeBox);
@@ -355,7 +303,9 @@ public sealed partial class MainWindow
 
         var operatorBox = new ComboBox
         {
-            ItemsSource = ConditionalFormatOperatorChoices.Select(c => c.Label).ToList(),
+            ItemsSource = ConditionalFormatDialogCatalog.RuleEditorOperatorOptions
+                .Select(option => UiText.Get(option.LabelKey))
+                .ToList(),
             SelectedIndex = 0,
             MinWidth = 220,
         };
@@ -500,11 +450,11 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(errorText, "ConditionalFormatErrorText");
 
         CfRuleType SelectedRuleType() =>
-            ConditionalFormatRuleTypeChoices[Math.Max(0, ruleTypeBox.SelectedIndex)].Type;
+            ConditionalFormatDialogCatalog.RuleEditorTypeOptions[Math.Max(0, ruleTypeBox.SelectedIndex)].RuleType;
 
         CfRuleInput CollectInput()
         {
-            var op = ConditionalFormatOperatorChoices[Math.Max(0, operatorBox.SelectedIndex)].Op;
+            var op = ConditionalFormatDialogCatalog.RuleEditorOperatorOptions[Math.Max(0, operatorBox.SelectedIndex)].Operator;
             return new CfRuleInput
             {
                 RuleType = SelectedRuleType(),
@@ -530,7 +480,7 @@ public sealed partial class MainWindow
             var schema = ConditionalFormatRuleSchema.ForRuleType(ruleType);
             operatorField.IsVisible = schema.HasField(CfInputField.Operator);
             value1Field.IsVisible = schema.HasField(CfInputField.Value1);
-            var op = ConditionalFormatOperatorChoices[Math.Max(0, operatorBox.SelectedIndex)].Op;
+            var op = ConditionalFormatDialogCatalog.RuleEditorOperatorOptions[Math.Max(0, operatorBox.SelectedIndex)].Operator;
             value2Field.IsVisible = schema.HasField(CfInputField.Value2)
                 && op is CfOperator.Between or CfOperator.NotBetween;
             formulaField.IsVisible = schema.HasField(CfInputField.Formula);
@@ -625,7 +575,9 @@ public sealed partial class MainWindow
         // Pre-select a starting rule type for new rules (e.g. the ribbon's "New Formula Rule…").
         if (existingRule is null && initialSeed is null && startRuleType is { } seedType)
         {
-            var seedIndex = ConditionalFormatRuleTypeChoices.ToList().FindIndex(c => c.Type == seedType);
+            var seedIndex = ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+                .ToList()
+                .FindIndex(option => option.RuleType == seedType);
             if (seedIndex >= 0)
                 ruleTypeBox.SelectedIndex = seedIndex;
         }
@@ -636,8 +588,8 @@ public sealed partial class MainWindow
         // dropdown that drives the description editor on the right, keeping the two in sync.
         var ruleTypeShellList = new ListBox
         {
-            ItemsSource = ConditionalFormatRuleShellChoices
-                .Select(c => UiText.Get(c.LabelKey).Replace("_", string.Empty, StringComparison.Ordinal))
+            ItemsSource = ConditionalFormatDialogCatalog.RuleEditorShellOptions
+                .Select(option => UiText.Get(option.LabelKey).Replace("_", string.Empty, StringComparison.Ordinal))
                 .ToList(),
             MinHeight = 182,
             Background = Brushes.White,
@@ -656,7 +608,8 @@ public sealed partial class MainWindow
             if (syncingShell)
                 return;
             syncingShell = true;
-            ruleTypeShellList.SelectedIndex = ConditionalFormatShellIndexForRuleType(SelectedRuleType());
+            ruleTypeShellList.SelectedIndex = ConditionalFormatDialogCatalog
+                .RuleEditorShellIndexForModelRuleType(SelectedRuleType());
             syncingShell = false;
         }
 
@@ -665,8 +618,12 @@ public sealed partial class MainWindow
             if (syncingShell || ruleTypeShellList.SelectedIndex < 0)
                 return;
 
-            var targetType = ConditionalFormatRuleShellChoices[ruleTypeShellList.SelectedIndex].Type;
-            var idx = ConditionalFormatRuleTypeChoices.ToList().FindIndex(c => c.Type == targetType);
+            var targetType = ConditionalFormatDialogCatalog
+                .RuleEditorShellOptions[ruleTypeShellList.SelectedIndex]
+                .RuleType;
+            var idx = ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+                .ToList()
+                .FindIndex(option => option.RuleType == targetType);
             if (idx >= 0 && idx != ruleTypeBox.SelectedIndex)
             {
                 syncingShell = true;
@@ -856,8 +813,8 @@ public sealed partial class MainWindow
         }
 
         var typeIndex = 0;
-        for (var i = 0; i < ConditionalFormatRuleTypeChoices.Count; i++)
-            if (ConditionalFormatRuleTypeChoices[i].Type == rule.RuleType)
+        for (var i = 0; i < ConditionalFormatDialogCatalog.RuleEditorTypeOptions.Count; i++)
+            if (ConditionalFormatDialogCatalog.RuleEditorTypeOptions[i].RuleType == rule.RuleType)
             {
                 typeIndex = i;
                 break;
@@ -865,8 +822,8 @@ public sealed partial class MainWindow
 
         ruleTypeBox.SelectedIndex = typeIndex;
 
-        for (var i = 0; i < ConditionalFormatOperatorChoices.Count; i++)
-            if (ConditionalFormatOperatorChoices[i].Op == rule.Operator)
+        for (var i = 0; i < ConditionalFormatDialogCatalog.RuleEditorOperatorOptions.Count; i++)
+            if (ConditionalFormatDialogCatalog.RuleEditorOperatorOptions[i].Operator == rule.Operator)
             {
                 operatorBox.SelectedIndex = i;
                 break;
@@ -903,15 +860,15 @@ public sealed partial class MainWindow
         TextBox midColorBox,
         TextBox maxColorBox)
     {
-        for (var i = 0; i < ConditionalFormatRuleTypeChoices.Count; i++)
-            if (ConditionalFormatRuleTypeChoices[i].Type == preset.RuleType)
+        for (var i = 0; i < ConditionalFormatDialogCatalog.RuleEditorTypeOptions.Count; i++)
+            if (ConditionalFormatDialogCatalog.RuleEditorTypeOptions[i].RuleType == preset.RuleType)
             {
                 ruleTypeBox.SelectedIndex = i;
                 break;
             }
 
-        for (var i = 0; i < ConditionalFormatOperatorChoices.Count; i++)
-            if (ConditionalFormatOperatorChoices[i].Op == preset.Operator)
+        for (var i = 0; i < ConditionalFormatDialogCatalog.RuleEditorOperatorOptions.Count; i++)
+            if (ConditionalFormatDialogCatalog.RuleEditorOperatorOptions[i].Operator == preset.Operator)
             {
                 operatorBox.SelectedIndex = i;
                 break;
@@ -945,11 +902,15 @@ public sealed partial class MainWindow
         CheckBox percentBox,
         ComboBox topBottomBox)
     {
-        var ruleTypeIndex = ConditionalFormatRuleTypeChoices.ToList().FindIndex(choice => choice.Type == seed.RuleType);
+        var ruleTypeIndex = ConditionalFormatDialogCatalog.RuleEditorTypeOptions
+            .ToList()
+            .FindIndex(option => option.RuleType == seed.RuleType);
         if (ruleTypeIndex >= 0)
             ruleTypeBox.SelectedIndex = ruleTypeIndex;
 
-        var operatorIndex = ConditionalFormatOperatorChoices.ToList().FindIndex(choice => choice.Op == seed.Operator);
+        var operatorIndex = ConditionalFormatDialogCatalog.RuleEditorOperatorOptions
+            .ToList()
+            .FindIndex(option => option.Operator == seed.Operator);
         if (operatorIndex >= 0)
             operatorBox.SelectedIndex = operatorIndex;
 

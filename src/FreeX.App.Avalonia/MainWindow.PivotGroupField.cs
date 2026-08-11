@@ -51,9 +51,15 @@ public sealed partial class MainWindow
         var headers = PivotApplication.ReadSourceHeaders(
             new PivotApplicationTarget(_session.ActiveSheet, pivot!));
         var caption = PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex);
-        var ungrouped = PivotGroupFieldPlanner.CreateField(
-            field.SourceFieldIndex, PivotFieldGrouping.None, ungroup: true, null, null, null);
-        ApplyPivotGrouping(pivot!, ungrouped, UiText.Format("PivotGroup_Ungrouped", caption));
+        var submission = PivotGroupFieldPlanner.CreateSubmission(
+            caption,
+            field.SourceFieldIndex,
+            PivotFieldGrouping.None,
+            ungroup: true,
+            start: null,
+            end: null,
+            interval: null);
+        ApplyPivotGrouping(pivot!, submission, UiText.Format("PivotGroup_Ungrouped", caption));
     }
 
     private async Task OpenPivotGroupFieldDialogAsync(PivotTableModel pivot)
@@ -189,25 +195,30 @@ public sealed partial class MainWindow
             ? layoutFields[fieldBox.SelectedIndex]
             : layoutFields[0];
         var selectedGrouping = PivotGroupFieldPlanner.GroupingFromIndex(groupingBox.SelectedIndex);
-        if (!PivotGroupFieldPlanner.TryValidate(
-                selectedGrouping, ungroup: false, startBox.Text, endBox.Text, intervalBox.Text,
-                out var start, out var end, out var interval, out var lateError))
+        if (!PivotGroupFieldPlanner.TryCreateSubmission(
+                selected.Caption,
+                selected.SourceFieldIndex,
+                selectedGrouping,
+                ungroup: false,
+                startBox.Text,
+                endBox.Text,
+                intervalBox.Text,
+                out var submission,
+                out var lateError))
         {
             ShowEditIssue(lateError ?? PivotGroupFieldPlanner.InvalidStartMessage);
             return;
         }
 
-        var groupedField = PivotGroupFieldPlanner.CreateField(
-            selected.SourceFieldIndex, selectedGrouping, ungroup: false, start, end, interval);
         var status = selectedGrouping == PivotFieldGrouping.None
             ? UiText.Format("PivotGroup_Ungrouped", selected.Caption)
             : UiText.Format("PivotGroup_Grouped", selected.Caption);
-        ApplyPivotGrouping(pivot, groupedField, status);
+        ApplyPivotGrouping(pivot, submission!, status);
     }
 
-    private void ApplyPivotGrouping(PivotTableModel pivot, PivotFieldModel groupedField, string status)
+    private void ApplyPivotGrouping(PivotTableModel pivot, PivotGroupFieldSubmission submission, string status)
     {
-        var layout = PivotGroupFieldPlanner.BuildLayout(pivot, groupedField);
+        var layout = PivotGroupFieldPlanner.BuildLayout(pivot, submission.Field);
         ApplyPivotApplicationPlan(
             PivotApplication.PlanCalculatedConfiguration(
                 new PivotApplicationTarget(_session.ActiveSheet, pivot),

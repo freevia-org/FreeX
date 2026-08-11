@@ -175,4 +175,83 @@ public sealed class PivotGroupFieldPlannerTests
         PivotGroupFieldPlanner.FormatBound(null).Should().BeEmpty();
         PivotGroupFieldPlanner.FormatBound(12.5).Should().Be(12.5.ToString("G", CultureInfo.CurrentCulture));
     }
+
+    [Fact]
+    public void CaptureSubmission_UsesCurrentFieldAndNormalizesItsIdentity()
+    {
+        var current = new PivotFieldModel(
+            SourceFieldIndex: 1,
+            Grouping: PivotFieldGrouping.Month,
+            GroupStart: 44562,
+            GroupEnd: 44927,
+            GroupInterval: 2);
+
+        var submission = PivotGroupFieldPlanner.CaptureSubmission(["Region", " Order Date "], current);
+
+        submission.SourceFieldName.Should().Be("Order Date");
+        submission.Field.Should().Be(current);
+        submission.Ungroup.Should().BeFalse();
+    }
+
+    [Fact]
+    public void TryCreateSubmission_ParsesAndNormalizesNumberRange()
+    {
+        var success = PivotGroupFieldPlanner.TryCreateSubmission(
+            " Value ",
+            sourceFieldIndex: -1,
+            PivotFieldGrouping.NumberRange,
+            ungroup: false,
+            startText: "10",
+            endText: "90",
+            intervalText: "2",
+            out var submission,
+            out var error);
+
+        success.Should().BeTrue(error);
+        submission.Should().Be(new PivotGroupFieldSubmission(
+            "Value",
+            new PivotFieldModel(
+                0,
+                Grouping: PivotFieldGrouping.NumberRange,
+                GroupStart: 10,
+                GroupEnd: 90,
+                GroupInterval: 2),
+            Ungroup: false));
+    }
+
+    [Theory]
+    [InlineData("de-DE", "0,5", "10,5", "2,5")]
+    [InlineData("de-DE", "0.5", "10.5", "2.5")]
+    public void TryCreateSubmission_AcceptsCurrentCultureAndInvariantFallback(
+        string cultureName,
+        string startText,
+        string endText,
+        string intervalText)
+    {
+        var previous = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo(cultureName);
+
+            PivotGroupFieldPlanner.TryCreateSubmission(
+                    "Value",
+                    0,
+                    PivotFieldGrouping.NumberRange,
+                    ungroup: false,
+                    startText,
+                    endText,
+                    intervalText,
+                    out var submission,
+                    out var error)
+                .Should().BeTrue(error);
+
+            submission!.Field.GroupStart.Should().Be(0.5);
+            submission.Field.GroupEnd.Should().Be(10.5);
+            submission.Field.GroupInterval.Should().Be(2.5);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previous;
+        }
+    }
 }

@@ -24,8 +24,9 @@ public sealed class CalculationWorkflowOwnershipSourceGuardTests
 
         foreach (var source in new[] { hostOptions, avaloniaOptions })
         {
-            source.Should().Contain("CalculationWorkflow.ChangeIterativeCalculation(");
+            source.Should().Contain("CalculationOptionsSubmissionCoordinator.Apply(CalculationWorkflow, submission)");
             source.Should().Contain("CalculationWorkflow.ChangeFormulaErrorRules(");
+            source.Should().NotContain("CalculationWorkflow.ChangeIterativeCalculation(");
             source.Should().NotContain("CalculationCommandPolicy.PlanIterativeCalculationChange(");
             source.Should().NotContain("CalculationCommandPolicy.PlanFormulaErrorRuleChanges(");
             source.Should().NotContain("ApplyCalculationRecalculation(");
@@ -44,6 +45,21 @@ public sealed class CalculationWorkflowOwnershipSourceGuardTests
         source.Should().NotContain("Avalonia.");
         source.Should().NotContain("FreeX.App.Host");
         source.Should().NotContain("FreeX.App.Avalonia");
+    }
+
+    [Fact]
+    public void OptionsSubmissionPlanningAndExecution_AreOwnedByPresentation()
+    {
+        var hostDialog = ReadSource("FreeX.App.Host", "OptionsDialog.xaml.cs");
+        var host = ReadSource("FreeX.App.Host", "MainWindow.Backstage.cs");
+        var avalonia = ReadSource("FreeX.App.Avalonia", "MainWindow.Options.cs");
+
+        hostDialog.Should().Contain("CalculationOptionsSubmissionPlanner.Plan(");
+        host.Should().Contain("CalculationOptionsDialogState.FromWorkbook(_workbook)");
+        avalonia.Should().Contain("CalculationOptionsDialogState.FromWorkbook(workbook)");
+        avalonia.Should().Contain("CalculationOptionsSubmissionPlanner.Plan(");
+        hostDialog.Should().NotContain("OptionsDialogCalculationSettings");
+        host.Should().NotContain("ApplyOptionsCalculationSettings");
     }
 
     private static string ReadSource(string projectName, params string[] path)

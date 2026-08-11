@@ -35,6 +35,20 @@ public sealed record ConditionalFormatDialogDatePeriodOption(string LabelKey, st
 
 public sealed record ConditionalFormatDialogAxisPositionOption(string LabelKey, string? XmlValue);
 
+public sealed record ConditionalFormatRuleTypeOption(string LabelKey, CfRuleType RuleType);
+
+public sealed record ConditionalFormatOperatorOption(string LabelKey, CfOperator Operator);
+
+public enum ConditionalFormatDialogFamily
+{
+    NewRule,
+    HighlightCells,
+    TopBottom,
+    DataBar,
+    ColorScale,
+    IconSet
+}
+
 /// <summary>
 /// Portable catalog and default-selection policy for conditional-format rule dialogs. Renderers localize
 /// <see cref="ConditionalFormatDialogOption.LabelKey"/> at binding edges; rule names and XML values
@@ -140,6 +154,67 @@ public static class ConditionalFormatDialogCatalog
         new("ConditionalFormatDialog_TextOperator_BeginningWith", TextBeginsWithRule),
         new("ConditionalFormatDialog_TextOperator_EndingWith", TextEndsWithRule)
     ];
+
+    public static IReadOnlyList<ConditionalFormatRuleTypeOption> RuleEditorTypeOptions { get; } =
+    [
+        new("ConditionalFormatDialog_RuleType_CellValue", CfRuleType.CellValue),
+        new("ConditionalFormatDialog_RuleType_Formula", CfRuleType.Formula),
+        new("ConditionalFormatDialog_RuleType_TopBottom", CfRuleType.Top10),
+        new("ConditionalFormatDialog_RuleType_IconSet", CfRuleType.IconSet),
+        new("ConditionalFormatDialog_RuleType_DataBar", CfRuleType.DataBar),
+        new("ConditionalFormatDialog_RuleType_ColorScale", CfRuleType.ColorScale),
+        new("ConditionalFormatDialog_RuleType_TextContains", CfRuleType.ContainsText),
+        new("ConditionalFormatDialog_RuleType_DateOccurring", CfRuleType.DateOccurring),
+        new("ConditionalFormatDialog_RuleType_DuplicateValues", CfRuleType.DuplicateValues),
+        new("ConditionalFormatDialog_RuleType_UniqueValues", CfRuleType.UniqueValues),
+        new("ConditionalFormatDialog_RuleType_AboveAverage", CfRuleType.AboveAverage),
+    ];
+
+    public static IReadOnlyList<ConditionalFormatRuleTypeOption> RuleEditorShellOptions { get; } =
+    [
+        new("ConditionalFormatDialog_RuleShell_FormatAllCells", CfRuleType.ColorScale),
+        new("ConditionalFormatDialog_RuleShell_FormatContainingCells", CfRuleType.CellValue),
+        new("ConditionalFormatDialog_RuleShell_FormatTopBottom", CfRuleType.Top10),
+        new("ConditionalFormatDialog_RuleShell_FormatAboveBelowAverage", CfRuleType.AboveAverage),
+        new("ConditionalFormatDialog_RuleShell_FormatUniqueDuplicate", CfRuleType.DuplicateValues),
+        new("ConditionalFormatDialog_RuleShell_UseFormula", CfRuleType.Formula),
+    ];
+
+    public static IReadOnlyList<ConditionalFormatOperatorOption> RuleEditorOperatorOptions { get; } =
+    [
+        new("ConditionalFormatDialog_CellValueOperator_GreaterThan", CfOperator.GreaterThan),
+        new("ConditionalFormatDialog_CellValueOperator_LessThan", CfOperator.LessThan),
+        new("ConditionalFormatDialog_CellValueOperator_GreaterThanOrEqualTo", CfOperator.GreaterThanOrEqual),
+        new("ConditionalFormatDialog_CellValueOperator_LessThanOrEqualTo", CfOperator.LessThanOrEqual),
+        new("ConditionalFormatDialog_CellValueOperator_EqualTo", CfOperator.Equal),
+        new("ConditionalFormatDialog_CellValueOperator_NotEqualTo", CfOperator.NotEqual),
+        new("ConditionalFormatDialog_CellValueOperator_Between", CfOperator.Between),
+        new("ConditionalFormatDialog_CellValueOperator_NotBetween", CfOperator.NotBetween),
+    ];
+
+    public static int RuleEditorShellIndexForModelRuleType(CfRuleType ruleType) => ruleType switch
+    {
+        CfRuleType.ColorScale or CfRuleType.DataBar or CfRuleType.IconSet => 0,
+        CfRuleType.Top10 => 2,
+        CfRuleType.AboveAverage => 3,
+        CfRuleType.DuplicateValues or CfRuleType.UniqueValues => 4,
+        CfRuleType.Formula => 5,
+        _ => 1,
+    };
+
+    public static ConditionalFormatDialogFamily DialogFamilyForRuleType(string ruleType) =>
+        ruleType switch
+        {
+            GreaterThanRule or LessThanRule or EqualToRule or BetweenRule or TextContainsRule or
+                DateOccurringRule or DuplicateValuesRule or BlanksRule or NoBlanksRule or ErrorsRule or
+                NoErrorsRule => ConditionalFormatDialogFamily.HighlightCells,
+            Top10ItemsRule or Bottom10ItemsRule or Top10PercentRule or Bottom10PercentRule or
+                AboveAverageRule or BelowAverageRule => ConditionalFormatDialogFamily.TopBottom,
+            DataBarRule => ConditionalFormatDialogFamily.DataBar,
+            ColorScaleRule => ConditionalFormatDialogFamily.ColorScale,
+            IconSetRule => ConditionalFormatDialogFamily.IconSet,
+            _ => ConditionalFormatDialogFamily.NewRule,
+        };
 
     public static IReadOnlyList<ConditionalFormatDialogDatePeriodOption> DatePeriodOptions { get; } =
     [

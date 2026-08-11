@@ -195,6 +195,9 @@ public sealed class LocTests
         keys.Should().Contain("CreateTable_Title");
         keys.Should().Contain("CreateTable_RangeLabel");
         keys.Should().Contain("CreateTable_HeadersCheckBox");
+        keys.Should().Contain("ConditionalFormatDialog_RuleType_CellValue");
+        keys.Should().Contain("ConditionalFormatDialog_RuleType_TopBottom");
+        keys.Should().Contain("ConditionalFormatDialog_RuleType_UniqueValues");
         keys.Should().Contain("MainWindow_Header_RecommendedPivotTables");
         keys.Should().Contain("RecommendedPivotTables_BlankPivotTable");
         keys.Should().Contain("RecommendedPivotTables_NoRecommendationsHeading");

@@ -19653,4 +19653,13 @@ and {0} more.</value>
   <data name="Backstage_Account_CurrentWorkbookUnsaved" xml:space="preserve">
     <value>Not saved yet</value>
   </data>
+  <data name="ConditionalFormatDialog_RuleType_CellValue" xml:space="preserve">
+    <value>Cell Value</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_TopBottom" xml:space="preserve">
+    <value>Top / Bottom</value>
+  </data>
+  <data name="ConditionalFormatDialog_RuleType_UniqueValues" xml:space="preserve">
+    <value>Unique Values</value>
+  </data>
 </root>

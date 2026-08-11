@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Calculation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -6,21 +7,18 @@ namespace FreeX.App.Host.Tests;
 // R19-meta-2: the WPF Options > Formulas dialog collapsed WorkbookCalculationMode.AutomaticExceptDataTables
 // into a lossy AutoCalculate bool.
 //
-// (a) OptionsDialogCalculationSettings.FromWorkbook used to seed AutoCalculate = (CalculationMode == Automatic),
+// (a) The dialog snapshot used to seed AutoCalculate = (CalculationMode == Automatic),
 //     so a workbook in AutomaticExceptDataTables mode showed "Manual calculation" checked in the dialog --
 //     wrong, the workbook was actually auto-recalculating except data tables.
-// (b) ApplyOptionsCalculationSettings (MainWindow.Backstage.cs) mapped AutoCalculate=false to
+// (b) The WPF apply path mapped AutoCalculate=false to
 //     WorkbookCalculationMode.Manual and fired SetCalculationModeCommand whenever that computed mode didn't
 //     equal the workbook's EXACT CalculationMode, so an unrelated Options edit (touching only the iterative-
 //     calculation fields) silently downgraded AutomaticExceptDataTables to Automatic/Manual on OK.
 //
 // The fix seeds AutoCalculate from "CalculationMode != Manual" (so AutomaticExceptDataTables shows as Automatic,
-// not Manual) and changes ApplyOptionsCalculationSettings to gate SetCalculationModeCommand on the boolean
-// "currently Manual" state (mirroring the Avalonia host's MainWindow.Options.cs CalculationModeIsManual guard),
-// applying the iterative-calculation block independently of the mode block. The FromWorkbook seeding below is
-// the deterministic root-cause guard; part (b)'s apply-path guard is a direct read-verified mirror of the
-// already-proven Avalonia path (a full STA MainWindow test of that private method is environmentally
-// unreliable -- a headless MainWindow manages its own active-workbook lifecycle -- so it is not asserted here).
+// not Manual). The shared CalculationOptionsSubmissionPlanner now compares the two-state dialog choice with
+// its opening snapshot, so an iterative-only edit emits no mode transition. The FromWorkbook seeding below is
+// the deterministic host-facing guard; Presentation tests cover the submission and coordinator behavior.
 public sealed class R19_calc_mode_wpf_Tests
 {
     [Fact]
@@ -30,7 +28,7 @@ public sealed class R19_calc_mode_wpf_Tests
         workbook.AddSheet("Sheet1");
         workbook.CalculationMode = WorkbookCalculationMode.AutomaticExceptDataTables;
 
-        var settings = OptionsDialogCalculationSettings.FromWorkbook(workbook);
+        var settings = CalculationOptionsDialogState.FromWorkbook(workbook);
 
         // The dialog only has Automatic/Manual radios; AutomaticExceptDataTables must display as Automatic
         // (checked), never as Manual -- the pre-fix seeding showed Manual and let an unrelated edit downgrade it.

@@ -43,11 +43,11 @@ public sealed class ErrorCheckingDialogSourceTests
         formulaSource.Should().Contain("ShowOptionsDialog(OptionsDialogInitialSection.FormulaErrorChecking)");
         backstageSource.Should().Contain("private void ShowOptionsDialog(OptionsDialogInitialSection initialSection = OptionsDialogInitialSection.General)");
         // Updated for the J26 fix: the dialog now also seeds from the live workbook's calculation
-        // settings (OptionsDialogCalculationSettings.FromWorkbook) instead of only the persisted
+        // settings (CalculationOptionsDialogState.FromWorkbook) instead of only the persisted
         // app options, so File > Options > Formulas reflects the workbook's actual CalculationMode.
         backstageSource.Should().Contain("_workbook.DisabledFormulaErrorCodes,");
         backstageSource.Should().Contain("initialSection,");
-        backstageSource.Should().Contain("OptionsDialogCalculationSettings.FromWorkbook(_workbook));");
+        backstageSource.Should().Contain("CalculationOptionsDialogState.FromWorkbook(_workbook),");
         backstageSource.Should().Contain("private void ErrorCheckingOptionsBtn_Click(object sender, RoutedEventArgs e)");
     }
 

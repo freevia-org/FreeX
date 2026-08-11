@@ -55,7 +55,8 @@ public sealed class QCalcSettingsAvaloniaOptionsTests
         // J27 fix: the calc-mode radios must be seeded from the live workbook's calculation mode
         // (via the existing CalculationModeIsManual helper), not the persisted AppOptions snapshot
         // loaded a few lines above (`current.AutoCalculate`).
-        source.Should().Contain("var workbookAutoCalculate = !CalculationModeIsManual;");
+        source.Should().Contain("var calculationState = CalculationOptionsDialogState.FromWorkbook(workbook);");
+        source.Should().Contain("var workbookAutoCalculate = calculationState.AutoCalculate;");
         source.Should().Contain("IsChecked = workbookAutoCalculate };");
         source.Should().Contain("IsChecked = !workbookAutoCalculate };");
         source.Should().NotContain("IsChecked = current.AutoCalculate };");
@@ -92,27 +93,26 @@ public sealed class QCalcSettingsAvaloniaOptionsTests
     }
 
     [Fact]
-    public void AvaloniaOptions_OnlyAppliesIterativeCalculationWhenValuesActuallyChange()
+    public void AvaloniaOptions_DelegatesCalculationSubmissionToPresentation()
     {
         var source = ReadAvaloniaOptionsSource();
 
-        source.Should().Contain("private void ApplyLiveIterativeCalculationOptions(bool enabled, int maxIterations, double maxChange)");
-        source.Should().Contain("CalculationWorkflow.ChangeIterativeCalculation(");
-        source.Should().Contain("if (!outcome.Success)");
+        source.Should().Contain("CalculationOptionsSubmissionPlanner.Plan(");
+        source.Should().Contain("private void ApplyCalculationOptionsSubmission(CalculationOptionsSubmission? submission)");
+        source.Should().Contain("CalculationOptionsSubmissionCoordinator.Apply(CalculationWorkflow, submission)");
+        source.Should().NotContain("CalculationWorkflow.ChangeIterativeCalculation(");
         source.Should().NotContain("CalculationCommandPolicy.PlanIterativeCalculationChange(");
         source.Should().NotContain("ApplyCalculationRecalculation(");
     }
 
     [Fact]
-    public void AvaloniaOptions_CalcModeStillOnlyForceAppliesWhenChanged()
+    public void AvaloniaOptions_CalcModeChangeDecisionIsNotRendererOwned()
     {
         var source = ReadAvaloniaOptionsSource();
 
-        // Pre-existing apply-only-on-change guard for calc mode must still be present (the J27 bug
-        // was in the seeding, not this guard).
-        source.Should().Contain("var wantManual = !input.AutoCalculate;");
-        source.Should().Contain("if (CalculationModeIsManual != wantManual)");
-        source.Should().Contain("SetCalculationMode(wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic);");
+        source.Should().NotContain("var wantManual = !input.AutoCalculate;");
+        source.Should().NotContain("SetCalculationMode(wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic);");
+        source.Should().Contain("CalculationOptionsSubmissionPlanner.Plan(");
     }
 
     private static string ReadAvaloniaOptionsSource() =>

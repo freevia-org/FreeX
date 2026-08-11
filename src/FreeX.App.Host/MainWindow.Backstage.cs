@@ -1044,7 +1044,7 @@ public partial class MainWindow
             _options,
             _workbook.DisabledFormulaErrorCodes,
             initialSection,
-            OptionsDialogCalculationSettings.FromWorkbook(_workbook),
+            CalculationOptionsDialogState.FromWorkbook(_workbook),
             _optionsRuntimeSession);
         if (ShowOwnedDialog(dlg) == true)
         {
@@ -1056,7 +1056,7 @@ public partial class MainWindow
                 AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage);
 
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
-            ApplyOptionsCalculationSettings(dlg.CalculationSettingsResult);
+            ApplyOptionsCalculationSubmission(dlg.CalculationSubmission);
             RebuildQuickAccessToolbar();
             ApplyOptionsWorksheetViewSettings();
             ApplyOptionsToView();
@@ -1074,37 +1074,13 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Applies the Options dialog's Formulas panel calc-mode/iterative-calculation edits to the
-    /// live workbook. <paramref name="calcSettings"/> is null when the dialog detected no change
-    /// from what it seeded (see <see cref="OptionsDialog.CalculationSettingsResult"/>), so an
-    /// unrelated Options edit never silently flips the workbook's calculation state.
+    /// Applies the portable calculation submission emitted by the Options dialog.
     /// </summary>
-    private void ApplyOptionsCalculationSettings(OptionsDialogCalculationSettings? calcSettings)
+    private void ApplyOptionsCalculationSubmission(CalculationOptionsSubmission? submission)
     {
-        if (calcSettings is null)
-            return;
-
-        // The dialog's calc-mode radios only ever express Automatic/Manual (there is no third
-        // "Automatic except for data tables" option), so comparing calcSettings.AutoCalculate
-        // against the exact _workbook.CalculationMode would spuriously fire a mode change for a
-        // workbook that's WorkbookCalculationMode.AutomaticExceptDataTables whenever the user
-        // never touched the calc-mode radios at all (e.g. edited only the iterative-calculation
-        // fields) -- silently downgrading "except data tables" to plain Automatic or Manual.
-        // Compare against the boolean "currently Manual" state instead (mirrors the Avalonia
-        // host's MainWindow.Options.cs CalculationModeIsManual guard) so the workbook's calc mode
-        // is only ever touched when the user's Automatic/Manual choice actually changed.
-        var workbookIsManual = _workbook.CalculationMode == WorkbookCalculationMode.Manual;
-        var wantManual = !calcSettings.AutoCalculate;
-        if (workbookIsManual != wantManual)
-        {
-            var wantMode = wantManual ? WorkbookCalculationMode.Manual : WorkbookCalculationMode.Automatic;
-            ApplyCalculationWorkflowOutcome(CalculationWorkflow.ChangeMode(wantMode));
-        }
-
-        CalculationWorkflow.ChangeIterativeCalculation(
-            calcSettings.IterativeCalculation,
-            calcSettings.MaxCalculationIterations,
-            calcSettings.MaxCalculationChange);
+        var outcome = CalculationOptionsSubmissionCoordinator.Apply(CalculationWorkflow, submission);
+        if (outcome.ModeOutcome is { } modeOutcome)
+            ApplyCalculationWorkflowOutcome(modeOutcome);
     }
 
     private void ApplyOptionsWorksheetViewSettings()
