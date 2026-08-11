@@ -214,24 +214,13 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     private void ApplyTransition(SlideShowCustomShowDialogSessionTransition transition)
-    {
-        switch (transition.RenderScope)
-        {
-            case SlideShowCustomShowDialogRenderScope.Full:
-                RenderFullPlan(transition.Plan);
-                break;
-            case SlideShowCustomShowDialogRenderScope.SelectedShow:
-                RenderSelectedShowPlan(transition.Plan);
-                break;
-            case SlideShowCustomShowDialogRenderScope.SlideSelection:
-                ApplySlideSelection(transition.Plan);
-                break;
-        }
-
-        SetValidation(transition.ValidationMessage);
-        if (transition.ShouldClose)
-            Close();
-    }
+        => SlideShowCustomShowDialogTransitionDispatcher.Dispatch(
+            transition,
+            RenderFullPlan,
+            RenderSelectedShowPlan,
+            ApplySlideSelection,
+            SetValidation,
+            () => Close());
 
     private void RenderFullPlan(SlideShowCustomShowSessionPlan plan)
     {

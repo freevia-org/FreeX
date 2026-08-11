@@ -193,18 +193,22 @@ public sealed class SlideCanvasGeometryPlannerTests
         router.Should().Contain("CanvasGestureSession _session");
         router.Should().Contain("_session.PlanMove(");
         router.Should().Contain("SlideCanvasGeometryPlanner.ScreenRectBetween");
+        router.Should().Contain("CanvasGesturePreviewProjector");
+        router.Should().Contain("SlideCanvasGeometryPlanner.EmuBoundsToScreen");
+        router.Should().Contain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen");
 
         foreach (var source in new[] { wpfGesture, avaloniaGesture })
         {
             source.Should().Contain("CanvasGestureRouter _gestureRouter");
             source.Should().Contain("_gestureRouter.PreviewPointer(");
             source.Should().Contain("ApplyPreviewPlan(");
-            source.Should().Contain("SlideCanvasGeometryPlanner.EmuBoundsToScreen");
-            source.Should().Contain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen");
+            source.Should().Contain("CanvasGesturePreviewProjector.Project(");
             source.Should().Contain("ToGesturePoint(");
             source.Should().NotContain("CanvasGesturePlanner.CaptureMoveState");
             source.Should().NotContain("CanvasGesturePlanner.PlanMove");
             source.Should().NotContain("SlideCanvasGeometryPlanner.ScreenRectBetween");
+            source.Should().NotContain("SlideCanvasGeometryPlanner.EmuBoundsToScreen");
+            source.Should().NotContain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen");
             source.Should().NotContain("BoundsToScreenRect");
             source.Should().NotContain("SnapEngine.Snap(");
         }

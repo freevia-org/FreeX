@@ -364,8 +364,6 @@ public sealed class SlideShowHostPolicySourceTests
         effectTrackSource.Should().Contain("ScaleY: Lerp(plan.PeakScaleY, plan.ToScaleY, phaseProgress)");
         source.Should().Contain("case SlideShowAnimationRendererRouteKind.LineColor:");
         source.Should().Contain("LineColorEffect(element, plan);");
-        source.Should().Contain("foreach (var layerPlan in shapePlan.AuxiliaryLayers)");
-        source.Should().Contain("_animationTargets.Register(shapeId, layerPlan.TargetKind, layer);");
         source.Should().NotContain("shapePlan.FillMaskShape");
         source.Should().NotContain("shapePlan.LineColorShape");
         source.Should().NotContain("_animFontStyleElements");
@@ -398,6 +396,22 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("var toX = isExit ? dx : 0;");
         source.Should().Contain("MotionPathEffect(element, plan, onReveal);");
         source.Should().Contain("AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2");
+    }
+
+    [Fact]
+    public void AvaloniaSlideShowWindow_DelegatesOverlaySequencingToSharedMaterializer()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+
+        source.Should().Contain("SlideShowAnimationOverlayMaterializer.Materialize<Control, RenderTargetBitmap>(");
+        source.Should().Contain("CreateAnimationOverlayElement(bitmap, w, h, elementPlan)");
+        source.Should().Contain("_animationTargets,");
+        source.Should().Contain("_slideCanvas.SuppressedShapeIds);");
+        source.Should().NotContain("foreach (var layerPlan in shapePlan.AuxiliaryLayers)");
     }
 
     [Fact]

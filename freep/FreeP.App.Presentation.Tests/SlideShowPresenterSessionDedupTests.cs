@@ -456,6 +456,8 @@ public sealed class SlideShowPresenterSessionDedupTests
         {
             source.Should().Contain("SlideShowPresenterViewSession");
             source.Should().Contain("SlideShowPresenterViewOperations operations");
+            source.Should().Contain("new SlideShowPresenterViewSession(operations)");
+            source.Should().NotContain("Func<SlideShowPresenterState> stateProvider");
             source.Should().Contain("_session.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(");
             source.Should().Contain("_session.Surface");
             source.Should().Contain("_session.Dispatch(new SlideShowPresenterViewDispatchRequest(");

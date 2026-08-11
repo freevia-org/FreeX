@@ -55,22 +55,57 @@ public sealed class PresentationReviewWorkflowSessionTests
         var session = CreateSession(editor, []);
         session.SetSelectedReviewCommentIndex(0);
 
-        var picker = session.BuildCommentMentionPickerPlanForInput("Please ask @No", 0);
-        var candidate = picker.Candidates.Should().ContainSingle().Subject;
-        var result = session.ApplyCommentMention(
+        var dispatch = session.DispatchCommentMentionPicker(
             PresentationReviewWorkflowIntentKind.EditComment,
             "Please ask @No",
-            0,
-            candidate);
+            0);
+        var picker = dispatch.PickerPlan;
+        var candidate = picker.Candidates.Should().ContainSingle().Subject;
+        var result = dispatch.ApplicationResult!;
 
         picker.Query.Should().Be("No");
         candidate.DisplayName.Should().Be("Nora Reviewer");
+        dispatch.ShouldShowPicker.Should().BeFalse();
         result.InsertionPlan.ShouldApply.Should().BeTrue();
         result.InsertionPlan.UpdatedText.Should().Be("Please ask @Nora.Reviewer ");
         result.MutationPlan!.ShouldApply.Should().BeTrue();
         presentation.Slides[0].Comments[0].Text.Should().Be("Please ask @Nora.Reviewer");
         session.LastCommentMentionPickerPlan.Should().BeSameAs(picker);
         session.LastCommentMentionInsertionPlan.Should().BeSameAs(result.InsertionPlan);
+    }
+
+    [Fact]
+    public void CommentMentionDispatch_LeavesMultipleCandidatesForTheNativePicker()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice Writer",
+            Initials = "AW",
+            Text = "Please ask @",
+            Idx = 1
+        });
+        presentation.Slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "Available for review.",
+            Idx = 2
+        });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var session = CreateSession(editor, []);
+        session.SetSelectedReviewCommentIndex(0);
+
+        var dispatch = session.DispatchCommentMentionPicker(
+            PresentationReviewWorkflowIntentKind.EditComment,
+            "Please ask @",
+            0);
+
+        dispatch.ShouldShowPicker.Should().BeTrue();
+        dispatch.ApplicationResult.Should().BeNull();
+        dispatch.PickerPlan.Candidates.Should().HaveCount(2);
+        presentation.Slides[0].Comments[0].Text.Should().Be("Please ask @");
+        session.LastCommentMentionInsertionPlan.Should().BeNull();
     }
 
     [Fact]
@@ -209,13 +244,14 @@ public sealed class PresentationReviewWorkflowSessionTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("_reviewWorkflowSession.BuildCommentMentionPickerPlanForInput(");
+            source.Should().Contain("_reviewWorkflowSession.DispatchCommentMentionPicker(");
             source.Should().Contain("_reviewWorkflowSession.ApplyCommentMention(");
             source.Should().Contain("PresentReadingOrderPane:");
             source.Should().Contain("PresentProofingPane:");
             source.Should().Contain("=> _reviewWorkflowSession.ShowReadingOrderPane();");
             source.Should().Contain("=> _reviewWorkflowSession.ShowProofingPane();");
             source.Should().NotContain("ResolveCommentInputCaret(");
+            source.Should().NotContain("currentPlan.Candidates.Count == 1");
             source.Should().NotContain("BuildCommentMentionPickerPlanForInsertionContext(");
             source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(");
             source.Should().NotContain("if (LastProofingPanePlan is null)");

@@ -101,6 +101,136 @@ public readonly record struct CanvasGesturePreviewPlan(
         null);
 }
 
+public readonly record struct CanvasGestureVisualPreviewPlan(
+    CanvasGestureKind Kind,
+    SlideScreenRect? PreviewBounds,
+    IReadOnlyList<SnapGuideLine> SnapGuides,
+    CanvasMultiTransformPlan? MultiTransform,
+    double? RotationDegrees,
+    string? GeometryHandleName,
+    CanvasGesturePoint? GeometryScreenPoint)
+{
+    public static readonly CanvasGestureVisualPreviewPlan Empty = new(
+        CanvasGestureKind.None,
+        null,
+        [],
+        null,
+        null,
+        null,
+        null);
+}
+
+public static class CanvasGesturePreviewProjector
+{
+    public static CanvasGestureVisualPreviewPlan Project(
+        CanvasGesturePreviewPlan plan,
+        Slide? slide,
+        Presentation? presentation,
+        SlideTransformCore transform)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+
+        return plan.Kind switch
+        {
+            CanvasGestureKind.Move when plan.Move is { } move => new(
+                plan.Kind,
+                move.PreviewBounds,
+                move.SnapGuides,
+                null,
+                null,
+                null,
+                null),
+            CanvasGestureKind.Resize when plan.MultiTransform is { } multiResize => new(
+                plan.Kind,
+                null,
+                [],
+                multiResize,
+                null,
+                null,
+                null),
+            CanvasGestureKind.Resize when plan.Resize is { } resize => new(
+                plan.Kind,
+                SlideCanvasGeometryPlanner.EmuBoundsToScreen(
+                    resize.XEmu,
+                    resize.YEmu,
+                    resize.CxEmu,
+                    resize.CyEmu,
+                    transform),
+                [],
+                null,
+                null,
+                null,
+                null),
+            CanvasGestureKind.Rotate when plan.MultiTransform is { } multiRotate => new(
+                plan.Kind,
+                null,
+                [],
+                multiRotate,
+                null,
+                null,
+                null),
+            CanvasGestureKind.Rotate when plan.RotationDegrees is { } angle => new(
+                plan.Kind,
+                ResolveShapeBounds(plan.ShapeId, slide, presentation, transform),
+                [],
+                null,
+                angle,
+                null,
+                null),
+            CanvasGestureKind.GeometryAdjustment when plan.Geometry is { } geometry => ProjectGeometry(
+                plan.Kind,
+                geometry,
+                transform),
+            CanvasGestureKind.Marquee => new(
+                plan.Kind,
+                plan.Marquee,
+                [],
+                null,
+                null,
+                null,
+                null),
+            _ => CanvasGestureVisualPreviewPlan.Empty,
+        };
+    }
+
+    private static CanvasGestureVisualPreviewPlan ProjectGeometry(
+        CanvasGestureKind kind,
+        CanvasGeometryPreviewPlan geometry,
+        SlideTransformCore transform)
+    {
+        var screen = transform.SlideToScreen(
+            geometry.PositionSlide.X,
+            geometry.PositionSlide.Y);
+        return new CanvasGestureVisualPreviewPlan(
+            kind,
+            null,
+            [],
+            null,
+            null,
+            geometry.HandleName,
+            new CanvasGesturePoint(screen.X, screen.Y));
+    }
+
+    private static SlideScreenRect? ResolveShapeBounds(
+        uint shapeId,
+        Slide? slide,
+        Presentation? presentation,
+        SlideTransformCore transform)
+    {
+        if (slide is null || presentation is null)
+            return null;
+
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
+        return shape is null
+            ? null
+            : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
+                shape,
+                slide,
+                presentation,
+                transform);
+    }
+}
+
 /// <summary>
 /// Owns renderer-neutral canvas input routing and model command decisions. Native hosts translate
 /// framework events and draw the returned preview plans, while this router keeps gesture behavior

@@ -205,6 +205,49 @@ public sealed record SlideShowCustomShowDialogSessionTransition(
     SlideShowCustomShowDialogMutationRequest? MutationRequest = null,
     SlideShowCustomShowMutationResult? MutationResult = null);
 
+public static class SlideShowCustomShowDialogTransitionDispatcher
+{
+    public static void Dispatch(
+        SlideShowCustomShowDialogSessionTransition transition,
+        Action<SlideShowCustomShowSessionPlan> renderFull,
+        Action<SlideShowCustomShowSessionPlan> renderSelectedShow,
+        Action<SlideShowCustomShowSessionPlan> renderSlideSelection,
+        Action<string?> setValidation,
+        Action close)
+    {
+        ArgumentNullException.ThrowIfNull(transition);
+        ArgumentNullException.ThrowIfNull(renderFull);
+        ArgumentNullException.ThrowIfNull(renderSelectedShow);
+        ArgumentNullException.ThrowIfNull(renderSlideSelection);
+        ArgumentNullException.ThrowIfNull(setValidation);
+        ArgumentNullException.ThrowIfNull(close);
+
+        switch (transition.RenderScope)
+        {
+            case SlideShowCustomShowDialogRenderScope.None:
+                break;
+            case SlideShowCustomShowDialogRenderScope.Full:
+                renderFull(transition.Plan);
+                break;
+            case SlideShowCustomShowDialogRenderScope.SelectedShow:
+                renderSelectedShow(transition.Plan);
+                break;
+            case SlideShowCustomShowDialogRenderScope.SlideSelection:
+                renderSlideSelection(transition.Plan);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(
+                    nameof(transition),
+                    transition.RenderScope,
+                    "Unknown custom-show dialog render scope.");
+        }
+
+        setValidation(transition.ValidationMessage);
+        if (transition.ShouldClose)
+            close();
+    }
+}
+
 public sealed record SlideShowCustomShowDialogReorderTransition(
     SlideShowCustomShowDragReorderPlan ReorderPlan,
     SlideShowCustomShowDialogSessionTransition SessionTransition);

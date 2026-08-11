@@ -304,8 +304,6 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("ZoomEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowAnimationRendererRouteKind.LineColor:");
         source.Should().Contain("LineColorEffect(sb, element, plan);");
-        source.Should().Contain("foreach (var layerPlan in shapePlan.AuxiliaryLayers)");
-        source.Should().Contain("_animationTargets.Register(shapeId, layerPlan.TargetKind, layer);");
         source.Should().NotContain("shapePlan.FillMaskShape");
         source.Should().NotContain("shapePlan.LineColorShape");
         source.Should().NotContain("_animFontStyleElements");
@@ -327,7 +325,6 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("private static void WaveEffect(");
         source.Should().NotContain("private static void EmphasisPulseEffect(");
         source.Should().NotContain("private static void ColorWaveEffect(");
-        source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(shapeId);");
         source.Should().Contain("DisappearEffect(sb, element, plan.DelayMs);");
         source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
         source.Should().Contain("var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(");
@@ -339,6 +336,22 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("var toX = isExit ? dx : 0;");
         source.Should().Contain("MotionPathEffect(sb, element, plan);");
         source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");
+    }
+
+    [Fact]
+    public void WpfSlideShowWindow_DelegatesOverlaySequencingToSharedMaterializer()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.App.Host",
+            "SlideShowWindow.cs"));
+
+        source.Should().Contain("SlideShowAnimationOverlayMaterializer.Materialize<FrameworkElement, BitmapSource>(");
+        source.Should().Contain("CreateAnimationOverlayElement(bitmap, w, h, elementPlan)");
+        source.Should().Contain("_animationTargets,");
+        source.Should().Contain("_slideCanvas.SuppressedShapeIds);");
+        source.Should().NotContain("foreach (var layerPlan in shapePlan.AuxiliaryLayers)");
     }
 
     [Fact]

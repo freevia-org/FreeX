@@ -18,8 +18,7 @@ namespace FreeP.App.Rendering.Avalonia;
 ///   <item>Maintains live-preview state during drag; commits one command to
 ///         <see cref="EditingSession"/> on pointer-up.</item>
 ///   <item>Drives a <see cref="SelectionAdornerLayer"/> for visual feedback.</item>
-///   <item>All coordinate work uses the framework-free helpers
-///         <see cref="SlideTransformCore"/> and <see cref="ShapeHitTester"/>.</item>
+///   <item>All coordinate work uses the framework-free gesture router and preview projector.</item>
 /// </list>
 /// </summary>
 public sealed class AvaloniaCanvasGestureHandler : IDisposable
@@ -323,54 +322,50 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
     private void ApplyPreviewPlan(CanvasGesturePreviewPlan plan, SlideTransformCore transform)
     {
-        switch (plan.Kind)
+        var visual = CanvasGesturePreviewProjector.Project(
+            plan,
+            _editor.CurrentSlide,
+            _editor.Presentation,
+            transform);
+        switch (visual.Kind)
         {
-            case CanvasGestureKind.Move when plan.Move is { } move:
+            case CanvasGestureKind.Move:
                 _adorner.UpdatePreview(
-                    move.PreviewBounds is { } bounds ? ToAvaloniaRect(bounds) : null);
+                    visual.PreviewBounds is { } bounds ? ToAvaloniaRect(bounds) : null);
                 _adorner.UpdateSnapGuides(
-                    move.SnapGuides.Count > 0 ? move.SnapGuides : null,
+                    visual.SnapGuides.Count > 0 ? visual.SnapGuides : null,
                     transform);
                 break;
 
-            case CanvasGestureKind.Resize when plan.MultiTransform is { } multiResize:
+            case CanvasGestureKind.Resize when visual.MultiTransform is { } multiResize:
                 _adorner.UpdateTransformPreview(multiResize);
                 _canvas.UpdateTransformPreview(multiResize);
                 break;
 
-            case CanvasGestureKind.Resize when plan.Resize is { } resize:
-                var resizeRect = SlideCanvasGeometryPlanner.EmuBoundsToScreen(
-                    resize.XEmu,
-                    resize.YEmu,
-                    resize.CxEmu,
-                    resize.CyEmu,
-                    transform);
-                _adorner.UpdatePreview(ToAvaloniaRect(resizeRect));
+            case CanvasGestureKind.Resize when visual.PreviewBounds is { } resizeBounds:
+                _adorner.UpdatePreview(ToAvaloniaRect(resizeBounds));
                 break;
 
-            case CanvasGestureKind.Rotate when plan.MultiTransform is { } multiRotate:
+            case CanvasGestureKind.Rotate when visual.MultiTransform is { } multiRotate:
                 _adorner.UpdateTransformPreview(multiRotate);
                 _canvas.UpdateTransformPreview(multiRotate);
                 break;
 
-            case CanvasGestureKind.Rotate when plan.RotationDegrees is { } angle:
-                if (_editor.CurrentSlide is { } slide &&
-                    GetSelectionScreenRect(plan.ShapeId, slide, transform) is { } selectionRect)
-                {
-                    _adorner.UpdatePreview(selectionRect, angle);
-                }
+            case CanvasGestureKind.Rotate when
+                visual.PreviewBounds is { } rotationBounds &&
+                visual.RotationDegrees is { } angle:
+                _adorner.UpdatePreview(ToAvaloniaRect(rotationBounds), angle);
                 break;
 
-            case CanvasGestureKind.GeometryAdjustment when plan.Geometry is { } geometry:
-                var geometryScreen = transform.SlideToScreen(
-                    geometry.PositionSlide.X,
-                    geometry.PositionSlide.Y);
+            case CanvasGestureKind.GeometryAdjustment when
+                visual.GeometryHandleName is { } handleName &&
+                visual.GeometryScreenPoint is { } geometryScreen:
                 _adorner.UpdateGeometryPreview(
-                    geometry.HandleName,
+                    handleName,
                     new Point(geometryScreen.X, geometryScreen.Y));
                 break;
 
-            case CanvasGestureKind.Marquee when plan.Marquee is { } marquee:
+            case CanvasGestureKind.Marquee when visual.PreviewBounds is { } marquee:
                 _adorner.UpdateMarquee(ToAvaloniaRect(marquee));
                 break;
         }
@@ -576,20 +571,6 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         if ((modifiers & KeyModifiers.Meta) != 0)
             result |= CanvasGestureModifiers.Meta;
         return result;
-    }
-
-    private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransformCore xf)
-    {
-        if (_editor.Presentation is null) return null;
-        var shape = ShapeHitTester.FindShape(slide, shapeId);
-        var rect = shape is null
-            ? (SlideScreenRect?)null
-            : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
-                shape,
-                slide,
-                _editor.Presentation,
-                xf);
-        return rect is { } screenRect ? ToAvaloniaRect(screenRect) : null;
     }
 
     private static Rect ToAvaloniaRect(SlideScreenRect rect)

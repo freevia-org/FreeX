@@ -185,6 +185,117 @@ public sealed class SlideShowAnimationRendererSessionTests
     }
 
     [Fact]
+    public void OverlayMaterializer_OwnsParagraphFallbackRegistrationAndSuppression()
+    {
+        var rangeAnimation = Animation(1, AnimationKind.Entrance, AnimationPreset.Fade, 200);
+        var plan = new SlideShowAnimationOverlayPlan(
+        [
+            new SlideShowAnimationOverlayShapePlan(
+                1,
+                new SlideShape { Id = 11 },
+                0,
+                true,
+                new SlideShape { Id = 12 },
+                [],
+                [new SlideShowAnimationParagraphRangeOverlayPlan(
+                    rangeAnimation,
+                    new SlideShape { Id = 13 },
+                    0.25)],
+                []),
+            new SlideShowAnimationOverlayShapePlan(
+                2,
+                new SlideShape { Id = 21 },
+                0,
+                true,
+                new SlideShape { Id = 22 },
+                [new SlideShape { Id = 23 }, new SlideShape { Id = 24 }],
+                [],
+                []),
+            new SlideShowAnimationOverlayShapePlan(
+                3,
+                new SlideShape { Id = 31 },
+                0.5,
+                true,
+                null,
+                [],
+                [],
+                [new SlideShowAnimationAuxiliaryOverlayPlan(
+                    SlideShowAnimationPlaybackTargetKind.Fill,
+                    new SlideShape { Id = 32 })]),
+            new SlideShowAnimationOverlayShapePlan(
+                4,
+                new SlideShape { Id = 99 },
+                0,
+                true,
+                null,
+                [],
+                [],
+                []),
+            new SlideShowAnimationOverlayShapePlan(
+                5,
+                new SlideShape { Id = 50 },
+                0.75,
+                true,
+                new SlideShape { Id = 51 },
+                [new SlideShape { Id = 52 }],
+                [],
+                []),
+            new SlideShowAnimationOverlayShapePlan(
+                6,
+                new SlideShape { Id = 60 },
+                0.8,
+                true,
+                new SlideShape { Id = 61 },
+                [],
+                [new SlideShowAnimationParagraphRangeOverlayPlan(
+                    Animation(6, AnimationKind.Entrance, AnimationPreset.Fade, 200),
+                    new SlideShape { Id = 62 },
+                    0.1)],
+                []),
+        ]);
+        var elements = new List<MaterializedElement>();
+        var targets = new SlideShowAnimationTargetRegistry<MaterializedElement>();
+        var suppressed = new HashSet<uint>();
+
+        var count = SlideShowAnimationOverlayMaterializer.Materialize<MaterializedElement, RenderedBitmap>(
+            plan,
+            shape => shape.Id is 52 or 62 or 99 ? null : new RenderedBitmap(shape.Id),
+            (bitmap, elementPlan) => new MaterializedElement(bitmap.ShapeId, elementPlan),
+            elements.Add,
+            targets,
+            suppressed);
+
+        count.Should().Be(10);
+        elements.Select(element => element.Plan.TargetKind).Should().Equal(
+            new SlideShowAnimationPlaybackTargetKind?[]
+            {
+                null,
+                SlideShowAnimationPlaybackTargetKind.ParagraphRange,
+                null,
+                SlideShowAnimationPlaybackTargetKind.Paragraph,
+                SlideShowAnimationPlaybackTargetKind.Paragraph,
+                SlideShowAnimationPlaybackTargetKind.Primary,
+                SlideShowAnimationPlaybackTargetKind.Fill,
+                null,
+                SlideShowAnimationPlaybackTargetKind.Primary,
+                SlideShowAnimationPlaybackTargetKind.Primary
+            });
+        elements.Select(element => element.Plan.InitialOpacity).Should().Equal(
+            1, 0.25, 1, 0, 0, 0.5, 0, 1, 0.75, 0.8);
+        elements.TakeLast(3).Select(element => element.BitmapShapeId).Should().Equal(51, 50, 60);
+        elements[6].Plan.UsesOpacityMask.Should().BeTrue();
+        suppressed.Should().BeEquivalentTo([1u, 2u, 3u, 5u, 6u]);
+
+        var availability = targets.BuildAvailability();
+        availability.ParagraphRangeAnimations.Should().NotBeNull();
+        availability.ParagraphRangeAnimations!.Should().Contain(rangeAnimation);
+        availability.ParagraphCounts[2].Should().Be(2);
+        availability.PrimaryShapeIds.Should().BeEquivalentTo([3u, 5u, 6u]);
+        availability.FillShapeIds.Should().ContainSingle().Which.Should().Be(3);
+        availability.PrimaryShapeIds.Should().NotContain(4);
+    }
+
+    [Fact]
     public void RepeatPassOwnsAutoReverseTimingGeometryAndStateReset()
     {
         var presentation = new Presentation();
@@ -292,4 +403,10 @@ public sealed class SlideShowAnimationRendererSessionTests
             playback,
             SuppressBaseBeforePlayback: false,
             RevealBaseUsingPlaybackTiming: false);
+
+    private sealed record RenderedBitmap(uint ShapeId);
+
+    private sealed record MaterializedElement(
+        uint BitmapShapeId,
+        SlideShowAnimationOverlayElementPlan Plan);
 }

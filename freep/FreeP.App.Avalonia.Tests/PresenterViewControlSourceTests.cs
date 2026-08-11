@@ -24,6 +24,8 @@ public sealed class PresenterViewControlSourceTests
         slideshow.Should().Contain("_runtime.SetMediaIntent(mediaIntent, nowUtc)");
         slideshow.Should().Contain("public SlideShowPresenterToolPlan SetPresenterMediaIntent");
         presenter.Should().Contain("SlideShowPresenterViewSession");
+        presenter.Should().Contain("new SlideShowPresenterViewSession(operations)");
+        presenter.Should().NotContain("Func<SlideShowPresenterState> stateProvider");
         presenter.Should().Contain("_session.Dispatch(new SlideShowPresenterViewDispatchRequest(");
         presenter.Should().Contain("_session.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(");
         presenter.Should().Contain("_notesText.LostFocus");

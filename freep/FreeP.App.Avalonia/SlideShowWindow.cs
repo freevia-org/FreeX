@@ -2652,163 +2652,51 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         _animOverlay.Width  = w;
         _animOverlay.Height = h;
 
-        foreach (var shapePlan in overlayPlan.Shapes)
-        {
-            var shapeId = shapePlan.ShapeId;
-            var shape = shapePlan.PrimaryShape;
-
-            if (shapePlan.IsParagraphRangeBuild)
+        SlideShowAnimationOverlayMaterializer.Materialize<Control, RenderTargetBitmap>(
+            overlayPlan,
+            shape => RenderShapeToOverlayBitmap(slide, shape, w, h),
+            (bitmap, elementPlan) => CreateAnimationOverlayElement(bitmap, w, h, elementPlan),
+            element =>
             {
-                var renderedRanges = shapePlan.ParagraphRangeShapes
-                    .Select(range => (Plan: range, Bitmap: RenderShapeToOverlayBitmap(slide, range.Shape, w, h)))
-                    .Where(item => item.Bitmap is not null)
-                    .ToArray();
-                if (renderedRanges.Length > 0)
-                {
-                    if (shapePlan.ParagraphBackgroundShape is { } background
-                        && RenderShapeToOverlayBitmap(slide, background, w, h) is { } backgroundBitmap)
-                    {
-                        _animOverlay.Children.Add(new Image
-                        {
-                            Source = backgroundBitmap,
-                            Width = w,
-                            Height = h,
-                            Stretch = Stretch.None,
-                            Opacity = 1,
-                            IsHitTestVisible = false,
-                        });
-                    }
-
-                    foreach (var (range, bitmap) in renderedRanges)
-                    {
-                        var rangeImage = new Image
-                        {
-                            Source = bitmap,
-                            Width = w,
-                            Height = h,
-                            Stretch = Stretch.None,
-                            Opacity = range.InitialOpacity,
-                            IsHitTestVisible = false,
-                        };
-                        Canvas.SetLeft(rangeImage, 0);
-                        Canvas.SetTop(rangeImage, 0);
-                        _animOverlay.Children.Add(rangeImage);
-                        _animationTargets.RegisterParagraphRange(range.Animation, rangeImage);
-                    }
-
-                    _slideCanvas.SuppressedShapeIds.Add(shapeId);
-                    continue;
-                }
-            }
-
-            if (shapePlan.IsParagraphBuild)
-            {
-                var paragraphShapes = shapePlan.ParagraphShapes;
-                if (shapePlan.ParagraphBackgroundShape is { } background)
-                {
-                    var backgroundBitmap = RenderShapeToOverlayBitmap(slide, background, w, h);
-                    if (backgroundBitmap is not null)
-                    {
-                        _animOverlay.Children.Add(new Image
-                        {
-                            Source = backgroundBitmap,
-                            Width = w,
-                            Height = h,
-                            Stretch = Stretch.None,
-                            Opacity = 1,
-                            IsHitTestVisible = false,
-                        });
-                    }
-
-                    var paragraphElements = new List<Control>(paragraphShapes.Count);
-                    foreach (var paragraphShape in paragraphShapes)
-                    {
-                        var paragraphBitmap = RenderShapeToOverlayBitmap(slide, paragraphShape, w, h);
-                        if (paragraphBitmap is null) continue;
-
-                        var paragraphImage = new Image
-                        {
-                            Source = paragraphBitmap,
-                            Width = w,
-                            Height = h,
-                            Stretch = Stretch.None,
-                            Opacity = shapePlan.InitialOpacity,
-                            IsHitTestVisible = false,
-                        };
-                        Canvas.SetLeft(paragraphImage, 0);
-                        Canvas.SetTop(paragraphImage, 0);
-                        _animOverlay.Children.Add(paragraphImage);
-                        paragraphElements.Add(paragraphImage);
-                    }
-
-                    if (paragraphElements.Count > 0)
-                    {
-                        _animationTargets.RegisterParagraphs(shapeId, paragraphElements);
-                        _slideCanvas.SuppressedShapeIds.Add(shapeId);
-                        continue;
-                    }
-                }
-            }
-
-            var shapeBitmap = RenderShapeToOverlayBitmap(slide, shape, w, h);
-            if (shapeBitmap is null) continue;
-
-            var img = new Image
-            {
-                Source           = shapeBitmap,
-                Width            = w,
-                Height           = h,
-                Stretch          = Stretch.None,
-                Opacity          = shapePlan.InitialOpacity,
-                IsHitTestVisible = false,
-            };
-
-            Canvas.SetLeft(img, 0);
-            Canvas.SetTop(img, 0);
-
-            _animOverlay.Children.Add(img);
-            _animationTargets.Register(
-                shapeId,
-                SlideShowAnimationPlaybackTargetKind.Primary,
-                img);
-
-            foreach (var layerPlan in shapePlan.AuxiliaryLayers)
-            {
-                var layerBitmap = RenderShapeToOverlayBitmap(slide, layerPlan.Shape, w, h);
-                if (layerBitmap is null)
-                    continue;
-
-                Control layer = layerPlan.UsesOpacityMask
-                    ? new Rectangle
-                    {
-                        Width = w,
-                        Height = h,
-                        Fill = new SolidColorBrush(Colors.Transparent),
-                        Opacity = 0,
-                        OpacityMask = new ImageBrush(layerBitmap) { Stretch = Stretch.None },
-                        IsHitTestVisible = false,
-                    }
-                    : new Image
-                    {
-                        Source = layerBitmap,
-                        Width = w,
-                        Height = h,
-                        Stretch = Stretch.None,
-                        Opacity = 0,
-                        IsHitTestVisible = false,
-                    };
-                Canvas.SetLeft(layer, 0);
-                Canvas.SetTop(layer, 0);
-                _animOverlay.Children.Add(layer);
-                _animationTargets.Register(shapeId, layerPlan.TargetKind, layer);
-            }
-
-            if (shapePlan.SuppressBaseShape)
-                _slideCanvas.SuppressedShapeIds.Add(shapeId);
-        }
+                Canvas.SetLeft(element, 0);
+                Canvas.SetTop(element, 0);
+                _animOverlay.Children.Add(element);
+            },
+            _animationTargets,
+            _slideCanvas.SuppressedShapeIds);
 
         // DA1: trigger a repaint so the suppressed shapes are hidden from the base canvas.
         _slideCanvas.Refresh();
+    }
+
+    private static Control CreateAnimationOverlayElement(
+        RenderTargetBitmap bitmap,
+        double width,
+        double height,
+        SlideShowAnimationOverlayElementPlan plan)
+    {
+        if (plan.UsesOpacityMask)
+        {
+            return new Rectangle
+            {
+                Width = width,
+                Height = height,
+                Fill = new SolidColorBrush(Colors.Transparent),
+                Opacity = plan.InitialOpacity,
+                OpacityMask = new ImageBrush(bitmap) { Stretch = Stretch.None },
+                IsHitTestVisible = false,
+            };
+        }
+
+        return new Image
+        {
+            Source = bitmap,
+            Width = width,
+            Height = height,
+            Stretch = Stretch.None,
+            Opacity = plan.InitialOpacity,
+            IsHitTestVisible = false,
+        };
     }
 
     /// <summary>

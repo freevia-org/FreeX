@@ -170,6 +170,7 @@ public sealed class ReviewCommentAndCustomShowSessionTests
         foreach (var source in new[] { wpfDialog, avaloniaDialog })
         {
             source.Should().Contain("SlideShowCustomShowDialogSession");
+            source.Should().Contain("SlideShowCustomShowDialogTransitionDispatcher.Dispatch(");
             source.Should().Contain("customShowSession.CreateDialogSession(");
             source.Should().Contain("_session.Reorder(");
             source.Should().NotContain("MainWindow _host");
@@ -178,6 +179,7 @@ public sealed class ReviewCommentAndCustomShowSessionTests
             source.Should().NotContain("BuildCustomShowSlideDragReorderPlan(");
             source.Should().NotContain("FormatShowListText(");
             source.Should().NotContain("new SlideShowCustomShowDragReorderPlan(");
+            source.Should().NotContain("switch (transition.RenderScope)");
             source.Should().NotContain("_host.CreateCustomShow(");
             source.Should().NotContain("_host.RenameCustomShow(");
             source.Should().NotContain("_host.UpdateCustomShowSlides(");

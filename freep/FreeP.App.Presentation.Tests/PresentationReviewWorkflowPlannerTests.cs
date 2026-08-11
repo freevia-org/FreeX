@@ -297,6 +297,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
                 "Nora.Reviewer",
                 "Comment author"));
         all.SummaryLabel.Should().Be("3 mention candidates");
+        all.ShouldAutoApplyDefaultCandidate.Should().BeFalse();
+        all.TriggerLabel.Should().Be("@");
 
         filtered.Query.Should().Be("nor");
         filtered.Candidates.Should().ContainSingle().Which.DisplayName.Should().Be("Nora Reviewer");
@@ -327,6 +329,8 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.Query.Should().Be("No");
         plan.Candidates.Should().ContainSingle().Which.DisplayName.Should().Be("Nora Reviewer");
         plan.DefaultCandidate!.InsertToken.Should().Be("Nora.Reviewer");
+        plan.ShouldAutoApplyDefaultCandidate.Should().BeTrue();
+        plan.TriggerLabel.Should().Be("@Nora.Reviewer");
     }
 
     [Fact]

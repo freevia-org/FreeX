@@ -41,52 +41,9 @@ public sealed class PresenterViewWindow : Window
     public PresenterViewWindow(
         Presentation presentation,
         SlideShowPresenterViewOperations operations)
-        : this(
-            presentation,
-            operations.StateProvider,
-            operations.GoBack,
-            operations.GoNext,
-            operations.SetScreenMode,
-            operations.SelectPointerMode,
-            operations.ClearInk,
-            operations.SetTimingIntent,
-            operations.SetMediaIntent,
-            operations.RecordingReviewProvider,
-            operations.ApplyRecordingReview,
-            operations.GoToSlide,
-            operations.SetNotesText)
-    {
-    }
-
-    public PresenterViewWindow(
-        Presentation presentation,
-        Func<SlideShowPresenterState> stateProvider,
-        Action? goBack = null,
-        Action? goNext = null,
-        Action<SlideShowScreenMode>? setScreenMode = null,
-        Action<SlideShowPresenterPointerMode>? selectPointerMode = null,
-        Action? clearInk = null,
-        Action<SlideShowTimingIntent>? setTimingIntent = null,
-        Action<SlideShowRecordingMediaIntent>? setMediaIntent = null,
-        Func<SlideShowRecordingReviewPlan>? recordingReviewProvider = null,
-        Func<SlideShowRecordingReviewApplyResult>? applyRecordingReview = null,
-        Action<int>? goToSlide = null,
-        Action<int, string?>? setNotesText = null)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
-        _session = new SlideShowPresenterViewSession(
-            stateProvider,
-            goBack,
-            goNext,
-            setScreenMode,
-            selectPointerMode,
-            clearInk,
-            setTimingIntent,
-            setMediaIntent,
-            recordingReviewProvider,
-            applyRecordingReview,
-            goToSlide,
-            setNotesText);
+        _session = new SlideShowPresenterViewSession(operations);
         var surface = _session.Surface;
 
         Title = surface.Title;

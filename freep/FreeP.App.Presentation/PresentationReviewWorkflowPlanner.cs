@@ -116,6 +116,12 @@ public sealed record PresentationCommentMentionPickerPlan(
 
     public PresentationCommentMentionCandidate? DefaultCandidate => HasCandidates ? Candidates[0] : null;
 
+    public bool ShouldAutoApplyDefaultCandidate => Candidates.Count == 1;
+
+    public string TriggerLabel => ShouldAutoApplyDefaultCandidate
+        ? DefaultCandidate!.Label
+        : "@";
+
     public string SummaryLabel => HasCandidates
         ? PresentationCommentMetadataPolicy.BuildCountSummary(Candidates.Count, "mention candidate")
         : "No mention candidates";
@@ -809,10 +815,10 @@ internal static class PresentationCommentMetadataPolicy
             .ToArray();
         if (mentions.Count <= labels.Length)
         {
-            return $"Mentions: {string.Join(", ", labels)}";
+            return $"{PresentationSemanticIdentityCatalog.CommentMentionSummaryPrefix} {string.Join(", ", labels)}";
         }
 
-        return $"Mentions: {string.Join(", ", labels)}, +{mentions.Count - labels.Length} more";
+        return $"{PresentationSemanticIdentityCatalog.CommentMentionSummaryPrefix} {string.Join(", ", labels)}, +{mentions.Count - labels.Length} more";
     }
 
     private static string? NormalizeText(string? value)

@@ -18,9 +18,8 @@ namespace FreeP.App.Rendering.Wpf;
 ///   <item>Maintains a live-preview offset/resize/rotate state during drag; commits one
 ///         command to <see cref="FreeP.App.Compositor.EditingSession"/> on mouse-up.</item>
 ///   <item>Drives a <see cref="SelectionAdorner"/> for visual feedback.</item>
-///   <item>All coordinate work is delegated to the framework-free helpers
-///         <see cref="SlideTransform"/> and <see cref="ShapeHitTester"/> so the logic
-///         is fully unit-testable.</item>
+///   <item>All coordinate work is delegated to the framework-free gesture router and preview
+///         projector so the logic is fully unit-testable.</item>
 /// </list>
 /// </summary>
 public sealed class CanvasGestureHandler : IDisposable
@@ -292,54 +291,50 @@ public sealed class CanvasGestureHandler : IDisposable
 
     private void ApplyPreviewPlan(CanvasGesturePreviewPlan plan, SlideTransform transform)
     {
-        switch (plan.Kind)
+        var visual = CanvasGesturePreviewProjector.Project(
+            plan,
+            _editor.CurrentSlide,
+            _editor.Presentation,
+            ToCoreTransform(transform));
+        switch (visual.Kind)
         {
-            case CanvasGestureKind.Move when plan.Move is { } move:
+            case CanvasGestureKind.Move:
                 _adorner.UpdatePreview(
-                    move.PreviewBounds is { } bounds ? ToWpfRect(bounds) : null);
+                    visual.PreviewBounds is { } bounds ? ToWpfRect(bounds) : null);
                 _adorner.UpdateSnapGuides(
-                    move.SnapGuides.Count > 0 ? move.SnapGuides : null,
+                    visual.SnapGuides.Count > 0 ? visual.SnapGuides : null,
                     transform);
                 break;
 
-            case CanvasGestureKind.Resize when plan.MultiTransform is { } multiResize:
+            case CanvasGestureKind.Resize when visual.MultiTransform is { } multiResize:
                 _adorner.UpdateTransformPreview(multiResize);
                 _canvas.UpdateTransformPreview(multiResize);
                 break;
 
-            case CanvasGestureKind.Resize when plan.Resize is { } resize:
-                var resizeRect = SlideCanvasGeometryPlanner.EmuBoundsToScreen(
-                    resize.XEmu,
-                    resize.YEmu,
-                    resize.CxEmu,
-                    resize.CyEmu,
-                    ToCoreTransform(transform));
-                _adorner.UpdatePreview(ToWpfRect(resizeRect));
+            case CanvasGestureKind.Resize when visual.PreviewBounds is { } resizeBounds:
+                _adorner.UpdatePreview(ToWpfRect(resizeBounds));
                 break;
 
-            case CanvasGestureKind.Rotate when plan.MultiTransform is { } multiRotate:
+            case CanvasGestureKind.Rotate when visual.MultiTransform is { } multiRotate:
                 _adorner.UpdateTransformPreview(multiRotate);
                 _canvas.UpdateTransformPreview(multiRotate);
                 break;
 
-            case CanvasGestureKind.Rotate when plan.RotationDegrees is { } angle:
-                if (_editor.CurrentSlide is { } slide &&
-                    GetSelectionScreenRect(plan.ShapeId, slide, transform) is { } selectionRect)
-                {
-                    _adorner.UpdatePreview(selectionRect, angle);
-                }
+            case CanvasGestureKind.Rotate when
+                visual.PreviewBounds is { } rotationBounds &&
+                visual.RotationDegrees is { } angle:
+                _adorner.UpdatePreview(ToWpfRect(rotationBounds), angle);
                 break;
 
-            case CanvasGestureKind.GeometryAdjustment when plan.Geometry is { } geometry:
-                var geometryScreen = transform.SlideToScreen(
-                    geometry.PositionSlide.X,
-                    geometry.PositionSlide.Y);
+            case CanvasGestureKind.GeometryAdjustment when
+                visual.GeometryHandleName is { } handleName &&
+                visual.GeometryScreenPoint is { } geometryScreen:
                 _adorner.UpdateGeometryPreview(
-                    geometry.HandleName,
+                    handleName,
                     new Point(geometryScreen.X, geometryScreen.Y));
                 break;
 
-            case CanvasGestureKind.Marquee when plan.Marquee is { } marquee:
+            case CanvasGestureKind.Marquee when visual.PreviewBounds is { } marquee:
                 _adorner.UpdateMarquee(ToWpfRect(marquee));
                 break;
         }
@@ -579,20 +574,6 @@ public sealed class CanvasGestureHandler : IDisposable
 
     private static SlideTransformCore ToCoreTransform(SlideTransform xf)
         => xf.Core;
-
-    private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransform xf)
-    {
-        if (_editor.Presentation is null) return null;
-        var shape = ShapeHitTester.FindShape(slide, shapeId);
-        var rect = shape is null
-            ? (SlideScreenRect?)null
-            : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
-                shape,
-                slide,
-                _editor.Presentation,
-                ToCoreTransform(xf));
-        return rect is { } screenRect ? ToWpfRect(screenRect) : null;
-    }
 
     private static Rect ToWpfRect(SlideScreenRect rect)
         => new(rect.Left, rect.Top, rect.Width, rect.Height);

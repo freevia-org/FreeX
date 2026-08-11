@@ -117,6 +117,79 @@ public sealed class CanvasGestureRouterTests
     }
 
     [Fact]
+    public void PreviewProjector_OwnsScreenBoundsGuidesRotationAndGeometryProjection()
+    {
+        var (editor, shape) = CreateEditorWithShape();
+        var transform = new SlideTransformCore(2, 5, 7, 960, 540);
+        var moveGuide = new SnapGuideLine { IsHorizontal = true, Position = 25 };
+
+        var move = CanvasGesturePreviewProjector.Project(
+            new CanvasGesturePreviewPlan(
+                CanvasGestureKind.Move,
+                0,
+                new CanvasMovePlan(0, 0, [], new SlideScreenRect(1, 2, 3, 4), [moveGuide]),
+                null,
+                null,
+                null,
+                null,
+                null),
+            editor.CurrentSlide,
+            editor.Presentation,
+            transform);
+        var resize = CanvasGesturePreviewProjector.Project(
+            new CanvasGesturePreviewPlan(
+                CanvasGestureKind.Resize,
+                shape.Id,
+                null,
+                new CanvasResizeBounds(
+                    10 * EmusPerDip,
+                    20 * EmusPerDip,
+                    100 * EmusPerDip,
+                    50 * EmusPerDip),
+                null,
+                null,
+                null,
+                null),
+            editor.CurrentSlide,
+            editor.Presentation,
+            transform);
+        var rotate = CanvasGesturePreviewProjector.Project(
+            new CanvasGesturePreviewPlan(
+                CanvasGestureKind.Rotate,
+                shape.Id,
+                null,
+                null,
+                null,
+                45,
+                null,
+                null),
+            editor.CurrentSlide,
+            editor.Presentation,
+            transform);
+        var geometry = CanvasGesturePreviewProjector.Project(
+            new CanvasGesturePreviewPlan(
+                CanvasGestureKind.GeometryAdjustment,
+                shape.Id,
+                null,
+                null,
+                null,
+                null,
+                new CanvasGeometryPreviewPlan("adj", new CanvasGesturePoint(3, 4)),
+                null),
+            editor.CurrentSlide,
+            editor.Presentation,
+            transform);
+
+        move.PreviewBounds.Should().Be(new SlideScreenRect(1, 2, 3, 4));
+        move.SnapGuides.Should().ContainSingle().Which.Should().Be(moveGuide);
+        resize.PreviewBounds.Should().Be(new SlideScreenRect(25, 47, 200, 100));
+        rotate.PreviewBounds.Should().Be(new SlideScreenRect(25, 47, 200, 100));
+        rotate.RotationDegrees.Should().Be(45);
+        geometry.GeometryHandleName.Should().Be("adj");
+        geometry.GeometryScreenPoint.Should().Be(new CanvasGesturePoint(11, 15));
+    }
+
+    [Fact]
     public void DoubleClickRouting_DefersText_ExternalizesOle_AndTerminatesZoomNavigation()
     {
         var presentation = Presentation.CreateEmpty();

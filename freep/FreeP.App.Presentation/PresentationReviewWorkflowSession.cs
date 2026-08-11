@@ -25,6 +25,14 @@ public sealed record PresentationCommentMentionApplicationResult(
     PresentationCommentMentionInsertionPlan InsertionPlan,
     PresentationCommentMutationPlan? MutationPlan);
 
+public sealed record PresentationCommentMentionDispatchResult(
+    PresentationCommentMentionPickerPlan PickerPlan,
+    PresentationCommentMentionApplicationResult? ApplicationResult)
+{
+    public bool ShouldShowPicker =>
+        ApplicationResult is null && PickerPlan.HasCandidates;
+}
+
 /// <summary>
 /// Renderer-neutral state and orchestration for the shared FreeP review workflow.
 /// Hosts retain their dirty, status, canvas, notes, and pane-rendering callbacks.
@@ -245,6 +253,24 @@ public sealed class PresentationReviewWorkflowSession
                 currentAuthor,
                 currentInitials);
         return LastCommentMentionPickerPlan;
+    }
+
+    public PresentationCommentMentionDispatchResult DispatchCommentMentionPicker(
+        PresentationReviewWorkflowIntentKind intent,
+        string? text,
+        int caretIndex,
+        string? currentAuthor = null,
+        string? currentInitials = null)
+    {
+        var picker = BuildCommentMentionPickerPlanForInput(
+            text,
+            caretIndex,
+            currentAuthor,
+            currentInitials);
+        var application = picker.ShouldAutoApplyDefaultCandidate
+            ? ApplyCommentMention(intent, text, caretIndex, picker.DefaultCandidate)
+            : null;
+        return new PresentationCommentMentionDispatchResult(picker, application);
     }
 
     public PresentationCommentMentionInsertionPlan InsertCommentMention(

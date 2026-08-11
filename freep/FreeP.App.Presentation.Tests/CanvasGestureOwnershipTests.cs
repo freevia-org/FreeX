@@ -33,6 +33,9 @@ public sealed class CanvasGestureOwnershipTests
         router.Should().Contain("private readonly CanvasGestureSession _session");
         router.Should().Contain("HandlePointerPressed(CanvasGesturePressRequest request)");
         router.Should().Contain("PreviewPointer(");
+        router.Should().Contain("public static class CanvasGesturePreviewProjector");
+        router.Should().Contain("SlideCanvasGeometryPlanner.EmuBoundsToScreen(");
+        router.Should().Contain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(");
         router.Should().Contain("CompletePointer(");
         router.Should().Contain("HandleKeyDown(");
         router.Should().Contain("ShapeHitTester.MarqueeHitTest");
@@ -47,6 +50,7 @@ public sealed class CanvasGestureOwnershipTests
             adapter.Should().Contain("CanvasGestureRouter _gestureRouter");
             adapter.Should().Contain("_gestureRouter.HandlePointerPressed(");
             adapter.Should().Contain("_gestureRouter.PreviewPointer(");
+            adapter.Should().Contain("CanvasGesturePreviewProjector.Project(");
             adapter.Should().Contain("_gestureRouter.CompletePointer(");
             adapter.Should().Contain("_gestureRouter.HandleKeyDown(");
             adapter.Should().Contain("CreatePressRequest(");
@@ -67,6 +71,8 @@ public sealed class CanvasGestureOwnershipTests
             adapter.Should().NotContain("ChartPointHitTester.TryHitTest");
             adapter.Should().NotContain("ZoomNavigationService.TryGetTargetSlideIndex");
             adapter.Should().NotContain("ShapeHitTester.MarqueeHitTest");
+            adapter.Should().NotContain("SlideCanvasGeometryPlanner.EmuBoundsToScreen(");
+            adapter.Should().NotContain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(");
             adapter.Should().NotContain("_editor.Select(");
             adapter.Should().NotContain("_editor.ClearSelection(");
             adapter.Should().NotContain("_editor.MoveSelected(");

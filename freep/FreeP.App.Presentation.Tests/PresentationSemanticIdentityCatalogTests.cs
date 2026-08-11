@@ -10,13 +10,32 @@ public sealed class PresentationSemanticIdentityCatalogTests
             PresentationSemanticIdentityCatalog.BackstageOverlayAutomationId,
             PresentationSemanticIdentityCatalog.BackstageNewBlankPresentationAutomationId,
             PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId,
+            PresentationSemanticIdentityCatalog.CommentsPaneItemAutomationIdPrefix,
+            PresentationSemanticIdentityCatalog.CommentsPaneCloseTag,
+            PresentationSemanticIdentityCatalog.CommentMentionSummaryPrefix,
+            PresentationSemanticIdentityCatalog.CommentMentionTagPrefix,
+            PresentationSemanticIdentityCatalog.CommentMentionEditTag,
+            PresentationSemanticIdentityCatalog.CommentMentionReplyTag,
         };
 
         identities.Should().Equal(
             "FreePBackstageOverlay",
             "BackstageNewBlankPresentation",
-            "FreePRichTextEditorInput");
+            "FreePRichTextEditorInput",
+            "FreePCommentsPaneItem",
+            "comments-pane-close",
+            "Mentions:",
+            "comment-mention:",
+            "comment-mention:edit",
+            "comment-mention:reply");
         identities.Should().OnlyHaveUniqueItems();
+
+        PresentationSemanticIdentityCatalog.IsCommentMentionSummary("Mentions: Alice").Should().BeTrue();
+        PresentationSemanticIdentityCatalog.IsCommentMentionTag("comment-mention:reply").Should().BeTrue();
+        PresentationSemanticIdentityCatalog.BuildCommentMentionCandidateTag(
+                PresentationSemanticIdentityCatalog.CommentMentionEditTag,
+                "Nora.Reviewer")
+            .Should().Be("comment-mention:edit:Nora.Reviewer");
     }
 
     [Fact]
@@ -48,6 +67,22 @@ public sealed class PresentationSemanticIdentityCatalogTests
             source.Should()
                 .Contain("PresentationSemanticIdentityCatalog.RichTextEditorInputAutomationId")
                 .And.NotContain("\"FreePRichTextEditorInput\"");
+        }
+
+        var commentSources = new[]
+        {
+            Read("freep", "FreeP.App.Host", "MainWindow.cs"),
+            Read("freep", "FreeP.App.Avalonia", "MainWindow.cs"),
+        };
+        foreach (var source in commentSources)
+        {
+            source.Should()
+                .Contain("PresentationSemanticIdentityCatalog.CommentMentionEditTag")
+                .And.Contain("PresentationSemanticIdentityCatalog.CommentMentionReplyTag")
+                .And.Contain("PresentationSemanticIdentityCatalog.CommentsPaneCloseTag")
+                .And.NotContain("\"comment-mention:edit\"")
+                .And.NotContain("\"comment-mention:reply\"")
+                .And.NotContain("\"comments-pane-close\"");
         }
     }
 

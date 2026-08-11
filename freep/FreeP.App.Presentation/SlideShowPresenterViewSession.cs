@@ -48,6 +48,23 @@ public sealed class SlideShowPresenterViewSession
     private readonly Action<int, string?>? _setNotesText;
     private int? _notesSlideIndex;
 
+    public SlideShowPresenterViewSession(SlideShowPresenterViewOperations operations)
+        : this(
+            (operations ?? throw new ArgumentNullException(nameof(operations))).StateProvider,
+            operations.GoBack,
+            operations.GoNext,
+            operations.SetScreenMode,
+            operations.SelectPointerMode,
+            operations.ClearInk,
+            operations.SetTimingIntent,
+            operations.SetMediaIntent,
+            operations.RecordingReviewProvider,
+            operations.ApplyRecordingReview,
+            operations.GoToSlide,
+            operations.SetNotesText)
+    {
+    }
+
     public SlideShowPresenterViewSession(
         Func<SlideShowPresenterState> stateProvider,
         Action? goBack = null,

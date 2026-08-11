@@ -494,12 +494,12 @@ public sealed partial class MainWindow : Window
             .ToArray();
     internal IReadOnlyList<string> ReviewCommentsPaneRenderedMentionLines =>
         EnumerateReviewPaneText(_reviewCommentsPanePanel)
-            .Where(text => text.StartsWith("Mentions:", StringComparison.Ordinal))
+            .Where(PresentationSemanticIdentityCatalog.IsCommentMentionSummary)
             .ToArray();
     internal IReadOnlyList<string> ReviewCommentsPaneRenderedMentionActions =>
         EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
             .Where(button => button.Tag is string tag &&
-                tag.StartsWith("comment-mention:", StringComparison.Ordinal))
+                PresentationSemanticIdentityCatalog.IsCommentMentionTag(tag))
             .Select(button => $"{button.Tag}|{button.Content}|{button.IsEnabled}")
             .ToArray();
     internal bool InvokeReviewCommentPaneMentionActionForTests(string tag, string? candidateLabel = null)
@@ -646,7 +646,9 @@ public sealed partial class MainWindow : Window
             : _reviewCommentsPanePanel.Children
                 .OfType<Control>()
                 .Where(item => AutomationProperties.GetAutomationId(item)
-                    ?.StartsWith("FreePCommentsPaneItem", StringComparison.Ordinal) == true)
+                    ?.StartsWith(
+                        PresentationSemanticIdentityCatalog.CommentsPaneItemAutomationIdPrefix,
+                        StringComparison.Ordinal) == true)
                 .ToArray();
     internal SelectionPane SelectionPaneForAccessibilityTests => _selectionPane;
     internal Border AnimationPaneForAccessibilityTests => _animationPaneHost;
@@ -4390,7 +4392,7 @@ public sealed partial class MainWindow : Window
             FontSize = PresentationCommentPaneVisualMetrics.CompactControlFontSize,
             Padding  = new Thickness(8, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
-            Tag      = "comments-pane-close",
+            Tag      = PresentationSemanticIdentityCatalog.CommentsPaneCloseTag,
             Margin   = new Thickness(6, 0, 0, 6),
         };
         close.Click += (_, _) => HideReviewCommentsPane();
@@ -4643,7 +4645,7 @@ public sealed partial class MainWindow : Window
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
             var mentionButton = BuildCommentMentionButton(
-                "comment-mention:edit",
+                PresentationSemanticIdentityCatalog.CommentMentionEditTag,
                 () => editInput.Text,
                 () => editInput.CaretIndex,
                 PresentationReviewWorkflowIntentKind.EditComment);
@@ -4698,7 +4700,7 @@ public sealed partial class MainWindow : Window
                 Margin          = new Thickness(0, 0, 6, 0),
             };
             var mentionButton = BuildCommentMentionButton(
-                "comment-mention:reply",
+                PresentationSemanticIdentityCatalog.CommentMentionReplyTag,
                 () => replyInput.Text,
                 () => replyInput.CaretIndex,
                 PresentationReviewWorkflowIntentKind.ReplyComment);
@@ -4769,37 +4771,30 @@ public sealed partial class MainWindow : Window
         var mentionPicker = _reviewWorkflowSession.BuildCommentMentionPickerPlanForInput(
             getText(),
             getCaretIndex());
-        var candidate = mentionPicker.DefaultCandidate;
         var button = new Button
         {
-            Content = mentionPicker.Candidates.Count == 1 ? candidate?.Label : "@",
+            Content = mentionPicker.TriggerLabel,
             IsEnabled = mentionPicker.HasCandidates,
             Tag = tag,
             MinWidth = 72,
         };
         button.Click += (_, _) =>
         {
-            var currentPlan = _reviewWorkflowSession.BuildCommentMentionPickerPlanForInput(
+            var dispatch = _reviewWorkflowSession.DispatchCommentMentionPicker(
+                intent,
                 getText(),
                 getCaretIndex());
-            if (currentPlan.Candidates.Count == 1)
-            {
-                _reviewWorkflowSession.ApplyCommentMention(
-                    intent,
-                    getText(),
-                    getCaretIndex(),
-                    currentPlan.DefaultCandidate);
+            if (dispatch.ApplicationResult is not null)
                 return;
-            }
 
-            if (currentPlan.HasCandidates)
+            if (dispatch.ShouldShowPicker)
             {
                 var menu = BuildCommentMentionMenu(
                     tag,
                     getText,
                     getCaretIndex,
                     intent,
-                    currentPlan);
+                    dispatch.PickerPlan);
                 button.ContextMenu = menu;
                 menu.Open(button);
             }
@@ -4820,7 +4815,9 @@ public sealed partial class MainWindow : Window
             var item = new MenuItem
             {
                 Header = candidate.Label,
-                Tag = $"{tag}:{candidate.InsertToken}",
+                Tag = PresentationSemanticIdentityCatalog.BuildCommentMentionCandidateTag(
+                    tag,
+                    candidate.InsertToken),
             };
             item.Click += (_, _) => _reviewWorkflowSession.ApplyCommentMention(
                 intent,

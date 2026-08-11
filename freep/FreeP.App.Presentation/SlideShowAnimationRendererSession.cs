@@ -168,6 +168,233 @@ public sealed class SlideShowAnimationTargetRegistry<TElement>
     }
 }
 
+public sealed record SlideShowAnimationOverlayElementPlan(
+    uint ShapeId,
+    SlideShowAnimationPlaybackTargetKind? TargetKind,
+    double InitialOpacity,
+    bool UsesOpacityMask = false);
+
+/// <summary>
+/// Owns the renderer-neutral sequencing that materializes an animation overlay. Native hosts
+/// provide bitmap rendering, control creation, and visual-tree insertion delegates.
+/// </summary>
+public static class SlideShowAnimationOverlayMaterializer
+{
+    public static int Materialize<TElement, TBitmap>(
+        SlideShowAnimationOverlayPlan plan,
+        Func<SlideShape, TBitmap?> renderShape,
+        Func<TBitmap, SlideShowAnimationOverlayElementPlan, TElement> createElement,
+        Action<TElement> addElement,
+        SlideShowAnimationTargetRegistry<TElement> targets,
+        ISet<uint> suppressedShapeIds)
+        where TElement : class
+        where TBitmap : class
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(renderShape);
+        ArgumentNullException.ThrowIfNull(createElement);
+        ArgumentNullException.ThrowIfNull(addElement);
+        ArgumentNullException.ThrowIfNull(targets);
+        ArgumentNullException.ThrowIfNull(suppressedShapeIds);
+
+        var materializedCount = 0;
+        foreach (var shapePlan in plan.Shapes)
+        {
+            if (TryMaterializeParagraphRanges(
+                    shapePlan,
+                    renderShape,
+                    createElement,
+                    addElement,
+                    targets,
+                    ref materializedCount))
+            {
+                suppressedShapeIds.Add(shapePlan.ShapeId);
+                continue;
+            }
+
+            if (TryMaterializeParagraphs(
+                    shapePlan,
+                    renderShape,
+                    createElement,
+                    addElement,
+                    targets,
+                    ref materializedCount))
+            {
+                suppressedShapeIds.Add(shapePlan.ShapeId);
+                continue;
+            }
+
+            if (renderShape(shapePlan.PrimaryShape) is not { } primaryBitmap)
+                continue;
+
+            var primary = CreateAndAdd(
+                primaryBitmap,
+                new SlideShowAnimationOverlayElementPlan(
+                    shapePlan.ShapeId,
+                    SlideShowAnimationPlaybackTargetKind.Primary,
+                    shapePlan.InitialOpacity),
+                createElement,
+                addElement,
+                ref materializedCount);
+            targets.Register(
+                shapePlan.ShapeId,
+                SlideShowAnimationPlaybackTargetKind.Primary,
+                primary);
+
+            foreach (var layer in shapePlan.AuxiliaryLayers)
+            {
+                if (renderShape(layer.Shape) is not { } layerBitmap)
+                    continue;
+
+                var element = CreateAndAdd(
+                    layerBitmap,
+                    new SlideShowAnimationOverlayElementPlan(
+                        shapePlan.ShapeId,
+                        layer.TargetKind,
+                        0,
+                        layer.UsesOpacityMask),
+                    createElement,
+                    addElement,
+                    ref materializedCount);
+                targets.Register(shapePlan.ShapeId, layer.TargetKind, element);
+            }
+
+            if (shapePlan.SuppressBaseShape)
+                suppressedShapeIds.Add(shapePlan.ShapeId);
+        }
+
+        return materializedCount;
+    }
+
+    private static bool TryMaterializeParagraphRanges<TElement, TBitmap>(
+        SlideShowAnimationOverlayShapePlan shapePlan,
+        Func<SlideShape, TBitmap?> renderShape,
+        Func<TBitmap, SlideShowAnimationOverlayElementPlan, TElement> createElement,
+        Action<TElement> addElement,
+        SlideShowAnimationTargetRegistry<TElement> targets,
+        ref int materializedCount)
+        where TElement : class
+        where TBitmap : class
+    {
+        if (!shapePlan.IsParagraphRangeBuild)
+            return false;
+
+        var renderedRanges = new List<(SlideShowAnimationParagraphRangeOverlayPlan Plan, TBitmap Bitmap)>();
+        foreach (var range in shapePlan.ParagraphRangeShapes)
+        {
+            if (renderShape(range.Shape) is { } bitmap)
+                renderedRanges.Add((range, bitmap));
+        }
+
+        if (renderedRanges.Count == 0)
+            return false;
+
+        AddParagraphBackground(
+            shapePlan,
+            renderShape,
+            createElement,
+            addElement,
+            ref materializedCount);
+        foreach (var (range, bitmap) in renderedRanges)
+        {
+            var element = CreateAndAdd(
+                bitmap,
+                new SlideShowAnimationOverlayElementPlan(
+                    shapePlan.ShapeId,
+                    SlideShowAnimationPlaybackTargetKind.ParagraphRange,
+                    range.InitialOpacity),
+                createElement,
+                addElement,
+                ref materializedCount);
+            targets.RegisterParagraphRange(range.Animation, element);
+        }
+
+        return true;
+    }
+
+    private static bool TryMaterializeParagraphs<TElement, TBitmap>(
+        SlideShowAnimationOverlayShapePlan shapePlan,
+        Func<SlideShape, TBitmap?> renderShape,
+        Func<TBitmap, SlideShowAnimationOverlayElementPlan, TElement> createElement,
+        Action<TElement> addElement,
+        SlideShowAnimationTargetRegistry<TElement> targets,
+        ref int materializedCount)
+        where TElement : class
+        where TBitmap : class
+    {
+        if (!shapePlan.IsParagraphBuild || shapePlan.ParagraphBackgroundShape is null)
+            return false;
+
+        AddParagraphBackground(
+            shapePlan,
+            renderShape,
+            createElement,
+            addElement,
+            ref materializedCount);
+        var paragraphElements = new List<TElement>(shapePlan.ParagraphShapes.Count);
+        foreach (var paragraphShape in shapePlan.ParagraphShapes)
+        {
+            if (renderShape(paragraphShape) is not { } bitmap)
+                continue;
+
+            paragraphElements.Add(CreateAndAdd(
+                bitmap,
+                new SlideShowAnimationOverlayElementPlan(
+                    shapePlan.ShapeId,
+                    SlideShowAnimationPlaybackTargetKind.Paragraph,
+                    shapePlan.InitialOpacity),
+                createElement,
+                addElement,
+                ref materializedCount));
+        }
+
+        if (paragraphElements.Count == 0)
+            return false;
+
+        targets.RegisterParagraphs(shapePlan.ShapeId, paragraphElements);
+        return true;
+    }
+
+    private static void AddParagraphBackground<TElement, TBitmap>(
+        SlideShowAnimationOverlayShapePlan shapePlan,
+        Func<SlideShape, TBitmap?> renderShape,
+        Func<TBitmap, SlideShowAnimationOverlayElementPlan, TElement> createElement,
+        Action<TElement> addElement,
+        ref int materializedCount)
+        where TElement : class
+        where TBitmap : class
+    {
+        if (shapePlan.ParagraphBackgroundShape is not { } background ||
+            renderShape(background) is not { } bitmap)
+        {
+            return;
+        }
+
+        CreateAndAdd(
+            bitmap,
+            new SlideShowAnimationOverlayElementPlan(shapePlan.ShapeId, null, 1),
+            createElement,
+            addElement,
+            ref materializedCount);
+    }
+
+    private static TElement CreateAndAdd<TElement, TBitmap>(
+        TBitmap bitmap,
+        SlideShowAnimationOverlayElementPlan plan,
+        Func<TBitmap, SlideShowAnimationOverlayElementPlan, TElement> createElement,
+        Action<TElement> addElement,
+        ref int materializedCount)
+        where TElement : class
+        where TBitmap : class
+    {
+        var element = createElement(bitmap, plan)
+            ?? throw new InvalidOperationException("Animation overlay element creation returned null.");
+        addElement(element);
+        materializedCount++;
+        return element;
+    }
+}
+
 public sealed record SlideShowAnimationPlaybackOperation(
     SlideShowAnimationPlaybackTargetKind TargetKind,
     uint ShapeId,

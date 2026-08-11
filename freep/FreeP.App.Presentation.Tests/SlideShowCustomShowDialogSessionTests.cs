@@ -182,6 +182,38 @@ public sealed class SlideShowCustomShowDialogSessionTests
         requests.Should().BeEmpty();
     }
 
+    [Fact]
+    public void TransitionDispatcher_OwnsRenderValidationAndCloseRouting()
+    {
+        var presentation = MakePresentation();
+        var session = CreateSession(presentation, out _);
+        var calls = new List<string>();
+
+        SlideShowCustomShowDialogTransitionDispatcher.Dispatch(
+            session.InitialTransition with
+            {
+                ValidationMessage = "Ready",
+                ShouldClose = true,
+            },
+            _ => calls.Add("full"),
+            _ => calls.Add("selected"),
+            _ => calls.Add("slide"),
+            message => calls.Add($"validation:{message}"),
+            () => calls.Add("close"));
+
+        calls.Should().Equal("full", "validation:Ready", "close");
+
+        calls.Clear();
+        SlideShowCustomShowDialogTransitionDispatcher.Dispatch(
+            session.SelectShow(-1),
+            _ => calls.Add("full"),
+            _ => calls.Add("selected"),
+            _ => calls.Add("slide"),
+            message => calls.Add($"validation:{message ?? "none"}"),
+            () => calls.Add("close"));
+        calls.Should().Equal("selected", "validation:none");
+    }
+
     private static SlideShowCustomShowDialogSession CreateSession(
         Presentation presentation,
         out List<SlideShowCustomShowDialogMutationRequest> requests,
