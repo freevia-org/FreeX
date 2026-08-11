@@ -1,7 +1,7 @@
 using System.Text;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
-using Free.ToolsShared;
+using Free.Shared.AppServices;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 

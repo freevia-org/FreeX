@@ -26,7 +26,7 @@ using FreeX.Core.IO;
 using FreeX.Core.Model;
 using FreeX.Ribbon.Definitions;
 using Free.Shared.Shell;
-using Free.ToolsShared;
+using Free.Shared.AppServices;
 using SubtotalColumnChoice = FreeX.App.Presentation.DataTools.SubtotalDialogColumnChoice;
 using SharedRibbon = Free.Shared.Ribbon;
 

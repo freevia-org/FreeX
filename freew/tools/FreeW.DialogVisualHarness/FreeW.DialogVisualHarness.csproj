@@ -9,6 +9,6 @@
     <PackageReference Include="SkiaSharp" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
+    <ProjectReference Include="..\..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
   </ItemGroup>
 </Project>

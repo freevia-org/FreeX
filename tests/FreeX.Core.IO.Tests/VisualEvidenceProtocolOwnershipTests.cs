@@ -5,10 +5,10 @@ namespace FreeX.Core.IO.Tests;
 public sealed class VisualEvidenceProtocolOwnershipTests
 {
     [Fact]
-    public void Neutral_tool_project_owns_the_cross_app_evidence_protocol()
+    public void Runtime_shared_project_owns_the_cross_app_evidence_protocol()
     {
         var protocol = TestWorkspaceFiles.ReadRepoText(
-            "tools", "Free.ToolsShared", "VisualEvidenceProtocol.cs");
+            "shared", "Free.Shared.AppServices", "VisualEvidence", "VisualEvidenceProtocol.cs");
         var freeP = TestWorkspaceFiles.ReadRepoText(
             "tools", "FreeP.RenderCompare", "VisualEvidenceCaptureOrchestration.cs");
         var freeXWpf = TestWorkspaceFiles.ReadRepoText(
@@ -25,6 +25,14 @@ public sealed class VisualEvidenceProtocolOwnershipTests
             "freew", "tools", "FreeW.DialogVisualHarness", "Program.cs");
         var freeWDialogCatalog = TestWorkspaceFiles.ReadRepoText(
             "freew", "tools", "FreeW.DialogVisualHarness", "FreeWDialogEvidenceCatalog.cs");
+        var productProjects = new[]
+        {
+            TestWorkspaceFiles.ReadRepoText("src", "FreeX.App.Host", "FreeX.App.Host.csproj"),
+            TestWorkspaceFiles.ReadRepoText("src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"),
+            TestWorkspaceFiles.ReadRepoText("freew", "FreeW.App.Presentation", "FreeW.App.Presentation.csproj"),
+            TestWorkspaceFiles.ReadRepoText("freep", "FreeP.App.Host", "FreeP.App.Host.csproj"),
+            TestWorkspaceFiles.ReadRepoText("freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj"),
+        };
 
         protocol.Should().Contain("public static class VisualEvidenceArgumentParser");
         protocol.Should().Contain("public static class VisualEvidencePathPolicy");
@@ -32,6 +40,9 @@ public sealed class VisualEvidenceProtocolOwnershipTests
         protocol.Should().Contain("public static class VisualEvidenceProgressLog");
         protocol.Should().Contain("public static class VisualEvidenceHash");
         protocol.Should().Contain("public static class VisualEvidenceNormalization");
+        protocol.Should().Contain("namespace Free.Shared.AppServices;");
+        productProjects.Should().OnlyContain(project =>
+            !project.Contains(@"tools\Free.ToolsShared", StringComparison.OrdinalIgnoreCase));
 
         freeP.Should().Contain("VisualEvidenceArgumentParser.ReadFirst(");
         freeP.Should().Contain("VisualEvidencePathPolicy.ResolveContainedPath(");

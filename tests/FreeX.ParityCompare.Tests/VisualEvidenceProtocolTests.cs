@@ -1,4 +1,4 @@
-using Free.ToolsShared;
+using Free.Shared.AppServices;
 using FluentAssertions;
 
 namespace FreeX.ParityCompare.Tests;

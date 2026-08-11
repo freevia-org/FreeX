@@ -7,7 +7,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Free.ToolsShared\Free.ToolsShared.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
   </ItemGroup>
   <Import Project="..\ToolProjects.props" />
 

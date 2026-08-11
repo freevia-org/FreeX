@@ -1,4 +1,4 @@
-using Free.ToolsShared;
+using Free.Shared.AppServices;
 
 namespace FreeX.ParityCompare.Core;
 

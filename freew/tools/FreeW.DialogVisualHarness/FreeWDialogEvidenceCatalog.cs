@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using Free.ToolsShared;
+using Free.Shared.AppServices;
 
 namespace FreeW.DialogVisualHarness;
 

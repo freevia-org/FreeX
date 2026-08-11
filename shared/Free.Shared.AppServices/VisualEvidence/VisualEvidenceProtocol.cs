@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Free.ToolsShared;
+namespace Free.Shared.AppServices;
 
 public sealed record VisualEvidenceArgumentSpec(
     string Key,

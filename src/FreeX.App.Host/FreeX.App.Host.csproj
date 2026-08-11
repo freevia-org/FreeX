@@ -22,7 +22,6 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
-    <ProjectReference Include="..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
   </ItemGroup>
 
   <ItemGroup>

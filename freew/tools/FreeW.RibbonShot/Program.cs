@@ -9,7 +9,6 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
-using Free.ToolsShared;
 using FreeW.App.Host;
 
 // FreeW.RibbonShot — renders the FreeW MainWindow offscreen to a PNG so the ribbon can be visually
