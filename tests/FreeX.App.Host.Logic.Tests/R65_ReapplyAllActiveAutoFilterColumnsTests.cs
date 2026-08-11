@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Reflection;
 using FluentAssertions;
 using FreeX.App.Presentation.Filtering;
@@ -53,6 +52,8 @@ public sealed class R65_ReapplyAllActiveAutoFilterColumnsTests
 
                 var range = new GridRange(
                     new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2)); // A1:B4
+                window.SheetGrid.SelectedRange = range;
+                sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
 
                 var regionFilter = new AutoFilterDialogResult(
                     AutoFilterSortDirection.None,
@@ -114,6 +115,8 @@ public sealed class R65_ReapplyAllActiveAutoFilterColumnsTests
 
                 var range = new GridRange(
                     new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 1)); // A1:A4
+                window.SheetGrid.SelectedRange = range;
+                sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
 
                 var regionFilter = new AutoFilterDialogResult(
                     AutoFilterSortDirection.None,
@@ -126,10 +129,13 @@ public sealed class R65_ReapplyAllActiveAutoFilterColumnsTests
 
                 sheet.FilterHiddenRows.Should().Contain(3u);
 
-                var factoriesField = typeof(MainWindow).GetField(
-                        "_activeAutoFilterColumnFactories", BindingFlags.Instance | BindingFlags.NonPublic)
-                    ?? throw new MissingFieldException(nameof(MainWindow), "_activeAutoFilterColumnFactories");
-                ((IDictionary)factoriesField.GetValue(window)!).Count.Should().Be(1);
+                var sessionField = typeof(MainWindow).GetField(
+                        "_filterWorkflowSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?? throw new MissingFieldException(nameof(MainWindow), "_filterWorkflowSession");
+                var session = (WorksheetFilterWorkflowSession)sessionField.GetValue(window)!;
+                var rememberedPlan = session.CreateReapplyPlan(sheet);
+                rememberedPlan.Should().NotBeNull();
+                rememberedPlan!.DefinitionCount.Should().Be(1);
 
                 // Sort the SAME column from the AutoFilter dropdown -- must not replace the
                 // remembered filter factory with a Sort factory.
@@ -142,17 +148,14 @@ public sealed class R65_ReapplyAllActiveAutoFilterColumnsTests
                         window, "ApplyAutoFilterDialogResult", range, (uint)0, sortResult, "Sort")!)
                     .Should().BeTrue();
 
-                var factoriesAfterSort = (IDictionary)factoriesField.GetValue(window)!;
-                factoriesAfterSort.Count.Should().Be(
+                var planAfterSort = session.CreateReapplyPlan(sheet);
+                planAfterSort.Should().NotBeNull();
+                planAfterSort!.DefinitionCount.Should().Be(
                     1,
                     "a Sort action must not add or replace entries in the remembered per-column filter map");
-
-                foreach (DictionaryEntry entry in factoriesAfterSort)
-                {
-                    var factory = (Func<GridRange, IWorkbookCommand>)entry.Value!;
-                    factory(range).Should().BeOfType<FilterCommand>(
+                planAfterSort.Commands.Should().ContainSingle()
+                    .Which.Should().BeOfType<FilterCommand>(
                         "the remembered command for this column must still be the value-list filter, not a Sort");
-                }
 
                 // Force row 3's Region back to "West" regardless of how the Sort reordered rows, so
                 // Reapply has a concrete change to react to.

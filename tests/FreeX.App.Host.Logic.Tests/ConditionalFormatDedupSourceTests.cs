@@ -60,7 +60,7 @@ public sealed class ConditionalFormatDedupSourceTests
         wpfSource.Should().Contain("_manageSession.BuildResultRules(");
         avaloniaSource.Should().Contain("new ManageConditionalFormatsSession(");
         avaloniaSource.Should().Contain("manageSession.BuildProjection()");
-        avaloniaSource.Should().Contain("manageSession.CreateApplyCommand(");
+        avaloniaSource.Should().Contain("manageSession.CreateApplyPlan(");
         avaloniaSource.Should().NotContain("ConditionalFormatManageModel");
 
         sessionSource.Should().Contain("public sealed class ManageConditionalFormatsSession");

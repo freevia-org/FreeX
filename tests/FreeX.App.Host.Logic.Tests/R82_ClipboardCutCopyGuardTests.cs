@@ -256,7 +256,7 @@ public sealed class R82_ClipboardCutCopyGuardTests
     {
         private readonly MethodInfo _executeCopy;
         private readonly MethodInfo _executePaste;
-        private readonly FieldInfo _internalClipboardField;
+        private readonly FieldInfo _clipboardSessionField;
 
         public MainWindow Window { get; }
         public Workbook Workbook { get; }
@@ -290,12 +290,13 @@ public sealed class R82_ClipboardCutCopyGuardTests
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteCopy");
             _executePaste = typeof(MainWindow).GetMethod("ExecutePaste", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "ExecutePaste");
-            _internalClipboardField = typeof(MainWindow)
-                .GetField("_internalClipboard", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_internalClipboard");
+            _clipboardSessionField = typeof(MainWindow)
+                .GetField("_workbookClipboardSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_workbookClipboardSession");
         }
 
-        public bool HasInternalClipboard => _internalClipboardField.GetValue(Window) is not null;
+        public bool HasInternalClipboard =>
+            ((WorkbookClipboardSession)_clipboardSessionField.GetValue(Window)!).HasContent;
 
         public void InvokeExecuteCopy(bool isCut)
         {

@@ -97,8 +97,8 @@ public sealed class FreeXBehaviorDedupSourceBoundaryTests
         var hostDiagnostics = ReadHost("AppDiagnostics.cs");
         var avaloniaDiagnostics = ReadAvalonia("AvaloniaAppDiagnostics.cs");
 
-        hostOutline.Should().Contain("OutlineGroupingPlanner.GetUngroupedOutlineLevel");
-        avaloniaOutline.Should().Contain("OutlineGroupingPlanner.GetUngroupedOutlineLevel");
+        hostOutline.Should().Contain("_session.UngroupSelectedOutline");
+        avaloniaOutline.Should().Contain("_session.UngroupSelectedOutline");
         hostOutline.Should().NotContain("private static int GetUngroupedOutlineLevel");
         avaloniaOutline.Should().NotContain("private static int GetUngroupedOutlineLevel");
         hostDiagnostics.Should().Contain("LocalAppDiagnostics");

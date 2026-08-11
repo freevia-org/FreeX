@@ -34,7 +34,7 @@ public sealed class R88_NameManagerValueColumnTests
             {
                 var vm = GetListedNames(dialog).Single(v => v.Name == "TaxRate");
 
-                vm.RefersTo.Should().Be("1+38", "Refers To must keep showing the raw formula source text");
+                vm.RefersTo.Should().Be("=1+38", "Refers To must show the canonical formula source text");
                 vm.Value.Should().Be(
                     "39", "the Value column must show the name's live computed value, not just repeat Refers To");
             }

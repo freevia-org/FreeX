@@ -25,23 +25,16 @@ public sealed class WorksheetContextMenuRemoveHyperlinkRoutingSourceTests
     [Fact]
     public void RemoveHyperlinksContextMenuAction_RoutesToFormatPreservingRemoveHyperlinkHandler()
     {
-        var source = WorkspaceFileLocator.ReadAllText(
-            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs");
+        var router = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Presentation", "Shell", "WorkbookApplicationCommandRouter.cs");
+        var renderer = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "MainWindow.ApplicationCommandRouting.cs");
 
-        var caseIndex = source.IndexOf("case WorksheetContextMenuAction.RemoveHyperlinks:", System.StringComparison.Ordinal);
-        caseIndex.Should().BeGreaterThan(-1, "the RemoveHyperlinks context-menu action must still be handled");
-
-        var breakIndex = source.IndexOf("break;", caseIndex, System.StringComparison.Ordinal);
-        breakIndex.Should().BeGreaterThan(caseIndex);
-
-        var caseBody = source[caseIndex..breakIndex];
-
-        caseBody.Should().Contain(
-            "RemoveHyperlinkMenuItem_Click",
-            "right-click Remove Hyperlink must route to the dedicated format-preserving handler, matching Excel");
-        caseBody.Should().NotContain(
-            "ClearHyperlinksMenuItem_Click",
-            "the right-click Remove Hyperlink action must not call the ribbon's format-stripping Clear Hyperlinks handler");
+        router.Should().Contain("Route(source, \"RemoveHyperlinks\", WorkbookApplicationCommandIntent.RemoveHyperlinks");
+        renderer.Should().Contain(
+            "RemoveHyperlinks = Handled(() => RemoveHyperlinkMenuItem_Click(this, new RoutedEventArgs()))");
+        renderer.Should().NotContain(
+            "RemoveHyperlinks = Handled(() => ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs()))");
     }
 
     [Fact]
@@ -51,18 +44,14 @@ public sealed class WorksheetContextMenuRemoveHyperlinkRoutingSourceTests
         // (WorksheetContextMenuAction.ClearHyperlinks) mirrors ribbon Home>Clear semantics and
         // must keep sharing the ribbon's format-stripping handler -- unlike the sibling
         // top-level "Remove Hyperlink" item checked above, this one was not re-pointed.
-        var source = WorkspaceFileLocator.ReadAllText(
-            "src", "FreeX.App.Host", "MainWindow.WorksheetContextMenu.cs");
+        var router = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Presentation", "Shell", "WorkbookApplicationCommandRouter.cs");
+        var renderer = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Host", "MainWindow.ApplicationCommandRouting.cs");
 
-        var caseIndex = source.IndexOf("case WorksheetContextMenuAction.ClearHyperlinks:", System.StringComparison.Ordinal);
-        caseIndex.Should().BeGreaterThan(-1, "the ClearHyperlinks context-menu action must still be handled");
-
-        var breakIndex = source.IndexOf("break;", caseIndex, System.StringComparison.Ordinal);
-        breakIndex.Should().BeGreaterThan(caseIndex);
-
-        source[caseIndex..breakIndex].Should().Contain(
-            "ClearHyperlinksMenuItem_Click",
-            "the right-click Clear submenu's Clear Hyperlinks entry must keep matching ribbon Home>Clear semantics (format-stripping)");
+        router.Should().Contain("Route(source, \"ClearHyperlinks\", WorkbookApplicationCommandIntent.ClearHyperlinks");
+        renderer.Should().Contain(
+            "ClearHyperlinks = Handled(() => ClearHyperlinksMenuItem_Click(this, new RoutedEventArgs()))");
     }
 
     [Fact]
@@ -138,12 +127,10 @@ public sealed class WorksheetContextMenuRemoveHyperlinkRoutingSourceTests
         File.Exists(avaloniaMainWindowPath)
             .Should().BeFalse("the Avalonia shell's worksheet context-menu handling lives in MainWindow.cs, not a dedicated file");
 
-        var avaloniaSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.cs");
-
-        var caseIndex = avaloniaSource.IndexOf("case WorksheetContextMenuAction.RemoveHyperlinks:", System.StringComparison.Ordinal);
-        caseIndex.Should().BeGreaterThan(-1);
-        var breakIndex = avaloniaSource.IndexOf("break;", caseIndex, System.StringComparison.Ordinal);
-        avaloniaSource[caseIndex..breakIndex].Should().Contain("ClearSelectedRangeHyperlinks");
+        var avaloniaSource = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Avalonia", "MainWindow.ApplicationCommandRouting.cs");
+        avaloniaSource.Should().Contain(
+            "RemoveHyperlinks = Handled(() => ClearSelectedRangeHyperlinks())");
 
         var sessionSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Services", "WorkbookSession.cs");
         var methodBody = ExtractMethodBody(sessionSource, 

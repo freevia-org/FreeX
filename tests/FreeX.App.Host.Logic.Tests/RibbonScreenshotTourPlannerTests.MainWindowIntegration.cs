@@ -1077,7 +1077,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("TraceDependentsBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("ShowFormulasBtn_Click(this, new RoutedEventArgs())");
         source.Should().Contain("RemoveTraceArrows(kind: null, \"Remove Arrows\")");
-        source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _recalcEngine.CyclicCells)");
+        source.Should().Contain("FormulaAuditingService.FindFormulaErrorIssues(_workbook, _currentSheetId, _session.CyclicCells)");
         source.Should().Contain("new ErrorCheckingDialog(");
         source.Should().Contain("new EvaluateFormulaDialog(resultSummary)");
         source.Should().Contain("FindDescendantButtonByContent(evaluateFormulaDialog, UiText.Get(\"EvaluateFormula_EvaluateButton\"))");
@@ -1118,7 +1118,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("home-clipboard-cells-editing-tour");
         source.Should().Contain("EnsureHomeClipboardCellsEditingTourContext");
         source.Should().Contain("SeedHomeClipboardCellsEditingInternalClipboard");
-        source.Should().Contain("new InternalClipboard(");
+        source.Should().Contain("_workbookClipboardSession.Capture(new WorkbookClipboardSnapshot(");
         source.Should().Contain("SheetGrid.ClipboardRange = copySourceRange;");
         source.Should().Contain("CaptureHomeClipboardCellsEditingMenuAsync");
         source.Should().Contain("FindDescendantByRibbonCommandName<Button>(RibbonTabs, commandName)");

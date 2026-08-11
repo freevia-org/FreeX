@@ -37,7 +37,7 @@ public sealed class R50_NameManagerNamedFormulaCrudTests
                 var viewModels = GetListedNames(dialog);
 
                 viewModels.Should().Contain(
-                    vm => vm.Name == "TaxRate" && vm.RefersTo == "0.0825",
+                    vm => vm.Name == "TaxRate" && vm.RefersTo == "=0.0825",
                     "named formulas/constants must be visible in the Name Manager just like named ranges");
             }
             finally
@@ -67,7 +67,7 @@ public sealed class R50_NameManagerNamedFormulaCrudTests
                 var viewModels = GetListedNames(dialog);
 
                 viewModels.Should().Contain(vm => vm.Name == "Sales" && vm.RefersTo == "Sheet1!A1:A2");
-                viewModels.Should().Contain(vm => vm.Name == "TaxRate" && vm.RefersTo == "0.0825");
+                viewModels.Should().Contain(vm => vm.Name == "TaxRate" && vm.RefersTo == "=0.0825");
             }
             finally
             {

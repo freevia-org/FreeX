@@ -38,6 +38,7 @@ public sealed class R78_AutoFilterDropdownSortExcludesHeaderTests
                 sheet.SetCell(new CellAddress(sheetId, 4, 1), new TextValue("Banana"));
 
                 var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 1)); // A1:A4
+                window.SheetGrid.SelectedRange = range;
 
                 var ascending = new AutoFilterDialogResult(
                     AutoFilterSortDirection.Ascending,
@@ -80,6 +81,7 @@ public sealed class R78_AutoFilterDropdownSortExcludesHeaderTests
                 sheet.SetCell(new CellAddress(sheetId, 4, 1), new TextValue("Banana"));
 
                 var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 1)); // A1:A4
+                window.SheetGrid.SelectedRange = range;
 
                 var descending = new AutoFilterDialogResult(
                     AutoFilterSortDirection.Descending,
@@ -127,6 +129,7 @@ public sealed class R78_AutoFilterDropdownSortExcludesHeaderTests
                 sheet.GetCell(4, 1)!.StyleId = workbook.RegisterStyle(fillStyle); // "Banana" is green
 
                 var range = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 1)); // A1:A4
+                window.SheetGrid.SelectedRange = range;
 
                 var sortByColor = new AutoFilterDialogResult(
                     AutoFilterSortDirection.None,

@@ -37,12 +37,9 @@ public sealed class AdvancedFilterDialogPlannerDedupSourceTests
         dialogSource.Should().Contain("SharedAdvancedFilterPlanner.CreatePlan(");
         dialogSource.Should().Contain("SharedAdvancedFilterPlanner.CreateRangeSelectionRequest(");
         dialogSource.Should().Contain("SharedAdvancedFilterPlanner.FocusTargetForPlanError(error)");
-        dialogSource.Should().Contain("FormatAdvancedFilterPlanError(");
-        dialogSource.Should().Contain("UiText.Get(\"AdvancedFilter_EnterValidListRange\")");
-        dialogSource.Should().Contain("UiText.Get(\"AdvancedFilter_EnterValidCriteriaRange\")");
-        dialogSource.Should().Contain("UiText.Get(\"AdvancedFilter_EnterValidCopyToRange\")");
-        dialogSource.Should().Contain("AdvancedFilterCommand.ListRangeTooLargeMessage");
-        dialogSource.Should().Contain("AdvancedFilterCommand.CopyOutputTooLargeMessage");
+        dialogSource.Should().Contain(".DescribeError(planResult)");
+        dialogSource.Should().Contain(".Message");
+        dialogSource.Should().Contain(".Resolve(UiText.Get, UiText.Format)");
 
         dialogSource.Should().NotContain("AdvancedFilterInputParser.TryParseRange");
         dialogSource.Should().NotContain("AdvancedFilterCommand.IsListRangeWithinSupportedBounds");

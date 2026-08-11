@@ -163,12 +163,12 @@ public sealed class ResidualRendererBoundaryTests
         File.Exists(Path.Combine(services, "FailedWorkbookCommand.cs")).Should().BeTrue();
         hostMain.Should().Contain("WorkbookSelectionStatsCache _statusBarStatsCache");
         hostPivot.Should().Contain("PivotFieldFilterSummary.CreateState(");
-        ReadHost("MainWindow.PivotCommands.cs").Should().Contain("CreateFieldSelectionState(");
+        ReadHost("MainWindow.PivotCommands.cs").Should().Contain("PivotApplication.PlanFieldItemSelection(");
         hostShapeEffects.Should().NotContain("ShapeEffectsDialogPlanner");
         avaloniaKeyboard.Should().Contain("SelectionCornerNavigator.GetNextCorner(");
         avaloniaKeyboard.Should().NotContain("var corners = new[]");
         avaloniaPivot.Should().Contain("PivotFieldFilterSummary.CreateState(");
-        ReadAvalonia("MainWindow.PivotFilters.cs").Should().Contain("CreateFieldSelectionState(");
+        ReadAvalonia("MainWindow.PivotFilters.cs").Should().Contain("PivotApplication.PlanFieldItemSelection(");
     }
 
     private static string ReadHost(string fileName) =>

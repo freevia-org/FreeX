@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FluentAssertions;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -85,11 +86,25 @@ public sealed class R58_PrintedCommentIndicatorColorTests
         IReadOnlyDictionary<CellAddress, string> comments,
         IReadOnlyDictionary<CellAddress, ThreadedComment> threadedComments)
     {
-        var pageRows = new uint[] { 1u };
-        var pageColumns = new uint[] { 1u };
-        var measurement = new PrintGridMeasurement(0, 0, ColumnWidth, RowHeight);
-        var shownComments = new HashSet<CellAddress> { Address() };
         var textOverlays = new List<PdfTextOverlay>();
+        var kind = threadedComments.Count > 0
+            ? CellCommentDisplayKind.ThreadedComment
+            : CellCommentDisplayKind.Note;
+        var text = threadedComments.Count > 0
+            ? threadedComments.Values.Single().Text
+            : comments.Values.Single();
+        var displayedComments = new[]
+        {
+            new PageDisplayedCommentBlock(
+                kind,
+                text,
+                [
+                    new LayoutPoint(ColumnWidth - 7, 0),
+                    new LayoutPoint(ColumnWidth, 0),
+                    new LayoutPoint(ColumnWidth, 7),
+                ],
+                new LayoutRect(8, 8, 80, 48)),
+        };
 
         var method = typeof(PrintRenderer).GetMethod(
             "DrawDisplayedComments",
@@ -105,17 +120,8 @@ public sealed class R58_PrintedCommentIndicatorColorTests
             [
                 dc,
                 textOverlays,
-                comments,
-                threadedComments,
-                pageRows,
-                pageColumns,
-                0.0,
-                0.0,
-                measurement,
-                (double)width,
-                (double)height,
+                displayedComments,
                 false,
-                shownComments,
             ]);
         }
 

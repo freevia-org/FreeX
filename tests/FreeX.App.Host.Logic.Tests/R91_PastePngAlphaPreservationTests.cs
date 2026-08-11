@@ -65,9 +65,7 @@ public sealed class R91_PastePngAlphaPreservationTests
                 var anchor = new CellAddress(sheet.Id, 1, 1);
                 window.SheetGrid.SelectedRange = new GridRange(anchor, anchor);
 
-                var dataObject = new System.Windows.DataObject();
-                dataObject.SetData(System.Windows.DataFormats.Bitmap, CreateOpaqueBitmapSource());
-                System.Windows.Clipboard.SetDataObject(dataObject, copy: true);
+                System.Windows.Clipboard.SetImage(CreateOpaqueBitmapSource());
 
                 var result = (bool)R49MainWindowTestHarness.Invoke(window, "TryPasteClipboardImage", anchor)!;
 

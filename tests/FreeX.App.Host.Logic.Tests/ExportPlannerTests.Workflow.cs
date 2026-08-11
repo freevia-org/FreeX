@@ -55,7 +55,7 @@ public partial class ExportPlannerTests
         printExport.Should().Contain("UiText.Get(\"Progress_ExportingFile\")");
 
         // XPS temp+replace atomicity (P3 fix)
-        printExport.Should().Contain("ExportAtomicWriter.CreateTempPath(xpsPath)");
+        printExport.Should().Contain("ExportAtomicWriter.CreateTempLease(xpsPath)");
         printExport.Should().Contain("ExportAtomicWriter.ReplaceTarget(tempPath, xpsPath)");
 
         // PDF bytes rendered on UI thread, flushed on background thread (P2 fix)

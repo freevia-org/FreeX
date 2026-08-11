@@ -43,8 +43,8 @@ public sealed class R93_AutoFitShowFormulasPerWindowTests
 
                 window.SheetGrid.SelectedRange = new GridRange(address, address);
 
-                // This window turns Show Formulas ON through the real ribbon button.
-                R49MainWindowTestHarness.Invoke(window, "ShowFormulasBtn_Click", null, null);
+                // The portable workarea owns per-window Show Formulas and AutoFit state.
+                window.Session.SetShowFormulas(true).Success.Should().BeTrue();
 
                 // A sibling "New Window" on the same sheet toggles it back off. A sibling's command
                 // writes the SHARED Sheet field (so the state round-trips on save) without touching
@@ -52,7 +52,7 @@ public sealed class R93_AutoFitShowFormulasPerWindowTests
                 // per-window overrides exist to survive.
                 sheet.ShowFormulas = false;
 
-                R49MainWindowTestHarness.Invoke(window, "FormatAutoColMenuItem_Click", null, null);
+                window.Session.AutoFitSelectedColumnWidth().Success.Should().BeTrue();
 
                 sheet.ColumnWidths.Should().ContainKey(1u);
                 sheet.ColumnWidths[1].Should().BeGreaterThan(

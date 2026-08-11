@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.Editing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -150,8 +151,10 @@ public sealed class R75_InsertDeleteClipboardMarqueeTests
 
     private static object? GetInternalClipboard(MainWindow window)
     {
-        var field = typeof(MainWindow).GetField("_internalClipboard", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-            ?? throw new MissingFieldException(nameof(MainWindow), "_internalClipboard");
-        return field.GetValue(window);
+        var field = typeof(MainWindow).GetField(
+                "_workbookClipboardSession",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(nameof(MainWindow), "_workbookClipboardSession");
+        return ((WorkbookClipboardSession)field.GetValue(window)!).Content;
     }
 }

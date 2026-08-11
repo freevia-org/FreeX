@@ -1,7 +1,4 @@
-using System.Reflection;
 using FluentAssertions;
-using Free.Shared.AppServices;
-using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host.Tests;
@@ -61,13 +58,11 @@ public sealed class R112_AutoFitEmptyPlanNoOpTests
                     new CellAddress(sheetId, 1, 2), new CellAddress(sheetId, CellAddress.MaxRow, 2));
 
                 var documentState = GetDocumentState(window);
-                var commandBusField = typeof(MainWindow).GetField("_commandBus", BindingFlags.Instance | BindingFlags.NonPublic)!;
-                var commandBus = (ICommandBus)commandBusField.GetValue(window)!;
                 documentState.IsDirty.Should().BeFalse("the workbook starts clean");
 
                 R49MainWindowTestHarness.Invoke(window, "FormatAutoRowMenuItem_Click", null, null);
 
-                commandBus.GetUndoStackDepth(workbook.Id).Should().Be(0,
+                documentState.GetUndoHistory(10).Should().BeEmpty(
                     "an empty auto-fit plan must not push a phantom undo entry");
                 documentState.IsDirty.Should().BeFalse(
                     "an empty auto-fit plan must not mark an otherwise-clean workbook as modified");
@@ -98,12 +93,9 @@ public sealed class R112_AutoFitEmptyPlanNoOpTests
                     new CellAddress(sheetId, 2, 1), new CellAddress(sheetId, 2, CellAddress.MaxCol));
 
                 var documentState = GetDocumentState(window);
-                var commandBusField = typeof(MainWindow).GetField("_commandBus", BindingFlags.Instance | BindingFlags.NonPublic)!;
-                var commandBus = (ICommandBus)commandBusField.GetValue(window)!;
-
                 R49MainWindowTestHarness.Invoke(window, "FormatAutoColMenuItem_Click", null, null);
 
-                commandBus.GetUndoStackDepth(workbook.Id).Should().Be(0,
+                documentState.GetUndoHistory(10).Should().BeEmpty(
                     "an empty auto-fit plan must not push a phantom undo entry");
                 documentState.IsDirty.Should().BeFalse(
                     "an empty auto-fit plan must not mark an otherwise-clean workbook as modified");
@@ -136,15 +128,12 @@ public sealed class R112_AutoFitEmptyPlanNoOpTests
                 window.SheetGrid.SelectedRange = new GridRange(address, address);
 
                 var documentState = GetDocumentState(window);
-                var commandBusField = typeof(MainWindow).GetField("_commandBus", BindingFlags.Instance | BindingFlags.NonPublic)!;
-                var commandBus = (ICommandBus)commandBusField.GetValue(window)!;
-
                 R49MainWindowTestHarness.Invoke(window, "FormatAutoRowMenuItem_Click", null, null);
 
                 sheet.RowHeights.Should().ContainKey(1u);
                 sheet.RowHeights[1].Should().BeGreaterThan(sheet.DefaultRowHeight,
                     "a 48pt font must grow the row well past the 15pt default so this is a genuine, non-no-op resize");
-                commandBus.GetUndoStackDepth(workbook.Id).Should().Be(1,
+                documentState.GetUndoHistory(10).Should().ContainSingle(
                     "a genuine resize must still push exactly one undo entry");
                 documentState.IsDirty.Should().BeTrue("a genuine resize must still mark the workbook dirty");
             }

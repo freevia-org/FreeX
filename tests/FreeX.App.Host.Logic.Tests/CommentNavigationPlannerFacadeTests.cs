@@ -31,7 +31,7 @@ public sealed class CommentNavigationPlannerDedupSourceTests
         commentListWindow.Should().NotContain("CommentNavigationPlanner.OrderedNoteAddresses(notes)");
 
         var printRenderer = DialogSourceTestSupport.ReadHostSources("PrintRenderer.cs");
-        printRenderer.Should().Contain("PrintCommentSummaryPlanner.BuildPages(");
+        printRenderer.Should().Contain("WorksheetPrintPageContentPlanner.BuildCommentSummaryPages(");
 
         var printRendererComments = DialogSourceTestSupport.ReadHostSources("PrintRenderer.Comments.cs");
         printRendererComments.Should().Contain("using FreeX.App.Presentation.PageLayout;");
