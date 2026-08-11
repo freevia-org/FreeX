@@ -170,7 +170,7 @@ public sealed class TemporaryResourceLeaseTests
     [Fact]
     public void ScopedProductionFlowsDelegateTemporaryOwnershipToLeases()
     {
-        var cups = ReadSource("src", "FreeX.App.Avalonia", "CupsPlatformPrinter.cs");
+        var freeXPrintWorkflow = ReadSource("src", "FreeX.App.Services", "WorkbookPrintWorkflow.cs");
         var freeWOutput = ReadSource(
             "freew",
             "FreeW.App.Presentation",
@@ -189,9 +189,10 @@ public sealed class TemporaryResourceLeaseTests
             "DocumentPersistenceWorkflow.cs");
         var freeXWpfExport = ReadSource("src", "FreeX.App.Host", "MainWindow.PrintExport.cs");
 
-        cups.Should().Contain("TemporaryFileLease.Create(\"freex-print-\", \".pdf\")");
-        cups.Should().NotContain("Path.GetTempPath()");
-        cups.Should().NotContain("private static void TryDelete");
+        freeXPrintWorkflow.Should().Contain("TemporaryFileLease.Create(\"freex-print-\", \".pdf\")");
+        freeXPrintWorkflow.Should().Contain("temporaryFile.WriteAllBytesAsync(");
+        freeXPrintWorkflow.Should().NotContain("Path.GetTempPath()");
+        freeXPrintWorkflow.Should().NotContain("private static void TryDelete");
 
         freeWOutput.Should().Contain("ExportAtomicWriter.CreateTempLease(path)");
         freeWOutput.Should().Contain("TemporaryFileLease.Create(\"FreeW-print-\", \".pdf\")");

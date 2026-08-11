@@ -381,8 +381,10 @@ public sealed class AvaloniaShellSourceTests
     [Fact]
     public void MainWindow_PrintFallbackGuardsNormalizedPdfOverwriteAndCupsTimeouts()
     {
+        var mainSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var printSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
-        var cupsSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "CupsPlatformPrinter.cs"));
+        var cupsSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "shared", "Free.Shared.AppServices", "Printing", "CupsPrintService.cs"));
 
         printSource.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
         printSource.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
@@ -390,14 +392,20 @@ public sealed class AvaloniaShellSourceTests
         printSource.Should().Contain("UiText.Get(\"Print_SaveCanceled\")");
         printSource.Should().Contain("ShowPortablePdfSavePickerAsync(UiText.Get(\"Print_SaveAsPdfButton\"))");
 
-        cupsSource.Should().Contain("private static readonly TimeSpan CommandTimeout");
+        cupsSource.Should().Contain("private static readonly TimeSpan DefaultCommandTimeout");
         cupsSource.Should().Contain("new SystemProcessRunner()");
-        cupsSource.Should().Contain("new ProcessInvocation(fileName, arguments)");
+        cupsSource.Should().Contain("CupsPrintCommandPlanner.Submit(");
+        cupsSource.Should().Contain("new(\"lpstat\", [\"-e\"])");
         cupsSource.Should().Contain("CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)");
         cupsSource.Should().Contain("timeout.CancelAfter(_commandTimeout)");
         cupsSource.Should().Contain("catch (TimeoutException)");
         cupsSource.Should().NotContain("ProcessStartInfo");
         cupsSource.Should().NotContain("new Process {");
+
+        printSource.Should().Contain("IPlatformPrintService");
+        printSource.Should().NotContain("IPlatformPrinter");
+        mainSource.Should().Contain(
+            "new CupsPrintService(discoveryMode: CupsPrinterDiscoveryMode.DestinationNames)");
     }
 
     [Fact]

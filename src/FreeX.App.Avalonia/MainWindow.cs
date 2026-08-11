@@ -446,7 +446,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly WorkbookFileWorkflow _fileWorkflow;
     private readonly IWorkbookShareSheetService _workbookShareSheetService;
     private readonly IWorkbookFileAccessService _workbookFileAccessService;
-    private readonly IPlatformPrinter _platformPrinter;
+    private readonly IPlatformPrintService _printService;
     private readonly IPlatformClipboard _platformClipboard;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
@@ -1279,7 +1279,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
             WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
-            new CupsPlatformPrinter())
+            CreatePlatformPrintService())
     {
     }
 
@@ -1288,7 +1288,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
             WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
-            new CupsPlatformPrinter(),
+            CreatePlatformPrintService(),
             sharedSession: null,
             platformClipboard: null,
             deferStartupFileOpen: deferStartupFileOpen)
@@ -1303,7 +1303,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             startupArguments,
             WorkbookShareSheetServiceFactory.Create(WorkbookShareSheetLabel),
             WorkbookFileAccessServiceFactory.Create(App.Diagnostics),
-            new CupsPlatformPrinter(),
+            CreatePlatformPrintService(),
             sharedSession,
             optionsRuntimeSession: optionsRuntimeSession)
     {
@@ -1313,13 +1313,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<string> startupArguments,
         IWorkbookShareSheetService workbookShareSheetService,
         IWorkbookFileAccessService workbookFileAccessService,
-        IPlatformPrinter platformPrinter,
+        IPlatformPrintService printService,
         IPlatformClipboard? platformClipboard = null)
         : this(
             startupArguments,
             workbookShareSheetService,
             workbookFileAccessService,
-            platformPrinter,
+            printService,
             sharedSession: null,
             platformClipboard: platformClipboard)
     {
@@ -1329,7 +1329,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         IReadOnlyList<string> startupArguments,
         IWorkbookShareSheetService workbookShareSheetService,
         IWorkbookFileAccessService workbookFileAccessService,
-        IPlatformPrinter platformPrinter,
+        IPlatformPrintService printService,
         WorkbookSession? sharedSession,
         IPlatformClipboard? platformClipboard = null,
         bool deferStartupFileOpen = false,
@@ -1337,7 +1337,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         ArgumentNullException.ThrowIfNull(workbookShareSheetService);
         ArgumentNullException.ThrowIfNull(workbookFileAccessService);
-        ArgumentNullException.ThrowIfNull(platformPrinter);
+        ArgumentNullException.ThrowIfNull(printService);
 
         _optionsRuntimeSession = optionsRuntimeSession ?? new FreeXOptionsRuntimeSession();
         _statusBarOptionVisibility = StatusBarOptionVisibilityStore
@@ -1345,7 +1345,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             .ToDictionary();
         _workbookShareSheetService = workbookShareSheetService;
         _workbookFileAccessService = workbookFileAccessService;
-        _platformPrinter = platformPrinter;
+        _printService = printService;
         _platformClipboard = platformClipboard ?? new AvaloniaPlatformClipboard(
             () => TopLevel.GetTopLevel(this)?.Clipboard,
             new AvaloniaPlatformClipboardOptions(FallBackToText: true));
@@ -1446,6 +1446,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         RefreshShell(_session.StartupStatus);
     }
+
+    private static IPlatformPrintService CreatePlatformPrintService() =>
+        new CupsPrintService(discoveryMode: CupsPrinterDiscoveryMode.DestinationNames);
 
     private Control BuildContent()
     {

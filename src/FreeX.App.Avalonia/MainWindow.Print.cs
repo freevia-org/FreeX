@@ -27,9 +27,9 @@ namespace FreeX.App.Avalonia;
 /// Export to PDF uses — Print is "render the print-ready document, then spool it" rather than a second
 /// rendering engine.
 ///
-/// The OS spooler call sits behind the injectable <see cref="IPlatformPrinter"/> seam (Linux/macOS bind
-/// the CUPS <c>lp</c>/<c>lpstat</c> utilities via <see cref="CupsPlatformPrinter"/>; tests/headless hosts
-/// inject <see cref="NullPlatformPrinter"/>). When no spooler is available, Print degrades to writing the
+/// The OS spooler call sits behind the canonical <see cref="IPlatformPrintService"/> seam. Linux and macOS
+/// use <see cref="CupsPrintService"/>; unsupported hosts report no destinations. When no spooler is available,
+/// Print degrades to writing the
 /// print-ready PDF to a file the user picks, so the feature still produces correct output everywhere.
 ///
 /// This file is UI + platform glue only; it deliberately holds no selection/validation logic of its own.
@@ -99,16 +99,17 @@ public sealed partial class MainWindow
             return;
         }
 
-        var printers = _platformPrinter.CanPrint
-            ? await _platformPrinter.GetPrintersAsync()
-            : [];
+        var discovery = _printService.IsSupported
+            ? await _printService.DiscoverAsync()
+            : new PrinterDiscoveryResult(PrinterDiscoveryStatus.Unavailable, [], null);
+        var printers = discovery.IsAvailable ? discovery.Printers : [];
 
         await ShowPrintDialogCoreAsync(scopePlan, printers);
     }
 
     private async Task ShowPrintDialogCoreAsync(
         WorkbookExportScopePlan scopePlan,
-        IReadOnlyList<PrinterDescriptor> printers)
+        IReadOnlyList<PrinterInfo> printers)
     {
         var dialog = new Window
         {
@@ -126,7 +127,7 @@ public sealed partial class MainWindow
 
         // ── Printer destination ───────────────────────────────────────────────
         content.Children.Add(CreatePrintSectionHeader(UiText.Get("Print_PrinterHeader")));
-        var canSpool = _platformPrinter.CanPrint && printers.Count > 0;
+        var canSpool = _printService.IsSupported && printers.Count > 0;
         var printerCombo = new ComboBox
         {
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
@@ -135,7 +136,7 @@ public sealed partial class MainWindow
         ApplyPrintComboBoxChrome(printerCombo);
         AutomationProperties.SetAutomationId(printerCombo, "PrintPrinterComboBox");
         foreach (var printer in printers)
-            printerCombo.Items.Add(printer.DisplayName);
+            printerCombo.Items.Add(printer.Name);
 
         var defaultIndex = -1;
         for (var i = 0; i < printers.Count; i++)
@@ -314,7 +315,7 @@ public sealed partial class MainWindow
                 collateCheck.IsChecked == true);
 
             var printerId = canSpool && printerCombo.SelectedIndex >= 0 && printerCombo.SelectedIndex < printers.Count
-                ? printers[printerCombo.SelectedIndex].Id
+                ? printers[printerCombo.SelectedIndex].Name
                 : null;
 
             dialog.Close();
@@ -376,7 +377,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Renders the chosen scope to a print-ready PDF (the same exporter File ▸ Export uses), then either
-    /// spools it through <see cref="IPlatformPrinter"/> or, when no spooler is available, falls back to the
+    /// spools it through <see cref="IPlatformPrintService"/> or, when no spooler is available, falls back to the
     /// save-file picker so the print-ready document still reaches the user.
     /// </summary>
     private async Task ExecutePrintJobAsync(PrintJobRequest request, string? printerId, bool canSpool)
@@ -404,7 +405,7 @@ public sealed partial class MainWindow
             var imageDiagnostics = result.RenderedDocument?.ImageDiagnostics ?? [];
             if (result.Submission is { } submission)
                 RefreshShell(AppendImageDiagnosticsSuffix(
-                    UiText.Format("Print_Sent", submission.StatusText),
+                    UiText.Format("Print_Sent", result.StatusText),
                     imageDiagnostics));
             else if (result.Fallback is { } fallback)
                 RefreshShell(AppendImageDiagnosticsSuffix(fallback.StatusText, imageDiagnostics));
@@ -447,7 +448,8 @@ public sealed partial class MainWindow
             : $"{statusText} ({imageDiagnostics.Count} image warning{(imageDiagnostics.Count == 1 ? "" : "s")})";
 
     private async Task<PrintSubmissionResult> SpoolPrintJobAsync(
-        PrintJobSubmission submission,
+        string pdfPath,
+        PrintSelection selection,
         CancellationToken cancellationToken)
     {
         _isSaving = true;
@@ -457,7 +459,7 @@ public sealed partial class MainWindow
             _statusText.Text = UiText.Get("Print_Spooling");
             _statusText.Foreground = Brush(67, 113, 83);
 
-            return await _platformPrinter.SubmitAsync(submission, cancellationToken);
+            return await _printService.SubmitAsync(pdfPath, selection, cancellationToken);
         }
         finally
         {
@@ -468,7 +470,7 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// No-spooler fallback: write the print-ready PDF where the user chooses. This keeps Print useful on
-    /// hosts without CUPS (and is what tests exercise via <see cref="NullPlatformPrinter"/>).
+    /// hosts without CUPS.
     /// </summary>
     private async Task<WorkbookPrintFallbackResult> SavePrintReadyPdfAsync(
         byte[] documentBytes,

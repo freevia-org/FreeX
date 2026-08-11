@@ -194,7 +194,19 @@ public sealed class SharedCupsPrintServiceTests
     }
 
     [Fact]
-    public async Task DiscoverAsync_ParsesPrintersAndDefault()
+    public void CommandPlanner_SingleCopyOmitsCountAndCarriesTrimmedJobTitle()
+    {
+        var invocation = SharedCupsPrintCommandPlanner.Submit(
+            "/tmp/job.pdf",
+            new PrintSelection(JobTitle: "  Budget  "),
+            "Office");
+
+        invocation.Arguments.Should().NotContain("-n");
+        invocation.Arguments.Should().ContainInOrder("-t", "Budget", "/tmp/job.pdf");
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_DefaultModePreservesPrinterStatusBehavior()
     {
         var runner = new FakeProcessRunner(
             new ProcessResult(0, "printer Office is idle.\nprinter PDF is idle.\n", ""),
@@ -202,11 +214,40 @@ public sealed class SharedCupsPrintServiceTests
 
         var result = await new CupsPrintService(runner, isSupportedOverride: true).DiscoverAsync();
 
+        result.Printers.Should().Equal(new PrinterInfo("Office", true), new PrinterInfo("PDF"));
+        runner.Invocations[0].Arguments.Should().Equal("-p");
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_ParsesPrintersAndDefault()
+    {
+        var runner = new FakeProcessRunner(
+            new ProcessResult(0, "PDF\nOffice\n", ""),
+            new ProcessResult(0, "system default destination: Office\n", ""));
+
+        var result = await FreeXCups(runner).DiscoverAsync();
+
         result.Status.Should().Be(PrinterDiscoveryStatus.Available);
         result.DefaultPrinter.Should().Be("Office");
-        result.Printers.Should().ContainSingle(printer => printer.Name == "Office" && printer.IsDefault);
-        result.Printers.Should().ContainSingle(printer => printer.Name == "PDF" && !printer.IsDefault);
+        result.Printers.Should().Equal(
+            new PrinterInfo("Office", true),
+            new PrinterInfo("PDF"));
         runner.Invocations.Select(invocation => invocation.FileName).Should().Equal("lpstat", "lpstat");
+        runner.Invocations.Select(invocation => invocation.Arguments.Single()).Should().Equal("-e", "-d");
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_DefaultMissingFromListIsAppendedFirst()
+    {
+        var runner = new FakeProcessRunner(
+            new ProcessResult(0, "Office\n", ""),
+            new ProcessResult(0, "system default destination: Hidden_Default\n", ""));
+
+        var result = await FreeXCups(runner).DiscoverAsync();
+
+        result.Printers.Should().Equal(
+            new PrinterInfo("Hidden_Default", true),
+            new PrinterInfo("Office"));
     }
 
     [Fact]
@@ -216,21 +257,22 @@ public sealed class SharedCupsPrintServiceTests
         try
         {
             var runner = SuccessfulSubmissionRunner();
-            var result = await new CupsPrintService(runner, isSupportedOverride: true).SubmitAsync(
+            var result = await FreeXCups(runner).SubmitAsync(
                 pdfPath,
                 new PrintSelection(
                     Copies: 2,
                     PageRange: PrintPageRange.Between(2, 4),
                     Orientation: PrintOrientation.Landscape,
-                    Collate: false));
+                    Collate: false,
+                    JobTitle: "Budget"));
 
             result.Status.Should().Be(PrintSubmissionStatus.Submitted);
             runner.Invocations.Last().Should().BeEquivalentTo(
                 new ProcessInvocation(
                     "lp",
                     [
-                        "-d", "Office", "-n", "2", "-o", "collate=false", "-P", "2-4",
-                        "-o", "orientation-requested=4", pdfPath,
+                        "-d", "Office", "-n", "2", "-P", "2-4", "-o", "collate=false",
+                        "-o", "orientation-requested=4", "-t", "Budget", pdfPath,
                     ]));
         }
         finally
@@ -245,14 +287,17 @@ public sealed class SharedCupsPrintServiceTests
         var pdfPath = await CreatePdfStubAsync();
         try
         {
-            var runner = new FakeProcessRunner(new ProcessResult(0, "", ""));
+            var runner = new FakeProcessRunner(
+                new ProcessResult(0, "", ""),
+                new ProcessResult(0, "no system default destination\n", ""));
 
-            var result = await new CupsPrintService(runner, isSupportedOverride: true)
+            var result = await FreeXCups(runner)
                 .SubmitAsync(pdfPath, new PrintSelection());
 
             result.Status.Should().Be(PrintSubmissionStatus.NoPrinters);
-            runner.Invocations.Should().ContainSingle();
-            runner.Invocations[0].Should().BeEquivalentTo(SharedCupsPrintCommandPlanner.ListPrinters());
+            runner.Invocations.Should().HaveCount(2);
+            runner.Invocations[0].Should().BeEquivalentTo(SharedCupsPrintCommandPlanner.ListPrinters(
+                CupsPrinterDiscoveryMode.DestinationNames));
         }
         finally
         {
@@ -266,7 +311,7 @@ public sealed class SharedCupsPrintServiceTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        var result = await new CupsPrintService(new FakeProcessRunner(), isSupportedOverride: true)
+        var result = await FreeXCups(new FakeProcessRunner())
             .DiscoverAsync(cancellation.Token);
 
         result.Status.Should().Be(PrinterDiscoveryStatus.Cancelled);
@@ -290,7 +335,7 @@ public sealed class SharedCupsPrintServiceTests
     {
         var runner = new FakeProcessRunner(new ProcessResult(1, "", "lpstat: not found"));
 
-        var result = await new CupsPrintService(runner, isSupportedOverride: true).DiscoverAsync();
+        var result = await FreeXCups(runner).DiscoverAsync();
 
         result.Status.Should().Be(PrinterDiscoveryStatus.Unavailable);
         result.Message.Should().Contain("lpstat");
@@ -303,11 +348,11 @@ public sealed class SharedCupsPrintServiceTests
         try
         {
             var runner = new FakeProcessRunner(
-                new ProcessResult(0, "printer Office is idle.\n", ""),
+                new ProcessResult(0, "Office\n", ""),
                 new ProcessResult(0, "system default destination: Office\n", ""),
                 new ProcessResult(1, "", "lp: backend rejected job"));
 
-            var result = await new CupsPrintService(runner, isSupportedOverride: true)
+            var result = await FreeXCups(runner)
                 .SubmitAsync(pdfPath, new PrintSelection());
 
             result.Status.Should().Be(PrintSubmissionStatus.Failed);
@@ -328,7 +373,7 @@ public sealed class SharedCupsPrintServiceTests
         {
             var runner = new CancellingSubmitProcessRunner();
 
-            var result = await new CupsPrintService(runner, isSupportedOverride: true)
+            var result = await FreeXCups(runner)
                 .SubmitAsync(pdfPath, new PrintSelection());
 
             result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
@@ -353,10 +398,69 @@ public sealed class SharedCupsPrintServiceTests
         result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
     }
 
+    [Fact]
+    public async Task SubmitAsync_CommandTimeoutIsReportedAndCancelsRunner()
+    {
+        var pdfPath = await CreatePdfStubAsync();
+        try
+        {
+            var runner = new BlockingSubmitProcessRunner();
+            var result = await new CupsPrintService(
+                    runner,
+                    isSupportedOverride: true,
+                    commandTimeout: TimeSpan.FromMilliseconds(50),
+                    discoveryMode: CupsPrinterDiscoveryMode.DestinationNames)
+                .SubmitAsync(pdfPath, new PrintSelection(JobTitle: "Quarterly report"));
+
+            result.Status.Should().Be(PrintSubmissionStatus.Failed);
+            result.Message.Should().Be("Printing failed: the CUPS command timed out.");
+            runner.CancellationObserved.Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
+    [Fact]
+    public async Task SubmitAsync_CallerCancellationIsNotReportedAsTimeout()
+    {
+        var pdfPath = await CreatePdfStubAsync();
+        try
+        {
+            var runner = new BlockingSubmitProcessRunner();
+            using var cancellation = new CancellationTokenSource();
+            var submission = new CupsPrintService(
+                    runner,
+                    isSupportedOverride: true,
+                    commandTimeout: TimeSpan.FromSeconds(10),
+                    discoveryMode: CupsPrinterDiscoveryMode.DestinationNames)
+                .SubmitAsync(pdfPath, new PrintSelection(), cancellation.Token);
+            await runner.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            cancellation.Cancel();
+            var result = await submission;
+
+            result.Status.Should().Be(PrintSubmissionStatus.Cancelled);
+            result.Message.Should().NotContain("timed out");
+            runner.CancellationObserved.Should().BeTrue();
+        }
+        finally
+        {
+            File.Delete(pdfPath);
+        }
+    }
+
     private static FakeProcessRunner SuccessfulSubmissionRunner() => new(
-        new ProcessResult(0, "printer Office is idle.\n", ""),
+        new ProcessResult(0, "Office\n", ""),
         new ProcessResult(0, "system default destination: Office\n", ""),
         new ProcessResult(0, "request id is Office-17 (1 file(s))\n", ""));
+
+    private static CupsPrintService FreeXCups(IProcessRunner runner) =>
+        new(
+            runner,
+            isSupportedOverride: true,
+            discoveryMode: CupsPrinterDiscoveryMode.DestinationNames);
 
     private static PrintDialogSession ReadyDialogSession() => PrintDialogSession.Start(
         new PrinterDiscoveryResult(
@@ -399,8 +503,41 @@ public sealed class SharedCupsPrintServiceTests
                 throw new OperationCanceledException(cancellationToken);
 
             return Task.FromResult(Invocations.Count == 1
-                ? new ProcessResult(0, "printer Office is idle.\n", "")
+                ? new ProcessResult(0, "Office\n", "")
                 : new ProcessResult(0, "system default destination: Office\n", ""));
+        }
+    }
+
+    private sealed class BlockingSubmitProcessRunner : IProcessRunner
+    {
+        private int _invocationCount;
+
+        public TaskCompletionSource<bool> Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool CancellationObserved { get; private set; }
+
+        public async Task<ProcessResult> RunAsync(
+            ProcessInvocation invocation,
+            CancellationToken cancellationToken = default)
+        {
+            _invocationCount++;
+            if (_invocationCount == 1)
+                return new ProcessResult(0, "Office\n", "");
+            if (_invocationCount == 2)
+                return new ProcessResult(0, "system default destination: Office\n", "");
+
+            Started.TrySetResult(true);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new InvalidOperationException("The blocking runner unexpectedly completed.");
+            }
+            catch (OperationCanceledException)
+            {
+                CancellationObserved = true;
+                throw;
+            }
         }
     }
 }

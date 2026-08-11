@@ -76,6 +76,7 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.AppServices" />
+    <Using Include="Free.Shared.AppServices.Printing" />
     <Using Include="FreeX.App.Presentation.FormulaBar" />
   </ItemGroup>
 </Project>

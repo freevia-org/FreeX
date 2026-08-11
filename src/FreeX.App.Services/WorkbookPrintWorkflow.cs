@@ -1,3 +1,4 @@
+using Free.Shared.AppServices.Printing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -76,7 +77,7 @@ public static class WorkbookPrintWorkflow
         string? printerId,
         string jobTitle,
         Func<PortablePdfExportPlan, CancellationToken, Task<WorkbookPrintRenderResult>> renderPdfAsync,
-        Func<PrintJobSubmission, CancellationToken, Task<PrintSubmissionResult>> submitAsync,
+        Func<string, PrintSelection, CancellationToken, Task<PrintSubmissionResult>> submitAsync,
         Func<byte[], CancellationToken, Task<WorkbookPrintFallbackResult>> saveFallbackAsync,
         CancellationToken cancellationToken = default)
     {
@@ -110,18 +111,28 @@ public static class WorkbookPrintWorkflow
             if (plan.Readiness.NativePrintPlan.RouteKind == PrintExportNativePrintRouteKind.PlatformPrinter)
             {
                 var job = plan.Readiness.NativePrintPlan.JobPlan;
-                var submission = await submitAsync(new PrintJobSubmission(
-                    printerId ?? "",
-                    renderedDocument.DocumentBytes,
-                    job.Copies,
-                    job.Collate,
-                    job.FirstPage,
-                    job.LastPage,
-                    jobTitle), cancellationToken).ConfigureAwait(true);
+                using var temporaryFile = TemporaryFileLease.Create("freex-print-", ".pdf");
+                await temporaryFile.WriteAllBytesAsync(renderedDocument.DocumentBytes, cancellationToken)
+                    .ConfigureAwait(true);
+                var selection = new PrintSelection(
+                    PrinterName: string.IsNullOrWhiteSpace(printerId) ? null : printerId.Trim(),
+                    Copies: job.Copies,
+                    PageRange: job.FirstPage == job.LastPage
+                        ? PrintPageRange.Single(job.FirstPage)
+                        : PrintPageRange.Between(job.FirstPage, job.LastPage),
+                    Collate: job.Collate,
+                    JobTitle: jobTitle);
+                var submission = await submitAsync(temporaryFile.Path, selection, cancellationToken)
+                    .ConfigureAwait(true);
+                var statusText = FormatSubmissionStatus(submission);
                 return new WorkbookPrintExecutionResult(
-                    submission.Succeeded ? WorkbookPrintExecutionOutcome.Succeeded : WorkbookPrintExecutionOutcome.Failed,
+                    submission.Succeeded
+                        ? WorkbookPrintExecutionOutcome.Succeeded
+                        : submission.Status == PrintSubmissionStatus.Cancelled
+                            ? WorkbookPrintExecutionOutcome.Canceled
+                            : WorkbookPrintExecutionOutcome.Failed,
                     plan,
-                    submission.StatusText,
+                    statusText,
                     Submission: submission,
                     RenderedDocument: renderedDocument);
             }
@@ -151,5 +162,20 @@ public static class WorkbookPrintWorkflow
                 $"Print failed: {ex.Message}",
                 Exception: ex);
         }
+    }
+
+    private static string FormatSubmissionStatus(PrintSubmissionResult submission)
+    {
+        if (submission.Succeeded)
+        {
+            var target = string.IsNullOrWhiteSpace(submission.PrinterName)
+                ? "the default printer"
+                : submission.PrinterName;
+            return $"Sent to {target}.";
+        }
+
+        return string.IsNullOrWhiteSpace(submission.Message)
+            ? "Printing failed."
+            : submission.Message;
     }
 }

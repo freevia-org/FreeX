@@ -110,6 +110,8 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         avaloniaExportOptionsSource.Should().NotContain("ApplyPageRangeToPortablePdfExportPlan(");
         avaloniaPrintSource.Should().Contain("WorkbookPrintWorkflow.CreatePlan(");
         avaloniaPrintSource.Should().Contain("WorkbookPrintWorkflow.ExecutePortableAsync(");
+        avaloniaPrintSource.Should().Contain("_printService.SubmitAsync(pdfPath, selection, cancellationToken)");
+        avaloniaPrintSource.Should().NotContain("IPlatformPrinter");
         avaloniaImportSource.Should().Contain("WorkbookImportWorkflow.ApplyImportedWorkbookEdit(");
         avaloniaPrintSource.Should().Contain("ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(");
         avaloniaParitySource.Should().Contain("WorkbookFileDialogSurfacePlanner.CreateOpenPlan(");

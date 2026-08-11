@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.RegularExpressions;
 
 namespace Free.Shared.AppServices.Printing;
 
@@ -8,8 +7,13 @@ namespace Free.Shared.AppServices.Printing;
 /// </summary>
 public static class CupsPrintCommandPlanner
 {
-    public static ProcessInvocation ListPrinters() =>
-        new("lpstat", ["-p"]);
+    public static ProcessInvocation ListPrinters(
+        CupsPrinterDiscoveryMode mode = CupsPrinterDiscoveryMode.PrinterStatus) =>
+        mode switch
+        {
+            CupsPrinterDiscoveryMode.DestinationNames => new("lpstat", ["-e"]),
+            _ => new("lpstat", ["-p"]),
+        };
 
     public static ProcessInvocation ReadDefaultPrinter() =>
         new("lpstat", ["-d"]);
@@ -24,23 +28,29 @@ public static class CupsPrintCommandPlanner
         ArgumentNullException.ThrowIfNull(selection);
         selection.Validate();
 
-        var arguments = new List<string>
-        {
-            "-d", printerName,
-            "-n", selection.Copies.ToString(CultureInfo.InvariantCulture),
-            "-o", $"collate={(selection.Collate ? "true" : "false")}",
-        };
+        var arguments = new List<string> { "-d", printerName };
+        if (selection.Copies > 1)
+            arguments.AddRange(["-n", selection.Copies.ToString(CultureInfo.InvariantCulture)]);
         if (selection.EffectivePageRange.ToCupsPageList() is { } pageList)
             arguments.AddRange(["-P", pageList]);
+        arguments.AddRange(["-o", $"collate={(selection.Collate ? "true" : "false")}"]);
         if (selection.Orientation is PrintOrientation.Portrait or PrintOrientation.Landscape)
         {
             var requested = selection.Orientation == PrintOrientation.Portrait ? "3" : "4";
             arguments.AddRange(["-o", $"orientation-requested={requested}"]);
         }
+        if (!string.IsNullOrWhiteSpace(selection.JobTitle))
+            arguments.AddRange(["-t", selection.JobTitle.Trim()]);
 
         arguments.Add(pdfPath);
         return new ProcessInvocation("lp", arguments);
     }
+}
+
+public enum CupsPrinterDiscoveryMode
+{
+    PrinterStatus,
+    DestinationNames,
 }
 
 /// <summary>
@@ -49,17 +59,25 @@ public static class CupsPrintCommandPlanner
 /// </summary>
 public sealed class CupsPrintService : IPlatformPrintService
 {
-    private static readonly Regex PrinterLine = new(
-        "^printer\\s+(?<name>\\S+)",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
 
     private readonly IProcessRunner _processRunner;
     private readonly bool? _isSupportedOverride;
+    private readonly TimeSpan _commandTimeout;
+    private readonly CupsPrinterDiscoveryMode _discoveryMode;
 
-    public CupsPrintService(IProcessRunner? processRunner = null, bool? isSupportedOverride = null)
+    public CupsPrintService(
+        IProcessRunner? processRunner = null,
+        bool? isSupportedOverride = null,
+        TimeSpan? commandTimeout = null,
+        CupsPrinterDiscoveryMode discoveryMode = CupsPrinterDiscoveryMode.PrinterStatus)
     {
         _processRunner = processRunner ?? new SystemProcessRunner();
         _isSupportedOverride = isSupportedOverride;
+        _commandTimeout = commandTimeout ?? DefaultCommandTimeout;
+        if (_commandTimeout <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(commandTimeout), "The CUPS command timeout must be positive.");
+        _discoveryMode = discoveryMode;
     }
 
     public bool IsSupported =>
@@ -81,25 +99,32 @@ public sealed class CupsPrintService : IPlatformPrintService
 
         try
         {
-            var printersResult = await _processRunner.RunAsync(
-                CupsPrintCommandPlanner.ListPrinters(), cancellationToken).ConfigureAwait(false);
+            var listPrinters = CupsPrintCommandPlanner.ListPrinters(_discoveryMode);
+            var printersResult = await RunAsync(listPrinters, cancellationToken).ConfigureAwait(false);
             if (!printersResult.Succeeded)
             {
                 return new(
                     PrinterDiscoveryStatus.Unavailable,
                     [],
                     null,
-                    FormatProcessFailure("lpstat -p", printersResult));
+                    FormatProcessFailure($"lpstat {listPrinters.Arguments[0]}", printersResult));
             }
 
-            var names = printersResult.StandardOutput
-                .Split(["\r\n", "\n", "\r"], StringSplitOptions.RemoveEmptyEntries)
-                .Select(line => PrinterLine.Match(line))
-                .Where(match => match.Success)
-                .Select(match => match.Groups["name"].Value)
+            var names = ParsePrinterNames(printersResult.StandardOutput, _discoveryMode)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            if (names.Length == 0)
+                .ToList();
+
+            var defaultResult = await RunAsync(
+                CupsPrintCommandPlanner.ReadDefaultPrinter(), cancellationToken).ConfigureAwait(false);
+            var defaultName = defaultResult.Succeeded
+                ? ParseDefaultPrinter(defaultResult.StandardOutput)
+                : null;
+            if (defaultName is not null &&
+                !names.Contains(defaultName, StringComparer.OrdinalIgnoreCase))
+            {
+                names.Add(defaultName);
+            }
+            if (names.Count == 0)
             {
                 return new(
                     PrinterDiscoveryStatus.NoPrinters,
@@ -108,15 +133,11 @@ public sealed class CupsPrintService : IPlatformPrintService
                     "No printers are installed or available.");
             }
 
-            var defaultResult = await _processRunner.RunAsync(
-                CupsPrintCommandPlanner.ReadDefaultPrinter(), cancellationToken).ConfigureAwait(false);
-            var defaultName = defaultResult.Succeeded
-                ? ParseDefaultPrinter(defaultResult.StandardOutput)
-                : null;
             var printers = names
                 .Select(name => new PrinterInfo(
                     name,
                     string.Equals(name, defaultName, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(printer => printer.IsDefault)
                 .ToArray();
             return new(
                 PrinterDiscoveryStatus.Available,
@@ -127,6 +148,10 @@ public sealed class CupsPrintService : IPlatformPrintService
         catch (OperationCanceledException)
         {
             return new(PrinterDiscoveryStatus.Cancelled, [], null, "Printer discovery was cancelled.");
+        }
+        catch (TimeoutException)
+        {
+            return new(PrinterDiscoveryStatus.Unavailable, [], null, "CUPS printer discovery timed out.");
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -189,7 +214,7 @@ public sealed class CupsPrintService : IPlatformPrintService
 
         try
         {
-            var result = await _processRunner.RunAsync(
+            var result = await RunAsync(
                 CupsPrintCommandPlanner.Submit(
                     pdfPath,
                     selection with { PrinterName = printer },
@@ -212,6 +237,13 @@ public sealed class CupsPrintService : IPlatformPrintService
                 printer,
                 Message: "Print submission was cancelled.");
         }
+        catch (TimeoutException)
+        {
+            return new(
+                PrintSubmissionStatus.Failed,
+                printer,
+                Message: "Printing failed: the CUPS command timed out.");
+        }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             return new(
@@ -230,6 +262,51 @@ public sealed class CupsPrintService : IPlatformPrintService
         }
 
         return discovery.DefaultPrinter ?? discovery.Printers[0].Name;
+    }
+
+    private static IEnumerable<string> ParsePrinterNames(
+        string output,
+        CupsPrinterDiscoveryMode mode)
+    {
+        foreach (var rawLine in output.Split(
+                     ["\r\n", "\n", "\r"],
+                     StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+                continue;
+            if (mode == CupsPrinterDiscoveryMode.DestinationNames)
+            {
+                yield return line;
+                continue;
+            }
+
+            const string prefix = "printer ";
+            if (!line.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var nameEnd = line.IndexOf(' ', prefix.Length);
+            var name = nameEnd < 0 ? line[prefix.Length..] : line[prefix.Length..nameEnd];
+            if (name.Length > 0)
+                yield return name;
+        }
+    }
+
+    private async Task<ProcessResult> RunAsync(
+        ProcessInvocation invocation,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(_commandTimeout);
+        try
+        {
+            return await _processRunner.RunAsync(invocation, timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (
+            timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"{invocation.FileName} did not exit within {_commandTimeout.TotalSeconds:n0} seconds.");
+        }
     }
 
     private static string? ParseDefaultPrinter(string output)
