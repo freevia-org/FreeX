@@ -30,23 +30,38 @@ public sealed class RichClipboardDocumentPlannerTests
     }
 
     [Fact]
-    public void Renderer_adapters_do_not_own_RtfReader_policy()
+    public void Renderer_adapters_route_RtfReader_policy_through_the_shared_clipboard_workflow()
     {
         var workspace = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var sources = new[]
+        var rendererSources = new[]
         {
             Path.Combine(workspace, "freew", "FreeW.App.Host", "Editing", "DocumentView.cs"),
             Path.Combine(workspace, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"),
+            Path.Combine(workspace, "freew", "FreeW.App.Avalonia", "MainWindow.cs"),
         }.Select(File.ReadAllText).ToArray();
+        var workflow = File.ReadAllText(Path.Combine(
+            workspace,
+            "freew",
+            "FreeW.App.Presentation",
+            "Editing",
+            "FreeWClipboardApplicationWorkflow.cs"));
+        var parser = File.ReadAllText(Path.Combine(
+            workspace,
+            "freew",
+            "FreeW.Core.IO",
+            "RtfClipboardDocumentParser.cs"));
 
-        sources.Should().AllSatisfy(source =>
+        rendererSources.Should().AllSatisfy(source =>
         {
             source.Should().NotContain("RtfReader.Read(");
+            source.Should().NotContain("RtfClipboardDocumentParser.TryParse(");
             source.Should().NotContain("TryReadRtfClipboardDocument");
         });
 
-        sources[0].Should().Contain("RichClipboardDocumentPlanner.TryReadRtf(");
-        File.ReadAllText(Path.Combine(workspace, "freew", "FreeW.App.Avalonia", "MainWindow.cs"))
-            .Should().Contain("RichClipboardDocumentPlanner.TryReadRtf(");
+        rendererSources[0].Should().Contain("FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(");
+        rendererSources[2].Should().Contain("FreeWClipboardApplicationWorkflow.ReadPasteSpecialAsync(");
+        workflow.Should().Contain("RtfClipboardDocumentParser.TryParse(");
+        workflow.Should().NotContain("RtfReader.Read(");
+        parser.Should().Contain("RtfReader.Read(");
     }
 }

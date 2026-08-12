@@ -310,6 +310,20 @@ public sealed partial class DocumentView
                     Math.Max(1, item.Width > 0 ? item.Width : item.AvailableWidth),
                     Math.Max(1, item.Height > 0 ? item.Height : item.LineHeight))));
         }
+        if (node.StoryKind != DocumentAccessibilityStoryKind.Body
+            && node.Kind == DocumentAccessibilityNodeKind.EmbeddedObject
+            && AutomationHeaderFooterContext(node) is { Paragraph: not null } embeddedContext)
+        {
+            var paragraphIndex = embeddedContext.Story.Paragraphs.IndexOf(embeddedContext.Paragraph);
+            rectangles.AddRange(_headerFooterItems
+                .Where(item => item.OwnerTarget is { } target
+                    && target.Slot == embeddedContext.Slot
+                    && target.ParaIdx == paragraphIndex
+                    && ReferenceEquals(ResolveHfStore(target), embeddedContext.Store)
+                    && item.EmbeddedObject is not null
+                    && item.RunIndex == node.RunIndex)
+                .Select(item => new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height))));
+        }
         if (node.ObjectPath is { Count: > 0 } objectPath
             && TryGetFloatingGroupChildGeometry(node.BlockIndex, node.RunIndex, objectPath, out var groupChild))
             rectangles.Add(groupChild.Child.Rect);
@@ -371,6 +385,15 @@ public sealed partial class DocumentView
             case DocumentAccessibilityNodeKind.DrawingGroup:
                 if (node.ObjectPath is not { Count: > 0 })
                     rectangles.AddRange(_floatingGroups.Where(item => item.BlockIndex == node.BlockIndex && item.RunIndex == node.RunIndex).Select(item => item.Rect));
+                break;
+            case DocumentAccessibilityNodeKind.EmbeddedObject:
+                rectangles.AddRange(_inlineEmbeddedObjects
+                    .Where(item => item.BlockIndex == node.BlockIndex
+                        && item.RunIndex == node.RunIndex
+                        && item.CellRow == node.RowIndex
+                        && item.CellColumn == node.ColumnIndex
+                        && item.CellParagraphIndex == node.ParagraphIndex)
+                    .Select(item => item.Rect));
                 break;
             case DocumentAccessibilityNodeKind.Paragraph:
             case DocumentAccessibilityNodeKind.Heading:

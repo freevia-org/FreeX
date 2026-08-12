@@ -102,6 +102,66 @@ public sealed class SpliceCellParagraphsCommand(
     }
 }
 
+/// <summary>Sets a table-cell paragraph mark revision while preserving undo state.</summary>
+public sealed class SetCellParagraphMarkRevisionCommand(
+    int blockIndex,
+    int rowIndex,
+    int cellStartColumn,
+    int paragraphIndex,
+    RevisionKind kind,
+    string? author,
+    string? dateXml) : IDocumentCommand
+{
+    private RevisionKind _previousKind;
+    private string? _previousAuthor;
+    private string? _previousDateXml;
+    private bool _applied;
+
+    public string Label => kind == RevisionKind.Deleted ? "Delete Paragraph Mark" : "Insert Paragraph Mark";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TableCellCommandAddress.TryGetParagraph(
+                context.Document,
+                blockIndex,
+                rowIndex,
+                cellStartColumn,
+                paragraphIndex,
+                out var paragraph))
+        {
+            return;
+        }
+
+        _previousKind = paragraph.MarkRevision;
+        _previousAuthor = paragraph.MarkRevisionAuthor;
+        _previousDateXml = paragraph.MarkRevisionDateXml;
+        paragraph.MarkRevision = kind;
+        paragraph.MarkRevisionAuthor = author;
+        paragraph.MarkRevisionDateXml = dateXml;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied
+            || !TableCellCommandAddress.TryGetParagraph(
+                context.Document,
+                blockIndex,
+                rowIndex,
+                cellStartColumn,
+                paragraphIndex,
+                out var paragraph))
+        {
+            return;
+        }
+
+        paragraph.MarkRevision = _previousKind;
+        paragraph.MarkRevisionAuthor = _previousAuthor;
+        paragraph.MarkRevisionDateXml = _previousDateXml;
+        _applied = false;
+    }
+}
+
 internal static class TableCellCommandAddress
 {
     public static bool TryGetParagraph(

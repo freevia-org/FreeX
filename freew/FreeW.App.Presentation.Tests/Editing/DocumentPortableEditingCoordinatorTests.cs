@@ -1394,12 +1394,16 @@ public sealed class DocumentPortableEditingOwnershipTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var editingDirectory = Path.Combine(root, "freew", "FreeW.App.Avalonia", "Editing");
+        var sharedCommands = ReadSource(
+            "freew", "FreeW.Core.Model", "TableCellParagraphCommands.cs");
         var offenders = Directory.EnumerateFiles(editingDirectory, "*.cs")
             .Where(file => File.ReadAllText(file).Contains(": IDocumentCommand", StringComparison.Ordinal))
             .Select(Path.GetFileName)
             .ToArray();
 
         offenders.Should().BeEmpty("renderer-neutral undo commands belong in Core or Presentation");
+        sharedCommands.Should().Contain("public sealed class SetCellParagraphMarkRevisionCommand(");
+        sharedCommands.Should().Contain("TableCellCommandAddress.TryGetParagraph(");
     }
 
     private static string ReadSource(params string[] parts)

@@ -54,6 +54,40 @@ public class DocumentCommandBusTests
     }
 
     [Fact]
+    public void SetCellParagraphMarkRevision_UsesLogicalColumnAndRestoresPreviousState()
+    {
+        var (doc, bus) = New();
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].GridSpan = 2;
+        var paragraph = table.Rows[0].Cells[1].Paragraphs[0];
+        paragraph.MarkRevision = RevisionKind.Inserted;
+        paragraph.MarkRevisionAuthor = "Before";
+        paragraph.MarkRevisionDateXml = "before-date";
+        doc.Blocks.Add(table);
+
+        bus.Execute(new SetCellParagraphMarkRevisionCommand(
+            0,
+            0,
+            2,
+            0,
+            RevisionKind.Deleted,
+            "After",
+            "after-date"));
+
+        paragraph.MarkRevision.Should().Be(RevisionKind.Deleted);
+        paragraph.MarkRevisionAuthor.Should().Be("After");
+        paragraph.MarkRevisionDateXml.Should().Be("after-date");
+
+        bus.Undo().Should().BeTrue();
+        paragraph.MarkRevision.Should().Be(RevisionKind.Inserted);
+        paragraph.MarkRevisionAuthor.Should().Be("Before");
+        paragraph.MarkRevisionDateXml.Should().Be("before-date");
+
+        bus.Redo().Should().BeTrue();
+        paragraph.MarkRevision.Should().Be(RevisionKind.Deleted);
+    }
+
+    [Fact]
     public void RollbackUndoGroup_RevertsAppliedCommandsWithoutCreatingHistory()
     {
         var (doc, bus) = New();

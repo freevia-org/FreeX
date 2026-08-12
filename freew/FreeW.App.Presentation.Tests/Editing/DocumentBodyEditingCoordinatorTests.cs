@@ -66,6 +66,7 @@ public sealed class DocumentBodyEditingCoordinatorTests
                 Range(0, 5, 0, 2),
                 DocumentBodyDeleteDirection.Forward,
                 trackChanges: false,
+                mergeForwardBoundary: false,
                 out var result)
             .Should().BeTrue();
 
@@ -86,6 +87,7 @@ public sealed class DocumentBodyEditingCoordinatorTests
                 Range(1, 0, 1, 0),
                 DocumentBodyDeleteDirection.Backward,
                 trackChanges: false,
+                mergeForwardBoundary: false,
                 out var backwardMerge)
             .Should().BeTrue();
 
@@ -99,6 +101,7 @@ public sealed class DocumentBodyEditingCoordinatorTests
                 Range(0, 5, 0, 5),
                 DocumentBodyDeleteDirection.Forward,
                 trackChanges: false,
+                mergeForwardBoundary: true,
                 out var forwardMerge)
             .Should().BeTrue();
 
@@ -120,6 +123,7 @@ public sealed class DocumentBodyEditingCoordinatorTests
                 Range(0, 0, 0, 0),
                 DocumentBodyDeleteDirection.Forward,
                 trackChanges: true,
+                mergeForwardBoundary: false,
                 out var result)
             .Should().BeTrue();
 
@@ -154,6 +158,7 @@ public sealed class DocumentBodyEditingCoordinatorTests
                 Range(0, 0, 0, 0),
                 DocumentBodyDeleteDirection.Backward,
                 trackChanges: false,
+                mergeForwardBoundary: false,
                 out var result)
             .Should().BeTrue();
 
@@ -210,6 +215,7 @@ public sealed class DocumentBodyEditingCoordinatorTests
                 Range(0, 1, 0, 1),
                 DocumentBodyDeleteDirection.Backward,
                 trackChanges: false,
+                mergeForwardBoundary: false,
                 out _)
             .Should().BeFalse();
         session.Body.TryApplyParagraphBreak(Range(0, 1, 0, 1), out _)

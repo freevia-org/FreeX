@@ -33,10 +33,14 @@ public sealed class RendererNeutralProjectionOwnershipSourceTests
 
         projection.Should().Contain("public static class TableGridProjection");
         coreCommands.Should().Contain("TableGridProjection.At(");
+        coreCommands.Should().Contain("TableGridProjection.ProjectRow(");
+        coreCommands.Should().Contain("TableGridProjection.RowWidth(");
         coreCommands.Should().NotContain("TableColumnHelpers");
         wpf.Should().Contain("TableGridProjection.ProjectRow(");
         avalonia.Should().Contain("TableGridProjection.ProjectRow(");
         presentationFiles.Should().Contain("TableGridProjection.At(");
+        presentationFiles.Should().Contain("TableGridProjection.ProjectRow(");
+        presentationFiles.Should().Contain("TableGridProjection.TableWidth(");
         wpf.Should().NotContain("Math.Max(1, modelCell.GridSpan)");
         avalonia.Should().NotContain("Math.Max(1, cell.GridSpan)");
         presentationFiles.Should().NotContain("Math.Max(1, cell.GridSpan)");
