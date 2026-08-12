@@ -157,7 +157,7 @@ public partial class FileAdapterSmokeTests
         saveAdapter.Save(workbook, stream);
         stream.Position = 0;
 
-        var openAdapter = FileDialogFilterBuilder.FindOpenAdapter(
+        var openAdapter = FileFormatResolver.FindOpenAdapter(
             [new XlsxFileAdapter(), new LegacyXlsFileAdapter(), new CsvFileAdapter(), new NativeJsonAdapter()],
             ".fxl",
             out var format);

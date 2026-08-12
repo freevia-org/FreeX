@@ -142,13 +142,13 @@ public sealed class HeaderFooterEditorPlannerTests
 
         var state = HeaderFooterEditorState.FromSheet(sheet);
         var fields = state.ApplyTo(PageSetupDialogModel.FromSheet(new Sheet(SheetId.New(), "Target")));
-        var request = state.ToCommandRequest();
+        var request = state.DeepClone();
 
         state.HeaderPictures.Should().NotBeSameAs(sheet.PageHeaderPictures);
-        fields.Header.Should().Be(sheet.PageHeader);
-        fields.Footer.Should().Be(sheet.PageFooter);
-        fields.DifferentFirstPage.Should().BeTrue();
-        fields.ScaleHeaderFooterWithDocument.Should().BeFalse();
+        fields.HeaderFooter.Header.Should().Be(sheet.PageHeader);
+        fields.HeaderFooter.Footer.Should().Be(sheet.PageFooter);
+        fields.HeaderFooter.DifferentFirstPage.Should().BeTrue();
+        fields.HeaderFooter.ScaleWithDocument.Should().BeFalse();
         request.Header.Should().Be(sheet.PageHeader);
         request.HeaderPictures.Should().NotBeSameAs(state.HeaderPictures);
     }

@@ -84,7 +84,7 @@ public sealed partial class MainWindow
             return;
 
         var plan = CreatePageLayoutCommandSession().PlanHeaderFooter(
-            edited.ToCommandRequest(),
+            edited,
             _statusText.Text ?? "Ready");
         var result = _session.ExecuteReviewCommand(plan.Command);
         var status = PageLayoutStatusPlanner.ResolveCommandStatus(
@@ -353,8 +353,9 @@ public sealed partial class MainWindow
     {
         (PageSetupDialogFields Fields, PageSetupDialogAction RequestedAction)? result = null;
         var initial = surface.Fields;
-        var headerPictures = initial.HeaderPictures;
-        var footerPictures = initial.FooterPictures;
+        var initialHeaderFooter = initial.HeaderFooter.DeepClone();
+        var headerPictures = initialHeaderFooter.HeaderPictures;
+        var footerPictures = initialHeaderFooter.FooterPictures;
         var dialog = new Window
         {
             Title = UiText.Get(PageSetupDialogPlanner.TitleResourceKey),
@@ -469,16 +470,16 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(centerVerticallyCheck, "PageSetupCenterVerticallyCheck");
 
         // --- Header/Footer tab ---
-        var header = initial.Header;
-        var footer = initial.Footer;
-        var firstPageHeader = initial.FirstPageHeader;
-        var firstPageFooter = initial.FirstPageFooter;
-        var evenPageHeader = initial.EvenPageHeader;
-        var evenPageFooter = initial.EvenPageFooter;
-        var firstPageHeaderPictures = initial.FirstPageHeaderPictures.DeepClone();
-        var firstPageFooterPictures = initial.FirstPageFooterPictures.DeepClone();
-        var evenPageHeaderPictures = initial.EvenPageHeaderPictures.DeepClone();
-        var evenPageFooterPictures = initial.EvenPageFooterPictures.DeepClone();
+        var header = initialHeaderFooter.Header;
+        var footer = initialHeaderFooter.Footer;
+        var firstPageHeader = initialHeaderFooter.FirstPageHeader;
+        var firstPageFooter = initialHeaderFooter.FirstPageFooter;
+        var evenPageHeader = initialHeaderFooter.EvenPageHeader;
+        var evenPageFooter = initialHeaderFooter.EvenPageFooter;
+        var firstPageHeaderPictures = initialHeaderFooter.FirstPageHeaderPictures;
+        var firstPageFooterPictures = initialHeaderFooter.FirstPageFooterPictures;
+        var evenPageHeaderPictures = initialHeaderFooter.EvenPageHeaderPictures;
+        var evenPageFooterPictures = initialHeaderFooter.EvenPageFooterPictures;
         var headerPresetChoices = PageSetupDialogModel.HeaderPresetChoices;
         var footerPresetChoices = PageSetupDialogModel.FooterPresetChoices;
         var headerPresetBox = new ComboBox
@@ -550,28 +551,28 @@ public sealed partial class MainWindow
         var differentFirstPageCheck = new CheckBox
         {
             Content = StripDisplayMnemonic(UiText.Get("PageSetup_DifferentFirstPage")),
-            IsChecked = initial.DifferentFirstPage,
+            IsChecked = initialHeaderFooter.DifferentFirstPage,
         };
         ApplyPageLayoutCheckBoxChrome(differentFirstPageCheck);
         AutomationProperties.SetAutomationId(differentFirstPageCheck, "PageSetupDifferentFirstPageCheck");
         var differentOddEvenCheck = new CheckBox
         {
             Content = UiText.Get("PageSetup_DifferentOddEven"),
-            IsChecked = initial.DifferentOddEvenPages,
+            IsChecked = initialHeaderFooter.DifferentOddEvenPages,
         };
         ApplyPageLayoutCheckBoxChrome(differentOddEvenCheck);
         AutomationProperties.SetAutomationId(differentOddEvenCheck, "PageSetupDifferentOddEvenCheck");
         var scaleWithDocumentCheck = new CheckBox
         {
             Content = StripDisplayMnemonic(UiText.Get("PageSetup_ScaleWithDocument")),
-            IsChecked = initial.ScaleHeaderFooterWithDocument,
+            IsChecked = initialHeaderFooter.ScaleWithDocument,
         };
         ApplyPageLayoutCheckBoxChrome(scaleWithDocumentCheck);
         AutomationProperties.SetAutomationId(scaleWithDocumentCheck, "PageSetupScaleWithDocumentCheck");
         var alignWithMarginsCheck = new CheckBox
         {
             Content = UiText.Get("PageSetup_AlignWithMargins"),
-            IsChecked = initial.AlignHeaderFooterWithMargins,
+            IsChecked = initialHeaderFooter.AlignWithMargins,
         };
         ApplyPageLayoutCheckBoxChrome(alignWithMarginsCheck);
         AutomationProperties.SetAutomationId(alignWithMarginsCheck, "PageSetupAlignWithMarginsCheck");
@@ -756,22 +757,7 @@ public sealed partial class MainWindow
             PrintErrorValueIndex = cellErrorsBox.SelectedIndex,
             PrintCommentsIndex = commentsBox.SelectedIndex,
             PageOrderIndex = pageOrderBox.SelectedIndex,
-            Header = header,
-            Footer = footer,
-            FirstPageHeader = firstPageHeader,
-            FirstPageFooter = firstPageFooter,
-            EvenPageHeader = evenPageHeader,
-            EvenPageFooter = evenPageFooter,
-            HeaderPictures = headerPictures,
-            FooterPictures = footerPictures,
-            FirstPageHeaderPictures = firstPageHeaderPictures,
-            FirstPageFooterPictures = firstPageFooterPictures,
-            EvenPageHeaderPictures = evenPageHeaderPictures,
-            EvenPageFooterPictures = evenPageFooterPictures,
-            DifferentFirstPage = differentFirstPageCheck.IsChecked == true,
-            DifferentOddEvenPages = differentOddEvenCheck.IsChecked == true,
-            ScaleHeaderFooterWithDocument = scaleWithDocumentCheck.IsChecked == true,
-            AlignHeaderFooterWithMargins = alignWithMarginsCheck.IsChecked == true,
+            HeaderFooter = CaptureHeaderFooterEditorState(),
         });
 
         // WPF layout: [Print...][Print Preview][Options...]  ··fill··  [OK][Cancel]

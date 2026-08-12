@@ -1,5 +1,7 @@
 using FreeX.Core.IO;
+using FileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
 using FileDialogPickerTypeDescriptor = Free.Shared.IO.FileDialogPickerTypeDescriptor;
+using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
 
 namespace FreeX.App.Services;
 
@@ -41,7 +43,9 @@ public static class ImportDataFilePickerPlanner
         var importAdapters = SelectAdapterImportAdapters(adapters);
         var filter = importAdapters.Count == 0
             ? string.Empty
-            : FileDialogFilterBuilder.BuildOpenFilter(importAdapters);
+            : FileDialogFilterBuilder.BuildOpenFilter(
+                FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(
+                    importAdapters.SelectMany(adapter => adapter.Formats)));
         return new ImportDataOpenDialogPlan(
             importAdapters,
             filter,

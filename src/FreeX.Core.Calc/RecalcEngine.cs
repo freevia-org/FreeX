@@ -2553,7 +2553,9 @@ public sealed class RecalcEngine
                         // circular formula), the evaluator falls back to evaluating the literal unshifted
                         // form -- so the dependency graph must track that same unshifted target rather than
                         // manufacture a self-dependency edge the evaluator never actually reads.
-                        var effectiveAst = ReferencesFormulaCell(shiftedAst, formulaCell) ? namedAst : shiftedAst;
+                        var effectiveAst = FormulaReferenceContainment.ContainsUnqualifiedCell(shiftedAst, formulaCell)
+                            ? namedAst
+                            : shiftedAst;
 
                         return CollectReferences(
                             effectiveAst,
@@ -2810,35 +2812,6 @@ public sealed class RecalcEngine
     // self-reference guard, re-declared here since the two projects share no InternalsVisibleTo.
     // Only the node kinds ShiftFormulaForCell actually rewrites are inspected; this is
     // intentionally narrow (not a full reference-tracking pass) to match that guard's purpose.
-    private static bool ReferencesFormulaCell(FormulaNode node, CellAddress current) => node switch
-    {
-        CellRefNode cr when cr.SheetName is null => cr.Row == current.Row && cr.ColumnNumber == current.Col,
-        RangeRefNode rr when rr.SheetName is null =>
-            current.Row >= Math.Min(rr.Start.Row, rr.End.Row) && current.Row <= Math.Max(rr.Start.Row, rr.End.Row) &&
-            current.Col >= Math.Min(rr.Start.ColumnNumber, rr.End.ColumnNumber) && current.Col <= Math.Max(rr.Start.ColumnNumber, rr.End.ColumnNumber),
-        FullColumnRangeRefNode fcr when fcr.SheetName is null =>
-            current.Col >= Math.Min(fcr.StartColumnNumber, fcr.EndColumnNumber) && current.Col <= Math.Max(fcr.StartColumnNumber, fcr.EndColumnNumber),
-        FullRowRangeRefNode frr when frr.SheetName is null =>
-            current.Row >= Math.Min(frr.StartRow, frr.EndRow) && current.Row <= Math.Max(frr.StartRow, frr.EndRow),
-        BinaryOpNode bin => ReferencesFormulaCell(bin.Left, current) || ReferencesFormulaCell(bin.Right, current),
-        UnaryOpNode un => ReferencesFormulaCell(un.Operand, current),
-        FunctionCallNode fn => ReferencesFormulaCellInAny(fn.Arguments, current),
-        UnionNode union => ReferencesFormulaCellInAny(union.Areas, current),
-        IntersectionNode ix => ReferencesFormulaCell(ix.Left, current) || ReferencesFormulaCell(ix.Right, current),
-        NamedRangeEndpointNode nre => ReferencesFormulaCell(nre.Start, current) || ReferencesFormulaCell(nre.End, current),
-        _ => false
-    };
-
-    private static bool ReferencesFormulaCellInAny(IReadOnlyList<FormulaNode> nodes, CellAddress current)
-    {
-        for (var i = 0; i < nodes.Count; i++)
-        {
-            if (ReferencesFormulaCell(nodes[i], current))
-                return true;
-        }
-        return false;
-    }
-
     private static bool IsVolatileFunctionName(string name) =>
         name is "NOW" or "TODAY" or "RAND" or "RANDBETWEEN" or "RANDARRAY" or "INDIRECT" or "OFFSET" or "CELL" or "INFO";
 

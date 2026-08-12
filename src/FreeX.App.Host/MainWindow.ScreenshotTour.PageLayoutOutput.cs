@@ -331,7 +331,7 @@ public partial class MainWindow
     {
         var savedWorkbookPath = Path.Combine(outputDir, PageLayoutOutputTourSavedWorkbookFileName);
         var pdfPath = Path.Combine(outputDir, PageLayoutOutputTourPdfFileName);
-        var xlsxSaveAdapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
+        var xlsxSaveAdapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
             ?? throw new InvalidOperationException("Page Layout output tour could not find an XLSX save adapter.");
 
         if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, xlsxSaveAdapter)))
@@ -384,7 +384,7 @@ public partial class MainWindow
 
     private async Task<Workbook> LoadPageLayoutOutputWorkbookAsync(string path)
     {
-        var adapter = FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, Path.GetExtension(path), out _)
+        var adapter = FileFormatResolver.FindOpenAdapter(_fileAdapters, Path.GetExtension(path), out _)
             ?? throw new InvalidOperationException("Page Layout output tour could not find an XLSX open adapter.");
         await using var stream = File.OpenRead(path);
         return adapter.Load(stream);

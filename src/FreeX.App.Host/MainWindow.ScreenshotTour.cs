@@ -2955,7 +2955,7 @@ public partial class MainWindow
         if (File.Exists(savedWorkbookPath))
             File.Delete(savedWorkbookPath);
 
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
             ?? throw new InvalidOperationException("Backstage recent/export/share tour could not find an XLSX save adapter.");
         var saved = await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter));
         if (!saved)
@@ -4237,7 +4237,7 @@ public partial class MainWindow
         if (File.Exists(savedWorkbookPath))
             File.Delete(savedWorkbookPath);
 
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
             ?? throw new InvalidOperationException("Titlebar/window chrome tour could not find an XLSX save adapter.");
 
         var saved = await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter));

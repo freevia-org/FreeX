@@ -318,7 +318,7 @@ public partial class MainWindow
         string savedWorkbookPath,
         ChartPersistenceRenderTourContext context)
     {
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".fxl", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".fxl", out _)
             ?? throw new InvalidOperationException("Chart render/persistence tour could not find the native FreeX save adapter.");
         var saved = await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter));
         if (!saved)

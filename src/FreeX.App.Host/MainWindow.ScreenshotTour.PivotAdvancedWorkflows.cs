@@ -301,7 +301,7 @@ public partial class MainWindow
         string savedWorkbookPath,
         PivotAdvancedWorkflowsTourContext context)
     {
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
             ?? throw new InvalidOperationException("Pivot advanced workflows tour could not find the XLSX save adapter.");
         if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter)))
             throw new InvalidOperationException("Pivot advanced workflows tour could not save the XLSX workbook.");

@@ -478,7 +478,7 @@ public sealed partial class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("checkFileExists: plan.CheckFileExists");
         dataCommandsSource.Should().Contain("multiselect: plan.Multiselect");
         dataCommandsSource.Should().Contain("if (!result.Chosen) return;");
-        dataCommandsSource.Should().Contain("FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format)");
+        dataCommandsSource.Should().Contain("FileFormatResolver.FindOpenAdapter(adapters, ext, out var format)");
         dataCommandsSource.Should().Contain("private async void GetDataBtn_Click(object sender, RoutedEventArgs e)");
         dataCommandsSource.Should().Contain("WorkbookImportWorkflow.ImportPathAsync(");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");

@@ -55,22 +55,23 @@ public partial class PageSetupDialog : Window
             ? selection
             : null;
         Fields = PageSetupDialogPlanner.PlanSurface(sheet).Fields;
-        Header = Fields.Header;
-        Footer = Fields.Footer;
-        FirstPageHeader = Fields.FirstPageHeader;
-        FirstPageFooter = Fields.FirstPageFooter;
-        EvenPageHeader = Fields.EvenPageHeader;
-        EvenPageFooter = Fields.EvenPageFooter;
-        HeaderPictures = Fields.HeaderPictures.DeepClone();
-        FooterPictures = Fields.FooterPictures.DeepClone();
-        FirstPageHeaderPictures = Fields.FirstPageHeaderPictures.DeepClone();
-        FirstPageFooterPictures = Fields.FirstPageFooterPictures.DeepClone();
-        EvenPageHeaderPictures = Fields.EvenPageHeaderPictures.DeepClone();
-        EvenPageFooterPictures = Fields.EvenPageFooterPictures.DeepClone();
-        DifferentFirstPage = Fields.DifferentFirstPage;
-        DifferentOddEvenPages = Fields.DifferentOddEvenPages;
-        ScaleHeaderFooterWithDocument = Fields.ScaleHeaderFooterWithDocument;
-        AlignHeaderFooterWithMargins = Fields.AlignHeaderFooterWithMargins;
+        var headerFooter = Fields.HeaderFooter.DeepClone();
+        Header = headerFooter.Header;
+        Footer = headerFooter.Footer;
+        FirstPageHeader = headerFooter.FirstPageHeader;
+        FirstPageFooter = headerFooter.FirstPageFooter;
+        EvenPageHeader = headerFooter.EvenPageHeader;
+        EvenPageFooter = headerFooter.EvenPageFooter;
+        HeaderPictures = headerFooter.HeaderPictures;
+        FooterPictures = headerFooter.FooterPictures;
+        FirstPageHeaderPictures = headerFooter.FirstPageHeaderPictures;
+        FirstPageFooterPictures = headerFooter.FirstPageFooterPictures;
+        EvenPageHeaderPictures = headerFooter.EvenPageHeaderPictures;
+        EvenPageFooterPictures = headerFooter.EvenPageFooterPictures;
+        DifferentFirstPage = headerFooter.DifferentFirstPage;
+        DifferentOddEvenPages = headerFooter.DifferentOddEvenPages;
+        ScaleHeaderFooterWithDocument = headerFooter.ScaleWithDocument;
+        AlignHeaderFooterWithMargins = headerFooter.AlignWithMargins;
         PopulateFields();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
@@ -147,22 +148,23 @@ public partial class PageSetupDialog : Window
             PrintErrorValueIndex = PrintErrorValueBox.SelectedIndex,
             PrintCommentsIndex = PrintCommentsBox.SelectedIndex,
             PageOrderIndex = PageOrderBox.SelectedIndex,
-            Header = Header,
-            Footer = Footer,
-            FirstPageHeader = FirstPageHeader,
-            FirstPageFooter = FirstPageFooter,
-            EvenPageHeader = EvenPageHeader,
-            EvenPageFooter = EvenPageFooter,
-            HeaderPictures = HeaderPictures.DeepClone(),
-            FooterPictures = FooterPictures.DeepClone(),
-            FirstPageHeaderPictures = FirstPageHeaderPictures.DeepClone(),
-            FirstPageFooterPictures = FirstPageFooterPictures.DeepClone(),
-            EvenPageHeaderPictures = EvenPageHeaderPictures.DeepClone(),
-            EvenPageFooterPictures = EvenPageFooterPictures.DeepClone(),
-            DifferentFirstPage = DifferentFirstPageBox.IsChecked == true,
-            DifferentOddEvenPages = DifferentOddEvenBox.IsChecked == true,
-            ScaleHeaderFooterWithDocument = ScaleWithDocumentBox.IsChecked == true,
-            AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true
+            HeaderFooter = new HeaderFooterEditorState(
+                Header,
+                Footer,
+                FirstPageHeader,
+                FirstPageFooter,
+                EvenPageHeader,
+                EvenPageFooter,
+                HeaderPictures.DeepClone(),
+                FooterPictures.DeepClone(),
+                FirstPageHeaderPictures.DeepClone(),
+                FirstPageFooterPictures.DeepClone(),
+                EvenPageHeaderPictures.DeepClone(),
+                EvenPageFooterPictures.DeepClone(),
+                DifferentFirstPageBox.IsChecked == true,
+                DifferentOddEvenBox.IsChecked == true,
+                ScaleWithDocumentBox.IsChecked == true,
+                AlignWithMarginsBox.IsChecked == true)
         });
     }
 

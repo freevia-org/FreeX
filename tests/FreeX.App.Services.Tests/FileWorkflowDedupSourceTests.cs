@@ -415,7 +415,8 @@ public sealed class FileWorkflowDedupSourceTests
         plannerSource.Should().Contain("\".csv\",");
         plannerSource.Should().Contain("\".xml\"");
         plannerSource.Should().Contain("TextImportPatterns");
-        plannerSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(importAdapters)");
+        plannerSource.Should().Contain("FileDialogFilterBuilder.BuildOpenFilter(");
+        plannerSource.Should().Contain("FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(");
 
         wpfSource.Should().Contain("ImportDataFilePickerPlanner.BuildAdapterOpenDialogPlan(_fileAdapters)");
         wpfSource.Should().Contain("var adapters = plan.Adapters;");

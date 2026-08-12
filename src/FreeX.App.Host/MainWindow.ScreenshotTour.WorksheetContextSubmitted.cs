@@ -229,7 +229,7 @@ public partial class MainWindow
 
             if (File.Exists(savedWorkbookPath))
                 File.Delete(savedWorkbookPath);
-            var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".fxl", out _)
+            var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".fxl", out _)
                 ?? throw new InvalidOperationException("Worksheet context-submitted tour could not find a native FreeX save adapter.");
             if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter)))
                 throw new InvalidOperationException("Worksheet context-submitted tour could not save the workflow workbook.");

@@ -1043,7 +1043,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         source.Should().Contain("private async Task ShowHeaderFooterDialogAsync()");
         source.Should().Contain("CreatePageLayoutCommandSession().PlanHeaderFooter(");
-        source.Should().Contain("edited.ToCommandRequest(),");
+        source.Should().Contain("PlanHeaderFooter(");
+        source.Should().Contain("            edited,");
         source.Should().NotContain("PageSetupCommandFactory.BuildHeaderFooterCommand(sheetId, request)");
         source.Should().NotContain("new CompositeWorkbookCommand(\"Header & Footer\", commands)");
         source.Should().NotContain("ShowPageSetupDialogAsync(openHeaderFooterTab: true)");

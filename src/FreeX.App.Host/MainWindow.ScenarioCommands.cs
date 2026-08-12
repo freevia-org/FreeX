@@ -5,6 +5,8 @@ using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using FileDialogFilterBuilder = Free.Shared.IO.FileDialogFilterBuilder;
+using FileFormatDialogDescriptorAdapter = Free.Shared.IO.FileFormatDialogDescriptorAdapter;
 
 namespace FreeX.App.Host;
 
@@ -262,7 +264,9 @@ public partial class MainWindow
         var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
         var openDialog = new Microsoft.Win32.OpenFileDialog
         {
-            Filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters),
+            Filter = FileDialogFilterBuilder.BuildOpenFilter(
+                FileFormatDialogDescriptorAdapter.ToOpenDialogDescriptors(
+                    _fileAdapters.SelectMany(adapter => adapter.Formats))),
             Title = ScenarioManagerDialogPlanner.MergeDialogTitle.Resolve(UiText.Get, UiText.Format),
             CheckFileExists = true
         };

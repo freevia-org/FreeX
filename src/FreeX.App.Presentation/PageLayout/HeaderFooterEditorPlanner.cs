@@ -41,6 +41,45 @@ public sealed record HeaderFooterEditorState(
     bool ScaleWithDocument,
     bool AlignWithMargins)
 {
+    public HeaderFooterEditorState()
+        : this(
+            new("", "", ""),
+            new("", "", ""),
+            new("", "", ""),
+            new("", "", ""),
+            new("", "", ""),
+            new("", "", ""),
+            WorksheetHeaderFooterPictureSet.Empty,
+            WorksheetHeaderFooterPictureSet.Empty,
+            WorksheetHeaderFooterPictureSet.Empty,
+            WorksheetHeaderFooterPictureSet.Empty,
+            WorksheetHeaderFooterPictureSet.Empty,
+            WorksheetHeaderFooterPictureSet.Empty,
+            DifferentFirstPage: false,
+            DifferentOddEvenPages: false,
+            ScaleWithDocument: true,
+            AlignWithMargins: true)
+    {
+    }
+
+    public static HeaderFooterEditorState Empty { get; } = new(
+        new("", "", ""),
+        new("", "", ""),
+        new("", "", ""),
+        new("", "", ""),
+        new("", "", ""),
+        new("", "", ""),
+        WorksheetHeaderFooterPictureSet.Empty,
+        WorksheetHeaderFooterPictureSet.Empty,
+        WorksheetHeaderFooterPictureSet.Empty,
+        WorksheetHeaderFooterPictureSet.Empty,
+        WorksheetHeaderFooterPictureSet.Empty,
+        WorksheetHeaderFooterPictureSet.Empty,
+        DifferentFirstPage: false,
+        DifferentOddEvenPages: false,
+        ScaleWithDocument: true,
+        AlignWithMargins: true);
+
     public WorksheetHeaderFooter GetValue(HeaderFooterEditorScope scope) =>
         scope switch
         {
@@ -115,24 +154,7 @@ public sealed record HeaderFooterEditorState(
     public static HeaderFooterEditorState FromPageSetupFields(PageSetupDialogFields fields)
     {
         ArgumentNullException.ThrowIfNull(fields);
-
-        return new(
-            fields.Header,
-            fields.Footer,
-            fields.FirstPageHeader,
-            fields.FirstPageFooter,
-            fields.EvenPageHeader,
-            fields.EvenPageFooter,
-            fields.HeaderPictures.DeepClone(),
-            fields.FooterPictures.DeepClone(),
-            fields.FirstPageHeaderPictures.DeepClone(),
-            fields.FirstPageFooterPictures.DeepClone(),
-            fields.EvenPageHeaderPictures.DeepClone(),
-            fields.EvenPageFooterPictures.DeepClone(),
-            fields.DifferentFirstPage,
-            fields.DifferentOddEvenPages,
-            fields.ScaleHeaderFooterWithDocument,
-            fields.AlignHeaderFooterWithMargins);
+        return fields.HeaderFooter.DeepClone();
     }
 
     public PageSetupDialogFields ApplyTo(PageSetupDialogFields fields)
@@ -141,43 +163,18 @@ public sealed record HeaderFooterEditorState(
 
         return fields with
         {
-            Header = Header,
-            Footer = Footer,
-            FirstPageHeader = FirstPageHeader,
-            FirstPageFooter = FirstPageFooter,
-            EvenPageHeader = EvenPageHeader,
-            EvenPageFooter = EvenPageFooter,
-            HeaderPictures = HeaderPictures.DeepClone(),
-            FooterPictures = FooterPictures.DeepClone(),
-            FirstPageHeaderPictures = FirstPageHeaderPictures.DeepClone(),
-            FirstPageFooterPictures = FirstPageFooterPictures.DeepClone(),
-            EvenPageHeaderPictures = EvenPageHeaderPictures.DeepClone(),
-            EvenPageFooterPictures = EvenPageFooterPictures.DeepClone(),
-            DifferentFirstPage = DifferentFirstPage,
-            DifferentOddEvenPages = DifferentOddEvenPages,
-            ScaleHeaderFooterWithDocument = ScaleWithDocument,
-            AlignHeaderFooterWithMargins = AlignWithMargins,
+            HeaderFooter = DeepClone(),
         };
     }
 
-    public PageSetupHeaderFooterRequest ToCommandRequest() => new()
+    public HeaderFooterEditorState DeepClone() => this with
     {
-        Header = Header,
-        Footer = Footer,
-        FirstPageHeader = FirstPageHeader,
-        FirstPageFooter = FirstPageFooter,
-        EvenPageHeader = EvenPageHeader,
-        EvenPageFooter = EvenPageFooter,
         HeaderPictures = HeaderPictures.DeepClone(),
         FooterPictures = FooterPictures.DeepClone(),
         FirstPageHeaderPictures = FirstPageHeaderPictures.DeepClone(),
         FirstPageFooterPictures = FirstPageFooterPictures.DeepClone(),
         EvenPageHeaderPictures = EvenPageHeaderPictures.DeepClone(),
         EvenPageFooterPictures = EvenPageFooterPictures.DeepClone(),
-        DifferentFirstPage = DifferentFirstPage,
-        DifferentOddEvenPages = DifferentOddEvenPages,
-        ScaleHeaderFooterWithDocument = ScaleWithDocument,
-        AlignHeaderFooterWithMargins = AlignWithMargins,
     };
 
     public HeaderFooterEditorState PrunePicturesWithoutTokens() => this with

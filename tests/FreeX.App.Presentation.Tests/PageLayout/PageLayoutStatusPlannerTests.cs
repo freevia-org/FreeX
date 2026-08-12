@@ -101,7 +101,7 @@ public sealed class PageLayoutStatusPlannerTests
             .Should().Be("Specific failure");
 
         var pageSetup = new PageLayoutCommandSession([SheetId.New()])
-            .PlanHeaderFooter(new PageSetupHeaderFooterRequest());
+            .PlanHeaderFooter(new HeaderFooterEditorState());
         PageLayoutStatusPlanner.ResolveCommandStatus(pageSetup, true, null, Resolve)
             .Should().Be("resolved:ShellLoc_PageSetupUpdated");
     }

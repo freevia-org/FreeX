@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
+using static FreeX.Core.IO.XlsxSlicerTimelineRelationshipTypes;
 
 namespace FreeX.Core.IO;
 
@@ -46,10 +47,6 @@ internal static class XlsxSlicerTimelineStateRewriter
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace MarkupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
-    private const string SlicerRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicer";
-    private const string SlicerCacheRelationshipType = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
-    private const string TimelineRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/Timeline";
-    private const string TimelineCacheRelationshipType = "http://schemas.microsoft.com/office/2010/relationships/TimelineCache";
     private const string SlicerWorkbookExtensionUri = "{BBE1A952-AA13-448e-AADC-164F8A28A991}";
     private const string TimelineWorkbookExtensionUri = "{D0CA8CA8-9F24-4464-BF8E-62219DCF47F9}";
     private const string SlicerWorksheetExtensionUri = "{A8765BA9-456A-4DAB-B4F3-ACF838C121DE}";

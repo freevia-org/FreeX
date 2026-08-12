@@ -239,7 +239,7 @@ public partial class MainWindow
         string savedWorkbookPath,
         DrawObjectPersistenceTourContext context)
     {
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".fxl", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".fxl", out _)
             ?? throw new InvalidOperationException("Draw/object persistence tour could not find the native FreeX save adapter.");
         var saved = await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter));
         if (!saved)

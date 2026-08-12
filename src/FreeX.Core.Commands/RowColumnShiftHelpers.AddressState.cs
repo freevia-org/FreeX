@@ -901,7 +901,7 @@ internal static partial class RowColumnShiftHelpers
             !TryParseSingleReference(autoFilter.Reference, shift, out var oldRange) ||
             !TryParseSingleReference(shiftedReference, shift, out var newRange))
         {
-            return autoFilter.FilterColumns.Select(column => CloneAutoFilterColumn(column));
+            return autoFilter.FilterColumns.Select(column => WorksheetAutoFilterCloner.CloneColumn(column));
         }
 
         var shiftedColumns = new List<WorksheetAutoFilterColumnModel>();
@@ -909,7 +909,7 @@ internal static partial class RowColumnShiftHelpers
         {
             if (column.ColumnId < 0)
             {
-                shiftedColumns.Add(CloneAutoFilterColumn(column));
+                shiftedColumns.Add(WorksheetAutoFilterCloner.CloneColumn(column));
                 continue;
             }
 
@@ -921,7 +921,7 @@ internal static partial class RowColumnShiftHelpers
             if (shiftedColumnId < 0 || shiftedColumnId >= newRange.ColCount)
                 continue;
 
-            shiftedColumns.Add(CloneAutoFilterColumn(column, (int)shiftedColumnId));
+            shiftedColumns.Add(WorksheetAutoFilterCloner.CloneColumn(column, (int)shiftedColumnId));
         }
 
         return shiftedColumns;
@@ -1979,49 +1979,6 @@ internal static partial class RowColumnShiftHelpers
         target.Clear();
         target.UnionWith(snapshot);
     }
-
-    private static WorksheetAutoFilterColumnModel CloneAutoFilterColumn(
-        WorksheetAutoFilterColumnModel column,
-        int? columnId = null) =>
-        new(
-            columnId ?? column.ColumnId,
-            column.Values.ToArray(),
-            column.IncludeBlank,
-            column.CustomFilters.Select(CloneAutoFilterCustomFilter).ToArray(),
-            column.CustomFiltersAnd,
-            column.CustomFiltersAndRaw,
-            CloneReadOnlyDictionary(column.NativeCustomFiltersAttributes),
-            CloneAutoFilterTop10(column.Top10),
-            CloneAutoFilterDynamicFilter(column.DynamicFilter),
-            CloneAutoFilterColorFilter(column.ColorFilter),
-            CloneAutoFilterIconFilter(column.IconFilter),
-            column.DateGroups.Select(CloneAutoFilterDateGroup).ToArray(),
-            CloneReadOnlyDictionary(column.NativeFiltersAttributes),
-            column.NativeFilterXmls.ToArray(),
-            CloneReadOnlyDictionary(column.NativeAttributes));
-
-    private static WorksheetAutoFilterCustomFilterModel CloneAutoFilterCustomFilter(
-        WorksheetAutoFilterCustomFilterModel filter) =>
-        new(filter.Operator, filter.Value, CloneReadOnlyDictionary(filter.NativeAttributes));
-
-    private static WorksheetAutoFilterDateGroupItemModel CloneAutoFilterDateGroup(
-        WorksheetAutoFilterDateGroupItemModel dateGroup) =>
-        dateGroup with { NativeAttributes = CloneReadOnlyDictionary(dateGroup.NativeAttributes) };
-
-    private static WorksheetAutoFilterTop10Model? CloneAutoFilterTop10(WorksheetAutoFilterTop10Model? top10) =>
-        top10 is null ? null : top10 with { NativeAttributes = CloneReadOnlyDictionary(top10.NativeAttributes) };
-
-    private static WorksheetAutoFilterDynamicFilterModel? CloneAutoFilterDynamicFilter(
-        WorksheetAutoFilterDynamicFilterModel? dynamicFilter) =>
-        dynamicFilter is null ? null : dynamicFilter with { NativeAttributes = CloneReadOnlyDictionary(dynamicFilter.NativeAttributes) };
-
-    private static WorksheetAutoFilterColorFilterModel? CloneAutoFilterColorFilter(
-        WorksheetAutoFilterColorFilterModel? colorFilter) =>
-        colorFilter is null ? null : colorFilter with { NativeAttributes = CloneReadOnlyDictionary(colorFilter.NativeAttributes) };
-
-    private static WorksheetAutoFilterIconFilterModel? CloneAutoFilterIconFilter(
-        WorksheetAutoFilterIconFilterModel? iconFilter) =>
-        iconFilter is null ? null : iconFilter with { NativeAttributes = CloneReadOnlyDictionary(iconFilter.NativeAttributes) };
 
     private static WorksheetCellSmartTagsModel CloneSmartTagCell(
         WorksheetCellSmartTagsModel cell,

@@ -197,7 +197,7 @@ public sealed class PageLayoutCommandSession
     }
 
     public PageLayoutCommandExecutionPlan PlanHeaderFooter(
-        PageSetupHeaderFooterRequest request,
+        HeaderFooterEditorState request,
         string? successStatusText = null)
     {
         ArgumentNullException.ThrowIfNull(request);

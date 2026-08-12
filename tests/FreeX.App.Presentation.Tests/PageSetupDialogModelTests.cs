@@ -424,9 +424,9 @@ public sealed class PageSetupDialogModelTests
         fields.PrintDraftQuality.Should().BeTrue();
         fields.PrintErrorValue.Should().Be(WorksheetPrintErrorValue.Dash);
         fields.PrintComments.Should().Be(WorksheetPrintComments.AtEnd);
-        fields.Header.Center.Should().Be("&[Page]");
-        fields.DifferentFirstPage.Should().BeTrue();
-        fields.ScaleHeaderFooterWithDocument.Should().BeFalse();
+        fields.HeaderFooter.Header.Center.Should().Be("&[Page]");
+        fields.HeaderFooter.DifferentFirstPage.Should().BeTrue();
+        fields.HeaderFooter.ScaleWithDocument.Should().BeFalse();
     }
 
     [Fact]
@@ -552,12 +552,16 @@ public sealed class PageSetupDialogModelTests
         var sheet = workbook.AddSheet("Sheet1");
         var ctx = new PageSetupTestCommandContext(workbook);
 
-        var fields = PageSetupDialogModel.FromSheet(sheet) with
+        var initial = PageSetupDialogModel.FromSheet(sheet);
+        var fields = initial with
         {
-            Header = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", ""),
-            Footer = new WorksheetHeaderFooter("&[File]", "", "&[Date]"),
-            DifferentOddEvenPages = true,
-            AlignHeaderFooterWithMargins = false,
+            HeaderFooter = initial.HeaderFooter with
+            {
+                Header = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", ""),
+                Footer = new WorksheetHeaderFooter("&[File]", "", "&[Date]"),
+                DifferentOddEvenPages = true,
+                AlignWithMargins = false,
+            }
         };
 
         var command = PageSetupDialogModel.BuildHeaderFooterCommand(sheet, fields);
@@ -580,35 +584,39 @@ public sealed class PageSetupDialogModelTests
         var workbook = new Workbook("Book");
         var sheet = workbook.AddSheet("Sheet1");
         var ctx = new PageSetupTestCommandContext(workbook);
-        var fields = PageSetupDialogModel.FromSheet(sheet) with
+        var initial = PageSetupDialogModel.FromSheet(sheet);
+        var fields = initial with
         {
-            Header = new WorksheetHeaderFooter("Header left", "Header center &[Picture]", "Header right"),
-            Footer = new WorksheetHeaderFooter("Footer left", "Footer center", "Footer right &[Picture]"),
-            FirstPageHeader = new WorksheetHeaderFooter("First header", "", ""),
-            FirstPageFooter = new WorksheetHeaderFooter("", "First footer", ""),
-            EvenPageHeader = new WorksheetHeaderFooter("", "Even header", ""),
-            EvenPageFooter = new WorksheetHeaderFooter("", "", "Even footer"),
-            HeaderPictures = new WorksheetHeaderFooterPictureSet(Picture("header-left.png"), Picture("header-center.png"), null),
-            FooterPictures = new WorksheetHeaderFooterPictureSet(null, null, Picture("footer-right.png")),
-            FirstPageHeaderPictures = new WorksheetHeaderFooterPictureSet(Picture("first-header.png"), null, null),
-            FirstPageFooterPictures = new WorksheetHeaderFooterPictureSet(null, Picture("first-footer.png"), null),
-            EvenPageHeaderPictures = new WorksheetHeaderFooterPictureSet(null, Picture("even-header.png"), null),
-            EvenPageFooterPictures = new WorksheetHeaderFooterPictureSet(null, null, Picture("even-footer.png")),
-            DifferentFirstPage = true,
-            DifferentOddEvenPages = true,
-            ScaleHeaderFooterWithDocument = false,
-            AlignHeaderFooterWithMargins = false,
+            HeaderFooter = initial.HeaderFooter with
+            {
+                Header = new WorksheetHeaderFooter("Header left", "Header center &[Picture]", "Header right"),
+                Footer = new WorksheetHeaderFooter("Footer left", "Footer center", "Footer right &[Picture]"),
+                FirstPageHeader = new WorksheetHeaderFooter("First header", "", ""),
+                FirstPageFooter = new WorksheetHeaderFooter("", "First footer", ""),
+                EvenPageHeader = new WorksheetHeaderFooter("", "Even header", ""),
+                EvenPageFooter = new WorksheetHeaderFooter("", "", "Even footer"),
+                HeaderPictures = new WorksheetHeaderFooterPictureSet(Picture("header-left.png"), Picture("header-center.png"), null),
+                FooterPictures = new WorksheetHeaderFooterPictureSet(null, null, Picture("footer-right.png")),
+                FirstPageHeaderPictures = new WorksheetHeaderFooterPictureSet(Picture("first-header.png"), null, null),
+                FirstPageFooterPictures = new WorksheetHeaderFooterPictureSet(null, Picture("first-footer.png"), null),
+                EvenPageHeaderPictures = new WorksheetHeaderFooterPictureSet(null, Picture("even-header.png"), null),
+                EvenPageFooterPictures = new WorksheetHeaderFooterPictureSet(null, null, Picture("even-footer.png")),
+                DifferentFirstPage = true,
+                DifferentOddEvenPages = true,
+                ScaleWithDocument = false,
+                AlignWithMargins = false,
+            }
         };
 
         var command = PageSetupDialogModel.BuildHeaderFooterCommand(sheet, fields);
         command.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.PageHeader.Should().Be(fields.Header);
-        sheet.PageFooter.Should().Be(fields.Footer);
-        sheet.FirstPageHeader.Should().Be(fields.FirstPageHeader);
-        sheet.FirstPageFooter.Should().Be(fields.FirstPageFooter);
-        sheet.EvenPageHeader.Should().Be(fields.EvenPageHeader);
-        sheet.EvenPageFooter.Should().Be(fields.EvenPageFooter);
+        sheet.PageHeader.Should().Be(fields.HeaderFooter.Header);
+        sheet.PageFooter.Should().Be(fields.HeaderFooter.Footer);
+        sheet.FirstPageHeader.Should().Be(fields.HeaderFooter.FirstPageHeader);
+        sheet.FirstPageFooter.Should().Be(fields.HeaderFooter.FirstPageFooter);
+        sheet.EvenPageHeader.Should().Be(fields.HeaderFooter.EvenPageHeader);
+        sheet.EvenPageFooter.Should().Be(fields.HeaderFooter.EvenPageFooter);
         sheet.PageHeaderPictures.Center!.FileName.Should().Be("header-center.png");
         sheet.PageFooterPictures.Right!.FileName.Should().Be("footer-right.png");
         sheet.FirstPageHeaderPictures.Left!.FileName.Should().Be("first-header.png");
@@ -673,11 +681,15 @@ public sealed class PageSetupDialogModelTests
         var target = workbook.AddSheet("Sheet2");
         var ctx = new PageSetupTestCommandContext(workbook);
 
-        var fields = PageSetupDialogModel.FromSheet(source) with
+        var initial = PageSetupDialogModel.FromSheet(source);
+        var fields = initial with
         {
             Orientation = WorksheetPageOrientation.Landscape,
             PrintAreaText = "B2:D5",
-            Header = new WorksheetHeaderFooter("", "Report", ""),
+            HeaderFooter = initial.HeaderFooter with
+            {
+                Header = new WorksheetHeaderFooter("", "Report", "")
+            },
         };
 
         var submission = PageSetupSubmissionPlanner.TryBuild(source, fields, PageSetupDialogAction.PrintPreview);
@@ -709,11 +721,15 @@ public sealed class PageSetupDialogModelTests
         var target = workbook.AddSheet("Sheet2");
         var ctx = new PageSetupTestCommandContext(workbook);
 
-        var fields = PageSetupDialogModel.FromSheet(source) with
+        var initial = PageSetupDialogModel.FromSheet(source);
+        var fields = initial with
         {
             Orientation = WorksheetPageOrientation.Landscape,
             PrintAreaText = "A1:B4",
-            Header = new WorksheetHeaderFooter("", "Grouped", ""),
+            HeaderFooter = initial.HeaderFooter with
+            {
+                Header = new WorksheetHeaderFooter("", "Grouped", "")
+            },
         };
 
         var submission = PageSetupSubmissionPlanner.TryBuild(source, fields, PageSetupDialogAction.Options);
@@ -793,7 +809,7 @@ public sealed class PageSetupDialogModelTests
 
         var request = new PageSetupCommandRequest
         {
-            HeaderFooter = new PageSetupHeaderFooterRequest
+            HeaderFooter = new HeaderFooterEditorState
             {
                 Header = new WorksheetHeaderFooter("", "Main", ""),
                 FirstPageHeader = new WorksheetHeaderFooter("First", "", ""),

@@ -283,25 +283,7 @@ public partial class MainWindow
                 "Header & Footer",
                 sheetId => PageSetupCommandFactory.BuildHeaderFooterCommand(
                     sheetId,
-                    new PageSetupHeaderFooterRequest
-                    {
-                        Header = dialog.Header,
-                        Footer = dialog.Footer,
-                        FirstPageHeader = dialog.FirstPageHeader,
-                        FirstPageFooter = dialog.FirstPageFooter,
-                        EvenPageHeader = dialog.EvenPageHeader,
-                        EvenPageFooter = dialog.EvenPageFooter,
-                        DifferentFirstPage = dialog.DifferentFirstPage,
-                        DifferentOddEvenPages = dialog.DifferentOddEvenPages,
-                        ScaleHeaderFooterWithDocument = dialog.ScaleWithDocument,
-                        AlignHeaderFooterWithMargins = dialog.AlignWithMargins,
-                        HeaderPictures = dialog.HeaderPictures,
-                        FooterPictures = dialog.FooterPictures,
-                        FirstPageHeaderPictures = dialog.FirstPageHeaderPictures,
-                        FirstPageFooterPictures = dialog.FirstPageFooterPictures,
-                        EvenPageHeaderPictures = dialog.EvenPageHeaderPictures,
-                        EvenPageFooterPictures = dialog.EvenPageFooterPictures
-                    })))
+                    dialog.ResultState)))
             return;
 
         UpdateViewport();

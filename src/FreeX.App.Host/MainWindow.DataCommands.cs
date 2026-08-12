@@ -76,7 +76,7 @@ public partial class MainWindow
         if (!result.Chosen) return;
 
         var ext = System.IO.Path.GetExtension(result.FileName!).ToLowerInvariant();
-        var adapter = FileDialogFilterBuilder.FindOpenAdapter(adapters, ext, out var format);
+        var adapter = FileFormatResolver.FindOpenAdapter(adapters, ext, out var format);
         if (adapter is null)
         {
             RecordDiagnosticEvent("import_failed", BuildImportDiagnosticProperties(ext, null, "unsupported_extension"));
@@ -239,7 +239,7 @@ public partial class MainWindow
         var properties = new Dictionary<string, string?>
         {
             ["extension"] = extension,
-            ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(extension)
+            ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(extension)
         };
         if (!string.IsNullOrWhiteSpace(format))
             properties["format"] = format;

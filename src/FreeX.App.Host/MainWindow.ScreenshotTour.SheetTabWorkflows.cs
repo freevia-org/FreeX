@@ -193,7 +193,7 @@ public partial class MainWindow
 
             if (File.Exists(savedWorkbookPath))
                 File.Delete(savedWorkbookPath);
-            var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
+            var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
                 ?? throw new InvalidOperationException("Sheet-tab workflows tour could not find an XLSX save adapter.");
             if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter)))
                 throw new InvalidOperationException("Sheet-tab workflows tour could not save the workflow workbook.");

@@ -550,12 +550,10 @@ public sealed class PageSetupDialogXamlTests
         source.Should().NotContain("PageSetupSubmissionPlanner.TryBuild(sheet, fields, dialog.RequestedAction)");
         source.Should().Contain("new PageSetupDialog(");
         source.Should().Contain("SheetGrid.SelectedRange");
-        source.Should().Contain("Header = Header");
-        source.Should().Contain("FirstPageHeader = FirstPageHeader");
-        source.Should().Contain("EvenPageFooter = EvenPageFooter");
-        source.Should().Contain("HeaderPictures = HeaderPictures.DeepClone()");
-        source.Should().Contain("ScaleHeaderFooterWithDocument = ScaleWithDocumentBox.IsChecked == true");
-        source.Should().Contain("AlignHeaderFooterWithMargins = AlignWithMarginsBox.IsChecked == true");
+        source.Should().Contain("HeaderFooter = new HeaderFooterEditorState(");
+        source.Should().Contain("HeaderPictures.DeepClone()");
+        source.Should().Contain("ScaleWithDocumentBox.IsChecked == true");
+        source.Should().Contain("AlignWithMarginsBox.IsChecked == true");
     }
 
     [Fact]

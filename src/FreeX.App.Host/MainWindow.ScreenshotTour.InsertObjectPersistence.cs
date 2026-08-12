@@ -247,7 +247,7 @@ public partial class MainWindow
         string savedWorkbookPath,
         InsertObjectPersistenceTourContext context)
     {
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".fxl", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".fxl", out _)
             ?? throw new InvalidOperationException("Insert object persistence tour could not find the native FreeX save adapter.");
         if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter)))
             throw new InvalidOperationException("Insert object persistence tour could not save the native FreeX workbook.");

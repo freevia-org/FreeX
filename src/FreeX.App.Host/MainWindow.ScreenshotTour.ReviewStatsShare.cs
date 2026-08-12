@@ -180,7 +180,7 @@ public partial class MainWindow
         if (File.Exists(savedWorkbookPath))
             File.Delete(savedWorkbookPath);
 
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".xlsx", out _)
             ?? throw new InvalidOperationException("Review statistics/share tour could not find an XLSX save adapter.");
         var saved = await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter));
         if (!saved)

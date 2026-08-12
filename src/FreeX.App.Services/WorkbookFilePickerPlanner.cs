@@ -89,7 +89,7 @@ public static class WorkbookFilePickerPlanner
         string? preferredDefaultFormat)
     {
         var preferredExtension = AppOptions.NormalizeDefaultFormat(preferredDefaultFormat);
-        return FileDialogFilterBuilder.FindSaveAdapter(adapters, preferredExtension, out _) is null
+        return FileFormatResolver.FindSaveAdapter(adapters, preferredExtension, out _) is null
             ? AppOptions.XlsxDefaultFormat
             : preferredExtension;
     }

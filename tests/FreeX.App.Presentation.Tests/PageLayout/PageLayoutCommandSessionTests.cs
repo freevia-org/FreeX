@@ -80,11 +80,11 @@ public sealed class PageLayoutCommandSessionTests
         var workbook = new Workbook("Book");
         var first = workbook.AddSheet("First");
         var second = workbook.AddSheet("Second");
-        var request = new PageSetupHeaderFooterRequest
+        var request = new HeaderFooterEditorState
         {
             Header = new WorksheetHeaderFooter("Left", "Center", "Right"),
             DifferentFirstPage = true,
-            ScaleHeaderFooterWithDocument = false,
+            ScaleWithDocument = false,
         };
         var session = new PageLayoutCommandSession([first.Id, second.Id]);
 

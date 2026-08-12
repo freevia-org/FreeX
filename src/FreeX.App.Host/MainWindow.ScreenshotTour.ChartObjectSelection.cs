@@ -554,7 +554,7 @@ public partial class MainWindow
         string savedWorkbookPath,
         ChartObjectSelectionTourContext context)
     {
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".fxl", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".fxl", out _)
             ?? throw new InvalidOperationException("Chart/object selection tour could not find the native FreeX save adapter.");
         if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter)))
             throw new InvalidOperationException("Chart/object selection tour could not save the native FreeX workbook.");

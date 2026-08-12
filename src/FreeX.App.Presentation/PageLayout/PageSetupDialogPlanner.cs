@@ -121,22 +121,7 @@ public sealed record PageSetupDialogSurfaceInput
     public int PrintErrorValueIndex { get; init; }
     public int PrintCommentsIndex { get; init; }
     public int PageOrderIndex { get; init; }
-    public WorksheetHeaderFooter Header { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter Footer { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter FirstPageHeader { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter FirstPageFooter { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter EvenPageHeader { get; init; } = new("", "", "");
-    public WorksheetHeaderFooter EvenPageFooter { get; init; } = new("", "", "");
-    public WorksheetHeaderFooterPictureSet HeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FirstPageHeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet FirstPageFooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet EvenPageHeaderPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public WorksheetHeaderFooterPictureSet EvenPageFooterPictures { get; init; } = WorksheetHeaderFooterPictureSet.Empty;
-    public bool DifferentFirstPage { get; init; }
-    public bool DifferentOddEvenPages { get; init; }
-    public bool ScaleHeaderFooterWithDocument { get; init; } = true;
-    public bool AlignHeaderFooterWithMargins { get; init; } = true;
+    public HeaderFooterEditorState HeaderFooter { get; init; } = HeaderFooterEditorState.Empty;
 }
 
 public sealed record PageSetupDialogValidationFocusState
@@ -233,10 +218,10 @@ public static class PageSetupDialogPlanner
                 PrintComments = PrintCommentChoices.IndexOf(fields.PrintComments),
                 HeaderPreset = PageSetupDialogModel.HeaderFooterPresetExactIndex(
                     PageSetupDialogModel.HeaderPresetChoices,
-                    fields.Header.Center),
+                    fields.HeaderFooter.Header.Center),
                 FooterPreset = PageSetupDialogModel.HeaderFooterPresetExactIndex(
                     PageSetupDialogModel.FooterPresetChoices,
-                    fields.Footer.Center),
+                    fields.HeaderFooter.Footer.Center),
             },
             Margins = ParseMarginTextFields(fields.MarginsText),
             Scaling = BuildScalingSurface(fields),
@@ -303,22 +288,7 @@ public static class PageSetupDialogPlanner
             PrintErrorValue = PrintErrorValueChoices.ValueAt(input.PrintErrorValueIndex),
             PrintComments = PrintCommentChoices.ValueAt(input.PrintCommentsIndex),
             PageOrder = PageOrderChoices.ValueAt(input.PageOrderIndex),
-            Header = input.Header,
-            Footer = input.Footer,
-            FirstPageHeader = input.FirstPageHeader,
-            FirstPageFooter = input.FirstPageFooter,
-            EvenPageHeader = input.EvenPageHeader,
-            EvenPageFooter = input.EvenPageFooter,
-            HeaderPictures = input.HeaderPictures.DeepClone(),
-            FooterPictures = input.FooterPictures.DeepClone(),
-            FirstPageHeaderPictures = input.FirstPageHeaderPictures.DeepClone(),
-            FirstPageFooterPictures = input.FirstPageFooterPictures.DeepClone(),
-            EvenPageHeaderPictures = input.EvenPageHeaderPictures.DeepClone(),
-            EvenPageFooterPictures = input.EvenPageFooterPictures.DeepClone(),
-            DifferentFirstPage = input.DifferentFirstPage,
-            DifferentOddEvenPages = input.DifferentOddEvenPages,
-            ScaleHeaderFooterWithDocument = input.ScaleHeaderFooterWithDocument,
-            AlignHeaderFooterWithMargins = input.AlignHeaderFooterWithMargins
+            HeaderFooter = input.HeaderFooter.DeepClone()
         };
     }
 

@@ -310,7 +310,7 @@ public partial class MainWindow
         string savedWorkbookPath,
         HomeStylePersistenceTourContext context)
     {
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".fxl", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".fxl", out _)
             ?? throw new InvalidOperationException("Home style persistence tour could not find the native FreeX save adapter.");
         if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter)))
             throw new InvalidOperationException("Home style persistence tour could not save the native FreeX workbook.");

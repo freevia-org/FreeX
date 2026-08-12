@@ -654,7 +654,7 @@ public partial class MainWindow
                 RecordDiagnosticEvent("workbook_open_canceled", new Dictionary<string, string?>
                 {
                     ["extension"] = ext,
-                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                     ["format"] = target.Format.FormatName
                 });
                 return;
@@ -666,7 +666,7 @@ public partial class MainWindow
                 RecordDiagnosticEvent("workbook_open_failed", new Dictionary<string, string?>
                 {
                     ["extension"] = ext,
-                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                     ["format"] = target.Format.FormatName,
                     ["reason"] = exception.GetType().Name
                 });
@@ -764,7 +764,7 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_opened", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Format.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
@@ -776,7 +776,7 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_open_canceled", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Format.FormatName
             });
         }
@@ -785,7 +785,7 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_open_failed", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Format.FormatName,
                 ["reason"] = ex.GetType().Name
             });
@@ -1316,7 +1316,7 @@ public partial class MainWindow
                 RecordDiagnosticEvent("workbook_save_canceled", new Dictionary<string, string?>
                 {
                     ["extension"] = ext,
-                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                     ["format"] = target.Adapter.FormatName
                 });
                 return false;
@@ -1330,7 +1330,7 @@ public partial class MainWindow
                 RecordDiagnosticEvent("workbook_save_externally_modified", new Dictionary<string, string?>
                 {
                     ["extension"] = ext,
-                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                     ["format"] = target.Adapter.FormatName
                 });
                 ShowOwnedMessage(
@@ -1346,7 +1346,7 @@ public partial class MainWindow
                 RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
                 {
                     ["extension"] = ext,
-                    ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                    ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                     ["format"] = target.Adapter.FormatName,
                     ["reason"] = saveException.GetType().Name
                 });
@@ -1363,7 +1363,7 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_saved", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Adapter.FormatName,
                 ["worksheetCount"] = _workbook.Sheets.Count.ToString()
             });
@@ -1374,7 +1374,7 @@ public partial class MainWindow
             RecordDiagnosticEvent("workbook_save_failed", new Dictionary<string, string?>
             {
                 ["extension"] = ext,
-                ["fileType"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext),
+                ["fileType"] = FileFormatResolver.SafeFileTypeFromExtension(ext),
                 ["format"] = target.Adapter.FormatName,
                 ["reason"] = ex.GetType().Name
             });

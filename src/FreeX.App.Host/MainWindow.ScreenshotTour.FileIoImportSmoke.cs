@@ -43,7 +43,7 @@ public partial class MainWindow
                 "Workbook grid seeded with representative text, numeric, formula, and table-like data before exercising file IO.",
                 "Worksheet grid before XLSX save"));
 
-            if (FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".xlsx", out _) is not { } xlsxSaveAdapter)
+            if (FileFormatResolver.FindSaveAdapter(_fileAdapters, ".xlsx", out _) is not { } xlsxSaveAdapter)
                 throw new InvalidOperationException("File IO/import smoke tour could not find the XLSX save adapter.");
 
             if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, xlsxSaveAdapter)))
@@ -172,7 +172,7 @@ public partial class MainWindow
 
     private GridRange ImportFileIoImportSmokeSheet(string path, string extension, CellAddress destination)
     {
-        if (FileDialogFilterBuilder.FindOpenAdapter(_fileAdapters, extension, out var format) is not { } adapter)
+        if (FileFormatResolver.FindOpenAdapter(_fileAdapters, extension, out var format) is not { } adapter)
             throw new InvalidOperationException($"File IO/import smoke tour could not find an import adapter for {extension}.");
 
         Workbook imported;

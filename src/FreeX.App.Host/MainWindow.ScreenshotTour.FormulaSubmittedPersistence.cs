@@ -309,7 +309,7 @@ public partial class MainWindow
         string savedWorkbookPath,
         FormulaSubmittedPersistenceTourContext context)
     {
-        var adapter = FileDialogFilterBuilder.FindSaveAdapter(_fileAdapters, ".fxl", out _)
+        var adapter = FileFormatResolver.FindSaveAdapter(_fileAdapters, ".fxl", out _)
             ?? throw new InvalidOperationException("Formula submitted/persistence tour could not find the native FreeX save adapter.");
         if (!await SaveWorkbookToTargetAsync(new FileSaveTarget(savedWorkbookPath, adapter)))
             throw new InvalidOperationException("Formula submitted/persistence tour could not save the native FreeX workbook.");

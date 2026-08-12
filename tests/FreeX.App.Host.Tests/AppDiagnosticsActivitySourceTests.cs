@@ -19,7 +19,7 @@ public sealed class AppDiagnosticsActivitySourceTests
         backstageSource.Should().Contain("RecordDiagnosticEvent(\"workbook_open_failed\"");
         backstageSource.Should().Contain("RecordDiagnosticEvent(\"workbook_saved\"");
         backstageSource.Should().Contain("RecordDiagnosticEvent(\"workbook_save_failed\"");
-        backstageSource.Should().Contain("[\"fileType\"] = FileDialogFilterBuilder.SafeFileTypeFromExtension(ext)");
+        backstageSource.Should().Contain("[\"fileType\"] = FileFormatResolver.SafeFileTypeFromExtension(ext)");
         dataSource.Should().Contain("RecordDiagnosticEvent(\"import_completed\"");
         dataSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
         dataSource.Should().Contain("BuildImportDiagnosticProperties(ext");
