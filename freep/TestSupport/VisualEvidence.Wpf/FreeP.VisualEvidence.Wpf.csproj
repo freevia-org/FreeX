@@ -13,8 +13,12 @@
   <Import Project="..\..\..\tools\ToolProjects.props" />
 
   <ItemGroup>
+    <!-- The adapter is compiled into the isolated renderer variant so its MainWindow partial
+         retains private access without entering the normal shipping assembly. -->
+    <Compile Remove="MainWindow.VisualCaptureAdapter.cs" />
     <ProjectReference Include="..\VisualEvidence\FreeP.VisualEvidence.csproj" />
-    <ProjectReference Include="..\..\FreeP.App.Host\FreeP.App.Host.csproj" />
+    <ProjectReference Include="..\..\FreeP.App.Host\FreeP.App.Host.csproj"
+                      AdditionalProperties="FreePVisualEvidenceHost=true" />
   </ItemGroup>
 
 </Project>

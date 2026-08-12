@@ -17,6 +17,16 @@
     <DefineConstants>$(DefineConstants);FREEP_WINDOWS_CAPTURE</DefineConstants>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
+    <OutputPath>bin\VisualEvidence\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\VisualEvidence\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
+    <Compile Include="..\TestSupport\VisualEvidence.Avalonia\MainWindow.VisualCaptureAdapter.cs"
+             Link="MainWindow.VisualCaptureAdapter.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
