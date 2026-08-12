@@ -125,8 +125,8 @@ public sealed partial class MainWindow
         var secondOption = options[1];
         var first = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(firstOption.LabelKey)), GroupName = "shift", IsChecked = true, Margin = new Thickness(0, 2) };
         var second = new RadioButton { Content = StripDisplayMnemonic(UiText.Get(secondOption.LabelKey)), GroupName = "shift", Margin = new Thickness(0, 2) };
-        var ok = new Button { Content = "OK", IsDefault = true };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var ok = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")), IsDefault = true };
+        var cancel = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")), IsCancel = true };
         ApplyCellShiftAutomation(first, firstOption);
         ApplyCellShiftAutomation(second, secondOption);
         AvaloniaCompactDialogChrome.ApplyRadioButton(first, InsertDeleteCellsDialogChromeStyle);

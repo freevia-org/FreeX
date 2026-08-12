@@ -16,7 +16,7 @@ public sealed class ZoomDialogSourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, zoomDialogChrome);");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(");
         source.Should().Contain("ZoomDialogPlanner.PresetColumnWidth");
-        source.Should().Contain("Header = \"Magnification\"");
+        source.Should().Contain("Header = UiText.Get(\"Zoom_Magnification\")");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(magnificationGroup, zoomDialogChrome);");
         source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton])");
         source.Should().Contain("Width = ZoomDialogPlanner.ActionButtonWidth");

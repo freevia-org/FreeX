@@ -25,7 +25,8 @@ public sealed class ValidationPresentationPlannerTests
 
         wpf.Message.ResourceKey.Should().Be("GoalSeek_InvalidCellAddressMessage");
         wpf.Message.Arguments.Should().Equal("bad");
-        avalonia.Message.LiteralText.Should().Be("Set cell 'bad' is not a valid cell reference.");
+        avalonia.Message.ResourceKey.Should().Be("GoalSeek_InvalidCellAddressMessage");
+        avalonia.Message.Arguments.Should().Equal("bad");
         wpf.FocusTarget.Should().Be(GoalSeekValidationFocusTarget.SetCell);
         avalonia.FocusTarget.Should().Be(GoalSeekValidationFocusTarget.SetCell);
     }
@@ -38,7 +39,8 @@ public sealed class ValidationPresentationPlannerTests
 
         wpf.ResourceKey.Should().Be("GoalSeekStatus_SuccessSummary");
         wpf.Arguments.Should().Equal("10", "9.5", "2");
-        avalonia.LiteralText.Should().StartWith("Goal Seek could not find a solution.");
+        avalonia.ResourceKey.Should().Be("GoalSeekStatus_FailureSummary");
+        avalonia.Arguments.Should().Equal("10", "9.5", "2");
     }
 
     [Fact]
@@ -49,13 +51,21 @@ public sealed class ValidationPresentationPlannerTests
                 null,
                 "B2",
                 "A1")
-            .LiteralText.Should().Be("Goal Seek request for B2 is invalid.");
+            .Should().BeEquivalentTo(new
+            {
+                ResourceKey = "GoalSeek_InvalidRequestFormat",
+                Arguments = new object?[] { "B2" }
+            });
         GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
                 WorkbookGoalSeekStatus.ApplyFailed,
                 null,
                 "B2",
                 "A1")
-            .LiteralText.Should().Be("Goal Seek result for A1 could not be applied.");
+            .Should().BeEquivalentTo(new
+            {
+                ResourceKey = "GoalSeek_ResultCouldNotBeAppliedFormat",
+                Arguments = new object?[] { "A1" }
+            });
         GoalSeekStatusDialogPlanner.DescribeExecutionFailure(
                 WorkbookGoalSeekStatus.ApplyFailed,
                 "Core failure",

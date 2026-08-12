@@ -96,9 +96,7 @@ public static class FindReplaceDialogSchema
     public static IReadOnlyList<FindReplaceDialogChoice<FindLookIn>> LookInChoices => LookInChoiceValues;
 
     public static LocalizedTextDescriptor Describe(FindReplaceDialogText text, params object?[] arguments) =>
-        text == FindReplaceDialogText.ResultsAutomationName
-            ? LocalizedTextDescriptor.Literal("Find all results")
-            : LocalizedTextDescriptor.Resource(ResourceKey(text), arguments);
+        LocalizedTextDescriptor.Resource(ResourceKey(text), arguments);
 
     public static string Resolve(
         FindReplaceDialogText text,
@@ -169,6 +167,7 @@ public static class FindReplaceDialogSchema
         FindReplaceDialogText.FormatChosenFromWorksheetStatus => "FindReplace_FormatChosenFromWorksheetStatus",
         FindReplaceDialogText.FindFormatSetToolTip => "FindReplace_FindFormatSetToolTip",
         FindReplaceDialogText.ReplaceFormatSetToolTip => "FindReplace_ReplaceFormatSetToolTip",
+        FindReplaceDialogText.ResultsAutomationName => "FindReplace_ResultsAutomationName",
         _ => throw new ArgumentOutOfRangeException(nameof(text), text, null),
     };
 }

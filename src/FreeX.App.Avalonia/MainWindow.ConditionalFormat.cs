@@ -83,7 +83,7 @@ public sealed partial class MainWindow
     {
         var menu = new NativeMenu();
 
-        var newRule = new NativeMenuItem { Header = "New Rule..." };
+        var newRule = new NativeMenuItem { Header = UiText.Get("MainWindow_Header_NewRule") };
         newRule.Click += async (_, _) => await ShowConditionalFormatNewRuleDialogAsync();
         menu.Items.Add(newRule);
         menu.Items.Add(new NativeMenuItemSeparator());
@@ -101,21 +101,21 @@ public sealed partial class MainWindow
             menu.Items.Add(item);
         }
 
-        var greaterThan = new NativeMenuItem { Header = "Highlight Cells > Greater Than..." };
+        var greaterThan = new NativeMenuItem { Header = UiText.Get("ConditionalFormat_HighlightCellsGreaterThan") };
         greaterThan.Click += async (_, _) => await ApplyHighlightGreaterThanPresetAsync();
         menu.Items.Add(greaterThan);
 
-        var top10 = new NativeMenuItem { Header = "Top 10 Items" };
+        var top10 = new NativeMenuItem { Header = UiText.Get("ConditionalFormatDialog_RuleType_Top10Items") };
         top10.Click += (_, _) => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10);
         menu.Items.Add(top10);
 
         menu.Items.Add(new NativeMenuItemSeparator());
 
-        var clear = new NativeMenuItem { Header = "Clear Rules from Selected Cells" };
+        var clear = new NativeMenuItem { Header = UiText.Get("ConditionalFormat_ClearRulesFromSelectedCells") };
         clear.Click += (_, _) => ClearConditionalFormatsFromSelection();
         menu.Items.Add(clear);
 
-        var manage = new NativeMenuItem { Header = "Manage Rules..." };
+        var manage = new NativeMenuItem { Header = UiText.Get("MainWindow_Header_ManageRules") };
         manage.Click += async (_, _) => await ShowManageConditionalFormatsDialogAsync();
         menu.Items.Add(manage);
 
@@ -289,7 +289,7 @@ public sealed partial class MainWindow
         };
         ApplyCfComboBoxChrome(ruleTypeBox);
         AutomationProperties.SetAutomationId(ruleTypeBox, "ConditionalFormatRuleTypeBox");
-        AutomationProperties.SetName(ruleTypeBox, "Rule type");
+        AutomationProperties.SetName(ruleTypeBox, UiText.CreateAutomationName(UiText.Get("ConditionalFormat_RuleTypeLabel")));
 
         var presetBox = new ComboBox
         {
@@ -298,7 +298,7 @@ public sealed partial class MainWindow
         };
         ApplyCfComboBoxChrome(presetBox);
         AutomationProperties.SetAutomationId(presetBox, "ConditionalFormatPresetBox");
-        AutomationProperties.SetName(presetBox, "Preset");
+        AutomationProperties.SetName(presetBox, UiText.CreateAutomationName(UiText.Get("ConditionalFormat_PresetLabel")));
 
         var operatorBox = new ComboBox
         {
@@ -337,7 +337,7 @@ public sealed partial class MainWindow
         };
         ApplyCfComboBoxChrome(topBottomBox);
         AutomationProperties.SetAutomationId(topBottomBox, "ConditionalFormatTopBottomBox");
-        AutomationProperties.SetName(topBottomBox, "Top or bottom");
+        AutomationProperties.SetName(topBottomBox, UiText.CreateAutomationName(UiText.Get("ConditionalFormat_TopOrBottomLabel")));
         var iconSetBox = new ComboBox
         {
             ItemsSource = ConditionalFormatIconSetCatalog.Styles.Select(s => s.Style).ToList(),
@@ -1092,7 +1092,7 @@ public sealed partial class MainWindow
         };
         ApplyCfButtonChrome(appliesToPicker, 32);
         AutomationProperties.SetAutomationId(appliesToPicker, "ManageConditionalFormatsAppliesToPickerButton");
-        AutomationProperties.SetName(appliesToPicker, "Select conditional format range");
+        AutomationProperties.SetName(appliesToPicker, UiText.Get("ConditionalFormat_SelectRangeAutomationName"));
 
         var appliesToRow = new AvaloniaGrid
         {

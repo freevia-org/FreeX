@@ -10945,6 +10945,9 @@ Envoyer des rapports d'erreur pour cette version de testeur?</value>&#xD;
   <data name="Sort_CustomSort" xml:space="preserve">&#xD;
     <value>Tri personnalisé</value>&#xD;
   </data>
+  <data name="Sort_CustomSortHelpText" xml:space="preserve">
+    <value>Trier par valeurs, couleur de cellule, couleur de police, ordre personnalisé, casse ou lignes.</value>
+  </data>
   <data name="Sort_MyDataHasHeaders" xml:space="preserve">&#xD;
     <value>_Mes données ont des en-têtes</value>&#xD;
   </data>
@@ -14457,6 +14460,12 @@ et {0} plus.</value>&#xD;
   </data>
   <data name="SymbolPicker_InsertButton" xml:space="preserve">&#xD;
     <value>_Insérer</value>&#xD;
+  </data>
+  <data name="SymbolPicker_InsertedIntoCellFormat" xml:space="preserve">
+    <value>{0} inséré dans {1}</value>
+  </data>
+  <data name="SymbolPicker_CouldNotInsertSymbol" xml:space="preserve">
+    <value>Impossible d'insérer le symbole.</value>
   </data>
   <data name="SymbolPicker_InsertSelectedSymbolAutomationName" xml:space="preserve">&#xD;
     <value>Insérer le symbole sélectionné</value>&#xD;
@@ -19093,5 +19102,284 @@ and {0} more.</value>&#xD;
   </data>
   <data name="PivotChart_ChangeTypeInsertFirst" xml:space="preserve">
     <value>Insérez un graphique croisé dynamique avant de modifier son type.</value>
+  </data>
+  <data name="AdvancedFilter_CancelHelpText" xml:space="preserve">
+    <value>Fermer le filtre avancé sans l'exécuter.</value>
+  </data>
+  <data name="AdvancedFilter_RunHelpText" xml:space="preserve">
+    <value>Exécuter le filtre avancé.</value>
+  </data>
+  <data name="AdvancedFilter_ValidationAutomationName" xml:space="preserve">
+    <value>Validation du filtre avancé</value>
+  </data>
+  <data name="AdvancedFilter_ValidationHelpText" xml:space="preserve">
+    <value>Affiche l'état de préparation et les messages de validation du filtre avancé.</value>
+  </data>
+  <data name="AutoFilter_CustomCriteriaPlaceholder" xml:space="preserve">
+    <value>Critère personnalisé</value>
+  </data>
+  <data name="AutoFilter_FiltersAutomationName" xml:space="preserve">
+    <value>Filtres</value>
+  </data>
+  <data name="ColorPicker_HexAutomationName" xml:space="preserve">
+    <value>Couleur hexadécimale</value>
+  </data>
+  <data name="ColorPicker_MoreColorsEllipsis" xml:space="preserve">
+    <value>Autres couleurs...</value>
+  </data>
+  <data name="ColorPicker_Pick" xml:space="preserve">
+    <value>Choisir</value>
+  </data>
+  <data name="ColorPicker_RecentColors" xml:space="preserve">
+    <value>Couleurs récentes</value>
+  </data>
+  <data name="ColorPicker_ThemeAndStandardColors" xml:space="preserve">
+    <value>Couleurs du thème et couleurs standard</value>
+  </data>
+  <data name="Common_CloseNamedHelpText" xml:space="preserve">
+    <value>Fermer {0}.</value>
+  </data>
+  <data name="Common_ReadOnlyNamedTextHelpText" xml:space="preserve">
+    <value>Texte {0} en lecture seule.</value>
+  </data>
+  <data name="ConditionalFormat_ClearRulesFromSelectedCells" xml:space="preserve">
+    <value>Effacer les règles des cellules sélectionnées</value>
+  </data>
+  <data name="ConditionalFormat_HighlightCellsGreaterThan" xml:space="preserve">
+    <value>Mettre en surbrillance les cellules &gt; Supérieur à...</value>
+  </data>
+  <data name="ConditionalFormat_SelectRangeAutomationName" xml:space="preserve">
+    <value>Sélectionner la plage de mise en forme conditionnelle</value>
+  </data>
+  <data name="DirtyWorkbook_CancelHelpText" xml:space="preserve">
+    <value>Revenir au classeur sans le fermer.</value>
+  </data>
+  <data name="DirtyWorkbook_CloseFreeXTitle" xml:space="preserve">
+    <value>Fermer FreeX</value>
+  </data>
+  <data name="DirtyWorkbook_CloseWorkbookTitle" xml:space="preserve">
+    <value>Fermer le classeur</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardAndClose" xml:space="preserve">
+    <value>Ignorer et fermer</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardAndCreate" xml:space="preserve">
+    <value>Ignorer et créer</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardAndOpen" xml:space="preserve">
+    <value>Ignorer et ouvrir</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardAndQuit" xml:space="preserve">
+    <value>Ignorer et quitter</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardHelpText" xml:space="preserve">
+    <value>Fermer sans enregistrer les modifications du classeur.</value>
+  </data>
+  <data name="DirtyWorkbook_NewWorkbookTitle" xml:space="preserve">
+    <value>Nouveau classeur</value>
+  </data>
+  <data name="DirtyWorkbook_OpenWorkbookTitle" xml:space="preserve">
+    <value>Ouvrir un classeur</value>
+  </data>
+  <data name="DirtyWorkbook_QuitFreeXTitle" xml:space="preserve">
+    <value>Quitter FreeX</value>
+  </data>
+  <data name="DirtyWorkbook_SaveChangesToFormat" xml:space="preserve">
+    <value>Enregistrer les modifications apportées à {0} ?</value>
+  </data>
+  <data name="DirtyWorkbook_SaveHelpText" xml:space="preserve">
+    <value>Enregistrer le classeur avant de le fermer.</value>
+  </data>
+  <data name="DirtyWorkbook_UnsavedChangesWillBeLost" xml:space="preserve">
+    <value>Les modifications non enregistrées seront perdues si vous les ignorez.</value>
+  </data>
+  <data name="FindReplace_ClearFormat" xml:space="preserve">
+    <value>Effacer le format</value>
+  </data>
+  <data name="FindReplace_FindFormat" xml:space="preserve">
+    <value>Format de recherche</value>
+  </data>
+  <data name="FindReplace_ReplaceFormat" xml:space="preserve">
+    <value>Format de remplacement</value>
+  </data>
+  <data name="FindReplace_ResultsAutomationName" xml:space="preserve">
+    <value>Résultats de la recherche</value>
+  </data>
+  <data name="ForecastSheet_CancelHelpText" xml:space="preserve">
+    <value>Fermer Feuille de prévision sans la créer.</value>
+  </data>
+  <data name="ForecastSheet_CreateHelpText" xml:space="preserve">
+    <value>Créer la feuille de prévision.</value>
+  </data>
+  <data name="ForecastSheet_SourceRangeAutomationName" xml:space="preserve">
+    <value>Plage source de prévision</value>
+  </data>
+  <data name="ForecastSheet_SourceRangeFormat" xml:space="preserve">
+    <value>Plage source : {0}</value>
+  </data>
+  <data name="ForecastSheet_SourceRangeHelpText" xml:space="preserve">
+    <value>Affiche la plage source sélectionnée pour la prévision.</value>
+  </data>
+  <data name="ForecastSheet_ValidationAutomationName" xml:space="preserve">
+    <value>Validation de la feuille de prévision</value>
+  </data>
+  <data name="ForecastSheet_ValidationHelpText" xml:space="preserve">
+    <value>Affiche l'état de préparation et les messages de validation de la feuille de prévision.</value>
+  </data>
+  <data name="GoalSeek_CancelHelpText" xml:space="preserve">
+    <value>Fermer Valeur cible sans l'exécuter.</value>
+  </data>
+  <data name="GoalSeek_CouldNotComplete" xml:space="preserve">
+    <value>La recherche de valeur cible n'a pas pu aboutir.</value>
+  </data>
+  <data name="GoalSeek_InvalidRequestFormat" xml:space="preserve">
+    <value>La demande de valeur cible pour {0} n'est pas valide.</value>
+  </data>
+  <data name="GoalSeek_RequestInvalid" xml:space="preserve">
+    <value>La demande de valeur cible n'est pas valide.</value>
+  </data>
+  <data name="GoalSeek_ResultCouldNotBeAppliedFormat" xml:space="preserve">
+    <value>Le résultat de la valeur cible pour {0} n'a pas pu être appliqué.</value>
+  </data>
+  <data name="GoalSeek_RunHelpText" xml:space="preserve">
+    <value>Exécuter la valeur cible avec ces entrées.</value>
+  </data>
+  <data name="GoalSeek_ValidationAutomationName" xml:space="preserve">
+    <value>Validation de la valeur cible</value>
+  </data>
+  <data name="GoalSeek_ValidationHelpText" xml:space="preserve">
+    <value>Affiche les messages de validation des entrées de la valeur cible.</value>
+  </data>
+  <data name="NormalizedOverwrite_CancelPdfHelpText" xml:space="preserve">
+    <value>Revenir sans exporter le PDF.</value>
+  </data>
+  <data name="NormalizedOverwrite_CancelWorkbookHelpText" xml:space="preserve">
+    <value>Revenir sans enregistrer le classeur.</value>
+  </data>
+  <data name="NormalizedOverwrite_FileAlreadyExistsFormat" xml:space="preserve">
+    <value>{0} existe déjà.</value>
+  </data>
+  <data name="NormalizedOverwrite_PdfDetail" xml:space="preserve">
+    <value>FreeX a modifié le nom du fichier sélectionné pour utiliser l'extension .pdf. Remplacer le fichier PDF existant ?</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplacePdfHelpText" xml:space="preserve">
+    <value>Remplacer le fichier PDF normalisé existant.</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplacePdfTitle" xml:space="preserve">
+    <value>Remplacer le PDF ?</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplaceWorkbookHelpText" xml:space="preserve">
+    <value>Remplacer le fichier de classeur normalisé existant.</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplaceWorkbookTitle" xml:space="preserve">
+    <value>Remplacer le classeur ?</value>
+  </data>
+  <data name="NormalizedOverwrite_WorkbookDetail" xml:space="preserve">
+    <value>FreeX a modifié le nom du fichier sélectionné pour utiliser l'extension du classeur. Remplacer le classeur existant ?</value>
+  </data>
+  <data name="Progress_ExportingPdf" xml:space="preserve">
+    <value>Exportation du PDF...</value>
+  </data>
+  <data name="RemoveDuplicates_ApplyHelpText" xml:space="preserve">
+    <value>Supprimer les lignes en double à l'aide des colonnes sélectionnées.</value>
+  </data>
+  <data name="RemoveDuplicates_CancelHelpText" xml:space="preserve">
+    <value>Fermer Supprimer les doublons sans apporter de modifications.</value>
+  </data>
+  <data name="RemoveDuplicates_ValidationAutomationName" xml:space="preserve">
+    <value>Validation de la suppression des doublons</value>
+  </data>
+  <data name="RemoveDuplicates_ValidationHelpText" xml:space="preserve">
+    <value>Affiche les messages de validation de la suppression des doublons.</value>
+  </data>
+  <data name="Startup_DiscardButton" xml:space="preserve">
+    <value>Ignorer</value>
+  </data>
+  <data name="Startup_RecoverButton" xml:space="preserve">
+    <value>Récupérer</value>
+  </data>
+  <data name="Toolbar_AlignBottomShort" xml:space="preserve">
+    <value>Bas</value>
+  </data>
+  <data name="Toolbar_AlignCenterShort" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Toolbar_AlignLeftShort" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Toolbar_AlignMiddleShort" xml:space="preserve">
+    <value>Mil.</value>
+  </data>
+  <data name="Toolbar_AlignRightShort" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Toolbar_AutoSumHelpText" xml:space="preserve">
+    <value>Insérer une formule à l'aide des cellules numériques voisines.</value>
+  </data>
+  <data name="Toolbar_CellAddressAutomationName" xml:space="preserve">
+    <value>Adresse de cellule</value>
+  </data>
+  <data name="Toolbar_CellAddressHelpText" xml:space="preserve">
+    <value>Affiche l'adresse de la cellule active.</value>
+  </data>
+  <data name="Toolbar_ClearHelpText" xml:space="preserve">
+    <value>Effacer le contenu, la mise en forme, les commentaires, les liens hypertexte ou tout l'état des cellules de la plage sélectionnée.</value>
+  </data>
+  <data name="Toolbar_DecreaseIndentShort" xml:space="preserve">
+    <value>Ret.</value>
+  </data>
+  <data name="Toolbar_FileOperationCancelHelpText" xml:space="preserve">
+    <value>Annule l'opération d'ouverture ou d'enregistrement en cours.</value>
+  </data>
+  <data name="Toolbar_FillCells" xml:space="preserve">
+    <value>Remplir</value>
+  </data>
+  <data name="Toolbar_FillCellsHelpText" xml:space="preserve">
+    <value>Copier les cellules de bord dans la plage sélectionnée.</value>
+  </data>
+  <data name="Toolbar_IncreaseIndentShort" xml:space="preserve">
+    <value>Ind.</value>
+  </data>
+  <data name="Toolbar_MergeCenterHelpText" xml:space="preserve">
+    <value>Fusionner et centrer les cellules sélectionnées.</value>
+  </data>
+  <data name="Toolbar_NameBoxListAutomationName" xml:space="preserve">
+    <value>Liste Zone Nom</value>
+  </data>
+  <data name="Toolbar_NameBoxListHelpText" xml:space="preserve">
+    <value>Affiche les noms définis permettant d'accéder à une plage.</value>
+  </data>
+  <data name="Toolbar_OrientationShort" xml:space="preserve">
+    <value>Orient.</value>
+  </data>
+  <data name="Toolbar_SelectionStatisticsAutomationName" xml:space="preserve">
+    <value>Statistiques de sélection</value>
+  </data>
+  <data name="Toolbar_SelectionStatisticsHelpText" xml:space="preserve">
+    <value>Affiche les statistiques de la sélection actuelle.</value>
+  </data>
+  <data name="Toolbar_StatusAutomationName" xml:space="preserve">
+    <value>État</value>
+  </data>
+  <data name="Toolbar_StatusHelpText" xml:space="preserve">
+    <value>Affiche l'état actuel du classeur.</value>
+  </data>
+  <data name="Toolbar_WrapTextHelpText" xml:space="preserve">
+    <value>Renvoyer le texte à la ligne dans les cellules sélectionnées.</value>
+  </data>
+  <data name="Toolbar_ZoomHelpText" xml:space="preserve">
+    <value>Affiche le zoom de la feuille active.</value>
+  </data>
+  <data name="WorkbookStatistics_CloseHelpText" xml:space="preserve">
+    <value>Fermer les statistiques du classeur.</value>
+  </data>
+  <data name="WorkbookStatistics_CopyToClipboard" xml:space="preserve">
+    <value>Copier dans le Presse-papiers</value>
+  </data>
+  <data name="WorkbookStatistics_CopyToClipboardHelpText" xml:space="preserve">
+    <value>Copier les statistiques du classeur dans le Presse-papiers.</value>
+  </data>
+  <data name="Toolbar_AlignTopShort" xml:space="preserve">
+    <value>Haut</value>
   </data>
 </root>

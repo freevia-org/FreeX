@@ -54,7 +54,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Insert Function",
+            Title = UiText.Get("MainWindow_Content_InsertFunction"),
             Width = 560,
             Height = 470,
             MinWidth = 460,
@@ -133,21 +133,21 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             MinWidth = 80,
             IsEnabled = false,
         };
         ApplyFnButtonChrome(okButton, minWidth: 80, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "InsertFunctionOkButton");
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             MinWidth = 80,
         };
         ApplyFnButtonChrome(cancelButton, minWidth: 80);
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "InsertFunctionCancelButton");
 
         void Accept()
@@ -230,7 +230,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Function Arguments",
+            Title = UiText.Get("FunctionArguments_Title"),
             Width = 520,
             Height = Math.Max(300, Math.Min(620, 220 + (arguments.Count * 58))),
             MinWidth = 440,
@@ -245,9 +245,9 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(previewText, "Formula result");
+        AutomationProperties.SetName(previewText, UiText.Get("FunctionArguments_FormulaResultAutomationName"));
         AutomationProperties.SetAutomationId(previewText, "FunctionArgumentsPreviewText");
-        AutomationProperties.SetHelpText(previewText, "The formula inserted when you choose OK.");
+        AutomationProperties.SetHelpText(previewText, UiText.Get("FunctionArguments_FormulaResultHelpText"));
 
         void UpdatePreview() =>
             previewText.Text = FunctionArgumentCatalog.BuildPreview(
@@ -307,20 +307,20 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             MinWidth = 76,
         };
         ApplyFnButtonChrome(okButton, minWidth: 76, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "FunctionArgumentsOkButton");
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
             MinWidth = 76,
         };
         ApplyFnButtonChrome(cancelButton, minWidth: 76);
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
         AutomationProperties.SetAutomationId(cancelButton, "FunctionArgumentsCancelButton");
 
         void Accept()

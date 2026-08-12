@@ -8305,6 +8305,12 @@ Changing cell value: {2}</value>
   <data name="SymbolPicker_InsertButton" xml:space="preserve">
     <value>_Insert</value>
   </data>
+  <data name="SymbolPicker_InsertedIntoCellFormat" xml:space="preserve">
+    <value>Inserted {0} into {1}</value>
+  </data>
+  <data name="SymbolPicker_CouldNotInsertSymbol" xml:space="preserve">
+    <value>Could not insert the symbol.</value>
+  </data>
   <data name="ObjectSizing_LeftLabel" xml:space="preserve">
     <value>_Left:</value>
   </data>
@@ -12076,6 +12082,9 @@ Saved PDF file:&#xD;
   </data>
   <data name="Sort_CustomSort" xml:space="preserve">
     <value>Custom Sort</value>
+  </data>
+  <data name="Sort_CustomSortHelpText" xml:space="preserve">
+    <value>Sort by values, cell color, font color, custom order, case, or rows.</value>
   </data>
   <data name="AutoFilter_SortOldestToNewest" xml:space="preserve">
     <value>Sort _Oldest to Newest</value>
@@ -19673,5 +19682,284 @@ and {0} more.</value>
   </data>
   <data name="ConditionalFormatDialog_RuleType_UniqueValues" xml:space="preserve">
     <value>Unique Values</value>
+  </data>
+  <data name="AdvancedFilter_CancelHelpText" xml:space="preserve">
+    <value>Close Advanced Filter without running.</value>
+  </data>
+  <data name="AdvancedFilter_RunHelpText" xml:space="preserve">
+    <value>Run Advanced Filter.</value>
+  </data>
+  <data name="AdvancedFilter_ValidationAutomationName" xml:space="preserve">
+    <value>Advanced Filter validation</value>
+  </data>
+  <data name="AdvancedFilter_ValidationHelpText" xml:space="preserve">
+    <value>Shows Advanced Filter readiness and validation messages.</value>
+  </data>
+  <data name="AutoFilter_CustomCriteriaPlaceholder" xml:space="preserve">
+    <value>Custom criteria</value>
+  </data>
+  <data name="AutoFilter_FiltersAutomationName" xml:space="preserve">
+    <value>Filters</value>
+  </data>
+  <data name="ColorPicker_HexAutomationName" xml:space="preserve">
+    <value>Hex color</value>
+  </data>
+  <data name="ColorPicker_MoreColorsEllipsis" xml:space="preserve">
+    <value>More colors...</value>
+  </data>
+  <data name="ColorPicker_Pick" xml:space="preserve">
+    <value>Pick</value>
+  </data>
+  <data name="ColorPicker_RecentColors" xml:space="preserve">
+    <value>Recent Colors</value>
+  </data>
+  <data name="ColorPicker_ThemeAndStandardColors" xml:space="preserve">
+    <value>Theme &amp; Standard Colors</value>
+  </data>
+  <data name="Common_CloseNamedHelpText" xml:space="preserve">
+    <value>Close {0}.</value>
+  </data>
+  <data name="Common_ReadOnlyNamedTextHelpText" xml:space="preserve">
+    <value>Read-only {0} text.</value>
+  </data>
+  <data name="ConditionalFormat_ClearRulesFromSelectedCells" xml:space="preserve">
+    <value>Clear Rules from Selected Cells</value>
+  </data>
+  <data name="ConditionalFormat_HighlightCellsGreaterThan" xml:space="preserve">
+    <value>Highlight Cells &gt; Greater Than...</value>
+  </data>
+  <data name="ConditionalFormat_SelectRangeAutomationName" xml:space="preserve">
+    <value>Select conditional format range</value>
+  </data>
+  <data name="DirtyWorkbook_CancelHelpText" xml:space="preserve">
+    <value>Return to the workbook without closing.</value>
+  </data>
+  <data name="DirtyWorkbook_CloseFreeXTitle" xml:space="preserve">
+    <value>Close FreeX</value>
+  </data>
+  <data name="DirtyWorkbook_CloseWorkbookTitle" xml:space="preserve">
+    <value>Close Workbook</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardAndClose" xml:space="preserve">
+    <value>Discard and Close</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardAndCreate" xml:space="preserve">
+    <value>Discard and Create</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardAndOpen" xml:space="preserve">
+    <value>Discard and Open</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardAndQuit" xml:space="preserve">
+    <value>Discard and Quit</value>
+  </data>
+  <data name="DirtyWorkbook_DiscardHelpText" xml:space="preserve">
+    <value>Close without saving workbook changes.</value>
+  </data>
+  <data name="DirtyWorkbook_NewWorkbookTitle" xml:space="preserve">
+    <value>New Workbook</value>
+  </data>
+  <data name="DirtyWorkbook_OpenWorkbookTitle" xml:space="preserve">
+    <value>Open Workbook</value>
+  </data>
+  <data name="DirtyWorkbook_QuitFreeXTitle" xml:space="preserve">
+    <value>Quit FreeX</value>
+  </data>
+  <data name="DirtyWorkbook_SaveChangesToFormat" xml:space="preserve">
+    <value>Save changes to {0}?</value>
+  </data>
+  <data name="DirtyWorkbook_SaveHelpText" xml:space="preserve">
+    <value>Save the workbook before closing.</value>
+  </data>
+  <data name="DirtyWorkbook_UnsavedChangesWillBeLost" xml:space="preserve">
+    <value>Unsaved changes will be lost if you discard them.</value>
+  </data>
+  <data name="FindReplace_ClearFormat" xml:space="preserve">
+    <value>Clear Format</value>
+  </data>
+  <data name="FindReplace_FindFormat" xml:space="preserve">
+    <value>Find format</value>
+  </data>
+  <data name="FindReplace_ReplaceFormat" xml:space="preserve">
+    <value>Replace format</value>
+  </data>
+  <data name="FindReplace_ResultsAutomationName" xml:space="preserve">
+    <value>Find all results</value>
+  </data>
+  <data name="ForecastSheet_CancelHelpText" xml:space="preserve">
+    <value>Close Forecast Sheet without creating it.</value>
+  </data>
+  <data name="ForecastSheet_CreateHelpText" xml:space="preserve">
+    <value>Create the Forecast Sheet.</value>
+  </data>
+  <data name="ForecastSheet_SourceRangeAutomationName" xml:space="preserve">
+    <value>Forecast source range</value>
+  </data>
+  <data name="ForecastSheet_SourceRangeFormat" xml:space="preserve">
+    <value>Source range: {0}</value>
+  </data>
+  <data name="ForecastSheet_SourceRangeHelpText" xml:space="preserve">
+    <value>Shows the selected source range for the forecast.</value>
+  </data>
+  <data name="ForecastSheet_ValidationAutomationName" xml:space="preserve">
+    <value>Forecast Sheet validation</value>
+  </data>
+  <data name="ForecastSheet_ValidationHelpText" xml:space="preserve">
+    <value>Shows Forecast Sheet readiness and validation messages.</value>
+  </data>
+  <data name="GoalSeek_CancelHelpText" xml:space="preserve">
+    <value>Close Goal Seek without running.</value>
+  </data>
+  <data name="GoalSeek_CouldNotComplete" xml:space="preserve">
+    <value>Goal Seek could not complete.</value>
+  </data>
+  <data name="GoalSeek_InvalidRequestFormat" xml:space="preserve">
+    <value>Goal Seek request for {0} is invalid.</value>
+  </data>
+  <data name="GoalSeek_RequestInvalid" xml:space="preserve">
+    <value>Goal Seek request is invalid.</value>
+  </data>
+  <data name="GoalSeek_ResultCouldNotBeAppliedFormat" xml:space="preserve">
+    <value>Goal Seek result for {0} could not be applied.</value>
+  </data>
+  <data name="GoalSeek_RunHelpText" xml:space="preserve">
+    <value>Run Goal Seek with these inputs.</value>
+  </data>
+  <data name="GoalSeek_ValidationAutomationName" xml:space="preserve">
+    <value>Goal Seek validation</value>
+  </data>
+  <data name="GoalSeek_ValidationHelpText" xml:space="preserve">
+    <value>Shows Goal Seek input validation messages.</value>
+  </data>
+  <data name="NormalizedOverwrite_CancelPdfHelpText" xml:space="preserve">
+    <value>Return without exporting the PDF.</value>
+  </data>
+  <data name="NormalizedOverwrite_CancelWorkbookHelpText" xml:space="preserve">
+    <value>Return without saving the workbook.</value>
+  </data>
+  <data name="NormalizedOverwrite_FileAlreadyExistsFormat" xml:space="preserve">
+    <value>{0} already exists.</value>
+  </data>
+  <data name="NormalizedOverwrite_PdfDetail" xml:space="preserve">
+    <value>FreeX changed the selected file name to use the .pdf extension. Replace the existing PDF file?</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplacePdfHelpText" xml:space="preserve">
+    <value>Replace the existing normalized PDF file.</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplacePdfTitle" xml:space="preserve">
+    <value>Replace PDF?</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplaceWorkbookHelpText" xml:space="preserve">
+    <value>Replace the existing normalized workbook file.</value>
+  </data>
+  <data name="NormalizedOverwrite_ReplaceWorkbookTitle" xml:space="preserve">
+    <value>Replace workbook?</value>
+  </data>
+  <data name="NormalizedOverwrite_WorkbookDetail" xml:space="preserve">
+    <value>FreeX changed the selected file name to use the workbook extension. Replace the existing workbook?</value>
+  </data>
+  <data name="Progress_ExportingPdf" xml:space="preserve">
+    <value>Exporting PDF...</value>
+  </data>
+  <data name="RemoveDuplicates_ApplyHelpText" xml:space="preserve">
+    <value>Remove duplicate rows using the selected columns.</value>
+  </data>
+  <data name="RemoveDuplicates_CancelHelpText" xml:space="preserve">
+    <value>Close Remove Duplicates without changes.</value>
+  </data>
+  <data name="RemoveDuplicates_ValidationAutomationName" xml:space="preserve">
+    <value>Remove Duplicates validation</value>
+  </data>
+  <data name="RemoveDuplicates_ValidationHelpText" xml:space="preserve">
+    <value>Shows Remove Duplicates validation messages.</value>
+  </data>
+  <data name="Startup_DiscardButton" xml:space="preserve">
+    <value>Discard</value>
+  </data>
+  <data name="Startup_RecoverButton" xml:space="preserve">
+    <value>Recover</value>
+  </data>
+  <data name="Toolbar_AlignBottomShort" xml:space="preserve">
+    <value>Bot</value>
+  </data>
+  <data name="Toolbar_AlignCenterShort" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Toolbar_AlignLeftShort" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Toolbar_AlignMiddleShort" xml:space="preserve">
+    <value>Mid</value>
+  </data>
+  <data name="Toolbar_AlignRightShort" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Toolbar_AutoSumHelpText" xml:space="preserve">
+    <value>Insert a formula using nearby numeric cells.</value>
+  </data>
+  <data name="Toolbar_CellAddressAutomationName" xml:space="preserve">
+    <value>Cell address</value>
+  </data>
+  <data name="Toolbar_CellAddressHelpText" xml:space="preserve">
+    <value>Shows the active cell address.</value>
+  </data>
+  <data name="Toolbar_ClearHelpText" xml:space="preserve">
+    <value>Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.</value>
+  </data>
+  <data name="Toolbar_DecreaseIndentShort" xml:space="preserve">
+    <value>Out</value>
+  </data>
+  <data name="Toolbar_FileOperationCancelHelpText" xml:space="preserve">
+    <value>Cancels the current open or save operation.</value>
+  </data>
+  <data name="Toolbar_FillCells" xml:space="preserve">
+    <value>Fill Cells</value>
+  </data>
+  <data name="Toolbar_FillCellsHelpText" xml:space="preserve">
+    <value>Copy the edge cells across the selected range.</value>
+  </data>
+  <data name="Toolbar_IncreaseIndentShort" xml:space="preserve">
+    <value>In</value>
+  </data>
+  <data name="Toolbar_MergeCenterHelpText" xml:space="preserve">
+    <value>Merge and center the selected cells.</value>
+  </data>
+  <data name="Toolbar_NameBoxListAutomationName" xml:space="preserve">
+    <value>Name Box list</value>
+  </data>
+  <data name="Toolbar_NameBoxListHelpText" xml:space="preserve">
+    <value>Shows defined names to navigate to.</value>
+  </data>
+  <data name="Toolbar_OrientationShort" xml:space="preserve">
+    <value>Orient</value>
+  </data>
+  <data name="Toolbar_SelectionStatisticsAutomationName" xml:space="preserve">
+    <value>Selection statistics</value>
+  </data>
+  <data name="Toolbar_SelectionStatisticsHelpText" xml:space="preserve">
+    <value>Shows statistics for the current selection.</value>
+  </data>
+  <data name="Toolbar_StatusAutomationName" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Toolbar_StatusHelpText" xml:space="preserve">
+    <value>Shows the current workbook status.</value>
+  </data>
+  <data name="Toolbar_WrapTextHelpText" xml:space="preserve">
+    <value>Wrap text within the selected cells.</value>
+  </data>
+  <data name="Toolbar_ZoomHelpText" xml:space="preserve">
+    <value>Shows the active worksheet zoom.</value>
+  </data>
+  <data name="WorkbookStatistics_CloseHelpText" xml:space="preserve">
+    <value>Close workbook statistics.</value>
+  </data>
+  <data name="WorkbookStatistics_CopyToClipboard" xml:space="preserve">
+    <value>Copy to Clipboard</value>
+  </data>
+  <data name="WorkbookStatistics_CopyToClipboardHelpText" xml:space="preserve">
+    <value>Copy workbook statistics to the clipboard.</value>
+  </data>
+  <data name="Toolbar_AlignTopShort" xml:space="preserve">
+    <value>Top</value>
   </data>
 </root>

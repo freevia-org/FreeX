@@ -80,7 +80,9 @@ public sealed partial class MainWindow
         // Keep the accessible NAME a stable label ("Selection statistics"); the dynamic readouts are the
         // element's Text (value/content). Overwriting Name with the readouts broke the launch-smoke /
         // accessibility contract (GetName must equal "Selection statistics") whenever a selection had stats.
-        AutomationProperties.SetName(_selectionStatsText, "Selection statistics");
+        AutomationProperties.SetName(
+            _selectionStatsText,
+            UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
         EnsureSelectionStatsLiveRegion();
 
         _zoomText.IsVisible = rendererPlan.IsElementVisible(StatusBarPresentationElement.ZoomText);

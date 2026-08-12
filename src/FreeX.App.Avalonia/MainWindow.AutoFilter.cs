@@ -104,7 +104,7 @@ public sealed partial class MainWindow
             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
         };
         AutomationProperties.SetAutomationId(button, $"AutoFilterButton_{address.Row}_{address.Col}");
-        AutomationProperties.SetName(button, "Filter");
+        AutomationProperties.SetName(button, UiText.CreateAutomationName(UiText.Get("PivotFieldFilter_Filter")));
         button.Click += (_, _) => OpenAutoFilterFlyout(button, address);
 
         var grid = new AvaloniaGrid { ClipToBounds = true };
@@ -177,13 +177,13 @@ public sealed partial class MainWindow
         };
         var searchBox = new TextBox
         {
-            PlaceholderText = "Search",
+            PlaceholderText = UiText.Get("AutoFilter_SectionSearch"),
             MinHeight = 26,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(searchBox, $"AutoFilterSearchBox_{headerCell.Row}_{headerCell.Col}");
-        AutomationProperties.SetName(searchBox, "Search");
+        AutomationProperties.SetName(searchBox, UiText.CreateAutomationName(UiText.Get("AutoFilter_SectionSearch")));
         var addSelectionBox = new CheckBox
         {
             Content = UiText.Get("AutoFilter_AddCurrentSelectionToFilter"),
@@ -193,14 +193,14 @@ public sealed partial class MainWindow
         };
         var selectAll = new CheckBox
         {
-            Content = "Select All",
+            Content = StripDisplayMnemonic(UiText.Get("AutoFilter_SelectAll2")),
             IsThreeState = true,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
         var criteriaBox = new TextBox
         {
-            PlaceholderText = "Custom criteria",
+            PlaceholderText = UiText.Get("AutoFilter_CustomCriteriaPlaceholder"),
             MinHeight = 26,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -360,7 +360,7 @@ public sealed partial class MainWindow
 
         var okButton = new Button
         {
-            Content = "OK",
+            Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")),
             IsDefault = true,
             MinWidth = 72,
         };
@@ -426,18 +426,21 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         };
         AutomationProperties.SetAutomationId(selector, "AutoFilterCriteriaOperatorBox");
-        AutomationProperties.SetName(selector, model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label ?? "Filters");
+        AutomationProperties.SetName(
+            selector,
+            model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label
+                ?? UiText.Get("AutoFilter_FiltersAutomationName"));
 
         var valueBox = new TextBox
         {
-            PlaceholderText = "Value",
+            PlaceholderText = UiText.Get("ConditionalFormat_ValueLabel"),
             MinHeight = 26,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
         var secondValueBox = new TextBox
         {
-            PlaceholderText = "Maximum",
+            PlaceholderText = UiText.Get("ConditionalFormat_MaximumLabel"),
             MinHeight = 26,
             IsVisible = false,
             FontSize = 12,
@@ -477,7 +480,8 @@ public sealed partial class MainWindow
         var panel = new StackPanel { Spacing = 4 };
         panel.Children.Add(new TextBlock
         {
-            Text = model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label ?? "Filters",
+            Text = model.Items.FirstOrDefault(item => item.Kind == AutoFilterMenuItemKind.FilterFamily)?.Label
+                ?? UiText.Get("AutoFilter_FiltersAutomationName"),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,

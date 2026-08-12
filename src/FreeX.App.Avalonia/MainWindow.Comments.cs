@@ -470,8 +470,8 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(box, label);
         AutomationProperties.SetAutomationId(box, "CommentTextBox");
 
-        var ok = new Button { Content = "OK", IsDefault = true };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var ok = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")), IsDefault = true };
+        var cancel = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, CommentDialogChromeStyle, 84, isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(cancel, CommentDialogChromeStyle, 84);
 

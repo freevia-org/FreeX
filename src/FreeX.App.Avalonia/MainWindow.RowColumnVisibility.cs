@@ -400,8 +400,8 @@ public sealed partial class MainWindow
         var validationText = new TextBlock();
         AvaloniaCompactDialogChrome.ApplyValidationStatus(validationText, RowColumnDialogChromeStyle);
 
-        var okButton = new Button { Content = "OK", IsDefault = true };
-        var cancelButton = new Button { Content = "Cancel", IsCancel = true };
+        var okButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Ok")), IsDefault = true };
+        var cancelButton = new Button { Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(okButton, RowColumnDialogChromeStyle, 84, isDefault: true);
         AvaloniaCompactDialogChrome.ApplyButton(cancelButton, RowColumnDialogChromeStyle, 84);
         AutomationProperties.SetAutomationId(okButton, "DimensionDialogOkButton");

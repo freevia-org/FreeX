@@ -120,7 +120,7 @@ internal sealed class FormatCellsColorPicker : Button
         Background = new SolidColorBrush(Color.FromRgb(221, 221, 221));
         BorderBrush = new SolidColorBrush(Color.FromRgb(128, 128, 128));
         BorderThickness = new Thickness(1);
-        Content = "Pick";
+        Content = UiText.Get("ColorPicker_Pick");
     }
 
     /// <summary>Select the palette/recent entry matching <paramref name="color"/>, or fall back to
@@ -191,7 +191,7 @@ internal sealed class FormatCellsColorPicker : Button
         if (_clearChoice is { } clearChoice)
             _flyoutRoot.Children.Add(CreateTextChoiceButton(clearChoice, "FormatCellsColorPickerNoFillItem"));
 
-        _flyoutRoot.Children.Add(new TextBlock { Text = "Theme & Standard Colors" });
+        _flyoutRoot.Children.Add(new TextBlock { Text = UiText.Get("ColorPicker_ThemeAndStandardColors") });
         _flyoutRoot.Children.Add(BuildSwatchGrid(CellColorPalettePlanner.BuildDefaultSwatches()));
 
         _recentRow = new StackPanel { Spacing = 4 };
@@ -200,7 +200,7 @@ internal sealed class FormatCellsColorPicker : Button
 
         var moreColorsButton = new Button
         {
-            Content = "More colors…",
+            Content = UiText.Get("ColorPicker_MoreColorsEllipsis"),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetAutomationId(moreColorsButton, "FormatCellsColorPickerMoreColorsButton");
@@ -225,7 +225,7 @@ internal sealed class FormatCellsColorPicker : Button
         if (recent.Count == 0)
             return;
 
-        _recentRow.Children.Add(new TextBlock { Text = "Recent Colors" });
+        _recentRow.Children.Add(new TextBlock { Text = UiText.Get("ColorPicker_RecentColors") });
         _recentRow.Children.Add(BuildSwatchGrid(recent, "FormatCellsColorPickerRecentSwatch"));
     }
 

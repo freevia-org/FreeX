@@ -53,28 +53,15 @@ public static class GoalSeekStatusDialogPlanner
         double foundValue,
         GoalSeekPresentationProfile profile)
     {
-        if (profile == GoalSeekPresentationProfile.Wpf)
-        {
-            var arguments = new object?[]
-            {
-                targetValue.ToString("G10", CultureInfo.InvariantCulture),
-                actualResult.ToString("G10", CultureInfo.InvariantCulture),
-                foundValue.ToString("G10", CultureInfo.InvariantCulture)
-            };
-            return LocalizedTextDescriptor.Resource(
-                converged ? "GoalSeekStatus_SuccessSummary" : "GoalSeekStatus_FailureSummary",
-                arguments);
-        }
-
-        var heading = converged
-            ? "Goal Seek found a solution."
-            : "Goal Seek could not find a solution.";
-        return LocalizedTextDescriptor.Literal(string.Join(
-            Environment.NewLine,
-            heading,
-            $"Target value: {targetValue.ToString("G12", CultureInfo.CurrentCulture)}",
-            $"Current value: {actualResult.ToString("G12", CultureInfo.CurrentCulture)}",
-            $"Changing cell value: {foundValue.ToString("G12", CultureInfo.CurrentCulture)}"));
+        var format = profile == GoalSeekPresentationProfile.Wpf ? "G10" : "G12";
+        var culture = profile == GoalSeekPresentationProfile.Wpf
+            ? CultureInfo.InvariantCulture
+            : CultureInfo.CurrentCulture;
+        return LocalizedTextDescriptor.Resource(
+            converged ? "GoalSeekStatus_SuccessSummary" : "GoalSeekStatus_FailureSummary",
+            targetValue.ToString(format, culture),
+            actualResult.ToString(format, culture),
+            foundValue.ToString(format, culture));
     }
 
     public static LocalizedTextDescriptor DescribeExecutionFailure(
@@ -82,14 +69,18 @@ public static class GoalSeekStatusDialogPlanner
         string? errorMessage,
         string setCellReference,
         string changingCellReference) =>
-        status switch
-        {
-            WorkbookGoalSeekStatus.InvalidRequest => LocalizedTextDescriptor.Literal(
-                errorMessage ?? $"Goal Seek request for {setCellReference} is invalid."),
-            WorkbookGoalSeekStatus.ApplyFailed => LocalizedTextDescriptor.Literal(
-                errorMessage ?? $"Goal Seek result for {changingCellReference} could not be applied."),
-            _ => LocalizedTextDescriptor.Literal("Goal Seek could not complete.")
-        };
+        !string.IsNullOrWhiteSpace(errorMessage)
+            ? LocalizedTextDescriptor.Literal(errorMessage)
+            : status switch
+            {
+                WorkbookGoalSeekStatus.InvalidRequest => LocalizedTextDescriptor.Resource(
+                    "GoalSeek_InvalidRequestFormat",
+                    setCellReference),
+                WorkbookGoalSeekStatus.ApplyFailed => LocalizedTextDescriptor.Resource(
+                    "GoalSeek_ResultCouldNotBeAppliedFormat",
+                    changingCellReference),
+                _ => LocalizedTextDescriptor.Resource("GoalSeek_CouldNotComplete")
+            };
 
     private static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeWpfValidationError(
         GoalSeekRequestParseResult result) =>
@@ -113,7 +104,9 @@ public static class GoalSeekStatusDialogPlanner
             GoalSeekRequestParseError.CellsMustDiffer => new(
                 LocalizedTextDescriptor.Resource("GoalSeek_CellsMustDifferMessage"),
                 GoalSeekValidationFocusTarget.ChangingCell),
-            _ => new(LocalizedTextDescriptor.Literal(""), GoalSeekValidationFocusTarget.SetCell)
+            _ => new(
+                LocalizedTextDescriptor.Resource("GoalSeek_RequestInvalid"),
+                GoalSeekValidationFocusTarget.SetCell)
         };
 
     private static ValidationPresentationDescriptor<GoalSeekValidationFocusTarget> DescribeAvaloniaValidationError(
@@ -121,25 +114,25 @@ public static class GoalSeekStatusDialogPlanner
         result.Error switch
         {
             GoalSeekRequestParseError.SetCellRequired => new(
-                LocalizedTextDescriptor.Literal("Set cell is required."),
+                LocalizedTextDescriptor.Resource("GoalSeek_SetCellRequiredMessage"),
                 GoalSeekValidationFocusTarget.SetCell),
             GoalSeekRequestParseError.InvalidSetCellAddress => new(
-                LocalizedTextDescriptor.Literal($"Set cell '{result.InvalidText}' is not a valid cell reference."),
+                LocalizedTextDescriptor.Resource("GoalSeek_InvalidCellAddressMessage", result.InvalidText),
                 GoalSeekValidationFocusTarget.SetCell),
             GoalSeekRequestParseError.InvalidTargetValue => new(
-                LocalizedTextDescriptor.Literal("Target value must be a finite number."),
+                LocalizedTextDescriptor.Resource("GoalSeek_InvalidNumberMessage", result.InvalidText),
                 GoalSeekValidationFocusTarget.TargetValue),
             GoalSeekRequestParseError.ChangingCellRequired => new(
-                LocalizedTextDescriptor.Literal("Changing cell is required."),
+                LocalizedTextDescriptor.Resource("GoalSeek_ByChangingCellRequiredMessage"),
                 GoalSeekValidationFocusTarget.ChangingCell),
             GoalSeekRequestParseError.InvalidChangingCellAddress => new(
-                LocalizedTextDescriptor.Literal($"Changing cell '{result.InvalidText}' is not a valid cell reference."),
+                LocalizedTextDescriptor.Resource("GoalSeek_InvalidCellAddressMessage", result.InvalidText),
                 GoalSeekValidationFocusTarget.ChangingCell),
             GoalSeekRequestParseError.CellsMustDiffer => new(
-                LocalizedTextDescriptor.Literal("Set cell and changing cell must be different."),
+                LocalizedTextDescriptor.Resource("GoalSeek_CellsMustDifferMessage"),
                 GoalSeekValidationFocusTarget.ChangingCell),
             _ => new(
-                LocalizedTextDescriptor.Literal("Goal Seek request is invalid."),
+                LocalizedTextDescriptor.Resource("GoalSeek_RequestInvalid"),
                 GoalSeekValidationFocusTarget.SetCell)
         };
 }

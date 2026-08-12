@@ -2,15 +2,21 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.ThemeUI;
 
-public sealed record WorkbookThemePresetOption(string Label, Func<WorkbookTheme> CreateTheme, bool IsCustomizeAction = false);
+public sealed record WorkbookThemePresetOption(
+    string Label,
+    string LabelResourceKey,
+    Func<WorkbookTheme> CreateTheme,
+    bool IsCustomizeAction = false);
 
 public sealed record WorkbookThemeColorPresetOption(
     string Label,
+    string LabelResourceKey,
     Func<WorkbookTheme, WorkbookTheme> ApplyColors,
     bool IsCustomizeAction = false);
 
 public sealed record WorkbookThemeFontPresetOption(
     string Label,
+    string LabelResourceKey,
     string MajorFontName,
     string MinorFontName,
     bool IsCustomizeAction = false)
@@ -19,7 +25,11 @@ public sealed record WorkbookThemeFontPresetOption(
         theme.WithFonts(MajorFontName, MinorFontName);
 }
 
-public sealed record WorkbookThemeEffectPresetOption(string Label, string EffectsName, bool IsCustomizeAction = false)
+public sealed record WorkbookThemeEffectPresetOption(
+    string Label,
+    string LabelResourceKey,
+    string EffectsName,
+    bool IsCustomizeAction = false)
 {
     public WorkbookTheme ApplyEffects(WorkbookTheme theme) =>
         theme.WithEffects(EffectsName);
@@ -28,52 +38,52 @@ public sealed record WorkbookThemeEffectPresetOption(string Label, string Effect
 public static class WorkbookThemeCatalog
 {
     public static WorkbookThemePresetOption OfficeThemePreset { get; } =
-        new("Office", () => WorkbookTheme.Office);
+        new("Office", "MainWindow_Header_Office", () => WorkbookTheme.Office);
 
     public static WorkbookThemePresetOption FreeXColorfulThemePreset { get; } =
-        new("FreeX Colorful", WorkbookThemeWorkflow.CreateColorfulTheme);
+        new("FreeX Colorful", "MainWindow_Header_FreeXColorful", WorkbookThemeWorkflow.CreateColorfulTheme);
 
     public static WorkbookThemePresetOption GrayscaleThemePreset { get; } =
-        new("Grayscale", WorkbookThemeWorkflow.CreateGrayscaleTheme);
+        new("Grayscale", "MainWindow_Header_Grayscale", WorkbookThemeWorkflow.CreateGrayscaleTheme);
 
     public static WorkbookThemePresetOption CustomizeThemePreset { get; } =
-        new("Customize...", () => WorkbookTheme.Office, IsCustomizeAction: true);
+        new("Customize...", "MainWindow_Header_Customize", () => WorkbookTheme.Office, IsCustomizeAction: true);
 
     public static WorkbookThemeColorPresetOption OfficeColorPreset { get; } =
-        new("Office", theme => WorkbookThemeWorkflow.ApplyOfficeColors(theme).WithName(theme.Name));
+        new("Office", "MainWindow_Header_Office", theme => WorkbookThemeWorkflow.ApplyOfficeColors(theme).WithName(theme.Name));
 
     public static WorkbookThemeColorPresetOption FreeXColorfulColorPreset { get; } =
-        new("FreeX Colorful", theme => WorkbookThemeWorkflow.ApplyColorfulColors(theme).WithName(theme.Name));
+        new("FreeX Colorful", "MainWindow_Header_FreeXColorful", theme => WorkbookThemeWorkflow.ApplyColorfulColors(theme).WithName(theme.Name));
 
     public static WorkbookThemeColorPresetOption GrayscaleColorPreset { get; } =
-        new("Grayscale", theme => WorkbookThemeWorkflow.ApplyGrayscaleColors(theme).WithName(theme.Name));
+        new("Grayscale", "MainWindow_Header_Grayscale", theme => WorkbookThemeWorkflow.ApplyGrayscaleColors(theme).WithName(theme.Name));
 
     public static WorkbookThemeColorPresetOption CustomizeColorPreset { get; } =
-        new("Customize Colors...", theme => theme, IsCustomizeAction: true);
+        new("Customize Colors...", "MainWindow_Header_CustomizeColors", theme => theme, IsCustomizeAction: true);
 
     public static WorkbookThemeFontPresetOption OfficeFontPreset { get; } =
-        new("Office", WorkbookTheme.Office.MajorFontName, WorkbookTheme.Office.MinorFontName);
+        new("Office", "MainWindow_Header_Office", WorkbookTheme.Office.MajorFontName, WorkbookTheme.Office.MinorFontName);
 
     public static WorkbookThemeFontPresetOption ArialFontPreset { get; } =
-        new("Arial", "Arial", "Arial");
+        new("Arial", "MainWindow_Header_Arial", "Arial", "Arial");
 
     public static WorkbookThemeFontPresetOption TimesNewRomanFontPreset { get; } =
-        new("Times New Roman", "Times New Roman", "Times New Roman");
+        new("Times New Roman", "MainWindow_Header_TimesNewRoman", "Times New Roman", "Times New Roman");
 
     public static WorkbookThemeFontPresetOption CustomizeFontPreset { get; } =
-        new("Customize Fonts...", WorkbookTheme.Office.MajorFontName, WorkbookTheme.Office.MinorFontName, IsCustomizeAction: true);
+        new("Customize Fonts...", "MainWindow_Header_CustomizeFonts", WorkbookTheme.Office.MajorFontName, WorkbookTheme.Office.MinorFontName, IsCustomizeAction: true);
 
     public static WorkbookThemeEffectPresetOption OfficeEffectPreset { get; } =
-        new("Office", WorkbookTheme.Office.EffectsName);
+        new("Office", "MainWindow_Header_Office", WorkbookTheme.Office.EffectsName);
 
     public static WorkbookThemeEffectPresetOption SubtleEffectPreset { get; } =
-        new("Subtle", "Subtle");
+        new("Subtle", "MainWindow_Header_Subtle", "Subtle");
 
     public static WorkbookThemeEffectPresetOption RefinedEffectPreset { get; } =
-        new("Refined", "Refined");
+        new("Refined", "MainWindow_Header_Refined", "Refined");
 
     public static WorkbookThemeEffectPresetOption CustomizeEffectPreset { get; } =
-        new("Customize Effects...", WorkbookTheme.Office.EffectsName, IsCustomizeAction: true);
+        new("Customize Effects...", "MainWindow_Header_CustomizeEffects", WorkbookTheme.Office.EffectsName, IsCustomizeAction: true);
 
     public static IReadOnlyList<WorkbookThemePresetOption> ThemePresets { get; } =
     [

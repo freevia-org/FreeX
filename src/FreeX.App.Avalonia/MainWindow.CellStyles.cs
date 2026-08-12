@@ -1,5 +1,4 @@
 using System;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -22,7 +21,7 @@ public sealed partial class MainWindow
 
         var dialog = new Window
         {
-            Title = "Cell Styles",
+            Title = UiText.Get("MainWindow_TooltipTitle_CellStyles"),
             Width = 560,
             Height = 420,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -34,7 +33,7 @@ public sealed partial class MainWindow
             var local = preset;
             var button = new Button
             {
-                Content = PrettyStyleName(preset),
+                Content = UiText.Get(CellStyleDiffPlanner.GetCellStylePresetLabelResourceKey(preset)),
                 Width = 120,
                 Margin = new Thickness(3),
                 Padding = new Thickness(6, 6),
@@ -65,13 +64,4 @@ public sealed partial class MainWindow
     /// </summary>
     private void ApplyCellStylePreset(CellStylePreset preset)
         => ApplySelectedRangeCellStylePreset(preset);
-
-    private static string PrettyStyleName(CellStylePreset preset)
-    {
-        var name = preset.ToString();
-        var accent = Regex.Match(name, @"^Accent(\d)_(\d+)$");
-        if (accent.Success)
-            return $"{accent.Groups[2].Value}% Accent {accent.Groups[1].Value}";
-        return Regex.Replace(name, "(?<=[a-z])(?=[A-Z0-9])", " ");
-    }
 }
