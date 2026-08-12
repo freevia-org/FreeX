@@ -28274,22 +28274,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         try
         {
-            var adapter = new NativeJsonAdapter();
-            Workbook workbook;
-            using (var stream = File.OpenRead(snapshotPath))
-                workbook = adapter.Load(stream);
-
-            var displayName = string.IsNullOrWhiteSpace(originalFilePath)
-                ? workbook.Name
-                : Path.GetFileName(originalFilePath);
-            workbook.Name = displayName;
-
-            var source = new StartupWorkbookLoadResult(
-                workbook,
-                displayName,
-                "Recovered from a previous session.",
-                IsFallback: false,
-                SourcePath: originalFilePath);
+            var source = RecoverySnapshotLoader.Load(snapshotPath, originalFilePath);
 
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             ReplaceSession(_sessionFactory.Create(source, viewportHeight, viewportWidth, includeObjects: true));
