@@ -89,6 +89,22 @@ public sealed class FreeWFinalResidualOwnershipSourceTests
         wpfCommands.Should().NotContain("ManageSourcesResult");
     }
 
+    [Fact]
+    public void Page_layout_ribbon_routes_keep_single_page_setting_ownership()
+    {
+        var wpfCommands = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+
+        wpfCommands.Should().Contain("PageSetting(FreeWRibbonCommandAction.ColumnsOne");
+        wpfCommands.Should().Contain("PageSetting(FreeWRibbonCommandAction.LineNumbersNone");
+        wpfCommands.Should().Contain("PageSetting(FreeWRibbonCommandAction.HyphenationNone");
+        wpfCommands.Should().Contain("PageSetting(FreeWRibbonCommandAction.DifferentFirstPage");
+        wpfCommands.Should().NotContain("class ColumnsPresetCommand");
+        wpfCommands.Should().NotContain("class LineNumberModeCommand");
+        wpfCommands.Should().NotContain("class HyphenationCommand");
+        wpfCommands.Should().NotContain("class HyphenationModeCommand");
+        wpfCommands.Should().NotContain("class DifferentFirstPageCommand");
+    }
+
     private static string Read(params string[] parts) =>
         File.ReadAllText(TestWorkspaceFileLocator.Find(parts));
 }

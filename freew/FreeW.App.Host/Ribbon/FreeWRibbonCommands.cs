@@ -2740,14 +2740,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Word's Layout > Columns dropdown applies common presets immediately. Equal presets clear explicit
-    // widths; Left/Right set the classic narrow/wide two-column split using the current page content width.
-    private sealed class ColumnsPresetCommand(DocumentView editor, PageColumnPreset preset) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => PageLayoutCommandPlanner.ApplyColumnPreset(page, preset));
-    }
-
     // Opens the unified Page Setup dialog (Margins / Paper / Layout tabs) and applies the chosen geometry,
     // orientation, gutter, mirror-margins, paper size, header/footer distance, vertical alignment and the
     // different-first-page / odd-even toggles to PageSettings via ApplyPageSettings — the same single
@@ -2784,31 +2776,6 @@ internal static class FreeWRibbonCommands
     {
         public void Execute(RibbonCommandContext context) =>
             editor.ApplyPageSettings(PageLayoutCommandPlanner.CycleLineNumberMode);
-    }
-
-    // Word's Layout > Line Numbers dropdown exposes discrete mode choices. These commands set the exact backed
-    // PageSettings mode instead of forcing users through the top-level cycle.
-    private sealed class LineNumberModeCommand(DocumentView editor, LineNumberMode mode) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.LineNumberMode = mode);
-    }
-
-    // Toggles automatic hyphenation (settings.xml w:autoHyphenation). Routes through ApplyPageSettings so
-    // the editor commits pending edits, mutates PageSettings.AutoHyphenation, and re-renders.
-    private sealed class HyphenationCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(PageLayoutCommandPlanner.ToggleHyphenation);
-    }
-
-    // Hyphenation dropdown — None / Automatic: sets the document's automatic-hyphenation flag explicitly
-    // (Word's Hyphenation > None / Automatic). Routes through ApplyPageSettings (commit + re-render) so the
-    // soft-hyphen rendering shows at once and the flag round-trips through settings.xml.
-    private sealed class HyphenationModeCommand(DocumentView editor, bool auto) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.AutoHyphenation = auto);
     }
 
     // Hyphenation dropdown - Manual: review candidates in document order, then insert accepted soft hyphens
@@ -2867,14 +2834,6 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context) =>
             editor.ApplyPageSettings(page =>
                 page.VerticalAlignment = PageVerticalAlignmentPlanner.Next(page.VerticalAlignment));
-    }
-
-    // Toggles "different first page" (sectPr w:titlePg). Routes through ApplyPageSettings so the editor
-    // commits pending edits, mutates PageSettings.DifferentFirstPage, and re-renders.
-    private sealed class DifferentFirstPageCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            editor.ApplyPageSettings(page => page.DifferentFirstPage = !page.DifferentFirstPage);
     }
 
     // Inserts a table at the caret. Delegates to the view, which routes through the undo/redo bus.
