@@ -91,6 +91,7 @@ public sealed class SmokeValidationOwnershipTests
         var readAloud = File.ReadAllText(Path.Combine(validation, "ReadAloudPauseSmoke.cs"));
         var launch = File.ReadAllText(Path.Combine(validation, "LaunchSmoke.cs"));
 
+        program.Should().Contain("ValidationHostCommandRouteExecutor.Run(");
         program.Should().Contain("PackagingSmoke.TryRun");
         program.Should().Contain("ReadAloudPauseSmoke.TryRun");
         program.Should().Contain("SisterAppLaunchSmokeOptions.TryParse");

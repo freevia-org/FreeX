@@ -616,10 +616,11 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_freeze_top_row_menu_item=true");
         script.Should().Contain("native_freeze_first_column_menu_item=true");
         script.Should().Contain("native_unfreeze_panes_menu_item=true");
-        script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode)");
+        script.Should().Contain("PackagingSmokeCommand.TryRun");
+        script.Should().Contain("ValidationHostCommandRouteExecutor.Run(");
         script.Should().Contain("PortPreviewWorkbookFactory.PreviewShapeName");
         script.Should().Contain("_sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true)");
-        script.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
+        script.Should().Contain("StartWithClassicDesktopLifetime(arguments)");
         script.Should().Contain("IActivatableLifetime");
         script.Should().Contain("OpenActivatedFilesAsync");
         script.Should().Contain("using FreeX.Core.Calc;");

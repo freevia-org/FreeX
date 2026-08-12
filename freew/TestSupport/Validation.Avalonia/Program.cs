@@ -7,51 +7,30 @@ namespace FreeW.Validation.Avalonia;
 internal static class Program
 {
     [STAThread]
-    public static int Main(string[] args)
-    {
-        if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))
-            return packagingExit;
-
-        if (ReadAloudPauseSmoke.TryRun(args, Console.Out, Console.Error, out var speechExit))
-            return speechExit;
-
-        if (!SisterAppLaunchSmokeOptions.TryParse(
-                args,
-                out var launchOptions,
-                out var launchStartupArguments,
-                out var launchError))
-        {
-            Console.Error.WriteLine(launchError);
-            return 2;
-        }
-
-        if (launchOptions is not null)
-        {
-            return FreeW.App.Avalonia.Program.RunToolHost(
-                launchStartupArguments,
-                access => LaunchSmokeCoordinator.Start(access, launchOptions));
-        }
-
-        if (!TablePropertiesX11ValidationOptions.TryParse(
-                args,
-                out var options,
-                out var startupArguments,
-                out var error))
-        {
-            Console.Error.WriteLine(error);
-            return 2;
-        }
-
-        if (options is null)
-        {
-            Console.Error.WriteLine(
-                $"Expected {SisterAppPackagingSmoke.Argument}, {ReadAloudPauseSmoke.Argument}, " +
-                $"{SisterAppLaunchSmokeOptions.Argument}, or {TablePropertiesX11ValidationOptions.Argument}.");
-            return 2;
-        }
-
-        return FreeW.App.Avalonia.Program.RunToolHost(
-            startupArguments,
-            access => TablePropertiesX11ValidationCoordinator.Start(access, options));
-    }
+    public static int Main(string[] args) =>
+        ValidationHostCommandRouteExecutor.Run(
+            args,
+            Console.Error,
+            $"Expected {SisterAppPackagingSmoke.Argument}, {ReadAloudPauseSmoke.Argument}, " +
+            $"{SisterAppLaunchSmokeOptions.Argument}, or {TablePropertiesX11ValidationOptions.Argument}.",
+            ValidationHostCommandRouteExecutor.Immediate(
+                PackagingSmoke.TryRun,
+                Console.Out,
+                Console.Error),
+            ValidationHostCommandRouteExecutor.Immediate(
+                ReadAloudPauseSmoke.TryRun,
+                Console.Out,
+                Console.Error),
+            ValidationHostCommandRouteExecutor.Parsed<SisterAppLaunchSmokeOptions>(
+                SisterAppLaunchSmokeOptions.TryParse,
+                (options, startupArguments) =>
+                    FreeW.App.Avalonia.Program.RunToolHost(
+                        startupArguments,
+                        access => LaunchSmokeCoordinator.Start(access, options))),
+            ValidationHostCommandRouteExecutor.Parsed<TablePropertiesX11ValidationOptions>(
+                TablePropertiesX11ValidationOptions.TryParse,
+                (options, startupArguments) =>
+                    FreeW.App.Avalonia.Program.RunToolHost(
+                        startupArguments,
+                        access => TablePropertiesX11ValidationCoordinator.Start(access, options))));
 }

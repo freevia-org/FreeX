@@ -27,7 +27,23 @@ public sealed record SisterAvaloniaProgramSpec(
     Func<string[], int> StartApplication)
 {
     public string CrashSource { get; init; } = "avalonia_startup";
+
+    public Func<SisterAvaloniaProgramDiagnostics>? CreateDiagnostics { get; init; }
+
+    public Action? BeforeRun { get; init; }
+
+    public Action<int>? AfterRun { get; init; }
+
+    public int? CompletedExitCode { get; init; }
 }
+
+/// <summary>
+/// Product-supplied diagnostics callbacks for apps that need a custom diagnostics directory or
+/// version source while retaining the shared Avalonia lifecycle.
+/// </summary>
+public sealed record SisterAvaloniaProgramDiagnostics(
+    Action RegisterCrashHandlers,
+    Action<Exception, string> RecordCrash);
 
 /// <summary>
 /// Runs the common Avalonia program lifecycle used by sister apps: installs product identity before
@@ -60,7 +76,11 @@ public static class SisterAvaloniaProgramRunner
             return exitCode;
 
         ArgumentNullException.ThrowIfNull(preparation.StartupArguments);
-        var diagnostics = runtime.CreateDiagnostics(runtime.ResolveVersion());
+        var diagnostics = spec.CreateDiagnostics?.Invoke()
+            ?? runtime.CreateDiagnostics(runtime.ResolveVersion());
+        ArgumentNullException.ThrowIfNull(diagnostics);
+        ArgumentNullException.ThrowIfNull(diagnostics.RegisterCrashHandlers);
+        ArgumentNullException.ThrowIfNull(diagnostics.RecordCrash);
         return SisterAvaloniaApplicationStartupRunner.Run(
             preparation.StartupArguments,
             new SisterAvaloniaApplicationStartupSpec(
@@ -69,6 +89,9 @@ public static class SisterAvaloniaProgramRunner
                 diagnostics.RecordCrash)
         {
             RegisterRibbonCommandFaultHandler = runtime.RegisterRibbonCommandFaultHandler,
+            BeforeRun = spec.BeforeRun,
+            AfterRun = spec.AfterRun,
+            CompletedExitCode = spec.CompletedExitCode,
             StartupCrashSource = spec.CrashSource
         });
     }
@@ -80,24 +103,15 @@ internal sealed class SisterAvaloniaProgramRuntime
 
     public Func<string> ResolveVersion { get; init; } = EntryAssemblyVersion.Resolve;
 
-    public Func<string, ISisterAvaloniaProgramDiagnostics> CreateDiagnostics { get; init; } =
-        version => new LocalSisterAvaloniaProgramDiagnostics(LocalAppDiagnostics.CreateDefault(version));
+    public Func<string, SisterAvaloniaProgramDiagnostics> CreateDiagnostics { get; init; } =
+        version =>
+        {
+            var diagnostics = LocalAppDiagnostics.CreateDefault(version);
+            return new SisterAvaloniaProgramDiagnostics(
+                () => diagnostics.RegisterCrashHandlers(),
+                (exception, source) => diagnostics.RecordCrash(exception, source));
+        };
 
     public Action<Action<Exception, string>> RegisterRibbonCommandFaultHandler { get; init; } =
         handler => RibbonCommandFaultReporter.Handler = handler;
-}
-
-internal interface ISisterAvaloniaProgramDiagnostics
-{
-    void RegisterCrashHandlers();
-
-    void RecordCrash(Exception exception, string source);
-}
-
-internal sealed class LocalSisterAvaloniaProgramDiagnostics(LocalAppDiagnostics diagnostics)
-    : ISisterAvaloniaProgramDiagnostics
-{
-    public void RegisterCrashHandlers() => diagnostics.RegisterCrashHandlers();
-
-    public void RecordCrash(Exception exception, string source) => diagnostics.RecordCrash(exception, source);
 }

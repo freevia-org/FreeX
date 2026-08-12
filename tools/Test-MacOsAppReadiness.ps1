@@ -1104,18 +1104,27 @@ function Test-SourceWiring {
             Markers = @(
                 "LocalAppDiagnostics.Create(",
                 "AppHelpInfo.GetVersionText(typeof(Program).Assembly)",
-                "internal static int RunToolHost(",
-                "Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator",
-                "SisterAvaloniaApplicationStartupRunner.Run(",
-                "RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers()",
-                "RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)",
-                "diagnostics.RecordEvent(`"app_start`"",
+                "Action<MainWindow, LocalAppDiagnostics?>? externalStartupCoordinator",
+                "SisterAvaloniaProgramRunner.Run(",
+                "CreateDiagnostics = () =>",
+                "new SisterAvaloniaProgramDiagnostics(",
+                "activeDiagnostics.RecordEvent(`"app_start`"",
                 "App.StartupArguments = startupArguments;",
                 "App.ExternalStartupCoordinator = externalStartupCoordinator;",
-                "App.Diagnostics = diagnostics;",
-                "diagnostics.RecordEvent(`"app_exit`"",
+                "App.Diagnostics = activeDiagnostics;",
+                ".RecordEvent(`"app_exit`"",
                 "CompletedExitCode = 0",
-                "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)"
+                "BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments)"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "tools\FreeX.Validation.Avalonia\RendererHost\Program.ValidationHost.cs"
+            Markers = @(
+                "internal static int RunValidationToolHost(",
+                "Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator",
+                "RunApplication(",
+                "externalStartupCoordinator(window.CreateRendererValidationAccess(), diagnostics)"
             )
             OrderedPairs = @()
         },
@@ -1147,9 +1156,12 @@ function Test-SourceWiring {
         @{
             Path = "tools\FreeX.Validation.Avalonia\Program.cs"
             Markers = @(
-                "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode)",
-                "MacOsLaunchSmokeOptions.TryParse(",
-                "FreeX.App.Avalonia.Program.RunToolHost(",
+                "ValidationHostCommandRouteExecutor.Run(",
+                "ValidationHostCommandRouteExecutor.Immediate(",
+                "PackagingSmokeCommand.TryRun",
+                "ValidationHostCommandRouteExecutor.Parsed<MacOsLaunchSmokeOptions>(",
+                "MacOsLaunchSmokeOptions.TryParse",
+                "FreeX.App.Avalonia.Program.RunValidationToolHost(",
                 "MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics)"
             )
             OrderedPairs = @()

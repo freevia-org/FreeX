@@ -44,8 +44,9 @@ public sealed class SmokeValidationOwnershipTests
         var launch = File.ReadAllText(Path.Combine(support, "LaunchSmokeValidation.cs"));
         var adapter = File.ReadAllText(Path.Combine(support, "MainWindow.ValidationAccessAdapter.cs"));
 
-        program.Should().Contain("PackagingSmokeCommand.TryRun(");
-        program.Should().Contain("SisterAppLaunchSmokeOptions.TryParse(");
+        program.Should().Contain("ValidationHostCommandRouteExecutor.Run(");
+        program.Should().Contain("PackagingSmokeCommand.TryRun");
+        program.Should().Contain("SisterAppLaunchSmokeOptions.TryParse");
         packaging.Should().Contain("Presentation.CreateEmpty()");
         packaging.Should().Contain("PptxPackageWriter.Write(");
         packaging.Should().Contain("SisterAppPackagingSmoke.WriteReport(");

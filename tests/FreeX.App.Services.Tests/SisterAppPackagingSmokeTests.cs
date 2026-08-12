@@ -52,7 +52,8 @@ public sealed class SisterAppPackagingSmokeTests
             .And.NotContain("public const string Argument = \"--packaging-smoke\"");
         shippingProgram.Should().NotContain("PackagingSmokeCommand");
         parityProgram.Should().NotContain("PackagingSmokeCommand");
-        validationProgram.Should().Contain("PackagingSmokeCommand.TryRun(");
+        validationProgram.Should().Contain("PackagingSmokeCommand.TryRun");
+        validationProgram.Should().Contain("ValidationHostCommandRouteExecutor.Immediate(");
         File.Exists(Path.Combine(root, "src", "FreeX.App.Services", "WorkbookStartupSmokeService.cs"))
             .Should().BeFalse();
     }

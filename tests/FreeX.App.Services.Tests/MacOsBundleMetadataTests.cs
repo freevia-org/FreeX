@@ -475,13 +475,17 @@ public sealed class MacOsBundleMetadataTests
         var program = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
         var validationProgram = File.ReadAllText(
             RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "Program.cs"));
+        var validationAccessProgram = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "FreeX.Validation.Avalonia", "RendererHost", "Program.ValidationHost.cs"));
 
         program.Should().NotContain("PackagingSmokeCommand");
-        validationProgram.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode)");
-        validationProgram.Should().Contain("return packagingExitCode;");
+        validationProgram.Should().Contain("PackagingSmokeCommand.TryRun");
+        validationProgram.Should().Contain("ValidationHostCommandRouteExecutor.Immediate(");
+        validationProgram.Should().Contain("ValidationHostCommandRouteExecutor.Run(");
         program.Should().NotContain("MacOsLaunchSmokeOptions.TryParse(");
-        program.Should().Contain("internal static int RunToolHost(");
-        program.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
+        program.Should().NotContain("internal static int RunValidationToolHost(");
+        validationAccessProgram.Should().Contain("internal static int RunValidationToolHost(");
+        program.Should().Contain("StartWithClassicDesktopLifetime(arguments)");
     }
 
     private static string? PlistString(XDocument plist, string key) =>

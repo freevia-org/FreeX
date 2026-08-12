@@ -32,19 +32,28 @@ internal static partial class Program
         string? diagnosticsDirectory,
         Action<MainWindow, LocalAppDiagnostics?>? externalStartupCoordinator)
     {
-        var diagnostics = LocalAppDiagnostics.Create(
-            AppHelpInfo.GetVersionText(typeof(Program).Assembly),
-            diagnosticsDirectory);
-        return SisterAvaloniaApplicationStartupRunner.Run(
+        LocalAppDiagnostics? diagnostics = null;
+        return SisterAvaloniaProgramRunner.Run(
             startupArguments,
-            new SisterAvaloniaApplicationStartupSpec(
-                StartApplication: _ => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments),
-                RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers(),
-                RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source))
+            new SisterAvaloniaProgramSpec(
+                FreeXApplicationStartupDescriptor.ProductIdentity,
+                SisterAvaloniaLaunchPreparation.Continue,
+                arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments))
         {
+            CreateDiagnostics = () =>
+            {
+                diagnostics = LocalAppDiagnostics.Create(
+                    AppHelpInfo.GetVersionText(typeof(Program).Assembly),
+                    diagnosticsDirectory);
+                return new SisterAvaloniaProgramDiagnostics(
+                    () => diagnostics.RegisterCrashHandlers(),
+                    (exception, source) => diagnostics.RecordCrash(exception, source));
+            },
             BeforeRun = () =>
             {
-                diagnostics.RecordEvent("app_start", new Dictionary<string, string?>
+                var activeDiagnostics = diagnostics
+                    ?? throw new InvalidOperationException("FreeX diagnostics were not initialized.");
+                activeDiagnostics.RecordEvent("app_start", new Dictionary<string, string?>
                 {
                     ["source"] = "avalonia",
                     ["scope"] = "app",
@@ -53,14 +62,16 @@ internal static partial class Program
 
                 App.StartupArguments = startupArguments;
                 App.ExternalStartupCoordinator = externalStartupCoordinator;
-                App.Diagnostics = diagnostics;
+                App.Diagnostics = activeDiagnostics;
             },
-            AfterRun = _ => diagnostics.RecordEvent("app_exit", new Dictionary<string, string?>
-            {
-                ["source"] = "avalonia",
-                ["scope"] = "app",
-                ["status"] = "completed"
-            }),
+            AfterRun = _ =>
+                (diagnostics ?? throw new InvalidOperationException("FreeX diagnostics were not initialized."))
+                .RecordEvent("app_exit", new Dictionary<string, string?>
+                {
+                    ["source"] = "avalonia",
+                    ["scope"] = "app",
+                    ["status"] = "completed"
+                }),
             CompletedExitCode = 0
         });
     }

@@ -1136,26 +1136,34 @@ public sealed class AvaloniaShellSourceTests
         var appSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
         var programSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
         var validationProgramSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "Program.cs"));
+        var validationAccessProgramSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "FreeX.Validation.Avalonia", "RendererHost", "Program.ValidationHost.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
-        var accessSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.LaunchSmokeAccessAdapter.cs"));
+        var accessSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "FreeX.Validation.Avalonia", "RendererHost", "MainWindow.RendererValidationAccess.cs"));
         var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         programSource.Should().NotContain("MacOsLaunchSmokeOptions.TryParse(");
         programSource.Should().NotContain("MacOsLaunchSmokeCoordinator");
-        programSource.Should().Contain("internal static int RunToolHost(");
-        programSource.Should().Contain("Action<MainWindow.LaunchSmokeAccessAdapter, LocalAppDiagnostics?> externalStartupCoordinator");
+        programSource.Should().NotContain("internal static int RunValidationToolHost(");
+        programSource.Should().Contain("Action<MainWindow, LocalAppDiagnostics?>? externalStartupCoordinator");
         programSource.Should().Contain("LocalAppDiagnostics.Create(");
         programSource.Should().Contain("AppHelpInfo.GetVersionText(typeof(Program).Assembly)");
-        programSource.Should().Contain("diagnostics.RecordEvent(\"app_start\"");
-        programSource.Should().Contain("diagnostics.RecordEvent(\"app_exit\"");
-        programSource.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(");
-        programSource.Should().Contain("RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)");
+        programSource.Should().Contain("activeDiagnostics.RecordEvent(\"app_start\"");
+        programSource.Should().Contain(".RecordEvent(\"app_exit\"");
+        programSource.Should().Contain("SisterAvaloniaProgramRunner.Run(");
+        programSource.Should().Contain("CreateDiagnostics = () =>");
+        programSource.Should().Contain("new SisterAvaloniaProgramDiagnostics(");
         programSource.Should().NotContain("App.LaunchSmokeOptions");
-        programSource.Should().Contain("externalStartupCoordinator(window.CreateLaunchSmokeAccessAdapter(), diagnostics)");
-        programSource.Should().Contain("App.Diagnostics = diagnostics;");
-        programSource.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
-        validationProgramSource.Should().Contain("MacOsLaunchSmokeOptions.TryParse(");
-        validationProgramSource.Should().Contain("FreeX.App.Avalonia.Program.RunToolHost(");
+        programSource.Should().Contain("App.Diagnostics = activeDiagnostics;");
+        programSource.Should().Contain("StartWithClassicDesktopLifetime(arguments)");
+        validationAccessProgramSource.Should().Contain("internal static int RunValidationToolHost(");
+        validationAccessProgramSource.Should().Contain(
+            "Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator");
+        validationAccessProgramSource.Should().Contain(
+            "externalStartupCoordinator(window.CreateRendererValidationAccess(), diagnostics)");
+        validationProgramSource.Should().Contain("MacOsLaunchSmokeOptions.TryParse");
+        validationProgramSource.Should().Contain("FreeX.App.Avalonia.Program.RunValidationToolHost(");
         validationProgramSource.Should().Contain("MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics)");
         appSource.Should().Contain("private const string ApplicationTitle = \"FreeX\";");
         appSource.Should().Contain("Name = ApplicationTitle;");
@@ -1164,9 +1172,9 @@ public sealed class AvaloniaShellSourceTests
         appSource.Should().Contain("internal static LocalAppDiagnostics? Diagnostics { get; set; }");
         appSource.Should().Contain("Diagnostics?.RecordEvent(\"app_ready\"");
         appSource.Should().Contain("ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);");
-        accessSource.Should().Contain("internal sealed class LaunchSmokeAccessAdapter");
-        accessSource.Should().Contain("internal MacOsLaunchSmokeSnapshot CreateSnapshot()");
-        accessSource.Should().Contain("internal Task<MacOsLaunchSmokeDialogSnapshot> CaptureDialogEvidenceAsync()");
+        accessSource.Should().Contain("internal sealed class RendererValidationAccess");
+        accessSource.Should().Contain("internal RendererShellObservation ObserveShell()");
+        accessSource.Should().Contain("internal RendererFormattingState BeginCommandObservation(");
         smokeSource.Should().Contain("public const string Argument = \"--macos-launch-smoke\";");
         smokeSource.Should().Contain("public const string DiagnosticsDirectoryArgument = \"--macos-launch-smoke-diagnostics-dir\";");
         smokeSource.Should().Contain("public const string VerifyImageClipboardPasteArgument = \"--macos-launch-smoke-verify-image-clipboard\";");

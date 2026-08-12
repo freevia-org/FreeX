@@ -53,6 +53,19 @@ public sealed class ValidationInfrastructureOwnershipSourceTests
             .And.NotContain("JsonSerializer.Serialize(report");
     }
 
+    [Theory]
+    [InlineData("tools", "FreeX.Validation.Avalonia", "Program.cs")]
+    [InlineData("freew", "TestSupport", "Validation.Avalonia", "Program.cs")]
+    [InlineData("freep", "TestSupport", "Validation.Avalonia", "Program.cs")]
+    public void Avalonia_validation_hosts_use_shared_command_routing(params string[] path)
+    {
+        var source = Read(path);
+
+        source.Should().Contain("ValidationHostCommandRouteExecutor.Run(")
+            .And.NotContain("Console.Error.WriteLine(")
+            .And.NotContain("private static int ReportError(");
+    }
+
     private static string Read(params string[] parts) =>
         File.ReadAllText(TestWorkspaceFileLocator.FindFromWorkspaceRoot(parts));
 }

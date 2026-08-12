@@ -43,7 +43,9 @@ public sealed class SisterAvaloniaProgramRunnerTests
                         order.Add("diagnostics");
                         resolvedVersion = version;
                         diagnostics.OnRegister = () => order.Add("register");
-                        return diagnostics;
+                        return new SisterAvaloniaProgramDiagnostics(
+                            diagnostics.RegisterCrashHandlers,
+                            diagnostics.RecordCrash);
                     },
                     RegisterRibbonCommandFaultHandler = handler =>
                     {
@@ -120,7 +122,9 @@ public sealed class SisterAvaloniaProgramRunnerTests
                     _ => throw failure),
                 new SisterAvaloniaProgramRuntime
                 {
-                    CreateDiagnostics = _ => diagnostics,
+                    CreateDiagnostics = _ => new SisterAvaloniaProgramDiagnostics(
+                        diagnostics.RegisterCrashHandlers,
+                        diagnostics.RecordCrash),
                     RegisterRibbonCommandFaultHandler = _ => { },
                 });
 
@@ -128,6 +132,70 @@ public sealed class SisterAvaloniaProgramRunnerTests
             diagnostics.Registered.Should().BeTrue();
             diagnostics.Exception.Should().BeSameAs(failure);
             diagnostics.Source.Should().Be("avalonia_startup");
+        }
+        finally
+        {
+            AppProduct.Current = originalProduct;
+        }
+    }
+
+    [Fact]
+    public void Run_UsesProductDiagnosticsAndLifecycleHooks()
+    {
+        var originalProduct = AppProduct.Current;
+        var identity = new AppProductIdentity("TestApp", "TESTAPP_DIAGNOSTICS", "Test App");
+        var diagnostics = new CapturingDiagnostics();
+        var order = new List<string>();
+
+        try
+        {
+            var exitCode = SisterAvaloniaProgramRunner.Run(
+                [],
+                new SisterAvaloniaProgramSpec(
+                    identity,
+                    _ =>
+                    {
+                        order.Add("prepare");
+                        return SisterAvaloniaLaunchPreparation.Continue([]);
+                    },
+                    _ =>
+                    {
+                        order.Add("start");
+                        return 9;
+                    })
+                {
+                    CreateDiagnostics = () =>
+                    {
+                        order.Add("diagnostics");
+                        diagnostics.OnRegister = () => order.Add("register");
+                        return new SisterAvaloniaProgramDiagnostics(
+                            diagnostics.RegisterCrashHandlers,
+                            diagnostics.RecordCrash);
+                    },
+                    BeforeRun = () => order.Add("before"),
+                    AfterRun = lifetimeExitCode =>
+                    {
+                        lifetimeExitCode.Should().Be(9);
+                        order.Add("after");
+                    },
+                    CompletedExitCode = 0,
+                },
+                new SisterAvaloniaProgramRuntime
+                {
+                    ResolveVersion = () => throw new InvalidOperationException("Default diagnostics were used."),
+                    CreateDiagnostics = _ => throw new InvalidOperationException("Default diagnostics were used."),
+                    RegisterRibbonCommandFaultHandler = _ => order.Add("ribbon"),
+                });
+
+            exitCode.Should().Be(0);
+            order.Should().Equal(
+                "prepare",
+                "diagnostics",
+                "register",
+                "ribbon",
+                "before",
+                "start",
+                "after");
         }
         finally
         {
@@ -154,16 +222,16 @@ public sealed class SisterAvaloniaProgramRunnerTests
         foreach (var source in new[] { freeWProgram, freePProgram })
         {
             source.Should().Contain("SisterAvaloniaProgramRunner.Run(");
-            source.Should().Contain("SisterAvaloniaLaunchPreparation.Continue(startupArguments)");
+            source.Should().Contain("SisterAvaloniaLaunchPreparation.Continue(args)");
             source.Should().NotContain("LocalAppDiagnostics.CreateDefault");
             source.Should().NotContain("diagnostics.RegisterCrashHandlers");
             source.Should().NotContain("diagnostics.RecordCrash");
             source.Should().NotContain("RibbonCommandFaultReporter.Handler");
         }
 
-        freeXProgram.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(")
-            .And.Contain("RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers()")
-            .And.Contain("RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)")
+        freeXProgram.Should().Contain("SisterAvaloniaProgramRunner.Run(")
+            .And.Contain("CreateDiagnostics = () =>")
+            .And.Contain("new SisterAvaloniaProgramDiagnostics(")
             .And.Contain("CompletedExitCode = 0")
             .And.NotContain("RibbonCommandFaultReporter.Handler");
         freeXApp.Should().NotContain("RibbonCommandFaultReporter.Handler");
@@ -180,7 +248,7 @@ public sealed class SisterAvaloniaProgramRunnerTests
         return File.ReadAllText(Path.Combine(new[] { root }.Concat(parts).ToArray()));
     }
 
-    private sealed class CapturingDiagnostics : ISisterAvaloniaProgramDiagnostics
+    private sealed class CapturingDiagnostics
     {
         public Action? OnRegister { get; set; }
 

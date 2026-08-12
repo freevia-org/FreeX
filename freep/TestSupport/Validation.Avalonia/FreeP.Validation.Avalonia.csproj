@@ -19,6 +19,7 @@
     <Compile Remove="MainWindow.ValidationAccessAdapter.cs" />
     <Compile Remove="Program.ValidationHost.cs" />
     <Compile Remove="StartupDirtyTrace.cs" />
+    <ProjectReference Include="..\..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
     <ProjectReference Include="..\..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
                       AdditionalProperties="FreePValidationHost=true" />
     <ProjectReference Include="..\..\FreeP.Core.IO\FreeP.Core.IO.csproj" />

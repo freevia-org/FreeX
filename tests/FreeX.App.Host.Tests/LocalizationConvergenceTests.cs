@@ -106,10 +106,10 @@ public sealed class LocalizationConvergenceTests
 
         shared.Should().Contain("LocalizedUiTextCatalog<Loc>");
         var sharedCatalog = WorkspaceFileLocator.ReadAllText("shared", "Free.Shared.Localization", "LocalizedUiTextCatalog.cs");
-        sharedCatalog.Should().Contain("Facade.Get(");
-        sharedCatalog.Should().Contain("Facade.Format(");
-        sharedCatalog.Should().Contain("Facade.GetNeutral(");
-        sharedCatalog.Should().Contain("Facade.GetNeutralResourceKeys(");
+        sharedCatalog.Should().Contain("LocalizedResourceCatalog<TCatalog>.Get(key)");
+        sharedCatalog.Should().Contain("LocalizedResourceCatalog<TCatalog>.Format(key, args)");
+        sharedCatalog.Should().Contain("LocalizedResourceCatalog<TCatalog>.GetNeutral(key)");
+        sharedCatalog.Should().Contain("LocalizedResourceCatalog<TCatalog>.GetNeutralResourceKeys()");
     }
 
     [Theory]

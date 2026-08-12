@@ -3,34 +3,35 @@ namespace Free.Shared.Localization;
 public abstract class LocalizedUiTextCatalog<TCatalog>
     where TCatalog : class
 {
-    private static readonly LocalizedUiTextFacade Facade = new(LocalizedResourceCatalog<TCatalog>.Resources);
-
     protected LocalizedUiTextCatalog()
     {
     }
 
-    public static string Ok => Facade.Ok;
+    public static string Ok => Get("Common_Ok");
 
-    public static string Cancel => Facade.Cancel;
+    public static string Cancel => Get("Common_Cancel");
 
-    public static string ErrorTitle => Facade.ErrorTitle;
+    public static string ErrorTitle => Get("Common_ErrorTitle");
 
-    public static string WarningTitle => Facade.WarningTitle;
+    public static string WarningTitle => Get("Common_WarningTitle");
 
-    public static string InformationTitle => Facade.InformationTitle;
+    public static string InformationTitle => Get("Common_InformationTitle");
 
-    public static string ConfirmTitle => Facade.ConfirmTitle;
+    public static string ConfirmTitle => Get("Common_ConfirmTitle");
 
-    public static string Get(string key) => Facade.Get(key);
+    public static string Get(string key) => LocalizedResourceCatalog<TCatalog>.Get(key);
 
-    public static string GetNeutral(string key) => Facade.GetNeutral(key);
+    public static string GetNeutral(string key) => LocalizedResourceCatalog<TCatalog>.GetNeutral(key);
 
-    public static string Format(string key, params object?[] args) => Facade.Format(key, args);
+    public static string Format(string key, params object?[] args) =>
+        LocalizedResourceCatalog<TCatalog>.Format(key, args);
 
-    public static IReadOnlySet<string> GetNeutralResourceKeys() => Facade.GetNeutralResourceKeys();
+    public static IReadOnlySet<string> GetNeutralResourceKeys() =>
+        LocalizedResourceCatalog<TCatalog>.GetNeutralResourceKeys();
 
     public static string CreateAutomationName(string textWithAccessKey) =>
-        Facade.CreateAutomationName(textWithAccessKey);
+        LocalizedResourceCatalog<TCatalog>.CreateAutomationName(textWithAccessKey);
 
-    public static string CreateMissingText(string key) => Facade.CreateMissingText(key);
+    public static string CreateMissingText(string key) =>
+        LocalizedResourceCatalog<TCatalog>.CreateMissingText(key);
 }

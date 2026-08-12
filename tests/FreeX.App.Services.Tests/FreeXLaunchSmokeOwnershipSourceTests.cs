@@ -38,7 +38,8 @@ public sealed class FreeXLaunchSmokeOwnershipSourceTests
         var project = Read("tools", "FreeX.Validation.Avalonia", "FreeX.Validation.Avalonia.csproj");
 
         program.Should().Contain("MacOsLaunchSmokeOptions.TryParse");
-        program.Should().Contain("FreeX.App.Avalonia.Program.RunToolHost");
+        program.Should().Contain("ValidationHostCommandRouteExecutor.Run(");
+        program.Should().Contain("FreeX.App.Avalonia.Program.RunValidationToolHost");
         smoke.Should().Contain("internal static class MacOsLaunchSmokeCoordinator");
         smoke.Should().Contain("internal sealed record MacOsLaunchSmokeSnapshot(");
         smoke.Should().Contain("private static MacOsLaunchSmokeSnapshot CaptureSnapshot(");
@@ -53,7 +54,8 @@ public sealed class FreeXLaunchSmokeOwnershipSourceTests
     [Fact]
     public void ValidationHost_UsesDedicatedRendererAccessAdapter()
     {
-        var access = Read("src", "FreeX.App.Avalonia", "MainWindow.RendererValidationAccess.cs");
+        var access = Read(
+            "tools", "FreeX.Validation.Avalonia", "RendererHost", "MainWindow.RendererValidationAccess.cs");
         var smoke = Read("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs");
 
         access.Should().Contain("internal sealed class RendererValidationAccess");
