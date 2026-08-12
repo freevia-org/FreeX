@@ -424,7 +424,7 @@ public sealed class LinuxFamilyInteractionToolTests
         {
             contractValidation = new { status = "pending" },
             summary = new { passed = 1, failed = 0, total = 1 },
-            results = new[] { new { id = "ok", status = "passed", evidence = new[] { "proof.txt" } },
+            results = new[] { new { id = "ok", status = "passed", evidence = new[] { "proof.txt" } } },
             screenshots = Array.Empty<object>()
         }), Encoding.UTF8);
 

@@ -50,7 +50,7 @@ public sealed partial class ColorPickerDialogTests
         StaTestRunner.Run(() =>
         {
             var initialColor = new CellColor(0x21, 0x73, 0x46);
-            var newColor = new CellColor(0xED, 0x7D, 0x31);
+            var newColor = WorkbookTheme.Office.ResolveColor(WorkbookThemeColorSlot.Accent2);
             var dialog = new ColorPickerDialog(initialColor);
             try
             {
@@ -79,8 +79,8 @@ public sealed partial class ColorPickerDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var initialColor = new CellColor(0x44, 0x72, 0xC4);
-            var newColor = new CellColor(0xED, 0x7D, 0x31);
+            var initialColor = WorkbookTheme.Office.ResolveColor(WorkbookThemeColorSlot.Accent1);
+            var newColor = WorkbookTheme.Office.ResolveColor(WorkbookThemeColorSlot.Accent2);
             var dialog = new ColorPickerDialog(initialColor);
             try
             {
@@ -107,8 +107,8 @@ public sealed partial class ColorPickerDialogTests
     {
         StaTestRunner.Run(() =>
         {
-            var initialColor = new CellColor(0x44, 0x72, 0xC4);
-            var paletteColor = new CellColor(0xED, 0x7D, 0x31);
+            var initialColor = WorkbookTheme.Office.ResolveColor(WorkbookThemeColorSlot.Accent1);
+            var paletteColor = WorkbookTheme.Office.ResolveColor(WorkbookThemeColorSlot.Accent2);
             var dialog = new ColorPickerDialog(initialColor);
             try
             {
@@ -122,7 +122,7 @@ public sealed partial class ColorPickerDialogTests
                 initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
                 paletteButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
 
-                hex.Text = "#ED7D31";
+                hex.Text = $"#{paletteColor.R:X2}{paletteColor.G:X2}{paletteColor.B:X2}";
 
                 initialButton.BorderThickness.Should().Be(new System.Windows.Thickness(1));
                 paletteButton.BorderThickness.Should().Be(new System.Windows.Thickness(2));

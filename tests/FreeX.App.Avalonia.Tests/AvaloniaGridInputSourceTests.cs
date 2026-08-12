@@ -390,8 +390,10 @@ public sealed class AvaloniaGridInputSourceTests
         // formula bar's overlay host), instead of returning the bare TextBox directly.
         source.Should().Contain("private Control CreateInlineCellEditor(");
         source.Should().Contain("AutomationProperties.SetAutomationId(editor, \"WorksheetInlineCellEditor\");");
+        source.Should().Contain("() => FocusInlineCellEditor(address, editor)");
+        source.Should().Contain("_pendingInlineCellCaretIndex ?? _inlineCellEditSelectionStart ?? textLength");
         source.Should().Contain("editor.Focus();");
-        source.Should().Contain("editor.CaretIndex = caret;");
+        source.Should().Contain("editor.CaretIndex = selectionEnd;");
         source.Should().Contain("new FormattedText(");
         source.Should().Contain("BeginInlineCellEdit(address, editText, editText.Length);");
     }

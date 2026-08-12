@@ -499,7 +499,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
         script.Should().Contain("AutomationProperties.SetAutomationId(dialog, `\"WorkbookStatisticsDialog`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(okButton, `\"WorkbookStatisticsOkButton`\");");
-        script.Should().Contain("AutomationProperties.SetAutomationId(statisticsBlock, `\"WorkbookStatisticsSummary`\");");
+        script.Should().Contain("FreeXAutomationIdCatalog.WorkbookStatisticsSummary");
         script.Should().Contain("private static string FormatWorkbookStatistics(WorkbookStatistics statistics)");
         script.Should().Contain("WorkbookStatisticsFormatter.Format(statistics)");
         script.Should().Contain("toolbar_format_painter_button=");
@@ -690,7 +690,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private sealed record ReplaceDialogResult(");
         script.Should().Contain("ReplaceDialogAction Action,");
         script.Should().Contain("StyleDiff? ReplacementFormat);");
-        script.Should().Contain("private sealed record FindOptionsControls(");
+        script.Should().Contain("internal sealed record FindOptionsControls(");
         script.Should().Contain("`\"ReplaceButton`\"");
         script.Should().Contain("CreateFindOptionsControls(`\"Replace`\", defaultLookInIndex: 1)");
         script.Should().Contain("CreateFindReplaceFormatButton(`\"FindChooseFormatFromCellButton`\", `\"Choose From Cell`\")");
@@ -1426,6 +1426,15 @@ public sealed class MacOsAppReadinessPreflightTests
                       test "$format_cells_style_roundtrip_count" -ge 2
                       echo "format_cells_style_roundtrip=true"
                       echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
+                      packaged_product_probe_home="$RUNNER_TEMP/freex-$runtime-packaged-product-home"
+                      packaged_product_launch_report="$RUNNER_TEMP/freex-$runtime-packaged-product-launch.txt"
+                      bash tools/Run-PackagedProductLaunchProbe.sh \
+                        --executable "$unzip_root/FreeX.app/Contents/MacOS/FreeX" \
+                        --readiness-root "$packaged_product_probe_home" \
+                        --report "$packaged_product_launch_report"
+                      grep -Fqx "packaged_product_launch_status=passed" "$packaged_product_launch_report"
+                      grep -Fqx "packaged_product_executable=$unzip_root/FreeX.app/Contents/MacOS/FreeX" "$packaged_product_launch_report"
+                      cat "$packaged_product_launch_report" >> "$evidence_path"
                       launchservices_smoke_timeout_seconds=60
                       launchservices_cleanup_timeout_seconds=10
                       append_launchservices_failure_diagnostics() {"{"}
@@ -1861,41 +1870,93 @@ public sealed class MacOsAppReadinessPreflightTests
             """
             namespace FreeX.App.Avalonia;
 
-            internal static class Program
+            internal static partial class Program
             {
-                public static int Main(string[] args)
+                public static int Main(string[] args) =>
+                    RunApplication(args, diagnosticsDirectory: null, externalStartupCoordinator: null);
+
+                private static int RunApplication(
+                    string[] startupArguments,
+                    string? diagnosticsDirectory,
+                    Action<MainWindow, LocalAppDiagnostics?>? externalStartupCoordinator)
                 {
-                    var startupArguments = args;
-                    var diagnostics = LocalAppDiagnostics.Create(
-                        AppHelpInfo.GetVersionText(typeof(Program).Assembly),
-                        diagnosticsDirectory: null);
-                    return SisterAvaloniaApplicationStartupRunner.Run(
+                    LocalAppDiagnostics? diagnostics = null;
+                    return SisterAvaloniaProgramRunner.Run(
                         startupArguments,
-                        new SisterAvaloniaApplicationStartupSpec(
-                            StartApplication: _ => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments),
-                            RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers(),
-                            RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source))
+                        new SisterAvaloniaProgramSpec(
+                            FreeXApplicationStartupDescriptor.ProductIdentity,
+                            SisterAvaloniaLaunchPreparation.Continue,
+                            arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments))
                     {
+                        CreateDiagnostics = () =>
+                        {
+                            diagnostics = LocalAppDiagnostics.Create(
+                                AppHelpInfo.GetVersionText(typeof(Program).Assembly),
+                                diagnosticsDirectory);
+                            return new SisterAvaloniaProgramDiagnostics(
+                                () => diagnostics.RegisterCrashHandlers(),
+                                (exception, source) => diagnostics.RecordCrash(exception, source));
+                        },
                         BeforeRun = () =>
                         {
-                            diagnostics.RecordEvent("app_start");
+                            var activeDiagnostics = diagnostics!;
+                            activeDiagnostics.RecordEvent("app_start");
                             App.StartupArguments = startupArguments;
-                            App.ExternalStartupCoordinator = null;
-                            App.Diagnostics = diagnostics;
+                            App.ExternalStartupCoordinator = externalStartupCoordinator;
+                            App.Diagnostics = activeDiagnostics;
                         },
-                        AfterRun = _ => diagnostics.RecordEvent("app_exit"),
+                        AfterRun = _ => diagnostics!.RecordEvent("app_exit"),
                         CompletedExitCode = 0
                     });
                 }
+            }
+            """);
 
-                internal static int RunToolHost(
+        WriteFile(
+            root,
+            "tools/FreeX.Validation.Avalonia/RendererHost/Program.ValidationHost.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal static partial class Program
+            {
+                internal static int RunValidationToolHost(
                     IReadOnlyList<string> startupArguments,
                     string? diagnosticsDirectory,
-                    Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator)
+                    Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator) =>
+                    RunApplication(
+                        startupArguments.ToArray(),
+                        diagnosticsDirectory,
+                        (window, diagnostics) =>
+                            externalStartupCoordinator(window.CreateRendererValidationAccess(), diagnostics));
+            }
+            """);
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.Shell.Avalonia/SisterAvaloniaApplicationStartupRunner.cs",
+            """
+            namespace Free.Shared.Shell.Avalonia;
+
+            internal static class SisterAvaloniaApplicationStartupRunner
+            {
+                internal static int Run(string[] startupArguments, dynamic spec)
                 {
-                    App.StartupArguments = startupArguments;
-                    App.ExternalStartupCoordinator = externalStartupCoordinator;
-                    return 0;
+                    spec.RegisterUnhandledExceptionHandlers();
+                    spec.RegisterRibbonCommandFaultHandler((Exception exception, string commandId) =>
+                        spec.RecordCrash(exception, RibbonCommandCrashSourcePrefix + commandId));
+                    spec.BeforeRun?.Invoke();
+                    try
+                    {
+                        var lifetimeExitCode = spec.StartApplication(startupArguments);
+                        spec.AfterRun?.Invoke(lifetimeExitCode);
+                        return lifetimeExitCode;
+                    }
+                    catch (Exception ex)
+                    {
+                        spec.RecordCrash(ex, spec.StartupCrashSource);
+                        throw;
+                    }
                 }
             }
             """);
@@ -1936,14 +1997,21 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public static int Main(string[] args)
                 {
-                    if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode))
-                        return packagingExitCode;
-
-                    MacOsLaunchSmokeOptions.TryParse(args, out var options, out var startupArguments, out var error);
-                    return FreeX.App.Avalonia.Program.RunToolHost(
-                        startupArguments,
-                        options.DiagnosticsDirectory,
-                        (window, diagnostics) => MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics));
+                    return ValidationHostCommandRouteExecutor.Run(
+                        args,
+                        Console.Error,
+                        $"Expected {MacOsLaunchSmokeOptions.Argument}.",
+                        ValidationHostCommandRouteExecutor.Immediate(
+                            PackagingSmokeCommand.TryRun,
+                            Console.Out,
+                            Console.Error),
+                        ValidationHostCommandRouteExecutor.Parsed<MacOsLaunchSmokeOptions>(
+                            MacOsLaunchSmokeOptions.TryParse,
+                            (options, startupArguments) =>
+                                FreeX.App.Avalonia.Program.RunValidationToolHost(
+                                    startupArguments,
+                                    options.DiagnosticsDirectory,
+                                    (window, diagnostics) => MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics))));
                 }
             }
             """);

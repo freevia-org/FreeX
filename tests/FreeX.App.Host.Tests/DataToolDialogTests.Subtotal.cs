@@ -221,8 +221,9 @@ public sealed partial class DataToolDialogTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("SubtotalDialog.cs");
 
-        source.Should().Contain("FocusInvalidInput(ex.Message);");
-        source.Should().Contain("private void FocusInvalidInput(string message)");
+        source.Should().Contain("var presentation = SubtotalDialogInputParser.DescribeIssue(issue);");
+        source.Should().Contain("FocusInvalidInput(presentation.FocusTarget);");
+        source.Should().Contain("private void FocusInvalidInput(SubtotalDialogInputFocusTarget focusTarget)");
         source.Should().Contain("FocusFunctionChoice();");
         source.Should().Contain("private void FocusFunctionChoice()");
         source.Should().Contain("_functionBox.Focus();");
