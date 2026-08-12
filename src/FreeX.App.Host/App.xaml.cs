@@ -112,28 +112,10 @@ public partial class App : Application
         ConfigureServices(serviceCollection, optionsRuntimeSession);
         _services = serviceCollection.BuildServiceProvider();
 
-        // Headless cross-platform visual-parity capture: render each app surface to a PNG and exit,
-        // without launching the interactive app. Additive and isolated — only engaged by the
-        // --parity-capture <outDir> switch (used by the WPF<->Avalonia visual-parity runner).
-#if FREEX_PARITY_CAPTURE
-        if (ParityCapture.TryGetOutputDirectory(startupArgs) is { } parityOutDir)
-        {
-            try
-            {
-                ParityCapture.Run(
-                    parityOutDir,
-                    () => Services.GetRequiredService<MainWindow>(),
-                    ParityCapture.TryGetTargetSurfaceId(startupArgs));
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Parity capture failed");
-            }
-
-            Shutdown();
+        var externalStartupHandled = false;
+        TryRunExternalStartup(startupArgs, ref externalStartupHandled);
+        if (externalStartupHandled)
             return;
-        }
-#endif
 
         var crashAnalytics = Services.GetRequiredService<ICrashAnalytics>();
         var crashAnalyticsOptions = Services.GetRequiredService<AppCrashAnalyticsOptions>();

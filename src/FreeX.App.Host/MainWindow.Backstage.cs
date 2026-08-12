@@ -514,26 +514,6 @@ public partial class MainWindow
         AdoptWorkbookAsInitial(WorkbookFactory.CreateFromAppOptions(_options, workbookName));
     }
 
-    /// <summary>
-    /// Replaces the live workbook with <paramref name="wb"/> and rebinds the grid/title/tabs to it, mirroring
-    /// the File &gt; New path. Used by the <c>--parity-capture</c> mode to render a fixed demo workbook so the
-    /// WPF and Avalonia <c>grid.demo</c> surfaces compare identical content (see ParityDemoWorkbookFactory).
-    /// </summary>
-    private bool _parityCaptureWorkbookPrepared;
-
-    internal void AdoptWorkbookForParityCapture(Workbook wb)
-    {
-        ArgumentNullException.ThrowIfNull(wb);
-        if (wb.Sheets.Count == 0)
-            throw new ArgumentException("Parity capture requires a workbook with a worksheet.", nameof(wb));
-        if (wb.Sheets.Any(sheet => sheet.Id.Value == Guid.Empty))
-            throw new ArgumentException("Parity capture requires non-empty sheet identities.", nameof(wb));
-
-        _parityCaptureWorkbookPrepared = true;
-        CloseFindReplaceDialogIfOpen();
-        AdoptWorkbookAsInitial(wb);
-    }
-
     private void AdoptWorkbookAsInitial(Workbook wb)
     {
         // When "New Window" siblings still view the current document, leave their context

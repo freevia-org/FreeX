@@ -22,19 +22,17 @@ public partial class MainWindow
             // replacing it. The first window keeps its CreateNewWorkbook() startup behavior.
             AdoptSharedWorkbook();
         }
-        else if (!_parityCaptureWorkbookPrepared)
+        else
         {
-            CreateNewWorkbook();
+            var shouldCreateInitialWorkbook = true;
+            AdjustExternalInitialWorkbookCreation(ref shouldCreateInitialWorkbook);
+            if (shouldCreateInitialWorkbook)
+                CreateNewWorkbook();
         }
         UpdateViewport();
         RefreshSheetTabs();
         UpdateTitleBar();
         RegisterWithWindowRegistry();
-#if FREEX_PARITY_CAPTURE
-        TryStartScreenshotTour();
-        TryStartSheetTabVisualTour();
-        TryStartSheetTabWorkflowsTour();
-        TryStartAccentBarVisualTour();
-#endif
+        StartExternalLoadedWorkflows();
     }
 }

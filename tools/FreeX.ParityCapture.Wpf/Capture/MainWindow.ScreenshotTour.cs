@@ -8541,7 +8541,7 @@ public partial class MainWindow
             _reviewCommentsWindow.Close();
             _reviewCommentsWindow = null;
 
-            ReviewShowNotesBtn_Click(this, new RoutedEventArgs());
+            ShowNotesListForParityCapture();
             if (_reviewNotesWindow is null)
                 throw new InvalidOperationException("Insert objects/links/text tour could not open the notes list surface.");
 

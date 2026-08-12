@@ -19,9 +19,6 @@ namespace FreeX.App.Host;
 public partial class MainWindow
 {
     private CommentListWindow? _reviewCommentsWindow;
-#if FREEX_PARITY_CAPTURE
-    private CommentListWindow? _reviewNotesWindow;
-#endif
 
     private void SpellCheckBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -405,9 +402,7 @@ public partial class MainWindow
             return;
 
         _reviewCommentsWindow?.Refresh(CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments));
-#if FREEX_PARITY_CAPTURE
-        _reviewNotesWindow?.Refresh(CommentListWindow.CreateNoteItems(sheet.Comments));
-#endif
+        RefreshExternalReviewWindows(sheet);
     }
 
     private void ProtectSheetBtn_Click(object sender, RoutedEventArgs e)

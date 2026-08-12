@@ -3,7 +3,6 @@
     <AssemblyName>FreeX.ParityCapture.Wpf</AssemblyName>
     <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeX.ico</ApplicationIcon>
     <ApplicationManifest>..\..\src\FreeX.App.Host\app.manifest</ApplicationManifest>
-    <DefineConstants>$(DefineConstants);FREEX_PARITY_CAPTURE</DefineConstants>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultPageItems>false</EnableDefaultPageItems>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -19,6 +18,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      The capture tours are large MainWindow partials that intentionally exercise private renderer
+      state. Linking the WPF renderer remains narrower than exposing that state through hundreds of
+      production accessors; capture startup and state still live exclusively under this tool.
+    -->
     <Compile Include="..\..\src\FreeX.App.Host\**\*.cs"
              Exclude="..\..\src\FreeX.App.Host\bin\**;..\..\src\FreeX.App.Host\obj\**"
              LinkBase="Renderer" />
