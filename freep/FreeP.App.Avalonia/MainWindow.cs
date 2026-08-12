@@ -66,7 +66,7 @@ namespace FreeP.App.Avalonia;
 ///
 /// Deferred to later Avalonia parity: transitions, animations, and full platform dialogs.
 /// </summary>
-public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
+public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostView, IPresentationMediaPaneHostView
 {
     private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
 
@@ -156,7 +156,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
     private CheckBox _altTextDecorativeCheck = null!;
     private Button _altTextApplyButton = null!;
     private Button _altTextCloseButton = null!;
-    private bool _altTextPaneRefreshing;
+    private readonly PresentationAltTextPaneHostCoordinator _altTextPaneHostCoordinator;
     private Border _accessibilityCheckerPaneHost = null!;
     private TextBlock _accessibilityCheckerPaneHeading = null!;
     private TextBlock _accessibilityCheckerPaneMessage = null!;
@@ -525,8 +525,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         return true;
     }
-    internal bool IsAltTextPaneVisible =>
-        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.AltText);
+    internal bool IsAltTextPaneVisible => _altTextPaneHostCoordinator.IsPaneVisible;
     internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
     internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
     internal string AltTextPaneTitleText => _altTextTitleBox?.Text ?? string.Empty;
@@ -868,6 +867,10 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 UpdateAfterCommentMutation: UpdateStatus,
                 UpdateAfterCommentNavigation: UpdateStatus,
                 UpdateAfterProofingCorrection: UpdateStatus));
+        _altTextPaneHostCoordinator = new(
+            _reviewWorkflowSession,
+            _workareaSession.Panes,
+            this);
         _mediaPaneHostCoordinator = new(
             new PresentationMediaPaneSession(
                 () => Editor,
@@ -5686,11 +5689,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
     }
 
     private void RefreshAltTextRequestPlan()
-    {
-        _reviewWorkflowSession.RefreshAltTextPlans(null, null, null);
-        if (IsAltTextPaneVisible && LastAltTextPanePlan is not null)
-            RenderAltTextPane(LastAltTextPanePlan);
-    }
+        => _altTextPaneHostCoordinator.RefreshSelection();
 
     internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane()
     {
@@ -5914,23 +5913,9 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         return true;
     }
 
-    internal void ShowAltTextPane()
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.AltText);
-        RefreshAltTextPlans(proposedDescription: null, proposedTitle: null, isDecorative: null);
-        if (LastAltTextPanePlan is not null)
-            RenderAltTextPane(LastAltTextPanePlan);
-        _altTextPaneHost.IsVisible = true;
-        RefreshPaneAccessibilityMetadata();
-    }
+    internal void ShowAltTextPane() => _altTextPaneHostCoordinator.Show();
 
-    internal void HideAltTextPane()
-    {
-        _workareaSession.Panes.Hide(PresentationWorkareaPane.AltText);
-        if (_altTextPaneHost is not null)
-            _altTextPaneHost.IsVisible = false;
-        RefreshPaneAccessibilityMetadata();
-    }
+    internal void HideAltTextPane() => _altTextPaneHostCoordinator.Hide();
 
     internal PresentationMediaCaptionAuthoringPanePlan ShowMediaCaptionPane() =>
         _mediaPaneHostCoordinator.Show();
@@ -6236,99 +6221,54 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         => _reviewWorkflowSession.ApplyReadingOrderMove(intent);
 
     internal void SetAltTextPaneInput(string title, string description, bool isDecorative)
+        => _altTextPaneHostCoordinator.SetInput(new(title, description, isDecorative));
+
+    internal PresentationAltTextMutationPlan ApplyAltTextPane() =>
+        _altTextPaneHostCoordinator.Apply();
+
+    private void RefreshVisibleAltTextPaneFromFields() => _altTextPaneHostCoordinator.Refresh();
+
+    private void RenderAltTextPaneIfVisible(PresentationAltTextPanePlan plan) =>
+        _altTextPaneHostCoordinator.RenderIfVisible(plan);
+
+    bool IPresentationAltTextPaneHostView.IsPaneVisible => _altTextPaneHost?.IsVisible == true;
+
+    PresentationAltTextPaneHostSnapshot IPresentationAltTextPaneHostView.CaptureInput() =>
+        new(_altTextTitleBox.Text, _altTextDescriptionBox.Text, _altTextDecorativeCheck.IsChecked == true);
+
+    void IPresentationAltTextPaneHostView.SetPaneVisible(bool visible) =>
+        _altTextPaneHost.IsVisible = visible;
+
+    void IPresentationAltTextPaneHostView.SetInput(PresentationAltTextPaneHostSnapshot input)
     {
-        if (!IsAltTextPaneVisible)
-            ShowAltTextPane();
-
-        _altTextPaneRefreshing = true;
-        try
-        {
-            _altTextTitleBox.Text = title;
-            _altTextDescriptionBox.Text = description;
-            _altTextDecorativeCheck.IsChecked = isDecorative;
-        }
-        finally
-        {
-            _altTextPaneRefreshing = false;
-        }
-
-        RefreshVisibleAltTextPaneFromFields();
+        _altTextTitleBox.Text = input.Title;
+        _altTextDescriptionBox.Text = input.Description;
+        _altTextDecorativeCheck.IsChecked = input.IsDecorative;
     }
 
-    internal PresentationAltTextMutationPlan ApplyAltTextPane()
+    void IPresentationAltTextPaneHostView.Render(PresentationAltTextPaneHostRenderPlan plan)
     {
-        var plan = ApplySelectedShapeAlternativeText(
-            _altTextDescriptionBox.Text,
-            _altTextTitleBox.Text,
-            _altTextDecorativeCheck.IsChecked == true);
-        if (LastAltTextPanePlan is not null)
-            RenderAltTextPane(LastAltTextPanePlan);
-
-        return plan;
+        _altTextPaneHeading.Text = plan.Heading;
+        _altTextPaneMessage.Text = plan.Message;
+        _altTextTitleLabel.Text = plan.Title.Label;
+        _altTextDescriptionLabel.Text = plan.Description.Label;
+        SetTextIfChanged(_altTextTitleBox, plan.Title.Value);
+        SetTextIfChanged(_altTextDescriptionBox, plan.Description.Value);
+        _altTextTitleBox.PlaceholderText = plan.Title.Placeholder;
+        _altTextDescriptionBox.PlaceholderText = plan.Description.Placeholder;
+        _altTextTitleBox.IsEnabled = plan.Title.IsEnabled;
+        _altTextDescriptionBox.IsEnabled = plan.Description.IsEnabled;
+        _altTextDecorativeCheck.Content = plan.DecorativeAction.Label;
+        _altTextDecorativeCheck.IsEnabled = plan.DecorativeAction.IsEnabled;
+        _altTextDecorativeCheck.IsChecked = plan.IsDecorative;
+        _altTextApplyButton.Content = plan.ApplyAction.Label;
+        _altTextApplyButton.IsEnabled = plan.ApplyAction.IsEnabled;
+        _altTextCloseButton.Content = plan.CloseAction.Label;
+        _altTextCloseButton.IsEnabled = plan.CloseAction.IsEnabled;
     }
 
-    private void RefreshAltTextPlans(
-        string? proposedDescription,
-        string? proposedTitle,
-        bool? isDecorative)
-        => _reviewWorkflowSession.RefreshAltTextPlans(proposedDescription, proposedTitle, isDecorative);
-
-    private void RefreshVisibleAltTextPaneFromFields()
-    {
-        if (_altTextPaneRefreshing || !IsAltTextPaneVisible)
-            return;
-
-        RefreshAltTextPlans(
-            _altTextDescriptionBox.Text,
-            _altTextTitleBox.Text,
-            _altTextDecorativeCheck.IsChecked == true);
-        if (LastAltTextPanePlan is not null)
-            RenderAltTextPane(LastAltTextPanePlan);
-    }
-
-    private void RenderAltTextPaneIfVisible(PresentationAltTextPanePlan plan)
-    {
-        if (IsAltTextPaneVisible)
-            RenderAltTextPane(plan);
-    }
-
-    private void RenderAltTextPane(PresentationAltTextPanePlan plan)
-    {
-        _altTextPaneRefreshing = true;
-        try
-        {
-            var applyAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneApplyCommandId);
-            var decorativeAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneDecorativeCommandId);
-            var closeAction = GetAltTextPaneAction(plan, PresentationReviewWorkflowPlanner.AltTextPaneCloseCommandId);
-
-            _altTextPaneHeading.Text = plan.Heading;
-            _altTextPaneMessage.Text = plan.Message;
-            _altTextTitleLabel.Text = plan.Title.Label;
-            _altTextDescriptionLabel.Text = plan.Description.Label;
-            SetTextIfChanged(_altTextTitleBox, plan.Title.Value);
-            SetTextIfChanged(_altTextDescriptionBox, plan.Description.Value);
-            _altTextTitleBox.PlaceholderText = plan.Title.Placeholder;
-            _altTextDescriptionBox.PlaceholderText = plan.Description.Placeholder;
-            _altTextTitleBox.IsEnabled = plan.Title.IsEnabled;
-            _altTextDescriptionBox.IsEnabled = plan.Description.IsEnabled;
-            _altTextDecorativeCheck.Content = decorativeAction.Label;
-            _altTextDecorativeCheck.IsEnabled = decorativeAction.IsEnabled;
-            _altTextDecorativeCheck.IsChecked = plan.IsDecorative;
-            _altTextApplyButton.Content = applyAction.Label;
-            _altTextApplyButton.IsEnabled = applyAction.IsEnabled;
-            _altTextCloseButton.Content = closeAction.Label;
-            _altTextCloseButton.IsEnabled = closeAction.IsEnabled;
-        }
-        finally
-        {
-            _altTextPaneRefreshing = false;
-        }
-    }
-
-    private static PresentationReviewWorkflowActionPlan GetAltTextPaneAction(
-        PresentationAltTextPanePlan plan,
-        string commandId)
-        => plan.Actions.Single(action => action.CommandId == commandId);
+    void IPresentationAltTextPaneHostView.RefreshAccessibilityMetadata() =>
+        RefreshPaneAccessibilityMetadata();
 
     private void RenderReadingOrderPane(PresentationReadingOrderPlan plan)
     {
