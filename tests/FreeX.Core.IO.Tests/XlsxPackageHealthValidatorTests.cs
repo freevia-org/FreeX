@@ -60,6 +60,16 @@ public sealed class XlsxPackageHealthValidatorTests
         "application/vnd.openxmlformats-officedocument.spreadsheetml.table+xml";
 
     [Fact]
+    public void Validator_IsOwnedByDiagnosticsAssembly()
+    {
+        typeof(XlsxPackageHealthValidator).Assembly.GetName().Name
+            .Should().Be("FreeX.XlsxPackageDiagnostics");
+        typeof(XlsxFileAdapter).Assembly
+            .GetType("FreeX.Core.IO.XlsxPackageHealthValidator")
+            .Should().BeNull();
+    }
+
+    [Fact]
     public void Validate_AcceptsMinimalWorkbookPackage()
     {
         using var package = CreateMinimalWorkbookPackage();

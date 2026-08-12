@@ -2,8 +2,10 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Xml;
 using System.Xml.Linq;
+using Free.Shared.Opc;
+using FreeX.Core.IO;
 
-namespace FreeX.Core.IO;
+namespace FreeX.XlsxPackageDiagnostics;
 
 public static class XlsxPackageHealthValidator
 {
@@ -2595,7 +2597,7 @@ public static class XlsxPackageHealthValidator
 
     private static XDocument LoadPackageXml(ZipArchiveEntry entry)
     {
-        return XlsxPackageXmlEditor.LoadXml(entry);
+        return OpcXml.LoadXml(entry);
     }
 
     private sealed record SharedStringCellReference(
