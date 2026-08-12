@@ -439,6 +439,7 @@ function Test-AvaloniaProject {
 
     $allowedProjectReferences = @(
         "Free.Shared.Drawing",
+        "Free.Shared.Localization",
         "Free.Shared.Pdf",
         "Free.Shared.Pdf.Skia",
         "Free.Shared.Ribbon",
