@@ -56,6 +56,7 @@ using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.Charts;

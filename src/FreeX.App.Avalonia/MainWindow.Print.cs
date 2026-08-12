@@ -10,6 +10,7 @@ using Avalonia.Platform.Storage;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Services;
 using FreeX.Core.Model;
 

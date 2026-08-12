@@ -93,7 +93,7 @@ public sealed class FormulaReferenceEditingControllerTests
             current,
             target,
             extendSelection: false,
-            new FormulaRangeEditorSnapshot("plain", 5, 0, current, false, "Sheet1"),
+            new FormulaRangeEditorSnapshot("=SUM(", 5, 0, current, false, "Sheet1"),
             (_, _) => false,
             _ => throw new InvalidOperationException("An invalid append must not edit formula text."),
             afterEditorEdit: null,

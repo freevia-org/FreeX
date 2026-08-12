@@ -93,8 +93,8 @@ public sealed class RemainingDialogInputPlannerTests
     [Fact]
     public void AvaloniaDimensionDialog_DelegatesValidationToPortablePlanner()
     {
-        var source = File.ReadAllText(RepositoryFileLocator.Find(
-            "src", "FreeX.App.Avalonia", "MainWindow.RowColumnVisibility.cs"));
+        var avaloniaRoot = RepositoryFileLocator.FindDirectory("src", "FreeX.App.Avalonia");
+        var source = File.ReadAllText(Path.Combine(avaloniaRoot, "MainWindow.RowColumnVisibility.cs"));
 
         source.Should().Contain("WorksheetDimensionDialogPlanner.TryCreateResult(");
         source.Should().Contain("WorksheetDimensionKind.RowHeight");
