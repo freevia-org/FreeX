@@ -79,6 +79,29 @@ public sealed class FreeXBackstageInfoPanePlannerTests
     }
 
     [Fact]
+    public void Build_AvaloniaLivePaneOwnsItsExactRendererLabelsAndValues()
+    {
+        var plan = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.AvaloniaLivePane,
+            Request(unsavedChangesNote: "Unsaved changes"));
+
+        plan.Actions.Should().BeEmpty();
+        plan.ProtectionSectionHeaderKey.Should().Be("Backstage_LiveInfo_ProtectionSectionHeader");
+        plan.StatisticsSectionHeaderKey.Should().Be("Backstage_LiveInfo_StatisticsSectionHeader");
+        plan.Details.Select(detail => (detail.Id, detail.LabelKey)).Should().Equal(
+            (FreeXBackstageInfoDetailId.WorkbookName, "Backstage_LiveInfo_WorkbookLabel"),
+            (FreeXBackstageInfoDetailId.FilePath, "Backstage_LiveInfo_LocationLabel"),
+            (FreeXBackstageInfoDetailId.Format, "Backstage_LiveInfo_FormatLabel"),
+            (FreeXBackstageInfoDetailId.FileSize, "Backstage_LiveInfo_SizeLabel"),
+            (FreeXBackstageInfoDetailId.LastModified, "Backstage_LiveInfo_LastModifiedLabel"),
+            (FreeXBackstageInfoDetailId.SheetCount, "Backstage_LiveInfo_SheetsLabel"));
+        TextFor(plan, FreeXBackstageInfoDetailId.WorkbookName).Should().Be("Budget.xlsx");
+        plan.WorkbookProtectionSummary.Text.Should().Be("Workbook protected");
+        plan.ActiveSheetProtectionSummary.Text.Should().Be("Sheet unprotected");
+        plan.StatisticsSummary.Text.Should().Be("3 sheets");
+    }
+
+    [Fact]
     public void Build_ParityCaptureKeepsWindowsPropertySubset()
     {
         var plan = FreeXBackstageInfoPanePlanner.Build(

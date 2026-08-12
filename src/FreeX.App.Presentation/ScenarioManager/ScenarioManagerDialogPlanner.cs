@@ -73,6 +73,15 @@ public sealed record ScenarioManagerDialogValidationFailure(
 
 public static class ScenarioManagerDialogPlanner
 {
+    public static LocalizedTextDescriptor Title { get; } =
+        LocalizedTextDescriptor.Resource("MainWindowMessage_ScenarioManagerTitle");
+
+    public static LocalizedTextDescriptor MergeDialogTitle { get; } =
+        LocalizedTextDescriptor.Resource("ScenarioManager_MergeScenariosDialogTitle");
+
+    public static LocalizedTextDescriptor MergeOpenFailedMessage { get; } =
+        LocalizedTextDescriptor.Resource("ScenarioManager_MergeOpenFailedMessage");
+
     public static LocalizedTextDescriptor? DescribeValidationError(
         ScenarioManagerDialogValidationError error) =>
         error switch

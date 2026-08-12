@@ -440,7 +440,9 @@ public partial class GridView
             }
         };
         AutomationProperties.SetAutomationId(_commentPreviewBorder, "GridCommentInWindowPopup");
-        AutomationProperties.SetName(_commentPreviewBorder, "Comment");
+        AutomationProperties.SetName(
+            _commentPreviewBorder,
+            UiText.Get("ThreadedComment_CommentAutomationName"));
 
         if (CommentOverlayHost is not null)
             CommentOverlayHost.Children.Add(_commentPreviewBorder);
@@ -565,7 +567,7 @@ public partial class GridView
                     }
                 };
                 AutomationProperties.SetAutomationId(border, $"GridPinnedNoteBox_{row}_{col}");
-                AutomationProperties.SetName(border, "Pinned Note");
+                AutomationProperties.SetName(border, UiText.Get("GridInlineComment_PinnedNoteAutomationName"));
                 host.Children.Add(border);
                 _pinnedNoteBorders[(row, col)] = border;
             }
@@ -622,31 +624,47 @@ public partial class GridView
     private void BuildNoteInlineEditor(string initialText)
     {
         var panel = ResetCommentPanel();
-        panel.Children.Add(CreateHeaderTextBlock($"Note - {_activeCommentCellReference}"));
+        panel.Children.Add(CreateHeaderTextBlock(UiText.Format(
+            "GridInlineComment_NoteTitleFormat",
+            _activeCommentCellReference)));
 
         _noteEditBox = CreateCommentTextBox(initialText, minLines: 4, maxLines: 7);
         AutomationProperties.SetAutomationId(_noteEditBox, "GridNoteInlineTextBox");
-        AutomationProperties.SetName(_noteEditBox, "Note");
+        AutomationProperties.SetName(_noteEditBox, UiText.Get("GridInlineComment_NoteAutomationName"));
         _noteEditBox.PreviewKeyDown += NoteEditBox_PreviewKeyDown;
         panel.Children.Add(_noteEditBox);
 
         AddInlineErrorBlock(panel);
-        panel.Children.Add(CreateEditorButtonRow(SubmitNoteInlineEdit, CancelCommentInlineEdit, saveText: "Save"));
+        panel.Children.Add(CreateEditorButtonRow(
+            SubmitNoteInlineEdit,
+            CancelCommentInlineEdit,
+            UiText.Get("GridInlineComment_SaveButton")));
     }
 
     private void BuildThreadedCommentInlineEditor(ThreadedComment? existing)
     {
         var panel = ResetCommentPanel();
-        panel.Children.Add(CreateHeaderTextBlock($"Comment - {_activeCommentCellReference}"));
+        panel.Children.Add(CreateHeaderTextBlock(UiText.Format(
+            "GridInlineComment_CommentTitleFormat",
+            _activeCommentCellReference)));
 
         if (existing is not null)
             panel.Children.Add(CreateThreadedConversationViewer(existing));
 
         _threadedRootBox = CreateCommentTextBox(existing?.Text ?? "", minLines: 3, maxLines: 6);
         AutomationProperties.SetAutomationId(_threadedRootBox, "GridThreadedCommentRootBox");
-        AutomationProperties.SetName(_threadedRootBox, existing is null ? "Comment" : "Edit comment");
+        AutomationProperties.SetName(
+            _threadedRootBox,
+            UiText.Get(existing is null
+                ? "ThreadedComment_CommentAutomationName"
+                : "ThreadedComment_EditCommentAutomationName"));
         _threadedRootBox.PreviewKeyDown += ThreadedTextBox_PreviewKeyDown;
-        panel.Children.Add(CreateFieldLabel(existing is null ? "Comment" : "Edit comment", _threadedRootBox, topMargin: 0));
+        panel.Children.Add(CreateFieldLabel(
+            UiText.Get(existing is null
+                ? "GridInlineComment_CommentLabel"
+                : "GridInlineComment_EditCommentLabel"),
+            _threadedRootBox,
+            topMargin: 0));
         panel.Children.Add(_threadedRootBox);
 
         if (existing is not null)
@@ -656,24 +674,34 @@ public partial class GridView
 
             _threadedReplyBox = CreateCommentTextBox("", minLines: 2, maxLines: 4);
             AutomationProperties.SetAutomationId(_threadedReplyBox, "GridThreadedCommentReplyBox");
-            AutomationProperties.SetName(_threadedReplyBox, "Reply");
+            AutomationProperties.SetName(_threadedReplyBox, UiText.Get("ThreadedComment_ReplyAutomationName"));
             _threadedReplyBox.PreviewKeyDown += ThreadedTextBox_PreviewKeyDown;
-            panel.Children.Add(CreateFieldLabel("Reply", _threadedReplyBox, topMargin: 8));
+            panel.Children.Add(CreateFieldLabel(
+                UiText.Get("GridInlineComment_ReplyLabel"),
+                _threadedReplyBox,
+                topMargin: 8));
             panel.Children.Add(_threadedReplyBox);
         }
 
         _threadedResolveBox = new CheckBox
         {
-            Content = "Mark as resolved",
+            Content = UiText.Get("GridInlineComment_MarkAsResolved"),
             IsChecked = existing?.IsResolved ?? false,
             Margin = new Thickness(0, 6, 0, 0)
         };
         AutomationProperties.SetAutomationId(_threadedResolveBox, "GridThreadedCommentResolvedBox");
-        AutomationProperties.SetName(_threadedResolveBox, "Mark as resolved");
+        AutomationProperties.SetName(
+            _threadedResolveBox,
+            UiText.Get("ThreadedComment_MarkAsResolvedAutomationName"));
         panel.Children.Add(_threadedResolveBox);
 
         AddInlineErrorBlock(panel);
-        panel.Children.Add(CreateEditorButtonRow(SubmitThreadedCommentInlineEdit, CancelCommentInlineEdit, existing is null ? "Save" : "Apply"));
+        panel.Children.Add(CreateEditorButtonRow(
+            SubmitThreadedCommentInlineEdit,
+            CancelCommentInlineEdit,
+            UiText.Get(existing is null
+                ? "GridInlineComment_SaveButton"
+                : "GridInlineComment_ApplyButton")));
     }
 
     private StackPanel ResetCommentPanel()
@@ -753,13 +781,13 @@ public partial class GridView
 
         var cancelButton = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("GridInlineComment_CancelButton"),
             Width = 72,
             MinHeight = 24,
             Margin = new Thickness(0, 8, 0, 0)
         };
         AutomationProperties.SetAutomationId(cancelButton, "GridCommentInlineCancelButton");
-        AutomationProperties.SetName(cancelButton, "Cancel");
+        AutomationProperties.SetName(cancelButton, UiText.Get("GridInlineComment_CancelButton"));
         cancelButton.Click += (_, _) => cancel();
 
         var row = new StackPanel
@@ -794,7 +822,9 @@ public partial class GridView
         var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         _threadedReplySelector = new ComboBox { MinWidth = 180 };
         AutomationProperties.SetAutomationId(_threadedReplySelector, "GridThreadedCommentReplySelector");
-        AutomationProperties.SetName(_threadedReplySelector, "Reply to edit or delete");
+        AutomationProperties.SetName(
+            _threadedReplySelector,
+            UiText.Get("ThreadedComment_ReplyToEditOrDeleteAutomationName"));
         for (var i = 0; i < existing.Replies.Count; i++)
         {
             var descriptor = ThreadedCommentDialogPlanner.DescribeReply(
@@ -808,12 +838,17 @@ public partial class GridView
 
         _threadedReplySelector.SelectionChanged += (_, _) => PopulateSelectedReplyText(existing);
         _threadedReplySelector.SelectedIndex = 0;
-        panel.Children.Add(CreateFieldLabel("Reply to edit", _threadedReplySelector, topMargin: 0));
+        panel.Children.Add(CreateFieldLabel(
+            UiText.Get("GridInlineComment_ReplyToEditLabel"),
+            _threadedReplySelector,
+            topMargin: 0));
         panel.Children.Add(_threadedReplySelector);
 
         _threadedSelectedReplyBox = CreateCommentTextBox("", minLines: 2, maxLines: 4);
         AutomationProperties.SetAutomationId(_threadedSelectedReplyBox, "GridThreadedCommentSelectedReplyBox");
-        AutomationProperties.SetName(_threadedSelectedReplyBox, "Selected reply text");
+        AutomationProperties.SetName(
+            _threadedSelectedReplyBox,
+            UiText.Get("ThreadedComment_SelectedReplyTextAutomationName"));
         _threadedSelectedReplyBox.TextChanged += (_, _) => UpdateSelectedReplyActionState(existing);
         _threadedSelectedReplyBox.PreviewKeyDown += (_, e) =>
         {
@@ -830,29 +865,36 @@ public partial class GridView
                 e.Handled = true;
             }
         };
-        panel.Children.Add(CreateFieldLabel("Selected reply", _threadedSelectedReplyBox, topMargin: 8));
+        panel.Children.Add(CreateFieldLabel(
+            UiText.Get("GridInlineComment_SelectedReplyLabel"),
+            _threadedSelectedReplyBox,
+            topMargin: 8));
         panel.Children.Add(_threadedSelectedReplyBox);
 
         _threadedUpdateReplyButton = new Button
         {
-            Content = "Update reply",
+            Content = UiText.Get("GridInlineComment_UpdateReplyButton"),
             Width = 104,
             MinHeight = 24,
             Margin = new Thickness(0, 6, 6, 0)
         };
         AutomationProperties.SetAutomationId(_threadedUpdateReplyButton, "GridThreadedCommentUpdateReplyButton");
-        AutomationProperties.SetName(_threadedUpdateReplyButton, "Update selected reply");
+        AutomationProperties.SetName(
+            _threadedUpdateReplyButton,
+            UiText.Get("ThreadedComment_UpdateSelectedReplyAutomationName"));
         _threadedUpdateReplyButton.Click += (_, _) => SubmitThreadedCommentReplyEdit();
 
         _threadedDeleteReplyButton = new Button
         {
-            Content = "Delete reply",
+            Content = UiText.Get("GridInlineComment_DeleteReplyButton"),
             Width = 104,
             MinHeight = 24,
             Margin = new Thickness(0, 6, 0, 0)
         };
         AutomationProperties.SetAutomationId(_threadedDeleteReplyButton, "GridThreadedCommentDeleteReplyButton");
-        AutomationProperties.SetName(_threadedDeleteReplyButton, "Delete selected reply");
+        AutomationProperties.SetName(
+            _threadedDeleteReplyButton,
+            UiText.Get("ThreadedComment_DeleteSelectedReplyAutomationName"));
         _threadedDeleteReplyButton.Click += (_, _) => SubmitThreadedCommentReplyDelete();
 
         var actionRow = new StackPanel
@@ -937,7 +979,7 @@ public partial class GridView
         var text = (_noteEditBox?.Text ?? "").Trim();
         if (string.IsNullOrWhiteSpace(text))
         {
-            ShowInlineCommentError("Enter a note.");
+            ShowInlineCommentError(UiText.Get("GridInlineComment_EnterNoteMessage"));
             FocusCommentTextBox(_noteEditBox);
             return;
         }
@@ -952,7 +994,7 @@ public partial class GridView
 
     private void SubmitThreadedCommentInlineEdit()
     {
-        if (!TryCreateThreadedCommentEditResult(
+        if (!ThreadedCommentDialogPlanner.TryCreateResult(
                 _threadedEditExisting,
                 _threadedRootBox?.Text,
                 _threadedReplyBox?.Text,
@@ -960,7 +1002,7 @@ public partial class GridView
                 out var result,
                 out var error))
         {
-            ShowInlineCommentError(error ?? "Enter a comment.");
+            ShowInlineCommentError(ResolveThreadedCommentValidation(error));
             FocusCommentTextBox(_threadedEditExisting is null ? _threadedRootBox : _threadedReplyBox ?? _threadedRootBox);
             return;
         }
@@ -970,16 +1012,22 @@ public partial class GridView
 
     private void SubmitThreadedCommentReplyEdit()
     {
-        if (_threadedEditExisting is not { } existing ||
-            !TryCreateThreadedReplyEditResult(
+        if (_threadedEditExisting is not { } existing)
+        {
+            ShowInlineCommentError(UiText.Get("GridInlineComment_SelectReplyAndEnterReplyMessage"));
+            FocusCommentTextBox(_threadedSelectedReplyBox);
+            return;
+        }
+
+        if (!ThreadedCommentDialogPlanner.TryCreateReplyEditResult(
                 existing,
                 _threadedReplySelector?.SelectedIndex ?? -1,
                 _threadedSelectedReplyBox?.Text,
                 _threadedResolveBox?.IsChecked == true,
                 out var result,
-                out var error))
+                out _))
         {
-            ShowInlineCommentError("Select a reply and enter reply text.");
+            ShowInlineCommentError(UiText.Get("GridInlineComment_SelectReplyAndEnterReplyMessage"));
             FocusCommentTextBox(_threadedSelectedReplyBox);
             return;
         }
@@ -991,19 +1039,20 @@ public partial class GridView
     {
         if (_threadedEditExisting is not { } existing)
         {
-            ShowInlineCommentError("Select a reply.");
+            ShowInlineCommentError(ResolveThreadedCommentValidation(
+                ThreadedCommentDialogValidationError.SelectReply));
             FocusCommentTextBox(_threadedSelectedReplyBox);
             return;
         }
 
-        if (!TryCreateThreadedReplyDeleteResult(
+        if (!ThreadedCommentDialogPlanner.TryCreateReplyDeleteResult(
                 existing,
                 _threadedReplySelector?.SelectedIndex ?? -1,
                 _threadedResolveBox?.IsChecked == true,
                 out var result,
                 out var error))
         {
-            ShowInlineCommentError(error ?? "Select a reply.");
+            ShowInlineCommentError(ResolveThreadedCommentValidation(error));
             FocusCommentTextBox(_threadedSelectedReplyBox);
             return;
         }
@@ -1011,7 +1060,7 @@ public partial class GridView
         SubmitThreadedCommentInlineResult(result);
     }
 
-    private void SubmitThreadedCommentInlineResult(GridThreadedCommentEditResult result)
+    private void SubmitThreadedCommentInlineResult(ThreadedCommentDialogResult result)
     {
         if (_activeThreadedEditAddress is not { } address)
             return;
@@ -1025,7 +1074,7 @@ public partial class GridView
     {
         if (keepOpen)
         {
-            ShowInlineCommentError(errorMessage ?? "The comment could not be saved.");
+            ShowInlineCommentError(errorMessage ?? UiText.Get("GridInlineComment_SaveFailedMessage"));
             return;
         }
 
@@ -1069,7 +1118,7 @@ public partial class GridView
         var replyIndex = _threadedReplySelector?.SelectedIndex ?? -1;
         if (_threadedSelectedReplyBox is not null)
         {
-            _threadedSelectedReplyBox.Text = IsValidReplyIndex(existing, replyIndex)
+            _threadedSelectedReplyBox.Text = ThreadedCommentDialogPlanner.IsValidReplyIndex(existing, replyIndex)
                 ? existing.Replies[replyIndex].Text
                 : "";
         }
@@ -1079,110 +1128,21 @@ public partial class GridView
 
     private void UpdateSelectedReplyActionState(ThreadedComment existing)
     {
-        var hasSelection = IsValidReplyIndex(existing, _threadedReplySelector?.SelectedIndex ?? -1);
+        var hasSelection = ThreadedCommentDialogPlanner.IsValidReplyIndex(
+            existing,
+            _threadedReplySelector?.SelectedIndex ?? -1);
         if (_threadedDeleteReplyButton is not null)
             _threadedDeleteReplyButton.IsEnabled = hasSelection;
         if (_threadedUpdateReplyButton is not null)
             _threadedUpdateReplyButton.IsEnabled = hasSelection && !string.IsNullOrWhiteSpace(_threadedSelectedReplyBox?.Text);
     }
 
-    private static bool TryCreateThreadedCommentEditResult(
-        ThreadedComment? existing,
-        string? rootText,
-        string? replyText,
-        bool isResolved,
-        out GridThreadedCommentEditResult result,
-        out string? error)
-    {
-        var trimmedRoot = (rootText ?? "").Trim();
-        var trimmedReply = (replyText ?? "").Trim();
-        if (existing is null)
-        {
-            result = new GridThreadedCommentEditResult(
-                null,
-                string.IsNullOrWhiteSpace(trimmedRoot) ? null : trimmedRoot,
-                isResolved);
-            if (result.ReplyText is null)
-            {
-                error = "Enter a comment.";
-                return false;
-            }
-
-            error = null;
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(trimmedRoot))
-        {
-            result = default;
-            error = "Enter a comment.";
-            return false;
-        }
-
-        var rootEdit = !string.Equals(trimmedRoot, existing.Text, StringComparison.Ordinal)
-            ? trimmedRoot
-            : null;
-        result = new GridThreadedCommentEditResult(
-            rootEdit,
-            string.IsNullOrWhiteSpace(trimmedReply) ? null : trimmedReply,
-            isResolved);
-        error = null;
-        return true;
-    }
-
-    private static bool TryCreateThreadedReplyEditResult(
-        ThreadedComment existing,
-        int replyIndex,
-        string? replyText,
-        bool isResolved,
-        out GridThreadedCommentEditResult result,
-        out string? error)
-    {
-        result = new GridThreadedCommentEditResult(
-            null,
-            null,
-            isResolved,
-            GridThreadedCommentEditAction.EditReply,
-            replyIndex,
-            (replyText ?? "").Trim());
-        if (!IsValidReplyIndex(existing, replyIndex))
-        {
-            error = "Select a reply.";
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(result.ReplyEditText))
-        {
-            error = "Enter reply text.";
-            return false;
-        }
-
-        error = null;
-        return true;
-    }
-
-    private static bool TryCreateThreadedReplyDeleteResult(
-        ThreadedComment existing,
-        int replyIndex,
-        bool isResolved,
-        out GridThreadedCommentEditResult result,
-        out string? error)
-    {
-        result = new GridThreadedCommentEditResult(
-            null,
-            null,
-            isResolved,
-            GridThreadedCommentEditAction.DeleteReply,
-            replyIndex);
-        if (!IsValidReplyIndex(existing, replyIndex))
-        {
-            error = "Select a reply.";
-            return false;
-        }
-
-        error = null;
-        return true;
-    }
+    private static string ResolveThreadedCommentValidation(
+        ThreadedCommentDialogValidationError error) =>
+        (ThreadedCommentDialogPlanner.DescribeValidationError(error)
+         ?? ThreadedCommentDialogPlanner.DescribeValidationError(
+             ThreadedCommentDialogValidationError.EnterComment)!)
+        .Message.Resolve(UiText.Get, UiText.Format);
 
     private void RefreshCommentPreviewAfterViewportChanged()
     {
@@ -1217,7 +1177,10 @@ public partial class GridView
                 cell.CommentDisplay is { } display => GridCommentPreviewPlacementPlanner.EstimatePreviewSize(display),
             CommentPopupMode.ThreadedCommentEditor when _threadedEditExisting is not null => new Size(CommentEditorWidth, CommentEditorExistingDesiredHeight),
             CommentPopupMode.NoteEditor or CommentPopupMode.ThreadedCommentEditor => new Size(CommentEditorWidth, CommentEditorDesiredHeight),
-            _ => GridCommentPreviewPlacementPlanner.EstimatePreviewSize(new CellCommentDisplay(CellCommentDisplayKind.Note, "Note", " "))
+            _ => GridCommentPreviewPlacementPlanner.EstimatePreviewSize(new CellCommentDisplay(
+                CellCommentDisplayKind.Note,
+                UiText.Get("GridInlineComment_NoteAutomationName"),
+                " "))
         };
 
         ApplyCommentPopupPlacement(CalculateCommentPopupPlacement(cellRect, desiredSize));
@@ -1252,9 +1215,6 @@ public partial class GridView
 
     private bool IsInlineCommentEditorOpen() =>
         _commentPopupMode is CommentPopupMode.NoteEditor or CommentPopupMode.ThreadedCommentEditor;
-
-    private static bool IsValidReplyIndex(ThreadedComment comment, int replyIndex) =>
-        replyIndex >= 0 && replyIndex < comment.Replies.Count;
 
     internal static string FormatMessageHeading(string author, DateTimeOffset? createdAtUtc) =>
         ThreadedCommentDialogPlanner.FormatMessageHeading(

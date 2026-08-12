@@ -24820,7 +24820,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (!_session.IsFormatPainterActive)
         {
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
             return;
         }
 
@@ -24828,8 +24828,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ApplyFormatPainterToSelectedRange();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Format Painter failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FormatPainterFailed"));
             return;
         }
 
@@ -26334,9 +26334,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             OpenedSourcePath: _session.CurrentFilePath,
             IsOpening: _isOpening,
             HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
-            HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter" &&
+            HasFormatPainterButton: _formatPainterButton.Content?.ToString() == UiText.Get("MainWindow_TooltipTitle_FormatPainter") &&
                 string.Equals(AutomationProperties.GetAutomationId(_formatPainterButton), "HomeFormatPainterButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_formatPainterButton), "Copy formatting from the selection and apply it to another range.", StringComparison.Ordinal),
+                string.Equals(
+                    AutomationProperties.GetHelpText(_formatPainterButton),
+                    UiText.Get("MainWindow_TooltipDescription_CopyFormattingFromOnePlaceAndApplyItToAnother"),
+                    StringComparison.Ordinal),
             HasAutoSumButton: _autoSumButton.Content?.ToString() == "AutoSum" &&
                 _autoSumButton.Flyout is MenuFlyout &&
                 string.Equals(AutomationProperties.GetAutomationId(_autoSumButton), "HomeAutoSumButton", StringComparison.Ordinal) &&

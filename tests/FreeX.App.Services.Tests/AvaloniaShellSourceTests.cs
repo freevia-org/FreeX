@@ -1887,12 +1887,12 @@ public sealed class AvaloniaShellSourceTests
 
         source.Should().Contain("private readonly Button _formatPainterButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _formatPainterMenuItem = new();");
-        source.Should().Contain("_formatPainterButton.Content = \"Format Painter\";");
+        source.Should().Contain("_formatPainterButton.Content = UiText.Get(\"MainWindow_TooltipTitle_FormatPainter\");");
         source.Should().Contain("_formatPainterButton.Click += FormatPainterButton_Click;");
         source.Should().Contain("_formatPainterButton.DoubleTapped += (_, args) =>");
         source.Should().Contain("CaptureFormatPainterSource(persistent: true);");
         source.Should().Contain("AutomationProperties.SetAutomationId(_formatPainterButton, \"HomeFormatPainterButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_formatPainterButton, \"Copy formatting from the selection and apply it to another range.\");");
+        source.Should().Contain("UiText.Get(\"MainWindow_TooltipDescription_CopyFormattingFromOnePlaceAndApplyItToAnother\")");
         catalogSource.Should().Contain("new(NativeMenuItemId.FormatPainter, \"Format Painter\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);");
         source.Should().Contain("NativeMenuItemId.FormatPainter => _formatPainterMenuItem,");
@@ -1911,8 +1911,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.CancelFormatPainter();");
         source.Should().Contain("e.Key == Key.Escape && _session.IsFormatPainterActive");
         source.Should().Contain("ApplyFormatPainterAfterTargetSelection();");
-        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Format Painter failed.\");");
-        source.Should().Contain("HasFormatPainterButton: _formatPainterButton.Content?.ToString() == \"Format Painter\"");
+        source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? UiText.Get(\"MainLoc_FormatPainterFailed\"));");
+        source.Should().Contain("HasFormatPainterButton: _formatPainterButton.Content?.ToString() == UiText.Get(\"MainWindow_TooltipTitle_FormatPainter\")");
         source.Should().Contain("HomeFormatPainterButton");
         source.Should().Contain("HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, NativeMenuItemId.FormatPainter)");
 

@@ -232,6 +232,7 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
                      "MainWindow.ConditionalFormat.cs",
                      "MainWindow.InsertDeleteCells.cs",
                      "MainWindow.InsertFunction.cs",
+                     "MainWindow.LiveBackstage.cs",
                      "MainWindow.MoreColors.cs",
                      "MainWindow.RowColumnVisibility.cs",
                      "MainWindow.StatusBar.cs",

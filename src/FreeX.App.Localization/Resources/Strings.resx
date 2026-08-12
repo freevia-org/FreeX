@@ -19962,4 +19962,112 @@ and {0} more.</value>
   <data name="Toolbar_AlignTopShort" xml:space="preserve">
     <value>Top</value>
   </data>
+  <data name="ScenarioManager_MergeScenariosDialogTitle" xml:space="preserve">
+    <value>Merge Scenarios</value>
+  </data>
+  <data name="ScenarioManager_MergeOpenFailedMessage" xml:space="preserve">
+    <value>The selected file could not be opened for merging scenarios.</value>
+  </data>
+  <data name="Backstage_Home_NoRecentWorkbooks" xml:space="preserve">
+    <value>(No recent workbooks)</value>
+  </data>
+  <data name="Backstage_LiveInfo_WorkbookLabel" xml:space="preserve">
+    <value>Workbook</value>
+  </data>
+  <data name="Backstage_LiveInfo_LocationLabel" xml:space="preserve">
+    <value>Location</value>
+  </data>
+  <data name="Backstage_LiveInfo_FormatLabel" xml:space="preserve">
+    <value>Format</value>
+  </data>
+  <data name="Backstage_LiveInfo_SizeLabel" xml:space="preserve">
+    <value>Size</value>
+  </data>
+  <data name="Backstage_LiveInfo_LastModifiedLabel" xml:space="preserve">
+    <value>Last modified</value>
+  </data>
+  <data name="Backstage_LiveInfo_SheetsLabel" xml:space="preserve">
+    <value>Sheets</value>
+  </data>
+  <data name="Backstage_LiveInfo_ActiveSheetLabel" xml:space="preserve">
+    <value>Active sheet</value>
+  </data>
+  <data name="Backstage_LiveInfo_ProtectionSectionHeader" xml:space="preserve">
+    <value>Protection</value>
+  </data>
+  <data name="Backstage_LiveInfo_StatisticsSectionHeader" xml:space="preserve">
+    <value>Statistics</value>
+  </data>
+  <data name="Backstage_Print_Description" xml:space="preserve">
+    <value>Preview the active worksheet or send it to an available printer.</value>
+  </data>
+  <data name="InsertFunction_SearchHelpText" xml:space="preserve">
+    <value>Type to filter functions by name or description.</value>
+  </data>
+  <data name="InsertFunction_FunctionSyntaxAutomationName" xml:space="preserve">
+    <value>Function syntax</value>
+  </data>
+  <data name="InsertFunction_FunctionDescriptionAutomationName" xml:space="preserve">
+    <value>Function description</value>
+  </data>
+  <data name="FunctionArguments_SelectWorksheetReferenceAutomationNameFormat" xml:space="preserve">
+    <value>Select worksheet reference for {0}</value>
+  </data>
+  <data name="GridInlineComment_PinnedNoteAutomationName" xml:space="preserve">
+    <value>Pinned Note</value>
+  </data>
+  <data name="GridInlineComment_NoteTitleFormat" xml:space="preserve">
+    <value>Note - {0}</value>
+  </data>
+  <data name="GridInlineComment_NoteAutomationName" xml:space="preserve">
+    <value>Note</value>
+  </data>
+  <data name="GridInlineComment_SaveButton" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="GridInlineComment_CommentTitleFormat" xml:space="preserve">
+    <value>Comment - {0}</value>
+  </data>
+  <data name="GridInlineComment_CommentLabel" xml:space="preserve">
+    <value>Comment</value>
+  </data>
+  <data name="GridInlineComment_EditCommentLabel" xml:space="preserve">
+    <value>Edit comment</value>
+  </data>
+  <data name="GridInlineComment_ReplyLabel" xml:space="preserve">
+    <value>Reply</value>
+  </data>
+  <data name="GridInlineComment_MarkAsResolved" xml:space="preserve">
+    <value>Mark as resolved</value>
+  </data>
+  <data name="GridInlineComment_ApplyButton" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="GridInlineComment_CancelButton" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="GridInlineComment_ReplyToEditLabel" xml:space="preserve">
+    <value>Reply to edit</value>
+  </data>
+  <data name="GridInlineComment_SelectedReplyLabel" xml:space="preserve">
+    <value>Selected reply</value>
+  </data>
+  <data name="GridInlineComment_UpdateReplyButton" xml:space="preserve">
+    <value>Update reply</value>
+  </data>
+  <data name="GridInlineComment_DeleteReplyButton" xml:space="preserve">
+    <value>Delete reply</value>
+  </data>
+  <data name="GridInlineComment_EnterNoteMessage" xml:space="preserve">
+    <value>Enter a note.</value>
+  </data>
+  <data name="GridInlineComment_SelectReplyAndEnterReplyMessage" xml:space="preserve">
+    <value>Select a reply and enter reply text.</value>
+  </data>
+  <data name="GridInlineComment_SaveFailedMessage" xml:space="preserve">
+    <value>The comment could not be saved.</value>
+  </data>
+  <data name="MainLoc_FormatPainterFailed" xml:space="preserve">
+    <value>Format Painter failed.</value>
+  </data>
 </root>

@@ -113,10 +113,11 @@ public partial class MainWindow
             }
         }
 
-        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName), "Scenario Manager"))
+        var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
+        if (!TryExecuteCommand(new SaveScenarioCommand(name, changes, comment, hidden, locked, replaceScenarioName), scenarioManagerTitle))
             return;
 
-        _messageService.ShowInfo(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count), "Scenario Manager");
+        _messageService.ShowInfo(ScenarioManagerPlanner.FormatSavedMessage(name, changes.Count), scenarioManagerTitle);
     }
 
     private bool TryParseScenarioChangingCells(string? changingCellsText, out IReadOnlyList<GridRange> ranges)
@@ -143,7 +144,7 @@ public partial class MainWindow
 
         if (!TryExecuteRepeatableCommand(
                 () => new ApplyScenarioCommand(name),
-                "Scenario Manager",
+                ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format),
                 out var outcome))
             return;
 
@@ -185,9 +186,10 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(scenarioName))
             return;
 
-        if (!TryExecuteCommand(new DeleteScenarioCommand(scenarioName), "Scenario Manager", out var outcome))
+        var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
+        if (!TryExecuteCommand(new DeleteScenarioCommand(scenarioName), scenarioManagerTitle, out var outcome))
         {
-            ShowCommandError(outcome, "Scenario Manager");
+            ShowCommandError(outcome, scenarioManagerTitle);
             return;
         }
 
@@ -204,7 +206,9 @@ public partial class MainWindow
         }
 
         var message = ScenarioManagerPlanner.FormatScenarioList(_workbook.Scenarios);
-        _messageService.ShowInfo(message, "Scenario Manager");
+        _messageService.ShowInfo(
+            message,
+            ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format));
     }
 
     private IReadOnlyList<CellAddress> ParseScenarioResultCells(string? resultCellsText)
@@ -227,7 +231,7 @@ public partial class MainWindow
                 // stale pre-report value (Excel's own Scenario Summary always computes fresh
                 // per-scenario results).
                 (_, changedCells) => _session.RecalculateChangedCellsAlways(changedCells)),
-            "Scenario Manager"))
+            ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format)))
             return;
 
         var report = _workbook.Sheets.LastOrDefault();
@@ -255,10 +259,11 @@ public partial class MainWindow
     /// </summary>
     private async Task MergeScenariosFromFileAsync()
     {
+        var scenarioManagerTitle = ScenarioManagerDialogPlanner.Title.Resolve(UiText.Get, UiText.Format);
         var openDialog = new Microsoft.Win32.OpenFileDialog
         {
             Filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters),
-            Title = "Merge Scenarios",
+            Title = ScenarioManagerDialogPlanner.MergeDialogTitle.Resolve(UiText.Get, UiText.Format),
             CheckFileExists = true
         };
         if (openDialog.ShowDialog(this) != true)
@@ -266,7 +271,9 @@ public partial class MainWindow
 
         if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, openDialog.FileName, out var target, out _))
         {
-            _messageService.ShowInfo("The selected file could not be opened for merging scenarios.", "Scenario Manager");
+            _messageService.ShowInfo(
+                ScenarioManagerDialogPlanner.MergeOpenFailedMessage.Resolve(UiText.Get, UiText.Format),
+                scenarioManagerTitle);
             return;
         }
 
@@ -284,14 +291,16 @@ public partial class MainWindow
         }
         catch (Exception)
         {
-            _messageService.ShowInfo("The selected file could not be opened for merging scenarios.", "Scenario Manager");
+            _messageService.ShowInfo(
+                ScenarioManagerDialogPlanner.MergeOpenFailedMessage.Resolve(UiText.Get, UiText.Format),
+                scenarioManagerTitle);
             return;
         }
 
         var mergeCandidates = RemapScenariosBySheetName(sourceWorkbook, _workbook);
-        if (!TryExecuteCommand(new MergeScenarioCommand(mergeCandidates), "Scenario Manager", out var outcome))
+        if (!TryExecuteCommand(new MergeScenarioCommand(mergeCandidates), scenarioManagerTitle, out var outcome))
         {
-            ShowCommandError(outcome, "Scenario Manager");
+            ShowCommandError(outcome, scenarioManagerTitle);
             return;
         }
 

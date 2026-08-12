@@ -186,20 +186,7 @@ public partial class MainWindow
 
     private void SheetGrid_ThreadedCommentInlineEditSubmitted(object? sender, GridThreadedCommentInlineEditSubmittedEventArgs e)
     {
-        var result = e.Result;
-        var mutation = ReviewSessionController.ApplyThreadedComment(
-            new ThreadedCommentDialogResult(
-                result.RootText,
-                result.ReplyText,
-                result.IsResolved,
-                result.Action switch
-                {
-                    GridThreadedCommentEditAction.EditReply => ThreadedCommentDialogAction.EditReply,
-                    GridThreadedCommentEditAction.DeleteReply => ThreadedCommentDialogAction.DeleteReply,
-                    _ => ThreadedCommentDialogAction.ApplyThread,
-                },
-                result.ReplyIndex,
-                result.ReplyEditText));
+        var mutation = ReviewSessionController.ApplyThreadedComment(e.Result);
         if (!mutation.Success)
         {
             e.KeepOpen = true;

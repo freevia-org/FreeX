@@ -66,9 +66,9 @@ public sealed partial class MainWindow
 
         var searchBox = new TextBox { MinWidth = 260 };
         ApplyFnTextBoxChrome(searchBox);
-        AutomationProperties.SetName(searchBox, "Search for a function");
+        AutomationProperties.SetName(searchBox, ResolveInsertFunctionLabel("InsertFunction_SearchForAFunction"));
         AutomationProperties.SetAutomationId(searchBox, "InsertFunctionSearchBox");
-        AutomationProperties.SetHelpText(searchBox, "Type to filter functions by name or description.");
+        AutomationProperties.SetHelpText(searchBox, UiText.Get("InsertFunction_SearchHelpText"));
 
         var categoryBox = new ComboBox
         {
@@ -77,12 +77,12 @@ public sealed partial class MainWindow
             MinWidth = 220,
         };
         ApplyFnComboBoxChrome(categoryBox);
-        AutomationProperties.SetName(categoryBox, "Or select a category");
+        AutomationProperties.SetName(categoryBox, ResolveInsertFunctionLabel("InsertFunction_OrSelectACategory"));
         AutomationProperties.SetAutomationId(categoryBox, "InsertFunctionCategoryBox");
 
         var listBox = new ListBox { MinHeight = 160 };
         ApplyFnListBoxStyle(listBox);
-        AutomationProperties.SetName(listBox, "Select a function");
+        AutomationProperties.SetName(listBox, ResolveInsertFunctionLabel("InsertFunction_SelectAFunction"));
         AutomationProperties.SetAutomationId(listBox, "InsertFunctionListBox");
 
         var syntaxText = new TextBlock
@@ -91,7 +91,7 @@ public sealed partial class MainWindow
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(syntaxText, "Function syntax");
+        AutomationProperties.SetName(syntaxText, UiText.Get("InsertFunction_FunctionSyntaxAutomationName"));
         AutomationProperties.SetAutomationId(syntaxText, "InsertFunctionSyntaxText");
 
         var descriptionText = new TextBlock
@@ -101,7 +101,7 @@ public sealed partial class MainWindow
             MinHeight = 40,
             Foreground = Brush(96, 96, 96),
         };
-        AutomationProperties.SetName(descriptionText, "Function description");
+        AutomationProperties.SetName(descriptionText, UiText.Get("InsertFunction_FunctionDescriptionAutomationName"));
         AutomationProperties.SetAutomationId(descriptionText, "InsertFunctionDescriptionText");
 
         void RefreshList()
@@ -196,9 +196,9 @@ public sealed partial class MainWindow
             Spacing = 10,
             Children =
             {
-                CreateInsertFunctionField("Search for a function", searchBox),
-                CreateInsertFunctionField("Or select a category", categoryBox),
-                new TextBlock { Text = "Select a function:", FontSize = 12 },
+                CreateInsertFunctionField(ResolveInsertFunctionLabel("InsertFunction_SearchForAFunction"), searchBox),
+                CreateInsertFunctionField(ResolveInsertFunctionLabel("InsertFunction_OrSelectACategory"), categoryBox),
+                new TextBlock { Text = StripDisplayMnemonic(UiText.Get("InsertFunction_SelectAFunction")), FontSize = 12 },
             },
         };
         DockPanel.SetDock(header, Dock.Top);
@@ -273,7 +273,9 @@ public sealed partial class MainWindow
                 Margin = new Thickness(6, 0, 0, 0),
             };
             ApplyFnButtonChrome(referencePicker, minWidth: 30);
-            AutomationProperties.SetName(referencePicker, $"Select worksheet reference for {argument.Name}");
+            AutomationProperties.SetName(
+                referencePicker,
+                UiText.Format("FunctionArguments_SelectWorksheetReferenceAutomationNameFormat", argument.Name));
             AutomationProperties.SetAutomationId(referencePicker, $"FunctionArgumentReferencePicker{argumentIndex}");
 
             var editorRow = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -421,6 +423,9 @@ public sealed partial class MainWindow
                 control,
             },
         };
+
+    private static string ResolveInsertFunctionLabel(string resourceKey) =>
+        StripDisplayMnemonic(UiText.Get(resourceKey)).TrimEnd(':');
 
     // ── Visual chrome helpers (InsertFunction / FunctionArguments dialogs) ────
 

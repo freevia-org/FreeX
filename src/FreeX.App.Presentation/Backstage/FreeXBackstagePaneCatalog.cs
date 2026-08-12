@@ -6,6 +6,7 @@ public enum FreeXBackstageInfoSurface
 {
     WpfInfoPane,
     AvaloniaInfoDialog,
+    AvaloniaLivePane,
     ParityCapture
 }
 
@@ -116,6 +117,7 @@ public static class FreeXBackstagePaneCatalog
         surface switch
         {
             FreeXBackstageInfoSurface.AvaloniaInfoDialog => AvaloniaInfoActions,
+            FreeXBackstageInfoSurface.AvaloniaLivePane => [],
             FreeXBackstageInfoSurface.WpfInfoPane or FreeXBackstageInfoSurface.ParityCapture => WpfInfoActions,
             _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, null)
         };
@@ -125,6 +127,7 @@ public static class FreeXBackstagePaneCatalog
         surface switch
         {
             FreeXBackstageInfoSurface.AvaloniaInfoDialog => AvaloniaInfoDetails,
+            FreeXBackstageInfoSurface.AvaloniaLivePane => AvaloniaLiveInfoDetails,
             FreeXBackstageInfoSurface.ParityCapture => ParityInfoDetails,
             FreeXBackstageInfoSurface.WpfInfoPane => WpfInfoDetails,
             _ => throw new ArgumentOutOfRangeException(nameof(surface), surface, null)
@@ -244,6 +247,16 @@ public static class FreeXBackstagePaneCatalog
         // FormulaErrors row -- File > Info must surface circular-reference/formula-issue counts on
         // this shell too, not just Windows.
         new(FreeXBackstageInfoDetailId.FormulaErrors, "Backstage_Info_FormulaErrorsLabel", "BackstageInfoFormulaErrors"),
+    ];
+
+    private static readonly FreeXBackstageInfoDetailDefinition[] AvaloniaLiveInfoDetails =
+    [
+        new(FreeXBackstageInfoDetailId.WorkbookName, "Backstage_LiveInfo_WorkbookLabel", "BackstageLiveInfoWorkbook"),
+        new(FreeXBackstageInfoDetailId.FilePath, "Backstage_LiveInfo_LocationLabel", "BackstageLiveInfoLocation"),
+        new(FreeXBackstageInfoDetailId.Format, "Backstage_LiveInfo_FormatLabel", "BackstageLiveInfoFormat"),
+        new(FreeXBackstageInfoDetailId.FileSize, "Backstage_LiveInfo_SizeLabel", "BackstageLiveInfoSize"),
+        new(FreeXBackstageInfoDetailId.LastModified, "Backstage_LiveInfo_LastModifiedLabel", "BackstageLiveInfoLastModified"),
+        new(FreeXBackstageInfoDetailId.SheetCount, "Backstage_LiveInfo_SheetsLabel", "BackstageLiveInfoSheets"),
     ];
 
     private static readonly FreeXBackstageInfoDetailDefinition[] WpfInfoDetails =

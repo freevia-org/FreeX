@@ -2173,9 +2173,11 @@ public sealed class MacOsAppReadinessPreflightTests
                 private static void RenderCell(CellStyle? style)
                 {
                     CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
-                    _formatPainterButton.Content = "Format Painter";
+                    _formatPainterButton.Content = UiText.Get("MainWindow_TooltipTitle_FormatPainter");
                     AutomationProperties.SetAutomationId(_formatPainterButton, "HomeFormatPainterButton");
-                    AutomationProperties.SetHelpText(_formatPainterButton, "Copy formatting from the selection and apply it to another range.");
+                    AutomationProperties.SetHelpText(
+                        _formatPainterButton,
+                        UiText.Get("MainWindow_TooltipDescription_CopyFormattingFromOnePlaceAndApplyItToAnother"));
                     _formatPainterMenuItem.Header = "Format Painter";
                     _formatPainterMenuItem.Click += (_, _) => CaptureFormatPainterSource(persistent: false);
                     homeMenu.Items.Add(_formatPainterMenuItem);
@@ -2922,7 +2924,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     GetToolbarFocusTargets().Any(control => control.Focusable) &&;
                     _formulaBox.Focusable &&;
                     _zoomText.Focusable;
-                    HasFormatPainterButton: _formatPainterButton.Content?.ToString() == "Format Painter";
+                    HasFormatPainterButton: _formatPainterButton.Content?.ToString() == UiText.Get("MainWindow_TooltipTitle_FormatPainter");
                     HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, "Format Painter", requireGesture: false);
                     private readonly NativeMenuItem _formatCellsMenuItem = new();
                     _formatCellsMenuItem.Header = "Format Cells...";

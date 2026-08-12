@@ -51,7 +51,9 @@ public sealed partial class MainWindow
             ZIndex = 1000,
         };
         AutomationProperties.SetAutomationId(_backstageOverlay, "FreeXBackstageOverlay");
-        AutomationProperties.SetName(_backstageOverlay, "File");
+        AutomationProperties.SetName(
+            _backstageOverlay,
+            UiText.CreateAutomationName(UiText.Get("MainWindow_Header_File")));
         _backstageOverlay.Closed += RestoreFocusAfterBackstageDismissal;
 
         return _backstageOverlay;
@@ -242,7 +244,7 @@ public sealed partial class MainWindow
         {
             content.Children.Add(new TextBlock
             {
-                Text = "(No recent workbooks)",
+                Text = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
                 FontFamily = FormulaBarFontFamily,
                 Foreground = SecondaryInk,
             });
@@ -360,32 +362,40 @@ public sealed partial class MainWindow
             BuildWorkbookInfoPlan(),
             WorkbookInfoDisplaySurface.AvaloniaBackstageInfoDialog,
             CreateWorkbookInfoDisplayStrings());
+        var pane = FreeXBackstageInfoPanePlanner.Build(
+            FreeXBackstageInfoSurface.AvaloniaLivePane,
+            CreateBackstageInfoPaneRequest(display));
         var content = CreateLiveBackstagePaneStack();
-        content.Children.Add(CreateLiveBackstageHeading(UiText.Get("Backstage_Info_Title")));
-        content.Children.Add(CreateLiveBackstageSection("Properties"));
-        content.Children.Add(CreateLiveBackstageDetail("Workbook", display.WorkbookName));
-        content.Children.Add(CreateLiveBackstageDetail("Location", display.FilePath));
-        content.Children.Add(CreateLiveBackstageDetail("Format", display.Format));
-        content.Children.Add(CreateLiveBackstageDetail("Size", display.FileSize));
-        content.Children.Add(CreateLiveBackstageDetail("Last modified", display.LastModified));
-        content.Children.Add(CreateLiveBackstageDetail("Sheets", display.SheetCount));
-        content.Children.Add(CreateLiveBackstageSection("Protection"));
-        content.Children.Add(CreateLiveBackstageDetail("Workbook", display.WorkbookProtectionSummary));
-        content.Children.Add(CreateLiveBackstageDetail("Active sheet", display.ActiveSheetProtectionSummary));
-        content.Children.Add(CreateLiveBackstageSection("Statistics"));
+        content.Children.Add(CreateLiveBackstageHeading(UiText.Get(pane.TitleKey)));
+        content.Children.Add(CreateLiveBackstageSection(UiText.Get(pane.PropertiesHeadingKey)));
+        foreach (var detail in pane.Details)
+        {
+            content.Children.Add(CreateLiveBackstageDetail(
+                UiText.Get(detail.LabelKey),
+                detail.Value.Resolve(UiText.Get)));
+        }
+
+        content.Children.Add(CreateLiveBackstageSection(UiText.Get(pane.ProtectionSectionHeaderKey)));
+        content.Children.Add(CreateLiveBackstageDetail(
+            UiText.Get("Backstage_LiveInfo_WorkbookLabel"),
+            pane.WorkbookProtectionSummary.Resolve(UiText.Get)));
+        content.Children.Add(CreateLiveBackstageDetail(
+            UiText.Get("Backstage_LiveInfo_ActiveSheetLabel"),
+            pane.ActiveSheetProtectionSummary.Resolve(UiText.Get)));
+        content.Children.Add(CreateLiveBackstageSection(UiText.Get(pane.StatisticsSectionHeaderKey)));
         content.Children.Add(new TextBlock
         {
-            Text = display.StatisticsSummary,
+            Text = pane.StatisticsSummary.Resolve(UiText.Get),
             FontFamily = FormulaBarFontFamily,
             FontSize = 13,
             Foreground = PrimaryInk,
             TextWrapping = TextWrapping.Wrap,
         });
-        if (!string.IsNullOrWhiteSpace(display.UnsavedChangesNote))
+        if (pane.UnsavedChangesNote is { } unsavedChangesNote)
         {
             content.Children.Add(new TextBlock
             {
-                Text = display.UnsavedChangesNote,
+                Text = unsavedChangesNote.Resolve(UiText.Get),
                 FontFamily = FormulaBarFontFamily,
                 FontSize = 12,
                 Foreground = SecondaryInk,
@@ -402,7 +412,7 @@ public sealed partial class MainWindow
         content.Children.Add(CreateLiveBackstageHeading(UiText.Get("MainWindow_Text_Print")));
         content.Children.Add(new TextBlock
         {
-            Text = "Preview the active worksheet or send it to an available printer.",
+            Text = UiText.Get("Backstage_Print_Description"),
             FontFamily = FormulaBarFontFamily,
             FontSize = 13,
             Foreground = SecondaryInk,
@@ -417,7 +427,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 22, 0, 0),
         };
         actions.Children.Add(CreateLiveBackstageActionButton(
-            "Print Preview",
+            UiText.Get("ShellLoc_PrintPreviewTitle"),
             "BackstagePrintPreviewButton",
             async () => await ShowPrintPreviewDialogAsync()));
         actions.Children.Add(CreateLiveBackstageActionButton(

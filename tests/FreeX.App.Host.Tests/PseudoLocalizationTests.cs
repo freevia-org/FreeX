@@ -25,6 +25,42 @@ public sealed partial class PseudoLocalizationTests
         "PivotSort_AscendingByValues",
         "PivotSort_DescendingByValues",
         "PivotSort_ValueFieldRequired",
+        "ScenarioManager_MergeScenariosDialogTitle",
+        "ScenarioManager_MergeOpenFailedMessage",
+        "Backstage_Home_NoRecentWorkbooks",
+        "Backstage_LiveInfo_WorkbookLabel",
+        "Backstage_LiveInfo_LocationLabel",
+        "Backstage_LiveInfo_FormatLabel",
+        "Backstage_LiveInfo_SizeLabel",
+        "Backstage_LiveInfo_LastModifiedLabel",
+        "Backstage_LiveInfo_SheetsLabel",
+        "Backstage_LiveInfo_ActiveSheetLabel",
+        "Backstage_LiveInfo_ProtectionSectionHeader",
+        "Backstage_LiveInfo_StatisticsSectionHeader",
+        "Backstage_Print_Description",
+        "InsertFunction_SearchHelpText",
+        "InsertFunction_FunctionSyntaxAutomationName",
+        "InsertFunction_FunctionDescriptionAutomationName",
+        "FunctionArguments_SelectWorksheetReferenceAutomationNameFormat",
+        "GridInlineComment_PinnedNoteAutomationName",
+        "GridInlineComment_NoteTitleFormat",
+        "GridInlineComment_NoteAutomationName",
+        "GridInlineComment_SaveButton",
+        "GridInlineComment_CommentTitleFormat",
+        "GridInlineComment_CommentLabel",
+        "GridInlineComment_EditCommentLabel",
+        "GridInlineComment_ReplyLabel",
+        "GridInlineComment_MarkAsResolved",
+        "GridInlineComment_ApplyButton",
+        "GridInlineComment_CancelButton",
+        "GridInlineComment_ReplyToEditLabel",
+        "GridInlineComment_SelectedReplyLabel",
+        "GridInlineComment_UpdateReplyButton",
+        "GridInlineComment_DeleteReplyButton",
+        "GridInlineComment_EnterNoteMessage",
+        "GridInlineComment_SelectReplyAndEnterReplyMessage",
+        "GridInlineComment_SaveFailedMessage",
+        "MainLoc_FormatPainterFailed",
         "Options_ChooseDisplayLanguage",
         "Options_AppLanguageRestartMessage",
         "AdvancedFilter_AdvancedFilter",
@@ -101,8 +137,7 @@ public sealed partial class PseudoLocalizationTests
     {
         UiText.GetNeutralResourceKeys().Should().Contain(key);
 
-        var neutralValues = ReadNeutralValues();
-        var neutral = neutralValues[key];
+        var neutral = UiText.GetNeutral(key);
 
         neutral.Should().NotBeNullOrEmpty();
 

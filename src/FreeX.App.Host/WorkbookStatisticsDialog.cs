@@ -74,8 +74,8 @@ public sealed class WorkbookStatisticsDialog : Window
             Margin = new Thickness(0, 12, 0, 0)
         };
 
-        const string copyContent = "_Copy to Clipboard";
-        const string copyHelpText = "Copy the workbook statistics report to the Clipboard.";
+        var copyContent = UiText.Get("WorkbookStatistics_CopyToClipboard");
+        var copyHelpText = UiText.Get("WorkbookStatistics_CopyToClipboardHelpText");
         var copy = new Button
         {
             Content = copyContent,

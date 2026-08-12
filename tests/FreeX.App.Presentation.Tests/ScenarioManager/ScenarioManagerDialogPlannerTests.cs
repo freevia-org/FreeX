@@ -7,6 +7,17 @@ namespace FreeX.App.Presentation.Tests.ScenarioManager;
 public sealed class ScenarioManagerDialogPlannerTests
 {
     [Fact]
+    public void MergeWorkflowText_IsOwnedByPortableResourceDescriptors()
+    {
+        ScenarioManagerDialogPlanner.Title.ResourceKey
+            .Should().Be("MainWindowMessage_ScenarioManagerTitle");
+        ScenarioManagerDialogPlanner.MergeDialogTitle.ResourceKey
+            .Should().Be("ScenarioManager_MergeScenariosDialogTitle");
+        ScenarioManagerDialogPlanner.MergeOpenFailedMessage.ResourceKey
+            .Should().Be("ScenarioManager_MergeOpenFailedMessage");
+    }
+
+    [Fact]
     public void BuildItems_ProjectsScenarioFieldsAndFormattedChangingCells()
     {
         var workbook = CreateWorkbook(out var sheet);
