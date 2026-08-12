@@ -9,7 +9,7 @@ public sealed class FreeXBackstagePaneProjectionPlannerTests
     public void BuildInfoPane_ProjectsPaneTitleActionsAndProperties()
     {
         var pane = FreeXBackstageInfoPanePlanner.Build(
-            FreeXBackstageInfoSurface.ParityCapture,
+            FreeXBackstageInfoSurface.WpfInfoPane,
             new FreeXBackstageInfoPaneRequest(
                 "Budget.xlsx",
                 @"C:\Work\Budget.xlsx",
@@ -67,7 +67,10 @@ public sealed class FreeXBackstagePaneProjectionPlannerTests
                 "BackstageInfoShareStatus",
                 "BackstageInfoExportStatus",
                 "BackstageInfoWorkbookProtection",
-                "BackstageInfoActiveSheetProtection");
+                "BackstageInfoActiveSheetProtection",
+                "BackstageInfoWorkbookStatistics",
+                "BackstageInfoAccessibility",
+                "BackstageInfoFormulaErrors");
     }
 
     [Fact]

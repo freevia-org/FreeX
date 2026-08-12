@@ -101,26 +101,6 @@ public sealed class FreeXBackstageInfoPanePlannerTests
         plan.StatisticsSummary.Text.Should().Be("3 sheets");
     }
 
-    [Fact]
-    public void Build_ParityCaptureKeepsWindowsPropertySubset()
-    {
-        var plan = FreeXBackstageInfoPanePlanner.Build(
-            FreeXBackstageInfoSurface.ParityCapture,
-            Request());
-
-        plan.Details.Select(detail => detail.Id).Should().Equal(
-            FreeXBackstageInfoDetailId.WorkbookName,
-            FreeXBackstageInfoDetailId.FilePath,
-            FreeXBackstageInfoDetailId.SheetCount,
-            FreeXBackstageInfoDetailId.Format,
-            FreeXBackstageInfoDetailId.FileSize,
-            FreeXBackstageInfoDetailId.LastModified,
-            FreeXBackstageInfoDetailId.Share,
-            FreeXBackstageInfoDetailId.Export,
-            FreeXBackstageInfoDetailId.WorkbookProtection,
-            FreeXBackstageInfoDetailId.ActiveSheetProtection);
-    }
-
     private static FreeXBackstageInfoPaneRequest Request(string? unsavedChangesNote = null) =>
         new(
             WorkbookName: "Budget.xlsx",

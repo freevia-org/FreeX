@@ -4103,8 +4103,7 @@ public sealed partial class MainWindow
             activeSheet,
             CultureInfo.CurrentCulture);
 
-        return FreeXBackstageInfoPanePlanner.Build(
-            FreeXBackstageInfoSurface.ParityCapture,
+        return global::FreeX.ParityCapture.Avalonia.BackstageInfoParityProjection.Build(
             BackstageInfoPlanner.CreatePaneRequest(info));
     }
 

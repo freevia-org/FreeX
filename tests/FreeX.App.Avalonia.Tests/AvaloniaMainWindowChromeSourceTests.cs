@@ -511,6 +511,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void ParityCapture_UsesSameResolutionAndDoesNotMislabelBackstageDialogs()
     {
         var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var backstageProjectionSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "BackstageInfoParityProjection.cs"));
         var captureContextSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "RibbonContextSource.ParityCapture.cs"));
         var rendererContextSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "RibbonContextSource.cs"));
         var hostCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
@@ -540,8 +541,9 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().Contain("CaptureBackstageSurface(outputDirectory, capture)");
         captureSource.Should().Contain("CreateParityCapturedBackstageSurface(capture.SurfaceId)");
         captureSource.Should().Contain("FreeXBackstageNavigationPlanner.Build()");
-        captureSource.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
-        captureSource.Should().Contain("FreeXBackstageInfoSurface.ParityCapture");
+        backstageProjectionSource.Should().Contain("FreeXBackstageInfoPanePlanner.Build(");
+        captureSource.Should().Contain("BackstageInfoParityProjection.Build(");
+        captureSource.Should().NotContain("FreeXBackstageInfoSurface.ParityCapture");
         captureSource.Should().Contain("BuildParityCapturedBackstageInfoPanePlan()");
         captureSource.Should().Contain("FreeXBackstagePaneProjectionPlanner.BuildInfoPane(");
         captureSource.Should().Contain("FreeXBackstageHomePanePlanner.Build()");
