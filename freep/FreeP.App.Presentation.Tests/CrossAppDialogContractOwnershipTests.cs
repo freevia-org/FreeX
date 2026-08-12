@@ -17,7 +17,7 @@ public sealed class CrossAppDialogContractOwnershipTests
             "src", "FreeX.App.Presentation", "Charts", "Editing", "SelectDataSourcePlanner.cs");
         var sharedLocalizedText = ReadWorkspaceFile(
             "shared", "Free.Shared.Localization", "LocalizedTextDescriptor.cs");
-        var freeXLocalizedText = ReadWorkspaceFile(
+        var freeXLocalizedText = WorkspacePath(
             "src", "FreeX.App.Presentation", "Localization", "LocalizedTextDescriptor.cs");
 
         sharedShell.Should().Contain("public class DialogSurfacePlan<TField, TAction>");
@@ -31,13 +31,18 @@ public sealed class CrossAppDialogContractOwnershipTests
         freeXSelectData.Should().Contain(": DialogSurfaceActionPlan<SelectDataSourceDialogActionId>");
         sharedShell.Should().NotContain("SelectDataSourceDialogFieldId");
         sharedLocalizedText.Should().Contain("return ResourceKey is null");
-        freeXLocalizedText.Should().Contain(": Free.Shared.Localization.LocalizedTextDescriptor");
-        freeXLocalizedText.Should().NotContain("return ResourceKey is null");
+        File.Exists(freeXLocalizedText).Should().BeFalse(
+            "FreeX should consume the shared localized text descriptor without a product-local shadow type");
     }
 
     private static string ReadWorkspaceFile(params string[] relativeParts)
     {
+        return File.ReadAllText(WorkspacePath(relativeParts));
+    }
+
+    private static string WorkspacePath(params string[] relativeParts)
+    {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        return File.ReadAllText(Path.Combine(new[] { root }.Concat(relativeParts).ToArray()));
+        return Path.Combine(new[] { root }.Concat(relativeParts).ToArray());
     }
 }

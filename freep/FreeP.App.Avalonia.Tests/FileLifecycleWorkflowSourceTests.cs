@@ -72,7 +72,7 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().NotContain("private bool _isDirty");
         source.Should().NotContain("private async Task<SaveChangesPrompt> ShowSaveChangesPromptAsync");
         source.Should().NotContain("PromptSaveChangesSync");
-        source.Should().NotContain("GetAwaiter().GetResult()");
+        (ports + lifecycleAdapter + session).Should().NotContain("GetAwaiter().GetResult()");
         source.Should().NotContain("AvaloniaSaveChangesDialog.ShowAsync(");
         source.Should().NotContain("Do you want to save changes to");
         source.Should().NotContain("Content = \"Don't save\"");

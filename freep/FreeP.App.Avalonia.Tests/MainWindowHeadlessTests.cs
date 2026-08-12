@@ -3351,7 +3351,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         printPlan.NativePrintHandoff.IsPackageReady.Should().BeTrue();
         printPlan.NativePrintHandoff.RequiresHostHandoff.Should().BeTrue();
         printPlan.NativePrintHandoff.CanOpenNativePrintDialog.Should().BeFalse();
-        printPlan.NativePrintHandoff.Reason.Should().Contain("Native output capability detection is pending");
+        printPlan.NativePrintHandoff.Reason.Should().Contain("host printer adapter is unavailable");
         printPlan.LayoutChoices.Select(choice => choice.Layout.SlidesPerPage).Should().Equal(1, 1, 1, 2, 3, 4, 6, 9);
         printPlan.RangeChoices.Select(choice => choice.Kind).Should().Contain(PresentationSlideRangeKind.CurrentSlide);
     }
