@@ -22,13 +22,13 @@ public sealed class StartupDirtyTraceTests
     }
 
     [Fact]
-    public void Production_app_lifetime_startup_argument_path_starts_clean()
+    public void Validation_host_startup_argument_path_starts_clean()
     {
         if (OperatingSystem.IsLinux() && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DISPLAY")))
             return;
 
         var documentPath = RepoFile("tools/FreeP.RenderCompare/corpus/01-title-slide.pptx");
-        var appAssemblyPath = typeof(StartupDirtyTraceOptions).Assembly.Location;
+        var appAssemblyPath = ValidationHostAssemblyPath();
         using var temporaryDirectory = new TestTemporaryDirectory("freep-startup-dirty-");
         var reportPath = Path.Combine(temporaryDirectory.Path, "startup-dirty.json");
 
@@ -82,18 +82,23 @@ public sealed class StartupDirtyTraceTests
         var app = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "App.cs"));
         var program = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "Program.cs"));
         var adapter = File.ReadAllText(RepoFile(
-            "freep", "FreeP.App.Avalonia", "MainWindow.ValidationAccessAdapter.cs"));
+            "freep", "TestSupport", "Validation.Avalonia", "MainWindow.ValidationAccessAdapter.cs"));
 
         coordinator.Should().Contain("DispatcherTimer");
-        coordinator.Should().Contain("File.WriteAllText");
+        coordinator.Should().Contain("JsonArtifactIO.Write");
         coordinator.Should().Contain("StartupDirtyTraceReport");
         app.Should().NotContain("StartupDirtyTraceOptions");
         app.Should().NotContain("StartupDirtyTraceCoordinator");
         program.Should().NotContain("StartupDirtyTraceOptions");
         program.Should().NotContain("--startup-dirty-trace");
+        program.Should().NotContain("RunToolHost(");
         adapter.Should().Contain("StartupDirtyTrace =>");
         adapter.Should().NotContain("DispatcherTimer");
-        adapter.Should().NotContain("File.WriteAllText");
+        adapter.Should().NotContain("JsonArtifactIO.Write");
+        File.Exists(RepoFile(
+            "freep", "FreeP.App.Avalonia", "MainWindow.ValidationAccessAdapter.cs")).Should().BeFalse();
+        File.Exists(RepoFile(
+            "freep", "FreeP.App.Avalonia", "StartupDirtyTrace.cs")).Should().BeFalse();
         File.Exists(Path.Combine(
             Path.GetDirectoryName(RepoFile("freep", "FreeP.App.Avalonia", "Program.cs"))!,
             "Smoke",
@@ -103,4 +108,19 @@ public sealed class StartupDirtyTraceTests
     private static string RepoFile(params string[] parts) =>
         TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
             "FreeP.slnx", parts);
+
+    private static string ValidationHostAssemblyPath()
+    {
+        var testOutput = Path.GetDirectoryName(typeof(StartupDirtyTraceTests).Assembly.Location)!;
+        var targetFramework = Path.GetFileName(testOutput);
+        var configuration = Directory.GetParent(testOutput)!.Name;
+        return RepoFile(
+            "freep",
+            "TestSupport",
+            "Validation.Avalonia",
+            "bin",
+            configuration,
+            targetFramework,
+            "FreeP.Validation.Avalonia.dll");
+    }
 }

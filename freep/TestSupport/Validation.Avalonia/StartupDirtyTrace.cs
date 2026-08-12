@@ -2,6 +2,7 @@ using Free.Shared.Shell.Avalonia;
 
 namespace FreeP.App.Avalonia;
 
+// Compiled into the isolated validation-host renderer variant only.
 internal sealed record StartupDirtyTraceEntry(
     string Stage,
     bool IsDirty,

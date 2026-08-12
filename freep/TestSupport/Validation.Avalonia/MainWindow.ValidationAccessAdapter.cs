@@ -9,21 +9,32 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
+// Compiled into the isolated validation-host renderer variant only.
 public sealed partial class MainWindow
 {
     private bool _allowCloseWithoutDirtyPromptForValidation;
     private Action? _externalAnimationPaneRequestCoordinator;
     private Action? _externalHyperlinkAppliedObserver;
     private Action<Hyperlink, int>? _externalSlideShowInternalHyperlinkObserver;
+    private bool _nativeOutputDetectionCompleted;
 
-    private void CoordinateExternalAnimationPaneRequest() =>
+    partial void CoordinateAnimationPaneRequestObserver() =>
         _externalAnimationPaneRequestCoordinator?.Invoke();
 
-    private void NotifyExternalHyperlinkApplied() =>
+    partial void NotifyHyperlinkAppliedObserver() =>
         _externalHyperlinkAppliedObserver?.Invoke();
 
-    private void ConfigureExternalSlideShowObserver(SlideShowWindow window) =>
+    partial void ConfigureSlideShowObserver(SlideShowWindow window) =>
         window.SetInternalHyperlinkNavigationObserver(_externalSlideShowInternalHyperlinkObserver);
+
+    partial void OverrideCloseCancellation(ref bool cancel)
+    {
+        if (_allowCloseWithoutDirtyPromptForValidation)
+            cancel = false;
+    }
+
+    partial void ObserveNativeOutputDetectionCompleted() =>
+        _nativeOutputDetectionCompleted = true;
 
     internal ValidationAccessAdapter CreateValidationAccessAdapter() => new(this);
 
@@ -42,7 +53,7 @@ public sealed partial class MainWindow
         internal int CurrentSlideIndex => _owner.CurrentSlideIndex;
         internal Presentation Presentation => _owner._presentation;
         internal EditingSession Editor => _owner.Editor;
-        internal IReadOnlyList<StartupDirtyTraceEntry> StartupDirtyTrace => _owner.StartupDirtyTraceForTests;
+        internal IReadOnlyList<StartupDirtyTraceEntry> StartupDirtyTrace => _owner.StartupDirtyTraceEntries;
         internal LinuxNativeOutputCapabilities NativeOutputCapabilities => _owner._nativeOutputCapabilities;
         internal bool NativeOutputCapabilityDetectionCompleted => _owner._nativeOutputDetectionCompleted;
         internal bool LastPrintPackageIsValid => _owner.LastPrintExecutionDescriptor?.Validation.IsValid == true;

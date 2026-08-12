@@ -14,10 +14,10 @@ public sealed partial class MainWindow
                 ResetAnimationSession = () => _animationPaneSession.Reset(),
                 HideTransientPickers = HideTransientPickers,
                 BeforeEditorChanged = () =>
-                    _startupDirtyTrace?.Record("editor-changed-before-mark", _fileWorkflow),
+                    RecordStartupObservation("editor-changed-before-mark"),
                 MarkDirty = () => _fileWorkflow.MarkDirty(),
                 AfterEditorMarkedDirty = () =>
-                    _startupDirtyTrace?.Record("editor-changed", _fileWorkflow),
+                    RecordStartupObservation("editor-changed"),
                 RefreshCommandStates = SyncRibbonCommandStates,
                 RefreshSlidePane = RefreshSlidePane,
                 RefreshCanvas = RefreshCanvas,
@@ -69,7 +69,7 @@ public sealed partial class MainWindow
     }
 
     private void PrepareCurrentSlideChange() =>
-        _startupDirtyTrace?.Record("current-slide-changed", _fileWorkflow);
+        RecordStartupObservation("current-slide-changed");
 
     private void BindWorkareaEditor(EditingSession editor)
     {

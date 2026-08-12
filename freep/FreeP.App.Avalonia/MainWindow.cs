@@ -71,6 +71,15 @@ public sealed partial class MainWindow : Window,
     IPresentationMediaPaneHostView,
     IPresentationReadingOrderPaneHostView
 {
+    partial void InitializeConditionalHost();
+    partial void RecordStartupObservation(string stage);
+    partial void RegisterStartupOpenedObservation();
+    partial void CoordinateAnimationPaneRequestObserver();
+    partial void NotifyHyperlinkAppliedObserver();
+    partial void ConfigureSlideShowObserver(SlideShowWindow window);
+    partial void OverrideCloseCancellation(ref bool cancel);
+    partial void ObserveNativeOutputDetectionCompleted();
+
     private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
 
     // Avalonia text metrics place the action row two pixels above WPF without this compensation.
@@ -84,7 +93,6 @@ public sealed partial class MainWindow : Window,
     private Presentation _presentation => _workareaSession.Presentation;
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
     private readonly PresentationFileCommandSession _fileSession;
-    private readonly StartupDirtyTrace? _startupDirtyTrace;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly PresentationPlatformClipboardSession _clipboardService;
     private Func<FileOpenPickerPlan, Task<string?>>? _openPickerOverrideForTests;
@@ -109,7 +117,6 @@ public sealed partial class MainWindow : Window,
     private readonly Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
         _videoFramePackageArtifactFactory;
     private bool _nativeOutputDetectionStarted;
-    private bool _nativeOutputDetectionCompleted;
     private CancellationTokenSource? _nativeOutputCancellation;
 
     // ── Editing session ────────────────────────────────────────────────────────
@@ -366,8 +373,6 @@ public sealed partial class MainWindow : Window,
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
     internal int DirtyGeneration => _fileWorkflow.DirtyGeneration;
-    internal IReadOnlyList<StartupDirtyTraceEntry> StartupDirtyTraceForTests =>
-        _startupDirtyTrace?.Entries ?? Array.Empty<StartupDirtyTraceEntry>();
     internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
     internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
     internal PresentationViewZoomState ViewZoomStateForTests => _viewZoomState;
@@ -716,13 +721,12 @@ public sealed partial class MainWindow : Window,
         Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? printOutputPackageFactory = null,
         Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
             videoFramePackageArtifactFactory = null,
-        bool enableStartupDirtyTrace = false,
         IPlatformPrintService? printService = null,
         Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
             showPrintSelectionDialog = null,
         IApplicationOptionsStore<FreePOptions>? optionsStore = null)
     {
-        _startupDirtyTrace = enableStartupDirtyTrace ? new StartupDirtyTrace() : null;
+        InitializeConditionalHost();
         Title = FreePApplicationFrameDescriptor.Title.ApplicationName;
         Width = 1280;
         Height = 760;
@@ -838,7 +842,7 @@ public sealed partial class MainWindow : Window,
             getPrintCurrentSlideNumber: () => Editor.CurrentSlideIndex + 1,
             printPackageFactory: _printOutputPackageFactory,
             videoPackageArtifactFactory: _videoFramePackageArtifactFactory);
-        _startupDirtyTrace?.Record("file-workflow-created", _fileWorkflow);
+        RecordStartupObservation("file-workflow-created");
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: () => _fileSession.ConfirmCloseAllowedAsync(),
             requestClose: Close,
@@ -981,9 +985,12 @@ public sealed partial class MainWindow : Window,
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
-        Closing += (_, e) => e.Cancel =
-            !_allowCloseWithoutDirtyPromptForValidation &&
-            _closeCoordinator.ShouldCancelClosing();
+        Closing += (_, e) =>
+        {
+            var cancel = _closeCoordinator.ShouldCancelClosing();
+            OverrideCloseCancellation(ref cancel);
+            e.Cancel = cancel;
+        };
         Closed += (_, _) =>
         {
             _workareaSession.Dispose();
@@ -998,9 +1005,8 @@ public sealed partial class MainWindow : Window,
 
         var startupPresentation = startupArguments
             .FirstOrDefault(a => IsSupportedPresentationPath(a) && File.Exists(a));
-        _startupDirtyTrace?.Record(
-            startupPresentation is null ? "startup-load-not-requested" : "startup-load-begin",
-            _fileWorkflow);
+        RecordStartupObservation(
+            startupPresentation is null ? "startup-load-not-requested" : "startup-load-begin");
 
         Exception? startupOpenError = null;
         if (startupPresentation is not null)
@@ -1009,14 +1015,14 @@ public sealed partial class MainWindow : Window,
             {
                 var result = PresentationFilePersistenceWorkflow.Open(startupPresentation);
                 LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
-                _startupDirtyTrace?.Record("startup-load-saved", _fileWorkflow);
+                RecordStartupObservation("startup-load-saved");
                 _statusText.Text = SisterAppFileTextPlanner.FormatOpened(FileText, Path.GetFileName(startupPresentation));
             }
             catch (Exception ex)
             {
                 startupOpenError = ex;
                 LoadPresentationAsSaved(_presentation, path: null);
-                _startupDirtyTrace?.Record("startup-load-failed-fallback-saved", _fileWorkflow);
+                RecordStartupObservation("startup-load-failed-fallback-saved");
                 _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
                     FileText,
                     FileText.OpenCommand,
@@ -1026,16 +1032,16 @@ public sealed partial class MainWindow : Window,
         else
         {
             LoadPresentationAsSaved(_presentation, path: null);
-            _startupDirtyTrace?.Record("startup-empty-saved", _fileWorkflow);
+            RecordStartupObservation("startup-empty-saved");
         }
 
-        _startupDirtyTrace?.Record("startup-seeds-complete", _fileWorkflow);
+        RecordStartupObservation("startup-seeds-complete");
 
         Content = windowFrame.Root;
-        _startupDirtyTrace?.Record("content-assigned", _fileWorkflow);
+        RecordStartupObservation("content-assigned");
         UpdateStatus();
-        _startupDirtyTrace?.Record("constructor-complete", _fileWorkflow);
-        Opened += (_, _) => _startupDirtyTrace?.Record("window-opened", _fileWorkflow);
+        RecordStartupObservation("constructor-complete");
+        RegisterStartupOpenedObservation();
         if (startupOpenError is not null)
         {
             var error = startupOpenError;
@@ -1069,7 +1075,7 @@ public sealed partial class MainWindow : Window,
             {
                 if (task.IsCanceled || task.IsFaulted)
                 {
-                    Dispatcher.UIThread.Post(() => _nativeOutputDetectionCompleted = true);
+                    Dispatcher.UIThread.Post(() => ObserveNativeOutputDetectionCompleted());
                     return;
                 }
 
@@ -1078,7 +1084,7 @@ public sealed partial class MainWindow : Window,
                     _nativeOutputCapabilities = task.Result;
                     _videoExportAdapter = CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
                     _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
-                    _nativeOutputDetectionCompleted = true;
+                    ObserveNativeOutputDetectionCompleted();
                     if (_printOptionsPaneHost?.IsVisible == true)
                         RenderPrintOptionsPane(RefreshPrintBackstagePlan(_printOptionsPaneRequest));
                 });
@@ -3245,7 +3251,7 @@ public sealed partial class MainWindow : Window,
             hyperlink => _textEditor?.TryApplySelectedShapeRunHyperlink(hyperlink) == true);
         LastHyperlinkDialogApplyPlan = workflowResult.ApplyPlan;
         if (workflowResult.Target == PresentationHyperlinkApplyTarget.SelectedShape)
-            NotifyExternalHyperlinkApplied();
+            NotifyHyperlinkAppliedObserver();
 
         return workflowResult.ApplyPlan;
     }
@@ -4830,7 +4836,7 @@ public sealed partial class MainWindow : Window,
 
     private void OnAnimationPaneRequested(PresentationAnimationCommandPlan plan)
     {
-        CoordinateExternalAnimationPaneRequest();
+        CoordinateAnimationPaneRequestObserver();
         _ = plan;
         if (IsAnimationPaneVisible)
             HideAnimationPane();
@@ -7450,7 +7456,7 @@ public sealed partial class MainWindow : Window,
     {
         if (_notesRefreshing)
             return;
-        _startupDirtyTrace?.Record("notes-text-changed", _fileWorkflow);
+        RecordStartupObservation("notes-text-changed");
         var result = _notesPaneSession.ApplyText(_notesBox.Text);
         LastNotesPagePreviewPlan = result.Plan.Preview;
         if (!result.Changed)
@@ -7540,7 +7546,7 @@ public sealed partial class MainWindow : Window,
 
     private void OnFileWorkflowChanged()
     {
-        _startupDirtyTrace?.Record("file-workflow-changed", _fileWorkflow);
+        RecordStartupObservation("file-workflow-changed");
         UpdateStatus();
     }
 
@@ -8200,7 +8206,7 @@ public sealed partial class MainWindow : Window,
             selectedCaption?.SlideIndex,
             selectedCaption?.ShapeId,
             selectedCaption?.TrackIndex);
-        ConfigureExternalSlideShowObserver(slideShow);
+        ConfigureSlideShowObserver(slideShow);
         if (timingIntent != FreeP.App.Compositor.SlideShowTimingIntent.None)
             slideShow.SetPresenterTimingIntent(timingIntent);
 
@@ -8245,7 +8251,7 @@ public sealed partial class MainWindow : Window,
             selectedCaption?.SlideIndex,
             selectedCaption?.ShapeId,
             selectedCaption?.TrackIndex);
-        ConfigureExternalSlideShowObserver(slideShow);
+        ConfigureSlideShowObserver(slideShow);
         // A named custom show is still a separate playback window. Restore the
         // editor's focus when it closes just like the normal slideshow route.
         slideShow.Closed += (_, _) => RestoreOwnerFocus();

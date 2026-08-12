@@ -7,11 +7,9 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-public sealed class App : Application
+public sealed partial class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
-    internal static bool EnableStartupDirtyTrace { get; set; }
-    internal static Action<MainWindow>? ExternalStartupCoordinator { get; set; }
     internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeP;
 
     public override void OnFrameworkInitializationCompleted()
@@ -37,21 +35,21 @@ public sealed class App : Application
             this,
             new SisterAvaloniaAppBootstrapSpec<MainWindow>(
                 StartupArguments,
-                args => new MainWindow(
-                    args,
-                    loadRecentFilesStore: null,
-                    options: options,
-                    enableStartupDirtyTrace: EnableStartupDirtyTrace,
-                    optionsStore: optionsStore),
-                mainWindow =>
-                {
-                    if (ExternalStartupCoordinator is { } externalStartupCoordinator)
-                    {
-                        externalStartupCoordinator(mainWindow);
-                        return;
-                    }
-                }));
+                args => CreateMainWindow(args, options, optionsStore),
+                mainWindow => CoordinateToolHostStartup(mainWindow)));
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    private static MainWindow CreateMainWindow(
+        IReadOnlyList<string> startupArguments,
+        FreePOptions options,
+        IApplicationOptionsStore<FreePOptions> optionsStore) =>
+        new(
+            startupArguments,
+            loadRecentFilesStore: null,
+            options: options,
+            optionsStore: optionsStore);
+
+    static partial void CoordinateToolHostStartup(MainWindow mainWindow);
 }

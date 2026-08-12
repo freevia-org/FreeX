@@ -22,9 +22,34 @@
     <IntermediateOutputPath>obj\VisualEvidence\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreePValidationHost)' == 'true'">
+    <OutputPath>bin\Validation\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true' Or '$(FreePValidationHost)' == 'true'">
+    <Compile Include="..\TestSupport\AvaloniaToolHost\App.ToolHost.cs"
+             Link="App.ToolHost.cs" />
+    <Compile Include="..\TestSupport\AvaloniaToolHost\Program.ToolHost.cs"
+             Link="Program.ToolHost.cs" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
     <Compile Include="..\TestSupport\VisualEvidence.Avalonia\MainWindow.VisualCaptureAdapter.cs"
              Link="MainWindow.VisualCaptureAdapter.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePValidationHost)' == 'true'">
+    <Compile Include="..\TestSupport\Validation.Avalonia\App.ValidationHost.cs"
+             Link="App.ValidationHost.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\MainWindow.StartupDirtyTrace.cs"
+             Link="MainWindow.StartupDirtyTrace.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\MainWindow.ValidationAccessAdapter.cs"
+             Link="MainWindow.ValidationAccessAdapter.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\Program.ValidationHost.cs"
+             Link="Program.ValidationHost.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\StartupDirtyTrace.cs"
+             Link="StartupDirtyTrace.cs" />
   </ItemGroup>
 
   <ItemGroup>
