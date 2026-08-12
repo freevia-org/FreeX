@@ -9460,6 +9460,9 @@ public sealed class DocumentView : RichTextBox
                     row.HeightPt = authoredRow.HeightPt;
                     row.HeightRule = authoredRow.HeightRule;
                     row.AllowBreakAcrossPages = authoredRow.AllowBreakAcrossPages;
+                    row.RowRevision = authoredRow.RowRevision;
+                    row.RowRevisionAuthor = authoredRow.RowRevisionAuthor;
+                    row.RowRevisionDateXml = authoredRow.RowRevisionDateXml;
                 }
                 foreach (var wpfCell in wpfRow.Cells)
                 {
@@ -9870,12 +9873,19 @@ public sealed class DocumentView : RichTextBox
         int PageNumber = 1,
         bool IsPaginationSegment = false);
 
+    // RowRevision/Author/DateXml ride along here for the same reason HeightPt and AllowBreakAcrossPages
+    // do: a WPF FlowDocument row has no slot for them, and ReadTable builds a FRESH ModelTableRow on every
+    // commit — so without this side-band a tracked row deletion (DeleteTableRowCommand under Track
+    // Changes) would be silently erased by the very next CommitToModel.
     private sealed record WpfTableRowTag(
         int SourceRowIndex,
         bool IsRepeatedHeader,
         double? HeightPt,
         TableRowHeightRule HeightRule,
-        bool AllowBreakAcrossPages);
+        bool AllowBreakAcrossPages,
+        RevisionKind RowRevision = RevisionKind.None,
+        string? RowRevisionAuthor = null,
+        string? RowRevisionDateXml = null);
 
     private sealed record WpfFloatingTableFigureTag(int SourceBlockIndex);
 
@@ -10132,7 +10142,10 @@ public sealed class DocumentView : RichTextBox
                     isRepeatedHeader,
                     modelRow.HeightPt,
                     modelRow.HeightRule,
-                    modelRow.AllowBreakAcrossPages)
+                    modelRow.AllowBreakAcrossPages,
+                    modelRow.RowRevision,
+                    modelRow.RowRevisionAuthor,
+                    modelRow.RowRevisionDateXml)
             };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
@@ -15401,11 +15414,18 @@ public sealed class DocumentView : RichTextBox
     {
         if (!TrackChangesEnabled
             || string.IsNullOrEmpty(text)
-            || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit)
-            || !TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+            || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
         {
             return false;
         }
+
+        // Typing over a selection that spans paragraphs: record the replacement as one tracked edit rather
+        // than letting the native RichTextBox merge the paragraphs and drop the text untracked.
+        if (TryGetCrossParagraphSelection(out var firstIndex, out var firstOffset, out var lastIndex, out var lastOffset))
+            return TryRecordTrackedCrossParagraphReplacement(firstIndex, firstOffset, lastIndex, lastOffset, text);
+
+        if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
+            return false;
 
         var insertOffset = Math.Min(startOffset, endOffset);
         var author = CurrentRevisionAuthor();
@@ -15443,6 +15463,8 @@ public sealed class DocumentView : RichTextBox
     {
         if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
             return false;
+        if (TryGetCrossParagraphSelection(out var firstIndex, out var firstOffset, out var lastIndex, out var lastOffset))
+            return TryRecordTrackedCrossParagraphReplacement(firstIndex, firstOffset, lastIndex, lastOffset, insertText: null);
         if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
             return false;
         if (hasSelection)
@@ -15456,6 +15478,8 @@ public sealed class DocumentView : RichTextBox
     {
         if (!TrackChangesEnabled || !AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
             return false;
+        if (TryGetCrossParagraphSelection(out var firstIndex, out var firstOffset, out var lastIndex, out var lastOffset))
+            return TryRecordTrackedCrossParagraphReplacement(firstIndex, firstOffset, lastIndex, lastOffset, insertText: null);
         if (!TryGetCurrentBodyTextTarget(out var paragraphIndex, out var startOffset, out var endOffset, out var hasSelection))
             return false;
         if (hasSelection)
@@ -15543,6 +15567,154 @@ public sealed class DocumentView : RichTextBox
             ? Math.Max(startOffset, endOffset)
             : result.CaretOffset;
         PlaceCaretAtModelTextOffset(paragraphIndex, caretOffset);
+        return true;
+    }
+
+    /// <summary>
+    /// Resolve a selection that spans TWO OR MORE body paragraphs to model paragraph indices/offsets.
+    /// <see cref="TryGetCurrentBodyTextTarget"/> deliberately handles only a selection contained in a single
+    /// paragraph; without this companion, every tracked edit over a multi-paragraph selection fell through
+    /// to native RichTextBox handling, which merged the paragraphs and discarded the selected text with no
+    /// revision recorded at all. Returns false — so the caller keeps its existing behaviour — for an empty
+    /// or single-paragraph selection, and whenever either endpoint is not a top-level body paragraph
+    /// (<see cref="NumberLeafBlocks"/> numbers a table as one opaque block, so a selection reaching into a
+    /// table cell simply does not resolve here).
+    /// </summary>
+    private bool TryGetCrossParagraphSelection(
+        out int firstParagraphIndex,
+        out int firstOffset,
+        out int lastParagraphIndex,
+        out int lastOffset)
+    {
+        firstParagraphIndex = -1;
+        lastParagraphIndex = -1;
+        firstOffset = 0;
+        lastOffset = 0;
+
+        if (Selection.IsEmpty)
+            return false;
+        var startParagraph = Selection.Start.Paragraph;
+        var endParagraph = Selection.End.Paragraph;
+        if (startParagraph is null || endParagraph is null || ReferenceEquals(startParagraph, endParagraph))
+            return false;
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var modelIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref modelIndex);
+        if (!indexOf.TryGetValue(startParagraph, out var startVisible)
+            || !indexOf.TryGetValue(endParagraph, out var endVisible))
+        {
+            return false;
+        }
+
+        firstParagraphIndex = ModelIndexFromVisible(startVisible);
+        lastParagraphIndex = ModelIndexFromVisible(endVisible);
+        if (firstParagraphIndex < 0 || lastParagraphIndex <= firstParagraphIndex)
+            return false;
+
+        firstOffset = OffsetInParagraph(startParagraph, Selection.Start);
+        lastOffset = OffsetInParagraph(endParagraph, Selection.End);
+        return true;
+    }
+
+    /// <summary>
+    /// Record a Backspace/Delete (<paramref name="insertText"/> null) or a type-over replacement
+    /// (<paramref name="insertText"/> non-null) of a selection spanning several body paragraphs as tracked
+    /// revisions, in one undo step. Nothing is physically removed or merged: the selected text in the first,
+    /// intervening, and last paragraphs is struck as a tracked deletion, and every paragraph MARK inside the
+    /// selection — the first paragraph's and each intervening one's, but not the last paragraph's, which
+    /// lies past the selection's end — is flagged <see cref="RevisionKind.Deleted"/> exactly as the
+    /// single-boundary case does (<see cref="TryRecordTrackedParagraphMergeBackward"/>). The paragraphs only
+    /// actually collapse into one when the revisions are accepted. Replacement text is inserted as a tracked
+    /// insertion at the selection's start, matching the single-paragraph type-over path.
+    /// Returns false — leaving the caller to fall through to native handling — when any block in the span is
+    /// not an ordinary body paragraph (a table in the middle of the selection is outside what this
+    /// pilcrow-level model covers).
+    /// </summary>
+    private bool TryRecordTrackedCrossParagraphReplacement(
+        int firstParagraphIndex,
+        int firstOffset,
+        int lastParagraphIndex,
+        int lastOffset,
+        string? insertText)
+    {
+        CommitToModel();
+        if (firstParagraphIndex < 0
+            || lastParagraphIndex >= _model.Blocks.Count
+            || lastParagraphIndex <= firstParagraphIndex)
+        {
+            return false;
+        }
+        for (var i = firstParagraphIndex; i <= lastParagraphIndex; i++)
+        {
+            if (_model.Blocks[i] is not ModelParagraph)
+                return false;
+        }
+
+        var author = CurrentRevisionAuthor();
+        var dateXml = CurrentRevisionDateXml();
+        var startLength = ((ModelParagraph)_model.Blocks[firstParagraphIndex]).PlainText.Length;
+        var insertOffset = Math.Clamp(firstOffset, 0, startLength);
+        var endLength = ((ModelParagraph)_model.Blocks[lastParagraphIndex]).PlainText.Length;
+        var deleteEndOffset = Math.Clamp(lastOffset, 0, endLength);
+
+        var ownsUndoGroup = !_commands.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _commands.BeginUndoGroup();
+        try
+        {
+            // First paragraph: strike from the selection start to its end, then (type-over only) insert the
+            // replacement there — the same delete-then-insert order the single-paragraph path uses.
+            _commands.Execute(new ReplaceParagraphRunsCommand(firstParagraphIndex, paragraph =>
+            {
+                RevisionEditPlanner.DeleteRangeAsRevision(
+                    paragraph, insertOffset, paragraph.PlainText.Length, author, dateXml);
+                if (insertText is not { Length: > 0 })
+                    return;
+                var formatting = RevisionEditPlanner.FormattingAtOffset(paragraph, insertOffset);
+                var link = RevisionEditPlanner.LinkAtOffset(paragraph, insertOffset);
+                RevisionEditPlanner.InsertText(
+                    paragraph,
+                    insertOffset,
+                    insertText,
+                    formatting,
+                    new RevisionEditPlanner.InsertOptions(
+                        RevisionKind.Inserted,
+                        author,
+                        dateXml,
+                        link.HyperlinkUrl,
+                        link.HyperlinkAnchor,
+                        link.HyperlinkTooltip));
+            }));
+
+            // Fully-covered paragraphs in between: all of their text is struck.
+            for (var i = firstParagraphIndex + 1; i < lastParagraphIndex; i++)
+            {
+                _commands.Execute(new ReplaceParagraphRunsCommand(i, paragraph =>
+                    RevisionEditPlanner.DeleteRangeAsRevision(
+                        paragraph, 0, paragraph.PlainText.Length, author, dateXml)));
+            }
+
+            // Last paragraph: strike only up to the selection's end; its own mark is NOT in the selection.
+            _commands.Execute(new ReplaceParagraphRunsCommand(lastParagraphIndex, paragraph =>
+                RevisionEditPlanner.DeleteRangeAsRevision(paragraph, 0, deleteEndOffset, author, dateXml)));
+
+            // Every paragraph mark the selection actually covers.
+            for (var i = firstParagraphIndex; i < lastParagraphIndex; i++)
+                _commands.Execute(new SetParagraphMarkRevisionCommand(i, RevisionKind.Deleted, author, dateXml));
+        }
+        catch
+        {
+            if (ownsUndoGroup)
+                _commands.RollbackUndoGroup();
+            throw;
+        }
+
+        if (ownsUndoGroup)
+            _commands.CommitUndoGroup(insertText is { Length: > 0 } ? "Replace Selection" : "Delete Selection");
+
+        PlaceCaretAtModelTextOffset(firstParagraphIndex, insertOffset + (insertText?.Length ?? 0));
         return true;
     }
 

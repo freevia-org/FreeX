@@ -451,6 +451,16 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
 /// <see cref="VerticalMergeState.Continue"/> to <see cref="VerticalMergeState.Restart"/> so the
 /// vertical merge continues from the next row (matching Word's behaviour). The prior states of any
 /// promoted cells are snapshotted for exact undo restoration.</para>
+/// <para>Track Changes: when <see cref="TextDocument.TrackRevisions"/> is on, the row is NOT removed —
+/// it stays in place with its <see cref="TableRow.RowRevision"/> flagged
+/// <see cref="RevisionKind.Deleted"/>, and only actually disappears when
+/// <see cref="TrackChanges.AcceptAll"/> resolves that mark (the row-level sibling of
+/// <see cref="SetParagraphMarkRevisionCommand"/>; without this the ribbon's "Delete Row" would silently
+/// bypass Track Changes). The one exception is a row that is this same author's own still-pending
+/// tracked INSERTION: deleting that removes it outright, mirroring the run-level rule that deleting your
+/// own unaccepted insertion just takes it back rather than layering a deletion on top of it. Because
+/// nothing is removed in the tracked case, the BF1 vertical-merge promotion above is deliberately skipped
+/// — the merge head is still there.</para>
 /// </summary>
 public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocumentCommand
 {
@@ -458,6 +468,11 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
     private int _removedAt = -1;
     // Snapshot of cells that were promoted (BF1): (rowIndexAfterDeletion, cellListIndex, priorState).
     private (int Row, int CellIdx, VerticalMergeState PriorState)[]? _promoted;
+    // Tracked-deletion path: the row left in place with its RowRevision flagged, plus its prior mark.
+    private TableRow? _marked;
+    private RevisionKind _previousRowRevision;
+    private string? _previousRowRevisionAuthor;
+    private string? _previousRowRevisionDateXml;
 
     public string Label => "Delete Row";
 
@@ -466,6 +481,20 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
         if (table.Rows.Count <= 1 || rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
+
+        if (context.Document.TrackRevisions && !IsOwnPendingInsertion(table.Rows[rowIndex], context))
+        {
+            var tracked = table.Rows[rowIndex];
+            _marked = tracked;
+            _previousRowRevision = tracked.RowRevision;
+            _previousRowRevisionAuthor = tracked.RowRevisionAuthor;
+            _previousRowRevisionDateXml = tracked.RowRevisionDateXml;
+            tracked.RowRevision = RevisionKind.Deleted;
+            tracked.RowRevisionAuthor = TrackedFormattingRevisionFactory.NormalizeAuthor(context.RevisionAuthor);
+            tracked.RowRevisionDateXml = TrackedFormattingRevisionFactory.CurrentDateXml();
+            return;
+        }
+
         _removedAt = rowIndex;
         _removed = table.Rows[rowIndex];
 
@@ -504,8 +533,26 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
         table.Rows.RemoveAt(rowIndex);
     }
 
+    // A row this same author inserted under Track Changes and that nobody has accepted yet: deleting it
+    // takes the insertion back outright instead of stacking a deletion mark on top of it.
+    private static bool IsOwnPendingInsertion(TableRow row, IDocumentCommandContext context) =>
+        row.RowRevision == RevisionKind.Inserted
+        && string.Equals(
+            row.RowRevisionAuthor,
+            TrackedFormattingRevisionFactory.NormalizeAuthor(context.RevisionAuthor),
+            StringComparison.Ordinal);
+
     public void Revert(IDocumentCommandContext context)
     {
+        if (_marked is { } marked)
+        {
+            marked.RowRevision = _previousRowRevision;
+            marked.RowRevisionAuthor = _previousRowRevisionAuthor;
+            marked.RowRevisionDateXml = _previousRowRevisionDateXml;
+            _marked = null;
+            return;
+        }
+
         if (_removed is null || _removedAt < 0)
             return;
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
@@ -2313,10 +2360,10 @@ internal static class TrackedFormattingRevisionFactory
     public static ParagraphFormatRevision ForParagraph(ParagraphFormatting previous, string? author) =>
         new(previous, NormalizeAuthor(author), CurrentDateXml());
 
-    private static string NormalizeAuthor(string? author) =>
+    internal static string NormalizeAuthor(string? author) =>
         string.IsNullOrWhiteSpace(author) ? DefaultAuthor : author.Trim();
 
-    private static string CurrentDateXml() =>
+    internal static string CurrentDateXml() =>
         DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
 }
 

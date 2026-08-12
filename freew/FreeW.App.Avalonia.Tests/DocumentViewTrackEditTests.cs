@@ -644,4 +644,279 @@ public sealed class DocumentViewTrackEditTests
         mark.Should().Be(RevisionKind.None, "reject clears the tracked mark-deletion");
         anyRevision.Should().BeFalse();
     }
+
+    // ── R136: the SIBLINGS of the R135 paragraph-mark fix — structural edits at a boundary that also
+    // bypassed Track Changes entirely. (a) Deleting a table row removed it outright; (b) merging two
+    // paragraphs INSIDE a table cell (Backspace at a cell paragraph's start / Delete at its end) spliced
+    // them together unconditionally, exactly the body-paragraph bug R135 fixed but one level down. ──
+
+    /// <summary>
+    /// A 3×2 table whose first cell holds TWO paragraphs, so the in-cell paragraph boundary the
+    /// Backspace/Delete cell branches take can be exercised.
+    /// </summary>
+    private static (DocumentView View, Table Table) BuildTableView()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(3, 2);
+        for (var r = 0; r < 3; r++)
+            for (var c = 0; c < 2; c++)
+                table.Rows[r].Cells[c] = new TableCell($"R{r}C{c}");
+        table.Rows[0].Cells[0].Paragraphs.Add(new Paragraph("Second"));
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.Measure(new Size(900, 6000));
+        return (view, (Table)view.Document.Blocks[0]);
+    }
+
+    private static IList<Paragraph> FirstCellParagraphs(Table table) => table.Rows[0].Cells[0].Paragraphs;
+
+    [Fact]
+    public async Task DeleteTableRow_with_TrackChanges_on_marks_the_row_deleted_without_removing_it()
+    {
+        int rowCount = -1; RevisionKind rowRevision = RevisionKind.None;
+        string? author = null; string? rowText = null; bool anyRevision = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.ToggleTrackChanges();
+            view.PlaceCaretInCell(0, row: 1, col: 0, paraIdx: 0, offset: 0);
+            view.DeleteTableRow();
+            rowCount = table.Rows.Count;
+            rowRevision = table.Rows[1].RowRevision;
+            author = table.Rows[1].RowRevisionAuthor;
+            rowText = table.Rows[1].Cells[0].PlainText;
+            anyRevision = view.HasRevisions;
+        });
+        if (!ran) return;
+
+        rowCount.Should().Be(3, "a tracked row deletion leaves the row in place until it is accepted");
+        rowRevision.Should().Be(RevisionKind.Deleted);
+        author.Should().Be("FreeW User");
+        rowText.Should().Be("R1C0", "the row's own content is untouched by the mark");
+        anyRevision.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task DeleteTableRow_with_TrackChanges_off_removes_the_row_immediately()
+    {
+        int rowCount = -1; string? newRow1 = null; bool anyRevision = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.PlaceCaretInCell(0, row: 1, col: 0, paraIdx: 0, offset: 0);
+            view.DeleteTableRow();
+            rowCount = table.Rows.Count;
+            newRow1 = table.Rows[1].Cells[0].PlainText;
+            anyRevision = view.HasRevisions;
+        });
+        if (!ran) return;
+
+        rowCount.Should().Be(2, "with Track Changes off the row is removed as before (regression guard)");
+        newRow1.Should().Be("R2C0");
+        anyRevision.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task AcceptAll_after_a_tracked_table_row_deletion_actually_removes_the_row()
+    {
+        int rowCount = -1; string? newRow1 = null; bool anyRevision = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.ToggleTrackChanges();
+            view.PlaceCaretInCell(0, row: 1, col: 0, paraIdx: 0, offset: 0);
+            view.DeleteTableRow();
+            view.AcceptAllRevisions();
+            rowCount = table.Rows.Count;
+            newRow1 = table.Rows[1].Cells[0].PlainText;
+            anyRevision = view.HasRevisions;
+        });
+        if (!ran) return;
+
+        rowCount.Should().Be(2, "accepting the tracked row deletion performs the removal");
+        newRow1.Should().Be("R2C0");
+        anyRevision.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RejectAll_after_a_tracked_table_row_deletion_keeps_the_row()
+    {
+        int rowCount = -1; RevisionKind rowRevision = RevisionKind.Deleted;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.ToggleTrackChanges();
+            view.PlaceCaretInCell(0, row: 1, col: 0, paraIdx: 0, offset: 0);
+            view.DeleteTableRow();
+            view.RejectAllRevisions();
+            rowCount = table.Rows.Count;
+            rowRevision = table.Rows[1].RowRevision;
+        });
+        if (!ran) return;
+
+        rowCount.Should().Be(3, "rejecting the tracked row deletion keeps the row");
+        rowRevision.Should().Be(RevisionKind.None);
+    }
+
+    [Fact]
+    public async Task Backspace_at_cell_paragraph_start_with_TrackChanges_on_marks_the_boundary_without_merging()
+    {
+        int paraCount = -1; RevisionKind mark = RevisionKind.None;
+        string? p0 = null; string? p1 = null; bool anyRevision = false;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.ToggleTrackChanges();
+            view.PlaceCaretInCell(0, row: 0, col: 0, paraIdx: 1, offset: 0);
+            view.BackspacePublic();
+            var paragraphs = FirstCellParagraphs(table);
+            paraCount = paragraphs.Count;
+            mark = paragraphs[0].MarkRevision;
+            p0 = paragraphs[0].PlainText;
+            p1 = paragraphs.Count > 1 ? paragraphs[1].PlainText : null;
+            anyRevision = view.HasRevisions;
+        });
+        if (!ran) return;
+
+        paraCount.Should().Be(2, "the two cell paragraphs must NOT be spliced together while the deletion is only tracked");
+        mark.Should().Be(RevisionKind.Deleted, "the earlier cell paragraph's own mark records the tracked boundary deletion");
+        p0.Should().Be("R0C0");
+        p1.Should().Be("Second");
+        anyRevision.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Backspace_at_cell_paragraph_start_with_TrackChanges_off_merges_immediately()
+    {
+        int paraCount = -1; string? p0 = null; bool anyRevision = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.PlaceCaretInCell(0, row: 0, col: 0, paraIdx: 1, offset: 0);
+            view.BackspacePublic();
+            var paragraphs = FirstCellParagraphs(table);
+            paraCount = paragraphs.Count;
+            p0 = paragraphs[0].PlainText;
+            anyRevision = view.HasRevisions;
+        });
+        if (!ran) return;
+
+        paraCount.Should().Be(1, "with Track Changes off the cell paragraphs merge as before (regression guard)");
+        p0.Should().Be("R0C0Second");
+        anyRevision.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task DeleteForward_at_cell_paragraph_end_with_TrackChanges_on_marks_the_boundary_without_merging()
+    {
+        int paraCount = -1; RevisionKind mark = RevisionKind.None;
+        string? p0 = null; string? p1 = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.ToggleTrackChanges();
+            view.PlaceCaretInCell(0, row: 0, col: 0, paraIdx: 0, offset: "R0C0".Length);
+            view.DeleteForwardPublic();
+            var paragraphs = FirstCellParagraphs(table);
+            paraCount = paragraphs.Count;
+            mark = paragraphs[0].MarkRevision;
+            p0 = paragraphs[0].PlainText;
+            p1 = paragraphs.Count > 1 ? paragraphs[1].PlainText : null;
+        });
+        if (!ran) return;
+
+        paraCount.Should().Be(2, "the two cell paragraphs must NOT be spliced together while the deletion is only tracked");
+        mark.Should().Be(RevisionKind.Deleted, "forward-Delete marks the SAME cell paragraph a Backspace at the next one's start would");
+        p0.Should().Be("R0C0");
+        p1.Should().Be("Second");
+    }
+
+    [Fact]
+    public async Task DeleteForward_at_cell_paragraph_end_with_TrackChanges_off_merges_immediately()
+    {
+        int paraCount = -1; string? p0 = null;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.PlaceCaretInCell(0, row: 0, col: 0, paraIdx: 0, offset: "R0C0".Length);
+            view.DeleteForwardPublic();
+            var paragraphs = FirstCellParagraphs(table);
+            paraCount = paragraphs.Count;
+            p0 = paragraphs[0].PlainText;
+        });
+        if (!ran) return;
+
+        paraCount.Should().Be(1, "with Track Changes off the in-cell join happens as before (regression guard)");
+        p0.Should().Be("R0C0Second");
+    }
+
+    [Fact]
+    public async Task AcceptAll_after_a_tracked_cell_paragraph_boundary_backspace_performs_the_merge()
+    {
+        int paraCount = -1; string? p0 = null; bool anyRevision = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.ToggleTrackChanges();
+            view.PlaceCaretInCell(0, row: 0, col: 0, paraIdx: 1, offset: 0);
+            view.BackspacePublic();
+            view.AcceptAllRevisions();
+            var paragraphs = FirstCellParagraphs(table);
+            paraCount = paragraphs.Count;
+            p0 = paragraphs[0].PlainText;
+            anyRevision = view.HasRevisions;
+        });
+        if (!ran) return;
+
+        paraCount.Should().Be(1, "accepting the tracked cell paragraph-mark deletion performs the merge");
+        p0.Should().Be("R0C0Second");
+        anyRevision.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RejectAll_after_a_tracked_cell_paragraph_boundary_backspace_restores_two_paragraphs()
+    {
+        int paraCount = -1; RevisionKind mark = RevisionKind.Deleted;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.ToggleTrackChanges();
+            view.PlaceCaretInCell(0, row: 0, col: 0, paraIdx: 1, offset: 0);
+            view.BackspacePublic();
+            view.RejectAllRevisions();
+            var paragraphs = FirstCellParagraphs(table);
+            paraCount = paragraphs.Count;
+            mark = paragraphs[0].MarkRevision;
+        });
+        if (!ran) return;
+
+        paraCount.Should().Be(2, "rejecting keeps the two cell paragraphs separate");
+        mark.Should().Be(RevisionKind.None);
+    }
+
+    [Fact]
+    public async Task Undo_after_a_tracked_cell_paragraph_boundary_backspace_clears_the_mark()
+    {
+        int paraCount = -1; RevisionKind mark = RevisionKind.Deleted; bool anyRevision = true;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, table) = BuildTableView();
+            view.ToggleTrackChanges();
+            view.PlaceCaretInCell(0, row: 0, col: 0, paraIdx: 1, offset: 0);
+            view.BackspacePublic();
+            view.Undo();
+            var paragraphs = FirstCellParagraphs(table);
+            paraCount = paragraphs.Count;
+            mark = paragraphs[0].MarkRevision;
+            anyRevision = view.HasRevisions;
+        });
+        if (!ran) return;
+
+        paraCount.Should().Be(2);
+        mark.Should().Be(RevisionKind.None, "undo reverts the tracked cell paragraph-mark deletion");
+        anyRevision.Should().BeFalse();
+    }
 }

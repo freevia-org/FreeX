@@ -19902,8 +19902,14 @@ public sealed class DocumentView : Control
             }
             else if (cc.ParaIdx > 0)
             {
-                // At start of a non-first paragraph in a cell → merge with previous paragraph.
-                CellMergeWithPreviousParagraph(cc);
+                // At start of a non-first paragraph in a cell → merge with previous paragraph. Under Track
+                // Changes the merge must NOT happen yet: record it as a tracked deletion of the PREVIOUS
+                // cell paragraph's own mark instead (the in-cell sibling of the body-paragraph case handled
+                // by TryRecordTrackedParagraphMergeBackward).
+                if (TrackChangesEnabled)
+                    TryRecordTrackedCellParagraphMergeBackward(cc);
+                else
+                    CellMergeWithPreviousParagraph(cc);
             }
             // else: at start of first paragraph in cell → do nothing (can't go back past cell boundary)
             return;
@@ -20028,6 +20034,17 @@ public sealed class DocumentView : Control
                 var cellModel = GetCellModel(cc.TableBlock, cc.Row, cc.Col);
                 if (cellModel != null && cc.ParaIdx < cellModel.Paragraphs.Count - 1)
                 {
+                    // Under Track Changes the join must be recorded, not performed — mark THIS cell
+                    // paragraph's own mark deleted (same paragraph a Backspace at the next one's start
+                    // would mark), leaving both paragraphs in place until the revision is accepted.
+                    if (TrackChangesEnabled)
+                    {
+                        _bus.Execute(new SetCellParagraphMarkRevisionCommand(
+                            cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx,
+                            RevisionKind.Deleted, RevisionAuthor, CurrentRevisionDateXml()));
+                        return;
+                    }
+
                     // Merge current para + next para in cell.
                     var curPara = cellModel.Paragraphs[cc.ParaIdx];
                     var nextPara = cellModel.Paragraphs[cc.ParaIdx + 1];
@@ -20261,6 +20278,25 @@ public sealed class DocumentView : Control
     }
 
     // AV-TBL: merge the current cell paragraph with the previous one (Backspace at start of para).
+    /// <summary>
+    /// AV-TRACKEDIT: Backspace at the very start of a non-first paragraph INSIDE a table cell, under Track
+    /// Changes. The in-cell sibling of <see cref="TryRecordTrackedParagraphMergeBackward"/>: rather than
+    /// splicing the two cell paragraphs together now (which would bypass Track Changes entirely), the
+    /// PRECEDING cell paragraph's own end-of-paragraph mark is flagged <see cref="RevisionKind.Deleted"/>.
+    /// Word's convention, same as in the body: the paragraph whose mark is deleted is the earlier of the
+    /// pair, so accepting keeps the later paragraph's formatting. Nothing moves and the caret stays exactly
+    /// where it is until the mark is resolved.
+    /// </summary>
+    private void TryRecordTrackedCellParagraphMergeBackward((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc)
+    {
+        if (cc.ParaIdx <= 0 || GetCellParagraph(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx - 1) is null)
+            return;
+
+        _bus.Execute(new SetCellParagraphMarkRevisionCommand(
+            cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx - 1,
+            RevisionKind.Deleted, RevisionAuthor, CurrentRevisionDateXml()));
+    }
+
     private void CellMergeWithPreviousParagraph((int TableBlock, int Row, int Col, int ParaIdx, int Offset) cc)
     {
         var prevParaIdx = cc.ParaIdx - 1;
