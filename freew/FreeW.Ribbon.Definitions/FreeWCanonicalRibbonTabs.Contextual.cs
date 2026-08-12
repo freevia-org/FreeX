@@ -795,7 +795,7 @@ internal static partial class FreeWCanonicalRibbonTabs
     private static RibbonDefinitionBuilder AddTableLayoutTopology(
         this RibbonDefinitionBuilder builder,
         FreeWRibbonCapabilities capabilities) =>
-        builder.ContextualTab("table-layout", "Layout",
+        builder.ContextualTab("table-layout", "Table Layout",
             new RibbonTabContext(capabilities.TableContextKey, "Table Tools", RibbonContextColor.Teal), tab =>
             {
                 var topology = new FreeWRibbonTabTopology(tab, capabilities);
