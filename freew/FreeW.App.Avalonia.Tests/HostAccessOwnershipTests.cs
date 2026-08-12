@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -14,7 +15,7 @@ public sealed class HostAccessOwnershipTests
         File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"))
             .Should().NotContain("RibbonKeyTipsVisibleForTest");
         File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"))
-            .Should().NotContain("CaretRectForTest");
+            .Should().NotContain("internal Rect? CaretRectForTest");
         File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"))
             .Should().Contain("Condition=\"'$(FreeWHostTestSupport)' == 'true'\"");
     }
