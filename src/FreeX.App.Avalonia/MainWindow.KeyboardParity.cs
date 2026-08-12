@@ -411,8 +411,8 @@ public sealed partial class MainWindow
             EditCellsCommand.ForValue(_session.ActiveSheet.Id, target, value),
             target);
         RefreshShell(result.Success
-            ? insertTime ? "Inserted current time." : "Inserted current date."
-            : result.ErrorMessage ?? "Could not insert the current date or time.");
+            ? UiText.Get(insertTime ? "KeyboardLoc_InsertedCurrentTime" : "KeyboardLoc_InsertedCurrentDate")
+            : result.ErrorMessage ?? UiText.Get("KeyboardLoc_InsertCurrentDateOrTimeFailed"));
     }
 
     private void ToggleOutlineSymbolsShortcut()
@@ -427,8 +427,8 @@ public sealed partial class MainWindow
         if (result.Success)
             _session.SelectRange(range);
         RefreshShell(result.Success
-            ? next ? "Showing outline symbols." : "Hiding outline symbols."
-            : result.ErrorMessage ?? "Could not change outline symbols.");
+            ? UiText.Get(next ? "KeyboardLoc_ShowingOutlineSymbols" : "KeyboardLoc_HidingOutlineSymbols")
+            : result.ErrorMessage ?? UiText.Get("KeyboardLoc_ChangeOutlineSymbolsFailed"));
     }
 
     private void CopyFromAbove(CopyFromAboveMode mode)
@@ -441,8 +441,10 @@ public sealed partial class MainWindow
             new EditCellsCommand(_session.ActiveSheet.Id, [edit]),
             target);
         RefreshShell(result.Success
-            ? mode == CopyFromAboveMode.Value ? "Copied value from above." : "Copied formula from above."
-            : result.ErrorMessage ?? "Could not copy from above.");
+            ? UiText.Get(mode == CopyFromAboveMode.Value
+                ? "KeyboardLoc_CopiedValueFromAbove"
+                : "KeyboardLoc_CopiedFormulaFromAbove")
+            : result.ErrorMessage ?? UiText.Get("KeyboardLoc_CopyFromAboveFailed"));
     }
 
     private void InsertChartSheetFromSelection()
@@ -466,7 +468,7 @@ public sealed partial class MainWindow
 
         if (command.CreatedSheetId is { } createdSheetId)
             _session.SelectSheet(createdSheetId);
-        RefreshShell("Inserted chart sheet.");
+        RefreshShell(UiText.Get("KeyboardLoc_InsertedChartSheet"));
     }
 
     private void SelectFormulaAuditCells(bool selectDependents, bool includeTransitive)
@@ -492,8 +494,14 @@ public sealed partial class MainWindow
         var plan = FormulaAuditSelectionPlanner.Plan(_session.ActiveSheet.Id, matches);
         if (plan is null)
         {
-            var depth = includeTransitive ? "traceable" : "direct";
-            RefreshShell(selectDependents ? $"No {depth} dependents" : $"No {depth} precedents");
+            var statusKey = (selectDependents, includeTransitive) switch
+            {
+                (true, true) => "KeyboardLoc_NoTraceableDependents",
+                (true, false) => "KeyboardLoc_NoDirectDependents",
+                (false, true) => "KeyboardLoc_NoTraceablePrecedents",
+                _ => "KeyboardLoc_NoDirectPrecedents",
+            };
+            RefreshShell(UiText.Get(statusKey));
             return;
         }
 
@@ -501,7 +509,9 @@ public sealed partial class MainWindow
             _session.SelectSheet(plan.TargetSheetId);
         var ranges = SelectionRangeService.CompressAddresses(plan.Matches);
         _session.SelectRanges(new GridRange(plan.Matches[0], plan.Matches[0]), ranges);
-        RefreshShell(selectDependents ? "Selected formula dependents." : "Selected formula precedents.");
+        RefreshShell(UiText.Get(selectDependents
+            ? "KeyboardLoc_SelectedFormulaDependents"
+            : "KeyboardLoc_SelectedFormulaPrecedents"));
     }
 
     private void ScrollActiveCellIntoView()
@@ -515,7 +525,7 @@ public sealed partial class MainWindow
         var topRow = rowVisible ? _session.ActiveSheet.ViewTopRow ?? 1 : active.Row;
         var leftColumn = columnVisible ? _session.ActiveSheet.ViewLeftCol ?? 1 : active.Col;
         if (_session.SetViewportOrigin(topRow, leftColumn))
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
     }
 
     private void CycleSelectionCorner()
@@ -531,7 +541,7 @@ public sealed partial class MainWindow
         // target the corner cell, and multi-cell command gating (SelectedRange.RowCount/ColCount/
         // CellCount, e.g. Merge/Sort enablement) would misreport the selection as 1x1.
         _session.SelectRanges(range, [range], next);
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
     }
 
     /// <summary>

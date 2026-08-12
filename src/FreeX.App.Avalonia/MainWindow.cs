@@ -25194,7 +25194,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             menu.Items.Add(new NativeMenuItem
             {
-                Header = "(No Recent Workbooks)",
+                Header = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
                 IsEnabled = false,
             });
             return menu;

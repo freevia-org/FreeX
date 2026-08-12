@@ -774,7 +774,7 @@ public sealed partial class MainWindow
                     StorageProvider,
                     AvaloniaFilePickerOpenRequest.FromFileTypes(
                         OptionsText("Options_QuickAccessToolbar"),
-                        [new FilePickerFileType("FreeX Quick Access Toolbar")
+                        [new FilePickerFileType(OptionsText("Options_QuickAccessToolbarFileType"))
                         {
                             Patterns = QuickAccessToolbarCustomizationFile.FilePickerPatterns,
                         }]));
@@ -784,13 +784,13 @@ public sealed partial class MainWindow
                 {
                     if (string.IsNullOrWhiteSpace(picker.LocalPath))
                     {
-                        ShowOptionsWarning("Quick Access Toolbar import requires a local file path.");
+                        ShowOptionsWarning(OptionsText("Options_QuickAccessImportRequiresLocalPath"));
                         return;
                     }
                     var result = quickAccessSession.TryImport(picker.LocalPath);
                     if (!result.Success || result.Customization is null)
                     {
-                        ShowOptionsWarning(result.ErrorMessage ?? "Could not import Quick Access Toolbar customization.");
+                        ShowOptionsWarning(result.ErrorMessage ?? OptionsText("Options_QuickAccessImportFailed"));
                         return;
                     }
                     quickAccessBelowRibbonBox.IsChecked = quickAccessSession.QuickAccessToolbarBelowRibbon;
@@ -811,7 +811,7 @@ public sealed partial class MainWindow
                     StorageProvider,
                     AvaloniaFilePickerSaveRequest.FromFileTypes(
                         OptionsText("Options_QuickAccessToolbar"),
-                        [new FilePickerFileType("FreeX Quick Access Toolbar")
+                        [new FilePickerFileType(OptionsText("Options_QuickAccessToolbarFileType"))
                         {
                             Patterns = QuickAccessToolbarCustomizationFile.FilePickerPatterns,
                         }],
@@ -828,7 +828,7 @@ public sealed partial class MainWindow
                     if (string.IsNullOrWhiteSpace(picker.LocalPath) ||
                         !quickAccessSession.TryExport(picker.LocalPath, out errorMessage))
                     {
-                        ShowOptionsWarning(errorMessage ?? "Quick Access Toolbar export requires a local file path.");
+                        ShowOptionsWarning(errorMessage ?? OptionsText("Options_QuickAccessExportRequiresLocalPath"));
                     }
                 }
             }
@@ -1417,93 +1417,7 @@ public sealed partial class MainWindow
     }
 
     private static string OptionsText(string resourceKey) =>
-        NormalizeOptionAccessText(UiText.Get(resourceKey)) is { } localized && !LooksLikeMissingResource(localized)
-            ? localized
-            : resourceKey switch
-            {
-                "Options_CategoryLanguage" => "Language",
-                "Options_CategoryEaseOfAccess" => "Ease of Access",
-                "Options_CategoryAdvanced" => "Advanced",
-                "Options_CategoryCustomizeRibbon" => "Customize Ribbon",
-                "Options_CategoryQuickAccessToolbar" => "Quick Access Toolbar",
-                "Options_CategoryAddIns" => "Add-ins",
-                "Options_CategoryTrustCenter" => "Trust Center",
-                "Options_GeneralOptionsForWorkingWithFreeX" => "General options for working with FreeX.",
-                "Options_UserInterfaceOptions" => "User Interface options",
-                "Options_CollapseTheRibbonAutomatically" => "Collapse the ribbon automatically",
-                "Options_WhenCreatingNewWorkbooks" => "When creating new workbooks",
-                "Options_DefaultFont" => "Default font:",
-                "Options_FontSize" => "Font size:",
-                "Options_IncludeThisManySheets" => "Include this many sheets:",
-                "Options_PersonalizeYourCopyOfFreeX" => "Personalize your copy of FreeX",
-                "Options_UserName" => "User name:",
-                "Options_CalculationOptions" => "Calculation options",
-                "Options_WorkbookCalculation" => "Workbook Calculation",
-                "Options_InManualModePressF9ToRecalculateTheWorkbook" => "In Manual mode, press F9 to recalculate the workbook.",
-                "Options_EnableIterativeCalculation" => "Enable iterative calculation",
-                "Options_MaximumIterations" => "Maximum Iterations",
-                "Options_MaximumChange" => "Maximum Change",
-                "Options_WorkingWithFormulas" => "Working with formulas",
-                "Options_EnableAutoCompleteForCellValues" => "Enable AutoComplete for cell values",
-                "Options_EnableFillHandleAndCellDragAndDrop" => "Enable fill handle and cell drag-and-drop",
-                "Options_ErrorCheckingRules" => "Error Checking Rules",
-                "Options_EnableBackgroundErrorChecksFor" => "Enable background error checks for:",
-                "Options_AutoCorrectOptions" => "AutoCorrect options",
-                "Options_CheckSpellingAsYouType" => "Check spelling as you type",
-                "Options_FlagRepeatedWords" => "Flag repeated words",
-                "Options_CustomDictionary" => "Custom dictionary",
-                "Options_CustomDictionaryDescription" => "FreeX spell check treats words in this list as correct.",
-                "Options_WorkbookViewOptions" => "Workbook view options",
-                "Options_ExpandFormulaBar" => "Expand formula bar",
-                "Options_SaveWorkbooks" => "Save workbooks",
-                "Options_SaveFilesInThisFormat" => "Save files in this format:",
-                "Options_FileLocations" => "File locations",
-                "Options_RecentFilesLocation" => "Recent files location:",
-                "Options_ChooseDisplayLanguage" => "Choose display language",
-                "Options_AppLanguage" => "App language:",
-                "Options_AppLanguageSystemDefault" => "Use system default",
-                "Options_AppLanguageEnglishUnitedStates" => "English (United States)",
-                "Options_AppLanguageRestartNotice" => "Some open windows may keep their current language until you restart FreeX.",
-                "Options_EaseOfAccessOptions" => "Ease of Access options",
-                "Options_ProvideFeedbackWithSound" => "Provide feedback with sound",
-                "Options_ShowQuickAnalysisOptionsOnSelection" => "Show Quick Analysis options on selection",
-                "Options_OptimizeDisplayForAccessibility" => "Optimize display for accessibility",
-                "Options_EditingOptions" => "Editing options",
-                "Options_AfterPressingEnterMoveSelection" => "After pressing Enter, move selection",
-                "Options_Direction" => "Direction:",
-                "Options_AfterEnterDirectionDown" => "Down",
-                "Options_AfterEnterDirectionRight" => "Right",
-                "Options_AfterEnterDirectionUp" => "Up",
-                "Options_AfterEnterDirectionLeft" => "Left",
-                "Options_DisplayOptionsForThisWorkbook" => "Display options for this workbook",
-                "Options_ForObjectsShow" => "For objects, show:",
-                "Options_ObjectsDisplayAll" => "All",
-                "Options_ObjectsDisplayPlaceholders" => "Placeholders",
-                "Options_ObjectsDisplayNothing" => "Nothing",
-                "Options_CustomizeTheRibbon" => "Customize the Ribbon",
-                "Options_ChooseCommandsFromPopularCommands" => "Choose commands from: Popular Commands",
-                "Options_ImportExport" => "Import/Export...",
-                "Options_CustomizeTheQuickAccessToolbar" => "Customize the Quick Access Toolbar",
-                "Options_ShowQuickAccessToolbarBelowTheRibbon" => "Show Quick Access Toolbar below the Ribbon",
-                "Options_QuickAccessToolbarCommands" => "Quick Access Toolbar commands:",
-                "Options_ViewAndManageAddIns" => "View and manage Add-ins",
-                "Options_ActiveApplicationAddIns" => "Active Application Add-ins",
-                "Options_Go" => "Go...",
-                "Options_TrustCenter2" => "Trust Center",
-                "Options_SecurityAndPrivacySettingsForFreeX" => "Security and privacy settings for FreeX.",
-                "Options_SendOptInCrashReports" => "Send opt-in crash reports",
-                "Options_CrashReportsAreSentOnlyWhenThisOptionIsEnabledAndTheTest" => "Crash reports are sent only when this option is enabled and the tester build is configured with a crash analytics endpoint.",
-                "Options_LocalTesterDiagnostics" => "Local tester diagnostics",
-                "Options_FreeXWritesLocalUsageEventsAndCrashFilesToLOCALAPPDATAFr" => "FreeX writes local usage events and crash files to %LOCALAPPDATA%\\FreeX\\Diagnostics. These files stay on this computer unless you attach them to an issue.",
-                "Options_TrustCenterSettings" => "Trust Center Settings...",
-                _ => resourceKey,
-            };
-
-    private static string NormalizeOptionAccessText(string text) =>
-        text.Replace("_", string.Empty, StringComparison.Ordinal);
-
-    private static bool LooksLikeMissingResource(string text) =>
-        text.StartsWith("[[", StringComparison.Ordinal) && text.EndsWith("]]", StringComparison.Ordinal);
+        StripDisplayMnemonic(UiText.Get(resourceKey));
 
     private sealed record OptionsQuickAccessCommandChoice(string Id, string Label)
     {

@@ -20040,6 +20040,99 @@ and {0} more.</value>
   <data name="GridInlineComment_SaveFailedMessage" xml:space="preserve">
     <value>The comment could not be saved.</value>
   </data>
+  <data name="Options_CategoryLanguage" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Options_CategoryEaseOfAccess" xml:space="preserve">
+    <value>Ease of Access</value>
+  </data>
+  <data name="Options_CategoryAdvanced" xml:space="preserve">
+    <value>Advanced</value>
+  </data>
+  <data name="Options_CategoryCustomizeRibbon" xml:space="preserve">
+    <value>Customize Ribbon</value>
+  </data>
+  <data name="Options_CategoryQuickAccessToolbar" xml:space="preserve">
+    <value>Quick Access Toolbar</value>
+  </data>
+  <data name="Options_CategoryAddIns" xml:space="preserve">
+    <value>Add-ins</value>
+  </data>
+  <data name="Options_CategoryTrustCenter" xml:space="preserve">
+    <value>Trust Center</value>
+  </data>
+  <data name="Options_QuickAccessToolbarFileType" xml:space="preserve">
+    <value>FreeX Quick Access Toolbar</value>
+  </data>
+  <data name="Options_QuickAccessImportRequiresLocalPath" xml:space="preserve">
+    <value>Quick Access Toolbar import requires a local file path.</value>
+  </data>
+  <data name="Options_QuickAccessImportFailed" xml:space="preserve">
+    <value>Could not import Quick Access Toolbar customization.</value>
+  </data>
+  <data name="Options_QuickAccessExportRequiresLocalPath" xml:space="preserve">
+    <value>Quick Access Toolbar export requires a local file path.</value>
+  </data>
+  <data name="DrawBorder_ModeActiveStatus" xml:space="preserve">
+    <value>Draw Border mode active &#x2014; click or drag cells to draw borders. Press Esc to cancel.</value>
+  </data>
+  <data name="DrawBorder_ModeCancelledStatus" xml:space="preserve">
+    <value>Draw Border mode cancelled.</value>
+  </data>
+  <data name="DrawBorder_FailedMessage" xml:space="preserve">
+    <value>Draw Border failed.</value>
+  </data>
+  <data name="DrawBorder_AppliedStatusFormat" xml:space="preserve">
+    <value>Draw Border applied to {0}</value>
+  </data>
+  <data name="KeyboardLoc_InsertedCurrentTime" xml:space="preserve">
+    <value>Inserted current time.</value>
+  </data>
+  <data name="KeyboardLoc_InsertedCurrentDate" xml:space="preserve">
+    <value>Inserted current date.</value>
+  </data>
+  <data name="KeyboardLoc_InsertCurrentDateOrTimeFailed" xml:space="preserve">
+    <value>Could not insert the current date or time.</value>
+  </data>
+  <data name="KeyboardLoc_ShowingOutlineSymbols" xml:space="preserve">
+    <value>Showing outline symbols.</value>
+  </data>
+  <data name="KeyboardLoc_HidingOutlineSymbols" xml:space="preserve">
+    <value>Hiding outline symbols.</value>
+  </data>
+  <data name="KeyboardLoc_ChangeOutlineSymbolsFailed" xml:space="preserve">
+    <value>Could not change outline symbols.</value>
+  </data>
+  <data name="KeyboardLoc_CopiedValueFromAbove" xml:space="preserve">
+    <value>Copied value from above.</value>
+  </data>
+  <data name="KeyboardLoc_CopiedFormulaFromAbove" xml:space="preserve">
+    <value>Copied formula from above.</value>
+  </data>
+  <data name="KeyboardLoc_CopyFromAboveFailed" xml:space="preserve">
+    <value>Could not copy from above.</value>
+  </data>
+  <data name="KeyboardLoc_InsertedChartSheet" xml:space="preserve">
+    <value>Inserted chart sheet.</value>
+  </data>
+  <data name="KeyboardLoc_NoTraceableDependents" xml:space="preserve">
+    <value>No traceable dependents</value>
+  </data>
+  <data name="KeyboardLoc_NoDirectDependents" xml:space="preserve">
+    <value>No direct dependents</value>
+  </data>
+  <data name="KeyboardLoc_NoTraceablePrecedents" xml:space="preserve">
+    <value>No traceable precedents</value>
+  </data>
+  <data name="KeyboardLoc_NoDirectPrecedents" xml:space="preserve">
+    <value>No direct precedents</value>
+  </data>
+  <data name="KeyboardLoc_SelectedFormulaDependents" xml:space="preserve">
+    <value>Selected formula dependents.</value>
+  </data>
+  <data name="KeyboardLoc_SelectedFormulaPrecedents" xml:space="preserve">
+    <value>Selected formula precedents.</value>
+  </data>
   <data name="MainLoc_FormatPainterFailed" xml:space="preserve">
     <value>Format Painter failed.</value>
   </data>
