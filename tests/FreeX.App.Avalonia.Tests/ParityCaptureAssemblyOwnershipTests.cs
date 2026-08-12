@@ -15,6 +15,9 @@ public sealed class ParityCaptureAssemblyOwnershipTests
         assembly.GetType("FreeX.App.Avalonia.ParityCaptureOptions").Should().BeNull();
         assembly.GetType("FreeX.App.Avalonia.InteractionValidationCoordinator").Should().BeNull();
         assembly.GetType("FreeX.App.Avalonia.GridCaptureCoordinator").Should().BeNull();
+        assembly.GetType("FreeX.App.Avalonia.MainWindow+PrintPreviewCapturePage").Should().BeNull();
+        assembly.GetType("FreeX.App.Avalonia.MainWindow+PrintPreviewCaptureTextRun").Should().BeNull();
+        assembly.GetType("FreeX.App.Avalonia.MainWindow+SubtotalDialogCaptureState").Should().BeNull();
         typeof(ProductionAvalonia::FreeX.App.Avalonia.MainWindow)
             .GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
             .Select(method => method.Name)
@@ -45,6 +48,21 @@ public sealed class ParityCaptureAssemblyOwnershipTests
             "FreeX.App.Avalonia",
             "MainWindow.TextBoxInlineEditing.cs"));
         var options = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var rendererAccess = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.RendererAccess.cs"));
+        var printPreview = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.PrintPreview.cs"));
+        var conditionalFormat = File.ReadAllText(Path.Combine(
+            root,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.ConditionalFormat.cs"));
         var captureProject = File.ReadAllText(Path.Combine(
             root,
             "tools",
@@ -81,6 +99,13 @@ public sealed class ParityCaptureAssemblyOwnershipTests
         textBoxEditor.Should().NotContain("System.Text.Json");
         options.Should().NotContain("FREEX_PARITY_CAPTURE");
         options.Should().Contain("ExternalOptionsFixtureFactory?.Invoke()");
+        rendererAccess.Should().NotContain("PrintPreviewCapture");
+        rendererAccess.Should().NotContain("SubtotalDialogCaptureState");
+        rendererAccess.Should().NotContain("ParityDialogWidth");
+        printPreview.Should().NotContain("SeedPrintPreviewParityReport");
+        printPreview.Should().NotContain("PrintPreviewCapturePage");
+        printPreview.Should().NotContain("BuildPreviewParityPageView");
+        conditionalFormat.Should().NotContain("parityCapture");
         captureProject.Should().NotContain("FREEX_PARITY_CAPTURE");
         captureProgram.Should().Contain("ParityCaptureOptions.TryParse(");
         captureProgram.Should().Contain("App.ExternalStartupCoordinator =");

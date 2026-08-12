@@ -96,8 +96,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Format("TableLoc_TtcWizardTitle", 1, 3),
-            Width = TextToColumnsParityDialogWidth,
-            Height = TextToColumnsParityDialogHeight,
+            Width = TextToColumnsDialogWidth,
+            Height = TextToColumnsDialogHeight,
             MinWidth = TextToColumnsDialogMetrics.MinimumWindowWidth,
             MinHeight = TextToColumnsDialogMetrics.MinimumWindowHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

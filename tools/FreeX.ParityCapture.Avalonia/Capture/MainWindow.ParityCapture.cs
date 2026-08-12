@@ -862,24 +862,71 @@ public sealed partial class MainWindow
 
     private Task ShowPrintPreviewParityDialogAsync()
     {
-        SeedPrintPreviewParityReport();
+        var pages = PrintPreviewParityFixture.Pages;
         return ShowPrintPreviewDialogAsync(
             PrintPreviewSurfacePlanner.ParityPrinterName,
-            PrintPreviewParityFixture.Pages
-                .Select(page => new PrintPreviewCapturePage(
-                    page.Title,
-                    page.Subtitle,
-                    page.PageNumber,
-                    page.TextRuns
-                        .Select(run => new PrintPreviewCaptureTextRun(
-                            run.Text,
-                            run.Left,
-                            run.Top,
-                            run.FontSize,
-                            run.Bold,
-                            run.Color))
-                        .ToArray()))
-                .ToArray());
+            pages.Count,
+            pageIndex => BuildPrintPreviewParityPageView(pages[pageIndex]));
+    }
+
+    private static Control BuildPrintPreviewParityPageView(PrintPreviewParityPage page)
+    {
+        var canvas = new Canvas
+        {
+            Width = PrintPreviewParityFixture.PageWidth,
+            Height = PrintPreviewParityFixture.PageHeight,
+            Background = Brushes.White,
+            ClipToBounds = true,
+        };
+        AutomationProperties.SetAutomationId(canvas, PrintPreviewDialogPlanner.PageCanvasAutomationId);
+
+        foreach (var run in page.TextRuns)
+        {
+            var text = new TextBlock
+            {
+                Text = run.Text,
+                FontFamily = FormulaBarFontFamily,
+                FontSize = run.FontSize,
+                FontWeight = run.Bold ? FontWeight.SemiBold : FontWeight.Normal,
+                Foreground = PreviewBrush(run.Color),
+                TextWrapping = TextWrapping.NoWrap,
+            };
+            Canvas.SetLeft(text, run.Left);
+            Canvas.SetTop(text, run.Top);
+            canvas.Children.Add(text);
+        }
+
+        var paper = new Grid
+        {
+            ClipToBounds = true,
+            Children =
+            {
+                canvas,
+                new Border
+                {
+                    BorderBrush = Brushes.Black,
+                    BorderThickness = new Thickness(1),
+                    IsHitTestVisible = false,
+                },
+            },
+        };
+
+        return new Border
+        {
+            Width = PrintPreviewParityFixture.PageWidth,
+            Height = PrintPreviewParityFixture.PageHeight,
+            Background = Brushes.White,
+            BoxShadow = new BoxShadows(new BoxShadow
+            {
+                OffsetX = 4,
+                OffsetY = 4,
+                Blur = 0,
+                Color = Color.FromArgb(89, 0, 0, 0),
+            }),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
+            Child = paper,
+        };
     }
 
     private WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan() =>
@@ -1499,15 +1546,10 @@ public sealed partial class MainWindow
             fixture.SelectedRange.Start,
             fixture.SelectedRange.End,
             async ()
-                => await ShowSubtotalInputDialogAsync(new SubtotalDialogCaptureState(
+                => await ShowSubtotalInputDialogAsync(
                     fixture.SelectedRange,
                     fixture.Columns,
-                    fixture.GroupColumnOffset,
-                    fixture.SubtotalColumnOffsets,
-                    fixture.FunctionText,
-                    fixture.ReplaceCurrentSubtotals,
-                    fixture.PageBreakBetweenGroups,
-                    fixture.SummaryBelowData)));
+                    fixture.CreatePlan()));
     }
 
     private void PrepareConsolidateParityCaptureState()
@@ -1894,7 +1936,7 @@ public sealed partial class MainWindow
 
         try
         {
-            await ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null, parityCapture: true);
+            await ShowManageConditionalFormatsDialogAsync(access => access.AppliesToRow.IsVisible = false);
         }
         finally
         {

@@ -76,6 +76,7 @@ public sealed partial class MainWindow
         Button MoveUpButton,
         Button MoveDownButton,
         Button ApplyAppliesToButton,
+        Control AppliesToRow,
         Button CloseButton);
 
     /// <summary>The native Format-menu "Conditional Formatting" submenu: New Rule, quick presets, Manage.</summary>
@@ -1007,7 +1008,7 @@ public sealed partial class MainWindow
     }
 
     private Task ShowManageConditionalFormatsDialogAsync() =>
-        ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null, parityCapture: false);
+        ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null);
 
     /// <summary>
     /// The Manage Rules dialog: lists the selection's overlapping rules (or every sheet rule when the
@@ -1020,8 +1021,7 @@ public sealed partial class MainWindow
     /// <c>ObservableCollection&lt;ConditionalFormat&gt;</c>).
     /// </summary>
     internal async Task ShowManageConditionalFormatsDialogAsync(
-        Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe,
-        bool parityCapture = false)
+        Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -1200,7 +1200,7 @@ public sealed partial class MainWindow
             moveUpButton.IsEnabled = hasSelection && listBox.SelectedIndex > 0;
             moveDownButton.IsEnabled = hasSelection && listBox.SelectedIndex >= 0 && listBox.SelectedIndex < listBox.ItemCount - 1;
             applyAppliesToButton.IsEnabled = hasSelection;
-            appliesToRow.IsVisible = !parityCapture && hasSelection;
+            appliesToRow.IsVisible = hasSelection;
             appliesToPicker.IsEnabled = hasSelection;
         }
 
@@ -1452,6 +1452,7 @@ public sealed partial class MainWindow
                         moveUpButton,
                         moveDownButton,
                         applyAppliesToButton,
+                        appliesToRow,
                         closeButton)));
             };
         }

@@ -37,8 +37,8 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("Content = plan.PrintHeadingsText");
         source.Should().Contain("IsChecked = plan.Settings.PrintHeadings");
         source.Should().Contain("IsEnabled = plan.Settings.IgnorePrintAreaEnabled");
-        source.Should().Contain("IReadOnlyList<PrintPreviewParityPage>? parityPages = null");
-        source.Should().Contain("BuildPreviewParityPageView(parityPages[pageIndex])");
+        source.Should().Contain("Func<int, Control>? externalPageViewFactory = null");
+        source.Should().Contain("externalPageViewFactory?.Invoke(pageIndex)");
         source.Should().Contain("AvaloniaRibbonIcons.BuildMonochrome");
         source.Should().Contain("PrintPreviewSurfacePlanner.DocumentToolbarChrome");
         source.Should().Contain("CreateDocumentToolbarIcon(RibbonCommandIconKind.Print");
@@ -75,20 +75,25 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().NotContain("PrintPreviewSurfaceBackground = Brush(82, 86, 92)");
         source.Should().Contain("Foreground = Brush(92, 92, 92)");
         source.Should().Contain("Background = Brushes.White");
-        source.Should().Contain("BorderBrush = Brushes.Black");
-        source.Should().Contain("OffsetX = 4");
-        source.Should().Contain("OffsetY = 4");
-        source.Should().Contain("Color = Color.FromArgb(89, 0, 0, 0)");
+        source.Should().NotContain("PrintPreviewCapturePage");
+        source.Should().NotContain("BuildPreviewParityPageView");
     }
 
     [Fact]
     public void ParityCapture_UsesTheSharedPrintPreviewFixtureInsteadOfLiveWorksheetPagination()
     {
         var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var shipping = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PrintPreview.cs"));
 
         source.Should().Contain("PrintPreviewParityFixture.Pages");
         source.Should().Contain("ShowPrintPreviewDialogAsync(");
-        source.Should().NotContain("SeedPrintPreviewParityReport();\n    await ShowPrintPreviewDialogAsync(");
+        source.Should().Contain("BuildPrintPreviewParityPageView");
+        source.Should().Contain("BorderBrush = Brushes.Black");
+        source.Should().Contain("OffsetX = 4");
+        source.Should().Contain("OffsetY = 4");
+        source.Should().Contain("Color = Color.FromArgb(89, 0, 0, 0)");
+        shipping.Should().NotContain("SeedPrintPreviewParityReport");
+        shipping.Should().NotContain("PrintPreviewParityFixture");
     }
 
     private static string RepoFile(params string[] parts) =>

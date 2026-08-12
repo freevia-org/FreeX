@@ -19050,8 +19050,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Child = new Border
             {
-                Width = NameBoxDropdownParityCaptureWidth,
-                Height = NameBoxDropdownParityCaptureHeight,
+                Width = NameBoxDropdownWidth,
+                Height = NameBoxDropdownHeight,
                 Background = Brushes.White,
                 BorderBrush = FormulaBarControlBorder,
                 BorderThickness = new Thickness(1),
@@ -21364,31 +21364,33 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(
-        SubtotalDialogCaptureState? parityFixture = null)
+        GridRange? initialRange = null,
+        IReadOnlyList<SubtotalDialogColumnChoice>? initialColumns = null,
+        SubtotalDialogPlanResult? initialPlan = null)
     {
         SubtotalDialogPlanResult? result = null;
-        var range = parityFixture?.SelectedRange ?? _session.SelectedRange;
-        var columns = parityFixture?.Columns ?? SubtotalDialogPlanner.BuildColumnChoices(
+        var range = initialRange ?? _session.SelectedRange;
+        var columns = initialColumns ?? SubtotalDialogPlanner.BuildColumnChoices(
             range,
             absoluteColumn => SpreadsheetDisplayFormatter.FormatScalarValue(
                 _session.ActiveSheet.GetValue(range.Start.Row, absoluteColumn),
                 SpreadsheetScalarFormatProfile.InvariantScalar));
         var plannerText = SubtotalDialogPlannerText.From(UiText.Get);
         var functions = SubtotalDialogPlanner.CreateFunctionChoices(plannerText);
-        var initialGroupColumnOffset = parityFixture?.GroupColumnOffset ?? 0;
-        var initialSubtotalColumnOffsets = parityFixture?.SubtotalColumnOffsets
+        var initialGroupColumnOffset = initialPlan?.GroupColumnOffset ?? 0;
+        var initialSubtotalColumnOffsets = initialPlan?.SubtotalColumnOffsets
             ?? columns.Where(static column => column.IsSelected).Select(static column => column.Offset).ToArray();
-        var summaryBelowData = parityFixture?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true;
+        var summaryBelowData = initialPlan?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true;
 
         var dialog = new Window
         {
             Title = UiText.Get("Subtotal_Subtotal"),
-            Width = SubtotalParityDialogWidth,
-            Height = SubtotalParityDialogHeight,
-            MinWidth = SubtotalParityDialogWidth,
-            MinHeight = SubtotalParityDialogHeight,
-            MaxWidth = SubtotalParityDialogWidth,
-            MaxHeight = SubtotalParityDialogHeight,
+            Width = SubtotalDialogWidth,
+            Height = SubtotalDialogHeight,
+            MinWidth = SubtotalDialogWidth,
+            MinHeight = SubtotalDialogHeight,
+            MaxWidth = SubtotalDialogWidth,
+            MaxHeight = SubtotalDialogHeight,
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -21411,8 +21413,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var functionBox = new ComboBox
         {
             ItemsSource = functions,
-            SelectedItem = functions.FirstOrDefault(function =>
-                string.Equals(function.FunctionText, parityFixture?.FunctionText ?? SubtotalDialogPlanner.DefaultFunctionText, StringComparison.Ordinal))
+            SelectedItem = (initialPlan is null
+                ? functions.FirstOrDefault(function =>
+                    string.Equals(function.FunctionText, SubtotalDialogPlanner.DefaultFunctionText, StringComparison.Ordinal))
+                : SubtotalDialogPlanner.FindFunctionChoice(initialPlan.FunctionNumber, plannerText))
                 ?? functions[0],
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
@@ -21460,7 +21464,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceBox = new CheckBox
         {
             Content = UiText.Get("Subtotal_ReplaceCurrentSubtotals"),
-            IsChecked = parityFixture?.ReplaceCurrentSubtotals ?? true,
+            IsChecked = initialPlan?.ReplaceCurrentSubtotals ?? true,
         };
         ApplySubtotalCheckBoxChrome(replaceBox);
         AutomationProperties.SetName(replaceBox, StripDisplayMnemonic(UiText.Get("Subtotal_ReplaceCurrentSubtotalsAutomationName")));
@@ -21470,7 +21474,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var pageBreakBox = new CheckBox
         {
             Content = UiText.Get("Subtotal_PageBreakBetweenGroups"),
-            IsChecked = parityFixture?.PageBreakBetweenGroups ?? false,
+            IsChecked = initialPlan?.PageBreakBetweenGroups ?? false,
         };
         ApplySubtotalCheckBoxChrome(pageBreakBox);
         AutomationProperties.SetName(pageBreakBox, StripDisplayMnemonic(UiText.Get("Subtotal_PageBreakBetweenGroupsAutomationName")));
@@ -22996,12 +23000,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = UiText.Get("MainWindow_Content_ForecastSheet"),
-            Width = ForecastSheetParityDialogWidth,
-            Height = ForecastSheetParityDialogHeight,
-            MinWidth = ForecastSheetParityDialogWidth,
-            MinHeight = ForecastSheetParityDialogHeight,
-            MaxWidth = ForecastSheetParityDialogWidth,
-            MaxHeight = ForecastSheetParityDialogHeight,
+            Width = ForecastSheetDialogWidth,
+            Height = ForecastSheetDialogHeight,
+            MinWidth = ForecastSheetDialogWidth,
+            MinHeight = ForecastSheetDialogHeight,
+            MaxWidth = ForecastSheetDialogWidth,
+            MaxHeight = ForecastSheetDialogHeight,
             CanResize = false,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,

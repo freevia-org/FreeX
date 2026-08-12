@@ -3410,7 +3410,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
         source.Should().Contain("_session.ExecuteSubtotalOptions(selection.ToInputOptions())");
         source.Should().Contain("private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(");
-        source.Should().Contain("SubtotalParityFixtureState? parityFixture = null");
+        source.Should().Contain("GridRange? initialRange = null");
+        source.Should().Contain("IReadOnlyList<SubtotalDialogColumnChoice>? initialColumns = null");
+        source.Should().Contain("SubtotalDialogPlanResult? initialPlan = null");
+        source.Should().NotContain("SubtotalDialogCaptureState");
         source.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"SubtotalCompactDialog\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(groupColumnBox, \"SubtotalGroupColumnBox\");");
         source.Should().Contain("AutomationProperties.SetAutomationId(functionBox, \"SubtotalFunctionBox\");");
@@ -3440,7 +3443,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.Subtotal\", () => ShowSubtotalParityDialogAsync()),");
         parityCaptureSource.Should().Contain("private Task ShowSubtotalParityDialogAsync()");
         parityCaptureSource.Should().Contain("var fixture = SubtotalParityFixture.CreateState(_session.ActiveSheet);");
-        parityCaptureSource.Should().Contain("async () => { await ShowSubtotalInputDialogAsync(fixture); }");
+        parityCaptureSource.Should().Contain("fixture.CreatePlan()");
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowSubtotalDialogAsync()", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);

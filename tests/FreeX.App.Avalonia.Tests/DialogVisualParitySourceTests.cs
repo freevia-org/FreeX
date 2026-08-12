@@ -185,7 +185,8 @@ public sealed class DialogVisualParitySourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
-        source.Should().Contain("parityFixture?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true");
+        source.Should().Contain("initialPlan?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true");
+        source.Should().NotContain("SubtotalDialogCaptureState");
         source.Should().Contain("CreateSubtotalAccessText(label)");
         source.Should().Contain("Content = UiText.Get(\"Subtotal_ReplaceCurrentSubtotals\")");
         source.Should().Contain("Content = UiText.Get(\"Subtotal_PageBreakBetweenGroups\")");
@@ -197,7 +198,7 @@ public sealed class DialogVisualParitySourceTests
 
         captureSource.Should().Contain("var fixture = SubtotalParityFixture.CreateState(_session.ActiveSheet);");
         captureSource.Should().Contain("SubtotalParityFixture.ApplySheetState(_session.ActiveSheet);");
-        captureSource.Should().Contain("ShowSubtotalInputDialogAsync(fixture)");
+        captureSource.Should().Contain("fixture.CreatePlan()");
     }
 
     private static string RepoFile(params string[] parts) =>
