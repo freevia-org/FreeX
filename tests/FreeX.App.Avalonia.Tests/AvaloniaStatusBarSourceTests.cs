@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Avalonia;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -14,13 +15,31 @@ namespace FreeX.App.Avalonia.Tests;
 /// right-click menu is built from the neutral <see cref="StatusBarCustomizeContextMenuPlanner"/>.
 /// </summary>
 [Collection("AvaloniaHeadless")]
-public sealed class AvaloniaStatusBarSourceTests
+public sealed class FreeXStatusBarRendererPlannerAvaloniaTests
 {
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
     private static Task RunOnUiThread(Action action) =>
         Session.Dispatch(action, CancellationToken.None);
+
+    private static readonly IStatusBarTextProvider TextProvider =
+        new ResourceKeyStatusBarTextProvider(UiText.Get);
+
+    private static Dictionary<string, bool> DefaultVisibility() =>
+        StatusBarVisibilityPlanner.CreateDefaultOptionVisibility(StatusBarOptionVisibility.ExcelDefaults);
+
+    private static StatusBarViewModel BuildModel(
+        WorkbookSelectionStats stats,
+        int zoomPercent,
+        string readyText,
+        WorksheetViewMode viewMode = WorksheetViewMode.Normal) =>
+        FreeXStatusBarRendererPlanner.BuildModel(
+            stats,
+            zoomPercent,
+            readyText,
+            viewMode,
+            TextProvider);
 
     // A representative multi-cell selection: Count=4, Numerical Count=3, Sum/Avg/Min/Max numeric.
     private static WorkbookSelectionStats SampleStats() =>
@@ -29,17 +48,17 @@ public sealed class AvaloniaStatusBarSourceTests
     [Fact]
     public void ReadyText_ResolvesSharedResourceKey()
     {
-        Assert.Equal(UiText.Get(StatusBarTextResourceKeys.ReadyText), AvaloniaStatusBarSource.ReadyText());
+        Assert.Equal(UiText.Get(StatusBarTextResourceKeys.ReadyText), TextProvider.GetReadyText());
     }
 
     [Fact]
     public void BuildModel_ProducesSharedStatsModel_ForRepresentativeSelection()
     {
-        var model = AvaloniaStatusBarSource.BuildModel(
+        var model = BuildModel(
             SampleStats(),
             zoomPercent: 100,
             readyText: "Ready",
-            WorksheetViewMode.PageBreakPreview);
+            viewMode: WorksheetViewMode.PageBreakPreview);
 
         Assert.Equal(StatusBarViewMode.PageBreak, model.ViewMode);
         Assert.Equal(100, model.ZoomPercent);
@@ -59,11 +78,11 @@ public sealed class AvaloniaStatusBarSourceTests
     public void BuildModel_EmptySelection_ProducesReadyModel()
     {
         var empty = new WorkbookSelectionStats(0, 0, 0, null, null, null);
-        var model = AvaloniaStatusBarSource.BuildModel(
+        var model = BuildModel(
             empty,
             zoomPercent: 80,
             readyText: "Ready",
-            WorksheetViewMode.PageLayout);
+            viewMode: WorksheetViewMode.PageLayout);
 
         Assert.Equal(StatusBarViewMode.PageLayout, model.ViewMode);
         Assert.True(model.IsReadyVisible);
@@ -85,7 +104,7 @@ public sealed class AvaloniaStatusBarSourceTests
             PromptMessage = "Use a number"
         });
 
-        var text = AvaloniaStatusBarSource.BuildReadyText(sheet, address);
+        var text = FreeXStatusBarRendererPlanner.BuildReadyText(sheet, address, TextProvider);
 
         Assert.Equal("Input: Use a number", text);
     }
@@ -93,10 +112,10 @@ public sealed class AvaloniaStatusBarSourceTests
     [Fact]
     public void FormatVisibleReadouts_JoinsDefaultVisibleReadouts_InWpfOrder()
     {
-        var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
-        var model = AvaloniaStatusBarSource.BuildModel(SampleStats(), zoomPercent: 100, readyText: "Ready");
+        var visibility = DefaultVisibility();
+        var model = BuildModel(SampleStats(), zoomPercent: 100, readyText: "Ready");
 
-        var text = AvaloniaStatusBarSource.FormatVisibleReadouts(model, visibility);
+        var text = FreeXStatusBarRendererPlanner.BuildRendererPlan(model, visibility).VisibleReadoutText;
 
         // Defaults mirror WPF: Average, Count, Sum are on; Numerical Count/Min/Max are off.
         Assert.Equal("Average: 20   Count: 4   Sum: 60", text);
@@ -105,14 +124,14 @@ public sealed class AvaloniaStatusBarSourceTests
     [Fact]
     public void FormatVisibleReadouts_HonorsPerOptionToggles()
     {
-        var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
+        var visibility = DefaultVisibility();
         visibility["Average"] = false;
         visibility["NumericalCount"] = true;
         visibility["Sum"] = false;
         visibility["Maximum"] = true;
-        var model = AvaloniaStatusBarSource.BuildModel(SampleStats(), zoomPercent: 100, readyText: "Ready");
+        var model = BuildModel(SampleStats(), zoomPercent: 100, readyText: "Ready");
 
-        var text = AvaloniaStatusBarSource.FormatVisibleReadouts(model, visibility);
+        var text = FreeXStatusBarRendererPlanner.BuildRendererPlan(model, visibility).VisibleReadoutText;
 
         // Average + Sum hidden, Maximum re-enabled.
         Assert.Equal("Count: 4   Numerical Count: 3   Max: 30", text);
@@ -121,42 +140,42 @@ public sealed class AvaloniaStatusBarSourceTests
     [Fact]
     public void FormatVisibleReadouts_EmptyForReadyModel()
     {
-        var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
-        var ready = AvaloniaStatusBarSource.BuildModel(
+        var visibility = DefaultVisibility();
+        var ready = BuildModel(
             new WorkbookSelectionStats(0, 0, 0, null, null, null),
             zoomPercent: 100,
             readyText: "Ready");
 
-        Assert.Equal("", AvaloniaStatusBarSource.FormatVisibleReadouts(ready, visibility));
+        Assert.Equal("", FreeXStatusBarRendererPlanner.BuildRendererPlan(ready, visibility).VisibleReadoutText);
     }
 
     [Fact]
     public void BuildPresentation_UsesSharedStatusBarPlan()
     {
-        var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
+        var visibility = DefaultVisibility();
         visibility["NumericalCount"] = true;
         visibility["Sum"] = false;
-        var model = AvaloniaStatusBarSource.BuildModel(SampleStats(), zoomPercent: 90, readyText: "Ready");
+        var model = BuildModel(SampleStats(), zoomPercent: 90, readyText: "Ready");
 
-        var plan = AvaloniaStatusBarSource.BuildPresentation(model, visibility);
+        var plan = FreeXStatusBarRendererPlanner.BuildRendererPlan(model, visibility);
 
-        Assert.True(plan.Visibility.StatsPanelVisible);
-        Assert.True(plan.Visibility.ZoomVisible);
+        Assert.True(plan.IsElementVisible(StatusBarPresentationElement.StatsPanel));
+        Assert.True(plan.IsElementVisible(StatusBarPresentationElement.ZoomText));
         Assert.Equal(90, plan.ZoomPercent);
-        Assert.Equal("Sum: 60", plan.SumText);
+        Assert.Contains(plan.ReadoutElements, readout => readout.Kind == StatusBarReadoutKind.Sum && readout.Text == "Sum: 60");
         Assert.Equal("Average: 20   Count: 4   Numerical Count: 3", plan.VisibleReadoutText);
-        Assert.Equal("Average: 20; Count: 4; Numerical Count: 3", plan.AutomationText);
+        Assert.Equal("Average: 20; Count: 4; Numerical Count: 3", plan.StatsPanelAutomationText);
     }
 
     [Fact]
     public void BuildRendererPlan_UsesSharedStatusBarRendererPlan()
     {
-        var visibility = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
+        var visibility = DefaultVisibility();
         visibility["NumericalCount"] = true;
         visibility["Sum"] = false;
-        var model = AvaloniaStatusBarSource.BuildModel(SampleStats(), zoomPercent: 90, readyText: "Ready");
+        var model = BuildModel(SampleStats(), zoomPercent: 90, readyText: "Ready");
 
-        var plan = AvaloniaStatusBarSource.BuildRendererPlan(model, visibility);
+        var plan = FreeXStatusBarRendererPlanner.BuildRendererPlan(model, visibility);
 
         Assert.False(plan.ReadyTextVisible);
         Assert.Equal("Average: 20   Count: 4   Numerical Count: 3", plan.VisibleReadoutText);
@@ -173,7 +192,7 @@ public sealed class AvaloniaStatusBarSourceTests
     [Fact]
     public Task CustomizeMenu_IsBuiltFromPlanner_WithExpectedToggleItems() => RunOnUiThread(() =>
     {
-        var options = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
+        var options = DefaultVisibility();
         var registered = new Dictionary<string, MenuItem>(StringComparer.Ordinal);
 
         var menu = AvaloniaStatusBarCustomizeMenu.Build(
@@ -211,7 +230,7 @@ public sealed class AvaloniaStatusBarSourceTests
     [Fact]
     public Task CustomizeMenu_ToggleClick_FlipsOptionState() => RunOnUiThread(() =>
     {
-        var options = AvaloniaStatusBarSource.CreateDefaultOptionVisibility();
+        var options = DefaultVisibility();
         var registered = new Dictionary<string, MenuItem>(StringComparer.Ordinal);
 
         var menu = AvaloniaStatusBarCustomizeMenu.Build(

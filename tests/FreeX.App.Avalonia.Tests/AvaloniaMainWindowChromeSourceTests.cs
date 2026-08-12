@@ -1229,7 +1229,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         mainSource.Should().Contain("private bool HasStatusBarAccessibleValue() =>");
         mainSource.Should().Contain("!string.IsNullOrWhiteSpace(_statusText.Text) ||");
         mainSource.Should().Contain("!string.IsNullOrWhiteSpace(_selectionStatsText.Text);");
-        statusBarSource.Should().Contain("AvaloniaStatusBarSource.BuildRendererPlan(model, _statusBarOptionVisibility);");
+        statusBarSource.Should().Contain("FreeXStatusBarRendererPlanner.BuildRendererPlan(model, _statusBarOptionVisibility);");
         statusBarSource.Should().Contain("_statusText.IsVisible = rendererPlan.ReadyTextVisible;");
         statusBarSource.Should().Contain("_selectionStatsText.Text = rendererPlan.VisibleReadoutText;");
         statusBarSource.Should().Contain("_selectionStatsText.IsVisible = rendererPlan.VisibleReadoutTextVisible;");

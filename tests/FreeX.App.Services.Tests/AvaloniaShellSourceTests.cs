@@ -286,6 +286,8 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresPortablePdfExportToNativeFileMenu()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var overwritePlannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Presentation", "Dialogs", "NormalizedOverwritePromptPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var exporterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "PortablePdfDocumentExporter.cs"));
@@ -319,17 +321,18 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("await TryOpenExportedPdfAsync(resultPlan.DestinationPath);");
         source.Should().Contain("var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(");
         source.Should().Contain("requestPlan.ShouldConfirmNormalizedOverwrite");
-        source.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(requestPlan.Request.Path)");
-        source.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
+        source.Should().Contain("!await ConfirmNormalizedOverwriteAsync(");
+        source.Should().Contain("NormalizedOverwriteTargetKind.Pdf");
+        source.Should().Contain("private async Task<bool> ConfirmNormalizedOverwriteAsync(");
         var normalizedOverwriteDialog = ExtractSourceBlock(
             source,
-            "private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)",
+            "private async Task<bool> ConfirmNormalizedOverwriteAsync(",
             "await dialog.ShowDialog(this);");
         normalizedOverwriteDialog.Should().NotContain("IsDefault = true,");
         normalizedOverwriteDialog.Should().Contain("IsCancel = true,");
         normalizedOverwriteDialog.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
-        source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"PdfExportOverwriteReplaceButton\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"PdfExportOverwriteCancelButton\")");
+        overwritePlannerSource.Should().Contain("\"PdfExportOverwriteReplaceButton\"");
+        overwritePlannerSource.Should().Contain("\"PdfExportOverwriteCancelButton\"");
         // The PDF export plan is created via the page-setup-aware overload (honours paper size / margins /
         // fit-to-page); the test accepts either the legacy or the new entry point so a future refactor does not
         // break a purely cosmetic name constraint.
@@ -388,7 +391,8 @@ public sealed class AvaloniaShellSourceTests
 
         printSource.Should().Contain("var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);");
         printSource.Should().Contain("exportTargetPlan.ShouldConfirmNormalizedOverwrite");
-        printSource.Should().Contain("!await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path)");
+        printSource.Should().Contain("!await ConfirmNormalizedOverwriteAsync(");
+        printSource.Should().Contain("NormalizedOverwriteTargetKind.Pdf");
         printSource.Should().Contain("UiText.Get(\"Print_SaveCanceled\")");
         printSource.Should().Contain("ShowPortablePdfSavePickerAsync(UiText.Get(\"Print_SaveAsPdfButton\"))");
 
@@ -413,6 +417,8 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var printSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.Print.cs"));
+        var overwritePlannerSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Presentation", "Dialogs", "NormalizedOverwritePromptPlanner.cs"));
 
         source.Should().Contain("private bool TryBeginFileOperation()");
         source.Should().Contain("if (_isOpening || _isSaving)");
@@ -432,10 +438,11 @@ public sealed class AvaloniaShellSourceTests
             .Should().BeLessThan(saveAsBlock.IndexOf("AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync", StringComparison.Ordinal));
         saveAsBlock.Should().Contain("var pathPlan = _fileWorkflow.PlanSavePathNormalization(");
         saveAsBlock.Should().Contain("pathPlan.ShouldConfirmOverwrite");
-        saveAsBlock.Should().Contain("!await ConfirmNormalizedWorkbookOverwriteAsync(pathPlan.Path)");
+        saveAsBlock.Should().Contain("!await ConfirmNormalizedOverwriteAsync(");
+        saveAsBlock.Should().Contain("NormalizedOverwriteTargetKind.Workbook");
         saveAsBlock.Should().Contain("path = pathPlan.Path;");
-        source.Should().Contain("AutomationProperties.SetAutomationId(replaceButton, \"WorkbookSaveOverwriteReplaceButton\")");
-        source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"WorkbookSaveOverwriteCancelButton\")");
+        overwritePlannerSource.Should().Contain("\"WorkbookSaveOverwriteReplaceButton\"");
+        overwritePlannerSource.Should().Contain("\"WorkbookSaveOverwriteCancelButton\"");
 
         source.Should().Contain(
             "private Task ExportActiveSheetPdfAsync() =>\r\n" +

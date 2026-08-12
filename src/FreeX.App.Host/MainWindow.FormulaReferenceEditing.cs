@@ -6,7 +6,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.FormulaBar;
-using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -35,9 +34,10 @@ public partial class MainWindow
     private void ClearFormulaRangeEntryState()
     {
         _formulaEditCell = null;
-        HideFormulaFunctionAutocomplete();
-        _formulaRangeEditingSession.Reset();
-        ClearFormulaReferenceHighlights();
+        FormulaReferenceEditingController.Reset(
+            _formulaRangeEditingSession,
+            HideFormulaFunctionAutocomplete,
+            ClearFormulaReferenceHighlights);
     }
 
     private void ClearFormulaReferenceEntrySpan() =>
@@ -88,37 +88,37 @@ public partial class MainWindow
         CellAddress target,
         bool extendSelection)
     {
-        var range = _formulaRangeEditingSession.PlanKeyboardSelectionRange(
-            current,
-            target,
-            extendSelection);
-        if (!_formulaRangeEditingSession.ShouldAppendKeyboardSelection)
-            return TryApplyFormulaRangeSelection(target, extendSelection);
-
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
-        if (editor is null || formulaCell is null)
-            return false;
-
-        var snapshot = FormulaRangeEditorSnapshot.Capture(
-            editor.Text,
-            editor.CaretIndex,
-            editor.SelectionLength,
-            formulaCell.Value,
-            _options.UseR1C1ReferenceStyle,
-            _workbook,
-            range);
-        if (!_formulaRangeEditingSession.TryApplyKeyboardDisjointRangeSelectionEdit(
-                snapshot,
+        FormulaRangeEditorSnapshot? snapshot = editor is not null && formulaCell is { } editCell
+            ? FormulaRangeEditorSnapshot.Capture(
+                editor.Text,
+                editor.CaretIndex,
+                editor.SelectionLength,
+                editCell,
+                _options.UseR1C1ReferenceStyle,
+                _workbook,
+                _formulaRangeEditingSession.PlanKeyboardSelectionRange(current, target, extendSelection))
+            : null;
+        if (!FormulaReferenceEditingController.TryApplyKeyboardSelection(
+                _formulaRangeEditingSession,
                 current,
                 target,
                 extendSelection,
-                edit => ApplyFormulaEditorTextEdit(editor, edit),
+                snapshot,
+                TryApplyFormulaRangeSelection,
+                edit => ApplyFormulaEditorTextEdit(editor!, edit),
                 afterEditorEdit: null,
-                out _))
+                (range, anchor, cursor) => TryApplyFormulaRangeSelection(range, anchor, cursor),
+                out var result))
         {
-            return TryApplyFormulaRangeSelection(range, range.Start, target);
+            return false;
         }
+
+        if (result.Route != FormulaKeyboardSelectionRoute.DisjointReference)
+            return true;
+
+        var range = result.Range;
         _selectionAnchor = range.Start;
         _selectionCursor = range.End;
         SheetGrid.SelectedRanges = null;
@@ -129,7 +129,7 @@ public partial class MainWindow
         RefreshStatusBar();
         RefreshFormulaReferenceHighlights();
         SetFormulaEditStatusBarMode(pointMode: true);
-        editor.Focus();
+        editor!.Focus();
         return true;
     }
 
@@ -248,29 +248,11 @@ public partial class MainWindow
     }
 
     private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
-        FormulaReferenceHighlightPlanner.GetHighlights(
+        FormulaReferenceEditingController.BuildHighlights(
             text,
-            _currentSheetId,
-            sheetName => _workbook.GetSheet(sheetName)?.Id,
-            ResolveStructuredFormulaReference,
-            sheetId =>
-            {
-                for (var index = 0; index < _workbook.Sheets.Count; index++)
-                {
-                    if (_workbook.Sheets[index].Id == sheetId)
-                        return index;
-                }
-
-                return null;
-            });
-
-    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector) =>
-        StructuredReferenceResolver.ResolveEditorReference(
             _workbook,
-            _workbook.GetSheet(_currentSheetId),
-            _formulaEditCell ?? SheetGrid.SelectedRange?.Start,
-            tableName,
-            selector);
+            _currentSheetId,
+            _formulaEditCell ?? SheetGrid.SelectedRange?.Start);
 
     private void RefreshFormulaReferenceHighlights()
     {

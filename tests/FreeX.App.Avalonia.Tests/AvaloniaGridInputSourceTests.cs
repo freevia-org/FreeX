@@ -114,9 +114,9 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("private static readonly IReadOnlyList<IBrush> FormulaReferenceBrushes");
         source.Should().Contain("private readonly TextBlock _formulaReferenceTextOverlay = new();");
         source.Should().Contain("_formulaBox.TextChanged += FormulaBox_TextChanged;");
-        source.Should().Contain("FormulaReferenceHighlightPlanner.GetHighlights(");
-        source.Should().Contain("ResolveStructuredFormulaReference");
-        source.Should().Contain("StructuredReferenceResolver.ResolveEditorReference(");
+        source.Should().Contain("FormulaReferenceEditingController.BuildHighlights(");
+        source.Should().NotContain("ResolveStructuredFormulaReference");
+        source.Should().NotContain("StructuredReferenceResolver.ResolveEditorReference(");
         source.Should().Contain("AddFormulaReferenceHighlightOverlay(overlay, viewport, showHeadings, zoomFactor);");
         source.Should().Contain("TryGetDisplayedRangeBounds(");
         source.Should().Contain("IsHitTestVisible = false");

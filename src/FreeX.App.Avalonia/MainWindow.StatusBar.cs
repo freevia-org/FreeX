@@ -9,6 +9,9 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private static readonly IStatusBarTextProvider StatusBarTextProvider =
+        new ResourceKeyStatusBarTextProvider(UiText.Get);
+
     // ── Shared status-bar model wiring ────────────────────────────────────────
     // The Avalonia footer renders from the platform-neutral StatusBarViewModel produced by the shared
     // StatusBarDisplayModelBuilder (the same builder + WorkbookSelectionStats path the WPF host uses).
@@ -36,7 +39,7 @@ public sealed partial class MainWindow
     private bool _statusTextLiveSettingApplied;
 
     private bool GetStatusBarOption(string optionTag) =>
-        AvaloniaStatusBarSource.IsOptionVisible(_statusBarOptionVisibility, optionTag);
+        StatusBarVisibilityPlanner.IsOptionVisible(_statusBarOptionVisibility, optionTag);
 
     /// <summary>
     /// Builds the neutral <see cref="StatusBarViewModel"/> for the current selection / sheet / zoom using
@@ -44,17 +47,19 @@ public sealed partial class MainWindow
     /// (the same stats path the WPF host consumes — no re-implementation of the stats math).
     /// </summary>
     private StatusBarViewModel BuildStatusBarViewModel(string readyText) =>
-        AvaloniaStatusBarSource.BuildModel(
+        FreeXStatusBarRendererPlanner.BuildModel(
             _session.SelectionStats,
             StatusBarZoomSliderPlanner.ClampZoomPercent(_session.ZoomPercent),
             // R128-status-bar-calculate-indicator: CalculationModeIsManual (MainWindow.Calculation.cs)
             // + Workbook.HasPendingManualRecalculation drive Excel's "Calculate" cell-mode indicator in
             // place of "Ready" -- see NormalizeReadyText's calc-mode overload.
-            AvaloniaStatusBarSource.NormalizeReadyText(
+            FreeXStatusBarRendererPlanner.NormalizeReadyText(
                 readyText,
+                StatusBarTextProvider,
                 CalculationModeIsManual,
                 _session.Workbook.HasPendingManualRecalculation),
-            _session.ViewMode);
+            _session.ViewMode,
+            StatusBarTextProvider);
 
     /// <summary>
     /// Renders the footer readout (<see cref="_selectionStatsText"/>) and ready text
@@ -69,7 +74,7 @@ public sealed partial class MainWindow
         // Render the neutral StatusBarViewModel: the readout is the model's visible aggregate readouts
         // (filtered by the customize toggles); zoom comes from the model; CellMode/Zoom toggles gate the
         // status / zoom controls — mirroring the WPF host's per-option StatusBarShow* gating.
-        var rendererPlan = AvaloniaStatusBarSource.BuildRendererPlan(model, _statusBarOptionVisibility);
+        var rendererPlan = FreeXStatusBarRendererPlanner.BuildRendererPlan(model, _statusBarOptionVisibility);
         _statusText.Text = rendererPlan.ReadyText;
         _statusText.Foreground = StatusBarForeground;
         _statusText.IsVisible = rendererPlan.ReadyTextVisible;
@@ -145,7 +150,7 @@ public sealed partial class MainWindow
             ShowEditIssue(result.PersistenceError ?? UiText.Get("Options_SaveFailed"));
         }
 
-        ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());
+        ApplyStatusBarModel(_statusText.Text ?? StatusBarTextProvider.GetReadyText());
     }
 
     // ── Accessibility: live-region announcement for selection statistics ─────

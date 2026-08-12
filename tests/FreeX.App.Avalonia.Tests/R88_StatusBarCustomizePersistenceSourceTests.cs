@@ -4,7 +4,7 @@ namespace FreeX.App.Avalonia.Tests;
 /// Round-88 regression test for finding R88-app-status-bar-aggregates-5-1 (MED): the Avalonia status
 /// bar's "Customize Status Bar" chooser toggles (Minimum, Maximum, Sum, etc.) never persisted across
 /// restarts -- <c>_statusBarOptionVisibility</c> was seeded purely from
-/// <c>AvaloniaStatusBarSource.CreateDefaultOptionVisibility()</c> (the hardcoded Excel defaults) with
+/// the hardcoded Excel defaults with
 /// no read from the on-disk options file, and <c>OnStatusBarCustomizeToggled</c> only updated the
 /// in-memory dictionary, never calling into <c>AppOptionsStore</c>/<c>StatusBarOptionVisibilityStore</c>
 /// the way the WPF host's <c>StatusBarCustomizeMenuItem_Click</c> already does. Fixed by seeding from
@@ -58,6 +58,6 @@ public sealed class R88_StatusBarCustomizePersistenceSourceTests
 
         method.Should().Contain("_statusBarOptionVisibility.Clear();");
         method.Should().Contain("_statusBarOptionVisibility[tag] = isVisible;");
-        method.Should().Contain("ApplyStatusBarModel(_statusText.Text ?? AvaloniaStatusBarSource.ReadyText());");
+        method.Should().Contain("ApplyStatusBarModel(_statusText.Text ?? StatusBarTextProvider.GetReadyText());");
     }
 }

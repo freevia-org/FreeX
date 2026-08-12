@@ -102,8 +102,7 @@ public partial class MainWindow
         if (_lastStatusBarDisplayState == state && IsStatusBarDisplayStateApplied(state))
             return;
 
-        var plan = BuildStatusBarPresentationPlan(state);
-        var rendererPlan = StatusBarPresentationPlanner.BuildRendererPlan(plan);
+        var rendererPlan = BuildStatusBarRendererPlan(state);
         ApplyStatusBarRendererPlan(state, rendererPlan);
         _lastStatusBarDisplayState = state;
     }
@@ -112,13 +111,11 @@ public partial class MainWindow
 
     private bool IsStatusBarDisplayStateApplied(Free.Shared.AppServices.StatusBarViewModel state)
     {
-        var plan = BuildStatusBarPresentationPlan(state);
-        var rendererPlan = StatusBarPresentationPlanner.BuildRendererPlan(plan);
-        return IsStatusBarRendererPlanApplied(rendererPlan);
+        return IsStatusBarRendererPlanApplied(BuildStatusBarRendererPlan(state));
     }
 
-    private StatusBarPresentationPlan BuildStatusBarPresentationPlan(Free.Shared.AppServices.StatusBarViewModel state) =>
-        StatusBarPresentationPlanner.Build(
+    private StatusBarRendererPlan BuildStatusBarRendererPlan(Free.Shared.AppServices.StatusBarViewModel state) =>
+        FreeXStatusBarRendererPlanner.BuildRendererPlan(
             state,
             GetStatusBarOptionVisibility(),
             hasPageNumberText: !string.IsNullOrEmpty(StatusPageNumberText.Text),
@@ -130,8 +127,7 @@ public partial class MainWindow
             _statusBarDisplayStateCache.GetReady(
                 GetCurrentStatusBarViewMode(),
                 zoomPercent: 0);
-        ApplyStatusBarInteractiveDisplayState(
-            StatusBarPresentationPlanner.BuildRendererPlan(BuildStatusBarPresentationPlan(state)));
+        ApplyStatusBarInteractiveDisplayState(BuildStatusBarRendererPlan(state));
     }
 
     private void ApplyStatusBarInteractiveDisplayState(StatusBarRendererPlan rendererPlan)

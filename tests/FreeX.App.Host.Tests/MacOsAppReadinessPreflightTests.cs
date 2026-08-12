@@ -172,11 +172,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private static byte EncodeWinAnsiByte(char ch)");
         script.Should().Contain("built-in Helvetica/WinAnsi set");
         script.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
-        script.Should().Contain("private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)");
+        script.Should().Contain("private async Task<bool> ConfirmNormalizedOverwriteAsync(");
+        script.Should().Contain("NormalizedOverwriteTargetKind.Pdf");
         script.Should().Contain("IsCancel = true,");
         script.Should().Contain("dialog.Opened += (_, _) => cancelButton.Focus();");
-        script.Should().Contain("PdfExportOverwriteReplaceButton");
-        script.Should().Contain("PdfExportOverwriteCancelButton");
+        script.Should().Contain("prompt.ReplaceButtonAutomationId");
+        script.Should().Contain("prompt.CancelButtonAutomationId");
         script.Should().Contain("launchservices_default_open_boundary=ci_open_document_without_app_override_not_finder_double_click");
         script.Should().Contain("freex-${{ matrix.runtime }}-macos-default-open-launch-smoke.txt");
         script.Should().Contain("cmd_find_direct_route_source_guard=true");
@@ -2413,13 +2414,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     ExportWorkbookPdfAsync(
                     var requestPlan = WorkbookExportInteractionPlanner.CreateRequestPlan(
                     requestPlan.ShouldConfirmNormalizedOverwrite
-                    !await ConfirmNormalizedPdfOverwriteAsync(requestPlan.Request.Path)
+                    !await ConfirmNormalizedOverwriteAsync(
+                    NormalizedOverwriteTargetKind.Pdf
                     WorkbookExportInteractionPlanner.CreateResultPlan(
-                    private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
+                    private async Task<bool> ConfirmNormalizedOverwriteAsync(
                     IsCancel = true,
                     dialog.Opened += (_, _) => cancelButton.Focus();
-                    AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
-                    AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
+                    AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId)
+                    AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId)
                     var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(
                     await File.WriteAllBytesAsync(
                     ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);

@@ -56,7 +56,6 @@ using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
-using FreeX.Core.Formula;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using FreeX.App.Presentation.Charts;
@@ -9372,10 +9371,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ClearFormulaRangeEntryState()
     {
-        HideFormulaFunctionAutocomplete();
-        _formulaRangeEditingSession.Reset();
-        ClearFormulaReferenceTextOverlay();
-        ClearFormulaReferenceGridHighlights();
+        FormulaReferenceEditingController.Reset(
+            _formulaRangeEditingSession,
+            HideFormulaFunctionAutocomplete,
+            () =>
+            {
+                ClearFormulaReferenceTextOverlay();
+                ClearFormulaReferenceGridHighlights();
+            });
     }
 
     private void UpdateFormulaRangeEntryStateAfterTextChanged(string? text)
@@ -9510,46 +9513,51 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         CellAddress target,
         bool extendSelection)
     {
-        var range = _formulaRangeEditingSession.PlanKeyboardSelectionRange(
-            current,
-            target,
-            extendSelection);
-        if (!_formulaRangeEditingSession.ShouldAppendKeyboardSelection)
-            return TryApplyFormulaRangeSelection(target, extendSelection);
-
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _session.FormulaEditAddress;
-        if (editor is null || formulaCell is null)
-            return false;
+        FormulaRangeEditorSnapshot? snapshot = null;
+        if (editor is not null && formulaCell is { } editCell)
+        {
+            var text = editor.Text ?? "";
+            var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
+            snapshot = FormulaRangeEditorSnapshot.Capture(
+                text,
+                selectionStart,
+                selectionLength,
+                editCell,
+                UseR1C1ReferenceStyle,
+                _session.Workbook,
+                _formulaRangeEditingSession.PlanKeyboardSelectionRange(current, target, extendSelection));
+        }
 
-        var text = editor.Text ?? "";
-        var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
-        var snapshot = FormulaRangeEditorSnapshot.Capture(
-            text,
-            selectionStart,
-            selectionLength,
-            formulaCell.Value,
-            UseR1C1ReferenceStyle,
-            _session.Workbook,
-            range);
-        if (!_formulaRangeEditingSession.TryApplyKeyboardDisjointRangeSelectionEdit(
-                snapshot,
+        if (!FormulaReferenceEditingController.TryApplyKeyboardSelection(
+                _formulaRangeEditingSession,
                 current,
                 target,
                 extendSelection,
-                edit => ApplyFormulaRangeEditorEdit(editor, edit),
-                _ => _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start),
-                out _))
+                snapshot,
+                TryApplyFormulaRangeSelection,
+                edit => ApplyFormulaRangeEditorEdit(editor!, edit),
+                editPlan => _session.SelectRangeForFormulaEdit(
+                    editPlan.Range,
+                    formulaCell!.Value,
+                    editPlan.Anchor),
+                (range, anchor, cursor) => TryApplyFormulaRangeSelection(range, anchor, cursor),
+                out var result))
         {
-            return TryApplyFormulaRangeSelection(range, range.Start, target);
+            return false;
         }
 
+        if (result.Route != FormulaKeyboardSelectionRoute.DisjointReference)
+            return true;
+
+        var range = result.Range;
         _cellAddressText.Text = FormatRangeReference(range);
         _selectionStatsText.Text = _session.SelectionStatsText;
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
         ApplyFormulaEditStatusBarPlan(_formulaRangeEditingSession.BuildEditStatusBarPlan(pointMode: true));
-        editor.Focus();
+        editor!.Focus();
         return true;
     }
 
@@ -10473,29 +10481,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
-        FormulaReferenceHighlightPlanner.GetHighlights(
+        FormulaReferenceEditingController.BuildHighlights(
             text,
-            _session.ActiveSheet.Id,
-            sheetName => _session.Workbook.GetSheet(sheetName)?.Id,
-            ResolveStructuredFormulaReference,
-            sheetId =>
-            {
-                for (var index = 0; index < _session.Workbook.Sheets.Count; index++)
-                {
-                    if (_session.Workbook.Sheets[index].Id == sheetId)
-                        return index;
-                }
-
-                return null;
-            });
-
-    private GridRange? ResolveStructuredFormulaReference(string tableName, string selector) =>
-        StructuredReferenceResolver.ResolveEditorReference(
             _session.Workbook,
-            _session.ActiveSheet,
-            _session.FormulaEditAddress ?? _session.ActiveCell,
-            tableName,
-            selector);
+            _session.ActiveSheet.Id,
+            _session.FormulaEditAddress ?? _session.ActiveCell);
 
     private bool IsFormulaReferenceHighlightActive() =>
         _session.FormulaEditAddress is not null &&
@@ -27081,7 +27071,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     NativeWorkbookExtension,
                     File.Exists);
                 if (pathPlan.ShouldConfirmOverwrite &&
-                    !await ConfirmNormalizedWorkbookOverwriteAsync(pathPlan.Path))
+                    !await ConfirmNormalizedOverwriteAsync(
+                        pathPlan.Path,
+                        NormalizedOverwriteTargetKind.Workbook))
                 {
                     ShowSaveIssue("Save canceled.");
                     return false;
@@ -27127,15 +27119,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         UpdateSaveButton();
     }
 
-    private async Task<bool> ConfirmNormalizedPdfOverwriteAsync(string normalizedPath)
+    private async Task<bool> ConfirmNormalizedOverwriteAsync(
+        string normalizedPath,
+        NormalizedOverwriteTargetKind targetKind)
     {
-        var fileName = Path.GetFileName(normalizedPath);
-        if (string.IsNullOrWhiteSpace(fileName))
-            fileName = normalizedPath;
+        var prompt = NormalizedOverwritePromptPlanner.Build(targetKind, normalizedPath);
 
         var dialog = new Window
         {
-            Title = UiText.Get("NormalizedOverwrite_ReplacePdfTitle"),
+            Title = UiText.Get(prompt.WindowTitleResourceKey),
             Width = 460,
             Height = 210,
             MinWidth = 420,
@@ -27146,138 +27138,42 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var titleText = new TextBlock
         {
-            Text = UiText.Format("NormalizedOverwrite_FileAlreadyExistsFormat", fileName),
+            Text = UiText.Format(prompt.FileExistsFormatResourceKey, prompt.FileName),
             FontSize = 16,
             FontWeight = FontWeight.SemiBold,
             TextWrapping = TextWrapping.Wrap,
         };
         var detailText = new TextBlock
         {
-            Text = UiText.Get("NormalizedOverwrite_PdfDetail"),
+            Text = UiText.Get(prompt.DetailResourceKey),
             Foreground = HeaderForeground,
             TextWrapping = TextWrapping.Wrap,
         };
 
         var replaceButton = new Button
         {
-            Content = UiText.Get("ShellLoc_ReplaceButton"),
+            Content = UiText.Get(prompt.ReplaceButtonResourceKey),
             MinWidth = 92,
             Padding = new Thickness(10, 4),
         };
-        AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
-        AutomationProperties.SetName(replaceButton, UiText.CreateAutomationName(UiText.Get("ShellLoc_ReplaceButton")));
-        AutomationProperties.SetHelpText(replaceButton, UiText.Get("NormalizedOverwrite_ReplacePdfHelpText"));
-
-        var cancelButton = new Button
-        {
-            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
-            MinWidth = 92,
-            Padding = new Thickness(10, 4),
-            IsCancel = true,
-        };
-        AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
-        AutomationProperties.SetHelpText(cancelButton, UiText.Get("NormalizedOverwrite_CancelPdfHelpText"));
-
-        var shouldReplace = false;
-        void Finish(bool value)
-        {
-            shouldReplace = value;
-            dialog.Close();
-        }
-
-        replaceButton.Click += (_, _) => Finish(true);
-        cancelButton.Click += (_, _) => Finish(false);
-        dialog.Opened += (_, _) => cancelButton.Focus();
-        dialog.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                Finish(false);
-                e.Handled = true;
-            }
-        };
-
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(18),
-            Spacing = 12,
-            Children =
-            {
-                titleText,
-                detailText,
-                new Border { Height = 10 },
-                new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Spacing = 8,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    Children =
-                    {
-                        cancelButton,
-                        replaceButton,
-                    },
-                },
-            },
-        };
-
-        await dialog.ShowDialog(this);
-        return shouldReplace;
-    }
-
-    private async Task<bool> ConfirmNormalizedWorkbookOverwriteAsync(string normalizedPath)
-    {
-        var fileName = Path.GetFileName(normalizedPath);
-        if (string.IsNullOrWhiteSpace(fileName))
-            fileName = normalizedPath;
-
-        var dialog = new Window
-        {
-            Title = UiText.Get("NormalizedOverwrite_ReplaceWorkbookTitle"),
-            Width = 460,
-            Height = 210,
-            MinWidth = 420,
-            MinHeight = 200,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-
-        var titleText = new TextBlock
-        {
-            Text = UiText.Format("NormalizedOverwrite_FileAlreadyExistsFormat", fileName),
-            FontSize = 16,
-            FontWeight = FontWeight.SemiBold,
-            TextWrapping = TextWrapping.Wrap,
-        };
-        var detailText = new TextBlock
-        {
-            Text = UiText.Get("NormalizedOverwrite_WorkbookDetail"),
-            Foreground = HeaderForeground,
-            TextWrapping = TextWrapping.Wrap,
-        };
-
-        var replaceButton = new Button
-        {
-            Content = UiText.Get("ShellLoc_ReplaceButton"),
-            MinWidth = 92,
-            Padding = new Thickness(10, 4),
-        };
-        AutomationProperties.SetAutomationId(replaceButton, "WorkbookSaveOverwriteReplaceButton");
-        AutomationProperties.SetName(replaceButton, UiText.CreateAutomationName(UiText.Get("ShellLoc_ReplaceButton")));
-        AutomationProperties.SetHelpText(
+        AutomationProperties.SetAutomationId(replaceButton, prompt.ReplaceButtonAutomationId);
+        AutomationProperties.SetName(
             replaceButton,
-            UiText.Get("NormalizedOverwrite_ReplaceWorkbookHelpText"));
+            UiText.CreateAutomationName(UiText.Get(prompt.ReplaceButtonResourceKey)));
+        AutomationProperties.SetHelpText(replaceButton, UiText.Get(prompt.ReplaceHelpTextResourceKey));
 
         var cancelButton = new Button
         {
-            Content = UiText.CreateAutomationName(UiText.Get("Common_Cancel")),
+            Content = UiText.CreateAutomationName(UiText.Get(prompt.CancelButtonResourceKey)),
             MinWidth = 92,
             Padding = new Thickness(10, 4),
             IsCancel = true,
         };
-        AutomationProperties.SetAutomationId(cancelButton, "WorkbookSaveOverwriteCancelButton");
-        AutomationProperties.SetName(cancelButton, UiText.CreateAutomationName(UiText.Get("Common_Cancel")));
-        AutomationProperties.SetHelpText(cancelButton, UiText.Get("NormalizedOverwrite_CancelWorkbookHelpText"));
+        AutomationProperties.SetAutomationId(cancelButton, prompt.CancelButtonAutomationId);
+        AutomationProperties.SetName(
+            cancelButton,
+            UiText.CreateAutomationName(UiText.Get(prompt.CancelButtonResourceKey)));
+        AutomationProperties.SetHelpText(cancelButton, UiText.Get(prompt.CancelHelpTextResourceKey));
 
         var shouldReplace = false;
         void Finish(bool value)
@@ -27399,7 +27295,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     exportOptions,
                     File.Exists);
                 if (requestPlan.ShouldConfirmNormalizedOverwrite &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(requestPlan.Request.Path))
+                    !await ConfirmNormalizedOverwriteAsync(
+                        requestPlan.Request.Path,
+                        NormalizedOverwriteTargetKind.Pdf))
                 {
                     ShowExportIssue(UiText.Get("MainLoc_PdfExportCanceled"));
                     return;

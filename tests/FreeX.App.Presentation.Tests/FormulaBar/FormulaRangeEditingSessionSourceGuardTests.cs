@@ -63,6 +63,24 @@ public sealed class FormulaRangeEditingSessionSourceGuardTests
         source.Should().NotContain("FreeX.App.Avalonia");
     }
 
+    [Fact]
+    public void Controller_RemainsRendererNeutralAndOwnsCrossRendererOrchestration()
+    {
+        var formulaBarRoot = RepositoryFileLocator.FindDirectory(
+            "src",
+            "FreeX.App.Presentation",
+            "FormulaBar");
+        var source = File.ReadAllText(Path.Combine(formulaBarRoot, "FormulaReferenceEditingController.cs"));
+
+        source.Should().Contain("TryApplyKeyboardSelection(");
+        source.Should().Contain("FormulaReferenceHighlightPlanner.GetHighlights(");
+        source.Should().Contain("StructuredReferenceResolver.ResolveEditorReference(");
+        source.Should().NotContain("System.Windows");
+        source.Should().NotContain("Avalonia.");
+        source.Should().NotContain("FreeX.App.Host");
+        source.Should().NotContain("FreeX.App.Avalonia");
+    }
+
     [Theory]
     [InlineData("FreeX.App.Host")]
     [InlineData("FreeX.App.Avalonia")]
@@ -80,5 +98,8 @@ public sealed class FormulaRangeEditingSessionSourceGuardTests
         foreach (var plannerCall in SessionOwnedPlannerCalls)
             source.Should().NotContain(plannerCall);
         source.Should().NotContain("selection.Mode == FormulaPointModeSelectionMode");
+        source.Should().Contain("FormulaReferenceEditingController.TryApplyKeyboardSelection(");
+        source.Should().Contain("FormulaReferenceEditingController.BuildHighlights(");
+        source.Should().NotContain("StructuredReferenceResolver.ResolveEditorReference(");
     }
 }

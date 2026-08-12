@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
@@ -290,8 +291,7 @@ public sealed partial class MainWindow
             UiText.Get("RowColumn_RowHeightDialogTitle"),
             UiText.Get("RowColumn_RowHeightDialogPrompt"),
             current,
-            min: 0,
-            max: 409.5,
+            WorksheetDimensionKind.RowHeight,
             automationId: "RowHeightValueBox");
         if (value is not { } height)
             return;
@@ -317,8 +317,7 @@ public sealed partial class MainWindow
             UiText.Get("RowColumn_ColumnWidthDialogTitle"),
             UiText.Get("RowColumn_ColumnWidthDialogPrompt"),
             current,
-            min: 0,
-            max: 255,
+            WorksheetDimensionKind.ColumnWidth,
             automationId: "ColumnWidthValueBox");
         if (value is not { } width)
             return;
@@ -365,15 +364,14 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Single-numeric-input modal used by the Row Height / Column Width dialogs. Returns the parsed,
-    /// clamped value, or null on cancel / invalid input. The Core command re-validates the range, so
-    /// this clamp is only for an immediate, friendly result.
+    /// validated value, or null on cancel. Validation is delegated to the same portable planner the
+    /// WPF row-height and column-width dialogs use.
     /// </summary>
     private async Task<double?> ShowDimensionInputDialogAsync(
         string title,
         string prompt,
         double current,
-        double min,
-        double max,
+        WorksheetDimensionKind dimensionKind,
         string automationId)
     {
         double? result = null;
@@ -409,9 +407,10 @@ public sealed partial class MainWindow
 
         void Accept()
         {
-            var text = (valueBox.Text ?? "").Trim();
-            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var parsed) &&
-                !double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+            if (!WorksheetDimensionDialogPlanner.TryCreateResult(
+                    dimensionKind,
+                    valueBox.Text,
+                    out var parsed))
             {
                 validationText.Text = prompt;
                 validationText.IsVisible = true;
@@ -420,7 +419,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            result = Math.Clamp(parsed, min, max);
+            result = parsed.Value;
             dialog.Close();
         }
 

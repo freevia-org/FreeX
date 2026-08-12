@@ -19,7 +19,7 @@ public static class StatusBarReadyTextPlanner
 
     /// <summary>
     /// R128-status-bar-calculate-indicator: calc-mode-aware overload used by shells (currently the
-    /// Avalonia shell -- see <c>AvaloniaStatusBarSource.NormalizeReadyText</c>) that render the default
+    /// Avalonia shell -- see <c>FreeXStatusBarRendererPlanner.NormalizeReadyText</c>) that render the default
     /// "ready" cell-mode text through this normalizer rather than a single production choke point like
     /// the WPF host's <c>StatusBarRefreshPlanner</c>. Resolves the fallback via
     /// <see cref="IStatusBarTextProvider.GetReadyText(bool, bool)"/> so a Manual-mode edit with a

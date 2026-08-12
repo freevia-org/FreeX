@@ -501,7 +501,9 @@ public sealed partial class MainWindow
 
                 var exportTargetPlan = ExportFilePickerPlanner.BuildPortablePdfSaveTargetPlan(path, File.Exists);
                 if (exportTargetPlan.ShouldConfirmNormalizedOverwrite &&
-                    !await ConfirmNormalizedPdfOverwriteAsync(exportTargetPlan.Path))
+                    !await ConfirmNormalizedOverwriteAsync(
+                        exportTargetPlan.Path,
+                        NormalizedOverwriteTargetKind.Pdf))
                 {
                     return WorkbookPrintFallbackResult.Canceled(UiText.Get("Print_SaveCanceled"));
                 }
