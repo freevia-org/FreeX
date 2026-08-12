@@ -19,7 +19,7 @@ namespace FreeP.App.Rendering.Wpf;
 /// The adorner does NOT own interaction logic — that lives in <see cref="CanvasGestureHandler"/>.
 /// The adorner is invalidated and redrawn whenever the handler raises a layout change.
 /// </summary>
-public sealed class SelectionAdorner : Adorner
+public sealed partial class SelectionAdorner : Adorner
 {
     // Handle appearance
     private const double HandleSize = SelectionAdornerGeometry.HandleSize;
@@ -153,9 +153,6 @@ public sealed class SelectionAdorner : Adorner
         _state.UpdateSnapGuides(guides, transform.Core);
         InvalidateVisual();
     }
-
-    internal bool HasTransientInteractionVisualsForTests =>
-        _state.HasTransientInteractionVisuals;
 
     // ── Rendering ─────────────────────────────────────────────────────────────────────────────
 

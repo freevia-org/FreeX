@@ -229,8 +229,6 @@ public sealed partial class CanvasGestureHandler : IDisposable
             transform);
     }
 
-    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
-
     private bool HandleOleDoubleClick(SlideShape shape) =>
         OleActivationCoordinator.TryActivate(
             shape,

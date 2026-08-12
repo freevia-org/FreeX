@@ -261,9 +261,6 @@ public sealed partial class SlideCanvas : Control
         InvalidateVisual();
     }
 
-    internal bool HasLiveTransformPreviewForTests =>
-        _liveTransformPreviewOps is { Count: > 0 };
-
     // ── Layout: maintain slide aspect ratio ──────────────────────────────────
 
     protected override Size MeasureOverride(Size availableSize)

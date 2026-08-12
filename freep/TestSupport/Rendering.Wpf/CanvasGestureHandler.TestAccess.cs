@@ -18,6 +18,8 @@ public sealed partial class CanvasGestureHandler
 
     internal SelectionAdorner AdornerForTests => _adorner;
 
+    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
+
     internal bool HandleEscapeForTests() => HandleKeyDown(Key.Escape, ModifierKeys.None);
 
     internal bool HandleKeyDownForTests(Key key, ModifierKeys modifiers) =>
@@ -93,4 +95,18 @@ public sealed partial class CanvasGestureHandler
             currentScreen,
             _canvas.CurrentTransform,
             CanvasGestureModifiers.None);
+}
+
+public sealed partial class SlideCanvas
+{
+    internal CanvasGestureHandler? GestureHandlerForTests => _gestureHandler;
+
+    internal bool HasLiveTransformPreviewForTests =>
+        _liveTransformPreviewOps is { Count: > 0 };
+}
+
+public sealed partial class SelectionAdorner
+{
+    internal bool HasTransientInteractionVisualsForTests =>
+        _state.HasTransientInteractionVisuals;
 }

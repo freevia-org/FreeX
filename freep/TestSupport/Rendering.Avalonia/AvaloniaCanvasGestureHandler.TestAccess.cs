@@ -43,6 +43,8 @@ public sealed partial class AvaloniaCanvasGestureHandler
         _adorner.HasTransientInteractionVisualsForTests ||
         _canvas.HasLiveTransformPreviewForTests;
 
+    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
+
     internal void SimulateCaptureLossForTests() => CancelActiveGesture(releaseCapture: false);
 
     internal void SimulateStalePointerUpForTests() =>
@@ -79,4 +81,16 @@ public sealed partial class AvaloniaCanvasGestureHandler
             [new SnapGuideLine { IsHorizontal = true, Position = 4, Label = "test" }],
             SlideTransformCore.Identity);
     }
+}
+
+public sealed partial class SlideCanvas
+{
+    internal bool HasLiveTransformPreviewForTests =>
+        _liveTransformPreviewOps is { Count: > 0 };
+}
+
+public sealed partial class SelectionAdornerLayer
+{
+    internal bool HasTransientInteractionVisualsForTests =>
+        _state.HasTransientInteractionVisuals;
 }

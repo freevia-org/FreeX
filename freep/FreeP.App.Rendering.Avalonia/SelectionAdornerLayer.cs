@@ -19,7 +19,7 @@ namespace FreeP.App.Rendering.Avalonia;
 /// The adorner does NOT own interaction logic — that lives in <see cref="AvaloniaCanvasGestureHandler"/>.
 /// Call the <c>Update*</c> methods from the gesture handler to trigger redraws.
 /// </summary>
-public sealed class SelectionAdornerLayer : Control
+public sealed partial class SelectionAdornerLayer : Control
 {
     // ── Handle appearance ───────────────────────────────────────────────────────
 
@@ -124,9 +124,6 @@ public sealed class SelectionAdornerLayer : Control
         _state.UpdateSnapGuides(guides, transform);
         InvalidateVisual();
     }
-
-    internal bool HasTransientInteractionVisualsForTests =>
-        _state.HasTransientInteractionVisuals;
 
     // ── Rendering ───────────────────────────────────────────────────────────────
 

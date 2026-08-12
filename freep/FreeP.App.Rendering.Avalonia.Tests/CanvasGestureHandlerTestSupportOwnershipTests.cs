@@ -8,6 +8,7 @@ public sealed class CanvasGestureHandlerTestSupportOwnershipTests
     private static readonly string[] TestSeams =
     [
         "CompleteGestureForTests",
+        "HandleOleDoubleClickForTests",
         "HasPendingGestureStateForTests",
         "HasTransientInteractionVisualsForTests",
         "IsGestureActiveForTests",
@@ -44,9 +45,13 @@ public sealed class CanvasGestureHandlerTestSupportOwnershipTests
 
         File.ReadAllText(Path.Combine(rendererDirectory, "AvaloniaCanvasGestureHandler.cs"))
             .Should().NotContain("SeedMoveStateForTests");
+        File.ReadAllText(Path.Combine(rendererDirectory, "SlideCanvas.cs"))
+            .Should().NotContain("HasLiveTransformPreviewForTests");
+        File.ReadAllText(Path.Combine(rendererDirectory, "SelectionAdornerLayer.cs"))
+            .Should().NotContain("HasTransientInteractionVisualsForTests");
         File.Exists(supportFile).Should().BeTrue();
         File.ReadAllText(Path.Combine(rendererDirectory, "FreeP.App.Rendering.Avalonia.csproj"))
-            .Should().Contain("'$(FreePRendererTestSupport)' == 'true'");
+            .Should().Contain("<ItemGroup Condition=\"'$(FreePRendererTestSupport)' == 'true'\">\r\n    <AssemblyAttribute Include=\"System.Runtime.CompilerServices.InternalsVisibleTo\">");
         File.ReadAllText(Path.Combine(
                 root,
                 "freep",

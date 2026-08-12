@@ -12,6 +12,7 @@ public sealed class CanvasGestureHandlerTestSupportOwnershipTests
         "CompleteGestureForTests",
         "HandleEscapeForTests",
         "HandleKeyDownForTests",
+        "HandleOleDoubleClickForTests",
         "HasPendingGestureStateForTests",
         "HasTransientInteractionVisualsForTests",
         "IsGestureActiveForTests",
@@ -47,9 +48,14 @@ public sealed class CanvasGestureHandlerTestSupportOwnershipTests
 
         File.ReadAllText(Path.Combine(rendererDirectory, "CanvasGestureHandler.cs"))
             .Should().NotContain("SeedMoveStateForTests");
+        File.ReadAllText(Path.Combine(rendererDirectory, "SlideCanvas.cs"))
+            .Should().NotContain("GestureHandlerForTests")
+            .And.NotContain("HasLiveTransformPreviewForTests");
+        File.ReadAllText(Path.Combine(rendererDirectory, "SelectionAdorner.cs"))
+            .Should().NotContain("HasTransientInteractionVisualsForTests");
         File.Exists(supportFile).Should().BeTrue();
         File.ReadAllText(Path.Combine(rendererDirectory, "FreeP.App.Rendering.Wpf.csproj"))
-            .Should().Contain("'$(FreePRendererTestSupport)' == 'true'");
+            .Should().Contain("<ItemGroup Condition=\"'$(FreePRendererTestSupport)' == 'true'\">\r\n    <AssemblyAttribute Include=\"System.Runtime.CompilerServices.InternalsVisibleTo\">");
         File.ReadAllText(Path.Combine(
                 root,
                 "freep",

@@ -272,8 +272,6 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
             _tryOpenOleInPlace,
             _tryActivateOleExternally);
 
-    internal bool HandleOleDoubleClickForTests(SlideShape shape) => HandleOleDoubleClick(shape);
-
     internal static bool ShouldContinueDoubleClickSelection(SlideShape? shape) =>
         CanvasGesturePlanner.ShouldContinueDoubleClickSelection(shape);
 

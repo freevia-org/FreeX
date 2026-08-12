@@ -245,8 +245,6 @@ public sealed partial class SlideCanvas : FrameworkElement
     /// <summary>Enables or disables the Edit Points interaction mode.</summary>
     public void SetEditPointsMode(bool enabled) => EditPointsEnabled = enabled;
 
-    internal CanvasGestureHandler? GestureHandlerForTests => _gestureHandler;
-
     // ── Wave 10A: active editor access for ribbon routing ──────────────────────
 
     /// <summary>
@@ -294,9 +292,6 @@ public sealed partial class SlideCanvas : FrameworkElement
             : CanvasTransformPreviewComposer.Compose(_cachedOps, plan);
         InvalidateVisual();
     }
-
-    internal bool HasLiveTransformPreviewForTests =>
-        _liveTransformPreviewOps is { Count: > 0 };
 
     // ── Layout: maintain slide aspect ratio ────────────────────────────────────
 
