@@ -1,4 +1,4 @@
-using System.Reflection;
+// Launch-smoke orchestration belongs to the external validation host, not the product binary.
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
@@ -7,6 +7,7 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
+#if FREEX_VALIDATION_HOST
 internal sealed record MacOsLaunchSmokeOptions(
     string ReportPath,
     bool VerifyImageClipboardPaste,
@@ -147,6 +148,8 @@ internal sealed record MacOsLaunchSmokeOptions(
     }
 }
 
+#endif
+#if FREEX_RENDERER_CONTRACTS
 internal sealed record MacOsLaunchSmokeDialogSnapshot(
     bool HasFindDialog,
     bool HasFindDialogTextBox,
@@ -898,6 +901,8 @@ internal sealed record MacOsLaunchSmokeSnapshot(
     public bool IsPassed => HasShellEvidence && DialogEvidence.IsPassed;
 }
 
+#endif
+#if FREEX_VALIDATION_HOST
 internal static class MacOsLaunchSmokeCoordinator
 {
     private const int MaxWaitMilliseconds = 15000;
@@ -905,24 +910,24 @@ internal static class MacOsLaunchSmokeCoordinator
     private const int PollDelayMilliseconds = 250;
 
     public static void Start(
-        MainWindow mainWindow,
+        MainWindow.LaunchSmokeAccessAdapter access,
         MacOsLaunchSmokeOptions options,
         LocalAppDiagnostics? diagnostics = null)
     {
-        ArgumentNullException.ThrowIfNull(mainWindow);
+        ArgumentNullException.ThrowIfNull(access);
         ArgumentNullException.ThrowIfNull(options);
 
-        mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options, diagnostics);
+        access.StartWhenOpened(() => RunAsync(access, options, diagnostics));
     }
 
     private static async Task RunAsync(
-        MainWindow mainWindow,
+        MainWindow.LaunchSmokeAccessAdapter access,
         MacOsLaunchSmokeOptions options,
         LocalAppDiagnostics? diagnostics)
     {
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(
             MaxWaitMilliseconds + (options.VerifyLiveCommandKeys ? LiveCommandKeyWaitMilliseconds : 0));
-        var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+        var snapshot = access.CreateSnapshot();
         var commandKeyEvidence = MacOsLaunchSmokeCommandKeySnapshot.Empty;
         var liveCommandKeyEvidence = MacOsLaunchSmokeLiveCommandKeySnapshot.Empty;
         var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
@@ -950,7 +955,7 @@ internal static class MacOsLaunchSmokeCoordinator
                     !attemptedCommandKeyEvidence)
                 {
                     attemptedCommandKeyEvidence = true;
-                    commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);
+                    commandKeyEvidence = CaptureCommandKeyEvidence(access);
                     continue;
                 }
 
@@ -959,8 +964,8 @@ internal static class MacOsLaunchSmokeCoordinator
                     !attemptedDialogEvidence)
                 {
                     attemptedDialogEvidence = true;
-                    await mainWindow.CaptureLaunchSmokeDialogEvidenceAsync();
-                    snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+                    await access.CaptureDialogEvidenceAsync();
+                    snapshot = access.CreateSnapshot();
                     continue;
                 }
 
@@ -970,8 +975,8 @@ internal static class MacOsLaunchSmokeCoordinator
                     !attemptedImageClipboardPaste)
                 {
                     attemptedImageClipboardPaste = true;
-                    await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();
-                    snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+                    await access.TryPasteClipboardImageAsync();
+                    snapshot = access.CreateSnapshot();
                     continue;
                 }
 
@@ -982,7 +987,7 @@ internal static class MacOsLaunchSmokeCoordinator
                         commandKeyEvidence,
                         liveCommandKeyEvidence))
                 {
-                    liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();
+                    liveCommandKeyEvidence = access.BeginLiveCommandKeyProbe();
                     WriteReport(
                         options.ReportPath,
                         snapshot,
@@ -997,11 +1002,11 @@ internal static class MacOsLaunchSmokeCoordinator
                 }
 
                 await Task.Delay(PollDelayMilliseconds);
-                snapshot = mainWindow.CreateLaunchSmokeSnapshot();
-                liveCommandKeyEvidence = mainWindow.CreateLaunchSmokeLiveCommandKeySnapshot();
+                snapshot = access.CreateSnapshot();
+                liveCommandKeyEvidence = access.CreateLiveCommandKeySnapshot();
             }
 
-            liveCommandKeyEvidence = mainWindow.CreateLaunchSmokeLiveCommandKeySnapshot();
+            liveCommandKeyEvidence = access.CreateLiveCommandKeySnapshot();
             WriteReport(
                 options.ReportPath,
                 snapshot,
@@ -1073,46 +1078,32 @@ internal static class MacOsLaunchSmokeCoordinator
         IsPassed(snapshot, options, initialExternalImageClipboardPictureCount) &&
         commandKeyEvidence.IsPassed;
 
-    private static MacOsLaunchSmokeCommandKeySnapshot CaptureCommandKeyEvidence(MainWindow mainWindow) =>
+    private static MacOsLaunchSmokeCommandKeySnapshot CaptureCommandKeyEvidence(
+        MainWindow.LaunchSmokeAccessAdapter access) =>
         new(
-            HasNewWorkbookMenuGesture: HasNativeMenuItemGesture(mainWindow, "_newWorkbookMenuItem", Key.N, KeyModifiers.Meta),
-            HasOpenMenuGesture: HasNativeMenuItemGesture(mainWindow, "_openMenuItem", Key.O, KeyModifiers.Meta),
-            HasSaveMenuGesture: HasNativeMenuItemGesture(mainWindow, "_saveMenuItem", Key.S, KeyModifiers.Meta),
-            HasSaveAsMenuGesture: HasNativeMenuItemGesture(mainWindow, "_saveAsMenuItem", Key.S, KeyModifiers.Meta | KeyModifiers.Shift),
-            HasCloseWorkbookMenuGesture: HasNativeMenuItemGesture(mainWindow, "_closeWorkbookMenuItem", Key.W, KeyModifiers.Meta),
-            HasQuitMenuGesture: HasNativeMenuItemGesture(mainWindow, "_quitMenuItem", Key.Q, KeyModifiers.Meta),
-            HasSelectAllMenuGesture: HasNativeMenuItemGesture(mainWindow, "_selectAllMenuItem", Key.A, KeyModifiers.Meta),
-            HasFindMenuGesture: HasNativeMenuItemGesture(mainWindow, "_findMenuItem", Key.F, KeyModifiers.Meta),
-            HasBoldMenuGesture: HasNativeMenuItemGesture(mainWindow, "_boldMenuItem", Key.B, KeyModifiers.Meta),
-            HasItalicMenuGesture: HasNativeMenuItemGesture(mainWindow, "_italicMenuItem", Key.I, KeyModifiers.Meta),
-            HasUnderlineMenuGesture: HasNativeMenuItemGesture(mainWindow, "_underlineMenuItem", Key.U, KeyModifiers.Meta),
-            HasFindDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(
+            HasNewWorkbookMenuGesture: access.HasNativeMenuItemGesture("_newWorkbookMenuItem", Key.N, KeyModifiers.Meta),
+            HasOpenMenuGesture: access.HasNativeMenuItemGesture("_openMenuItem", Key.O, KeyModifiers.Meta),
+            HasSaveMenuGesture: access.HasNativeMenuItemGesture("_saveMenuItem", Key.S, KeyModifiers.Meta),
+            HasSaveAsMenuGesture: access.HasNativeMenuItemGesture("_saveAsMenuItem", Key.S, KeyModifiers.Meta | KeyModifiers.Shift),
+            HasCloseWorkbookMenuGesture: access.HasNativeMenuItemGesture("_closeWorkbookMenuItem", Key.W, KeyModifiers.Meta),
+            HasQuitMenuGesture: access.HasNativeMenuItemGesture("_quitMenuItem", Key.Q, KeyModifiers.Meta),
+            HasSelectAllMenuGesture: access.HasNativeMenuItemGesture("_selectAllMenuItem", Key.A, KeyModifiers.Meta),
+            HasFindMenuGesture: access.HasNativeMenuItemGesture("_findMenuItem", Key.F, KeyModifiers.Meta),
+            HasBoldMenuGesture: access.HasNativeMenuItemGesture("_boldMenuItem", Key.B, KeyModifiers.Meta),
+            HasItalicMenuGesture: access.HasNativeMenuItemGesture("_italicMenuItem", Key.I, KeyModifiers.Meta),
+            HasUnderlineMenuGesture: access.HasNativeMenuItemGesture("_underlineMenuItem", Key.U, KeyModifiers.Meta),
+            HasFindDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(
                 "MainWindow_KeyDown",
                 "HasOnlyCommandModifier",
                 "ShowFindDialogAsync"),
-            HasPageUpDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(
+            HasPageUpDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(
                 "MainWindow_KeyDown",
                 "HasOnlyCommandModifier",
                 "SelectAdjacentVisibleSheetFromKeyboard"),
-            HasPageDownDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(
+            HasPageDownDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(
                 "MainWindow_KeyDown",
                 "HasOnlyCommandModifier",
                 "SelectAdjacentVisibleSheetFromKeyboard"));
-
-    private static bool HasNativeMenuItemGesture(
-        MainWindow mainWindow,
-        string fieldName,
-        Key expectedKey,
-        KeyModifiers expectedModifiers) =>
-        typeof(MainWindow).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(mainWindow) is NativeMenuItem { Gesture: { } gesture } &&
-        gesture.Key == expectedKey &&
-        gesture.KeyModifiers == expectedModifiers;
-
-    private static bool HasMainWindowDirectCommandRouteSourceSupport(params string[] requiredMethodNames) =>
-        requiredMethodNames.All(HasMainWindowMethod);
-
-    private static bool HasMainWindowMethod(string methodName) =>
-        typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic) is not null;
 
     private static bool HasExternalImageClipboardPasteEvidence(
         MacOsLaunchSmokeSnapshot snapshot,
@@ -1536,3 +1527,4 @@ internal static class MacOsLaunchSmokeCoordinator
 
     private static string FormatBool(bool value) => value ? "true" : "false";
 }
+#endif

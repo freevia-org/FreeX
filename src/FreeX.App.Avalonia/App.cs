@@ -18,8 +18,6 @@ public sealed class App : Application
 
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
 
-    internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }
-
     internal static Func<WorkbookSessionFactory, double, double, bool, WorkbookSession>?
         ExternalStartupSessionFactory { get; set; }
 
@@ -144,9 +142,6 @@ public sealed class App : Application
 
             if (this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime)
                 activatableLifetime.Activated += (_, args) => _ = OnActivatedAsync(mainWindow, args);
-
-            if (LaunchSmokeOptions is { } launchSmokeOptions)
-                MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
 
             ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);
         }

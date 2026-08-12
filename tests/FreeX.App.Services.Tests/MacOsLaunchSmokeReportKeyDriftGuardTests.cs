@@ -107,7 +107,7 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
     public void MacOsLaunchSmoke_NativeAndToolbarReportKeysMatchWorkflowGrepsAndReadinessMarkers()
     {
         var sourceReportKeys = ExtractDistinctKeys(
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs")),
             SourceReportKeyPattern);
         var workflowGrepKeys = ExtractDistinctKeys(
             File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml")),
@@ -133,7 +133,7 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
     public void MacOsLaunchSmoke_DialogReportKeysMatchWorkflowGrepsAndReadinessMarkers()
     {
         var sourceReportKeys = ExtractDistinctKeys(
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs")),
             DialogSourceReportKeyPattern);
         var workflowGrepKeys = ExtractDistinctKeys(
             File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml")),
@@ -159,7 +159,7 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
     public void MacOsLaunchSmoke_AccessibilityReportKeysMatchWorkflowGrepsAndReadinessMarkers()
     {
         var sourceReportKeys = ExtractDistinctKeys(
-            File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs")),
+            File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs")),
             AccessibilitySourceReportKeyPattern);
         var workflowGrepKeys = ExtractDistinctKeys(
             File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml")),
@@ -184,7 +184,7 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
     [Fact]
     public void MacOsLaunchSmoke_CommandKeyReportKeysMatchSourcePlanningAndHostedSafeWorkflowMarkers()
     {
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var workflow = File.ReadAllText(RepositoryFileLocator.Find(".github", "workflows", "macos-app.yml"));
         var planning = File.ReadAllText(RepositoryFileLocator.Find("docs", "planning", "multiplatform-macos-port.md"));
 
@@ -208,24 +208,24 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
 
         smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeCommandKeySnapshot(");
         smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(");
-        smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);");
-        smokeSource.Should().Contain("liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();");
+        smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(access);");
+        smokeSource.Should().Contain("liveCommandKeyEvidence = access.BeginLiveCommandKeyProbe();");
         smokeSource.Should().Contain("commandKeyEvidence.IsPassed");
         smokeSource.Should().Contain("liveCommandKeyEvidence.IsPassed");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_newWorkbookMenuItem\", Key.N, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_openMenuItem\", Key.O, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_saveMenuItem\", Key.S, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_saveAsMenuItem\", Key.S, KeyModifiers.Meta | KeyModifiers.Shift)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_closeWorkbookMenuItem\", Key.W, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_quitMenuItem\", Key.Q, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_selectAllMenuItem\", Key.A, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_findMenuItem\", Key.F, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_boldMenuItem\", Key.B, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_italicMenuItem\", Key.I, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasNativeMenuItemGesture(mainWindow, \"_underlineMenuItem\", Key.U, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
-        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
-        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_newWorkbookMenuItem\", Key.N, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_openMenuItem\", Key.O, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_saveMenuItem\", Key.S, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_saveAsMenuItem\", Key.S, KeyModifiers.Meta | KeyModifiers.Shift)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_closeWorkbookMenuItem\", Key.W, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_quitMenuItem\", Key.Q, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_selectAllMenuItem\", Key.A, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_findMenuItem\", Key.F, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_boldMenuItem\", Key.B, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_italicMenuItem\", Key.I, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_underlineMenuItem\", Key.U, KeyModifiers.Meta)");
+        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
+        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
+        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
         smokeSource.Should().Contain("cmd_find_direct_route_source_guard={FormatBool(commandKeyEvidence.HasFindDirectRouteSourceGuard)}");
         smokeSource.Should().Contain("cmd_page_up_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageUpDirectRouteSourceGuard)}");
         smokeSource.Should().Contain("cmd_page_down_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageDownDirectRouteSourceGuard)}");

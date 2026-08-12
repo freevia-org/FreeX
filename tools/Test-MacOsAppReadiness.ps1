@@ -720,6 +720,9 @@ function Test-MacOsWorkflow {
         'echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"',
         "edited, saved, and reopened",
         "lsregister -f",
+        "dotnet publish tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj",
+        'validation_host="$validation_published/FreeX.Validation.Avalonia"',
+        "run_launchservices_with_validation",
         'app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"',
         '--macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"',
         "app_diagnostics_directory_configured=true",
@@ -744,12 +747,14 @@ function Test-MacOsWorkflow {
         'open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"',
         'app_path="$unzip_root/FreeX.app"',
         'run_bounded_launchservices_smoke "open_with" "$open_with_report"',
-        'open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report"',
+        'run_launchservices_with_validation "$open_with_report" "$open_with_smoke_file"',
+        'open -W -n -a "$app_path" "$open_with_smoke_file"',
         'default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"',
         'default_open_smoke_file="$RUNNER_TEMP/freex-$runtime-default-open.fxl"',
         '"FileFormat": "FreeX.NativeJsonWorkbook"',
         'run_bounded_launchservices_smoke "default_open" "$default_open_report"',
-        'open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report"',
+        'run_launchservices_with_validation "$default_open_report" "$default_open_smoke_file"',
+        'open -W -n "$default_open_smoke_file"',
         'launchservices_smoke_timed_out=$timed_out',
         "launchservices_smoke_cleanup_timeout=true",
         'kill "$launchservices_pid" 2>/dev/null || true',
@@ -1091,16 +1096,16 @@ function Test-SourceWiring {
             Path = "src\FreeX.App.Avalonia\Program.cs"
             Markers = @(
                 "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)",
-                "MacOsLaunchSmokeOptions.TryParse(",
                 "LocalAppDiagnostics.Create(",
                 "AppHelpInfo.GetVersionText(typeof(Program).Assembly)",
-                "launchSmokeOptions?.DiagnosticsDirectory)",
+                "internal static int RunToolHost(",
+                "Action<MainWindow.LaunchSmokeAccessAdapter, LocalAppDiagnostics?> externalStartupCoordinator",
                 "SisterAvaloniaApplicationStartupRunner.Run(",
                 "RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers()",
                 "RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)",
                 "diagnostics.RecordEvent(`"app_start`"",
                 "App.StartupArguments = startupArguments;",
-                "App.LaunchSmokeOptions = launchSmokeOptions;",
+                "App.ExternalStartupCoordinator = externalStartupCoordinator;",
                 "App.Diagnostics = diagnostics;",
                 "diagnostics.RecordEvent(`"app_exit`"",
                 "CompletedExitCode = 0",
@@ -1134,7 +1139,16 @@ function Test-SourceWiring {
                 "args is not FileActivatedEventArgs fileArgs",
                 "fileArgs.Kind != ActivationKind.File",
                 "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);",
-                "MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);"
+                "ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "tools\FreeX.Validation.Avalonia\Program.cs"
+            Markers = @(
+                "MacOsLaunchSmokeOptions.TryParse(",
+                "FreeX.App.Avalonia.Program.RunToolHost(",
+                "MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics)"
             )
             OrderedPairs = @()
         },
@@ -1865,7 +1879,7 @@ function Test-SourceWiring {
                 "_sheetGridHost.Focusable = true;",
                 "AutomationProperties.SetName(_sheetGridHost, `"Worksheet`");",
                 "_zoomText.Focusable = true;",
-                "AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get(`"StatusBar_Zoom`")));",
+                "AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get(`"Common_Zoom`")));",
                 "private static bool IsShellFocusCycleKey(KeyEventArgs args)",
                 "args.Key == Key.F6 &&",
                 "if (IsShellFocusCycleKey(e))",
@@ -2328,7 +2342,7 @@ function Test-SourceWiring {
             )
         },
         @{
-            Path = "src\FreeX.App.Avalonia\MacOsLaunchSmoke.cs"
+            Path = "tools\FreeX.Validation.Avalonia\MacOsLaunchSmoke.cs"
             Markers = @(
                 "public const string Argument = `"--macos-launch-smoke`";",
                 "public const string DiagnosticsDirectoryArgument = `"--macos-launch-smoke-diagnostics-dir`";",
@@ -2339,17 +2353,17 @@ function Test-SourceWiring {
                 "verifyLiveCommandKeys = true;",
                 "diagnosticsDirectory = args[++index];",
                 "diagnosticsDirectory);",
-                "RunAsync(mainWindow, options, diagnostics)",
+                "RunAsync(access, options, diagnostics)",
                 "diagnostics?.RecordEvent(`"macos_launch_smoke`"",
                 "diagnostics?.RecordCrash(ex, `"macos_launch_smoke`")",
                 "app_diagnostics_directory_configured={FormatBool(appDiagnosticsConfigured)}",
-                "await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();",
-                "liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();",
+                "await access.TryPasteClipboardImageAsync();",
+                "liveCommandKeyEvidence = access.BeginLiveCommandKeyProbe();",
                 "liveCommandKeyEvidence.IsPassed",
                 "HasFindDirectRouteSourceGuard &&",
                 "HasPageUpDirectRouteSourceGuard &&",
                 "HasPageDownDirectRouteSourceGuard",
-                "HasMainWindowDirectCommandRouteSourceSupport(",
+                "MainWindow.LaunchSmokeAccessAdapter.HasMethods(",
                 "IsPassed(snapshot, options, initialExternalImageClipboardPictureCount)",
                 "HasExternalImageClipboardPasteEvidence(",
                 "HasNativeDockMenu &&",

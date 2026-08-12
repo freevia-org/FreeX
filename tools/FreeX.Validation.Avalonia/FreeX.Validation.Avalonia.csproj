@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>FreeX.Validation.Avalonia</AssemblyName>
+    <DefineConstants>$(DefineConstants);FREEX_VALIDATION_HOST</DefineConstants>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>FreeX.Validation.Avalonia</RootNamespace>
+    <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
+    <StartupObject>FreeX.Validation.Avalonia.Program</StartupObject>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <Import Project="..\ToolProjects.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.Tests" />
+  </ItemGroup>
+</Project>

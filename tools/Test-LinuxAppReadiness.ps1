@@ -114,7 +114,7 @@ Assert-FileContains -Path $appImageScript -Needles @(
 )
 
 # Avalonia project keeps the platform-neutral launch-smoke alias.
-$smokeSource = Get-RepoFile @("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs")
+$smokeSource = Get-RepoFile @("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs")
 Assert-FileContains -Path $smokeSource -Needles @(
     'public const string NeutralArgument = "--launch-smoke";',
     'public const string NeutralDiagnosticsDirectoryArgument = "--launch-smoke-diagnostics-dir";'

@@ -119,6 +119,7 @@
     <Project Path="tools/FreeX.SheetImageCompare/FreeX.SheetImageCompare.csproj" />
     <Project Path="tools/FreeX.ToolsShared/FreeX.ToolsShared.csproj" />
     <Project Path="tools/FreeX.ToolsShared.Wpf/FreeX.ToolsShared.Wpf.csproj" />
+    <Project Path="tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj" />
     <Project Path="tools/FreeX.XlsxPackageDiagnostics/FreeX.XlsxPackageDiagnostics.csproj" />
   </Folder>
 </Solution>

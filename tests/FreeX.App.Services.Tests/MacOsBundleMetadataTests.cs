@@ -217,7 +217,8 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("echo \"format_cells_style_roundtrip=true\"");
         workflow.Should().Contain("echo \"format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count\"");
         workflow.Should().Contain("lsregister -f \"$unzip_root/FreeX.app\"");
-        workflow.Should().Contain("open -W -n -b io.github.tony-xmelon.freex \"$launch_smoke_file\" --args --macos-launch-smoke \"$launch_smoke_report\"");
+        workflow.Should().Contain("run_launchservices_with_validation \"$launch_smoke_report\" \"$launch_smoke_file\"");
+        workflow.Should().Contain("open -W -n -b io.github.tony-xmelon.freex \"$launch_smoke_file\"");
         workflow.Should().Contain("--macos-launch-smoke-diagnostics-dir \"$app_diagnostics_dir\"");
         workflow.Should().Contain("grep -q \"app_diagnostics_directory_configured=true\" \"$launch_smoke_report\"");
         workflow.Should().Contain("app_diagnostics_events_path=\"$app_diagnostics_dir/events.jsonl\"");
@@ -469,8 +470,8 @@ public sealed class MacOsBundleMetadataTests
 
         program.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
         program.Should().Contain("return smokeExitCode;");
-        program.Should().Contain("MacOsLaunchSmokeOptions.TryParse(");
-        program.Should().Contain("App.LaunchSmokeOptions = launchSmokeOptions;");
+        program.Should().NotContain("MacOsLaunchSmokeOptions.TryParse(");
+        program.Should().Contain("internal static int RunToolHost(");
         program.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
     }
 

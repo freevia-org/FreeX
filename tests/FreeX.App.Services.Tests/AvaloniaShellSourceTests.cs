@@ -287,7 +287,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var exporterSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "PortablePdfDocumentExporter.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _exportPdfMenuItem = new();");
@@ -1131,32 +1131,42 @@ public sealed class AvaloniaShellSourceTests
     }
 
     [Fact]
-    public void App_WiresMacOsLaunchSmokeToRuntimeSnapshot()
+    public void ValidationHost_WiresLaunchSmokeThroughNarrowRendererAccess()
     {
         var appSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
         var programSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var validationProgramSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "Program.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
+        var accessSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.LaunchSmokeAccessAdapter.cs"));
         var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        programSource.Should().Contain("MacOsLaunchSmokeOptions.TryParse(");
-        programSource.Should().Contain("out var launchSmokeOptions");
-        programSource.Should().Contain("out var startupArguments");
+        programSource.Should().NotContain("MacOsLaunchSmokeOptions.TryParse(");
+        programSource.Should().NotContain("MacOsLaunchSmokeCoordinator");
+        programSource.Should().Contain("internal static int RunToolHost(");
+        programSource.Should().Contain("Action<MainWindow.LaunchSmokeAccessAdapter, LocalAppDiagnostics?> externalStartupCoordinator");
         programSource.Should().Contain("LocalAppDiagnostics.Create(");
         programSource.Should().Contain("AppHelpInfo.GetVersionText(typeof(Program).Assembly)");
         programSource.Should().Contain("diagnostics.RecordEvent(\"app_start\"");
         programSource.Should().Contain("diagnostics.RecordEvent(\"app_exit\"");
         programSource.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(");
         programSource.Should().Contain("RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)");
-        programSource.Should().Contain("App.LaunchSmokeOptions = launchSmokeOptions;");
+        programSource.Should().NotContain("App.LaunchSmokeOptions");
+        programSource.Should().Contain("externalStartupCoordinator(window.CreateLaunchSmokeAccessAdapter(), diagnostics)");
         programSource.Should().Contain("App.Diagnostics = diagnostics;");
         programSource.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
+        validationProgramSource.Should().Contain("MacOsLaunchSmokeOptions.TryParse(");
+        validationProgramSource.Should().Contain("FreeX.App.Avalonia.Program.RunToolHost(");
+        validationProgramSource.Should().Contain("MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics)");
         appSource.Should().Contain("private const string ApplicationTitle = \"FreeX\";");
         appSource.Should().Contain("Name = ApplicationTitle;");
-        appSource.Should().Contain("internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }");
+        appSource.Should().NotContain("MacOsLaunchSmokeOptions");
+        appSource.Should().NotContain("MacOsLaunchSmokeCoordinator");
         appSource.Should().Contain("internal static LocalAppDiagnostics? Diagnostics { get; set; }");
         appSource.Should().Contain("Diagnostics?.RecordEvent(\"app_ready\"");
-        appSource.Should().Contain("if (LaunchSmokeOptions is { } launchSmokeOptions)");
-        appSource.Should().Contain("MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);");
+        appSource.Should().Contain("ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);");
+        accessSource.Should().Contain("internal sealed class LaunchSmokeAccessAdapter");
+        accessSource.Should().Contain("internal MacOsLaunchSmokeSnapshot CreateSnapshot()");
+        accessSource.Should().Contain("internal Task<MacOsLaunchSmokeDialogSnapshot> CaptureDialogEvidenceAsync()");
         smokeSource.Should().Contain("public const string Argument = \"--macos-launch-smoke\";");
         smokeSource.Should().Contain("public const string DiagnosticsDirectoryArgument = \"--macos-launch-smoke-diagnostics-dir\";");
         smokeSource.Should().Contain("public const string VerifyImageClipboardPasteArgument = \"--macos-launch-smoke-verify-image-clipboard\";");
@@ -1166,14 +1176,14 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("verifyLiveCommandKeys = true;");
         smokeSource.Should().Contain("diagnosticsDirectory = args[++index];");
         smokeSource.Should().Contain("diagnosticsDirectory);");
-        smokeSource.Should().Contain("mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options, diagnostics);");
+        smokeSource.Should().Contain("access.StartWhenOpened(() => RunAsync(access, options, diagnostics));");
         smokeSource.Should().Contain("diagnostics?.RecordEvent(\"macos_launch_smoke\"");
         smokeSource.Should().Contain("diagnostics?.RecordCrash(ex, \"macos_launch_smoke\")");
-        smokeSource.Should().Contain("mainWindow.CreateLaunchSmokeSnapshot()");
-        smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(mainWindow);");
-        smokeSource.Should().Contain("liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();");
-        smokeSource.Should().Contain("mainWindow.CreateLaunchSmokeLiveCommandKeySnapshot()");
-        smokeSource.Should().Contain("await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();");
+        smokeSource.Should().Contain("access.CreateSnapshot()");
+        smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(access);");
+        smokeSource.Should().Contain("liveCommandKeyEvidence = access.BeginLiveCommandKeyProbe();");
+        smokeSource.Should().Contain("access.CreateLiveCommandKeySnapshot()");
+        smokeSource.Should().Contain("await access.TryPasteClipboardImageAsync();");
         smokeSource.Should().Contain("IsPassed(snapshot, options, initialExternalImageClipboardPictureCount)");
         smokeSource.Should().Contain("IsPassedWithCommandKeyEvidence(");
         smokeSource.Should().Contain("HasExternalImageClipboardPasteEvidence(");
@@ -1182,9 +1192,9 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("macos_launch_smoke={(IsPassedWithCommandKeyEvidence(snapshot, options, initialExternalImageClipboardPictureCount, commandKeyEvidence, liveCommandKeyEvidence) ? \"passed\" : \"failed\")}");
         smokeSource.Should().Contain("command_key_smoke={(commandKeyEvidence.IsPassed ? \"passed\" : \"failed\")}");
         smokeSource.Should().Contain("command_key_smoke_attempted={FormatBool(attemptedCommandKeyEvidence)}");
-        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
-        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
-        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: HasMainWindowDirectCommandRouteSourceSupport(");
+        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
+        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
+        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
         smokeSource.Should().Contain("cmd_find_direct_route_source_guard={FormatBool(commandKeyEvidence.HasFindDirectRouteSourceGuard)}");
         smokeSource.Should().Contain("cmd_page_up_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageUpDirectRouteSourceGuard)}");
         smokeSource.Should().Contain("cmd_page_down_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageDownDirectRouteSourceGuard)}");
@@ -1882,7 +1892,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresFormatPainterThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly Button _formatPainterButton = new();");
@@ -1929,7 +1939,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         sessionSource.Should().Contain("public WorkbookCellEditResult InsertAutoSumFormula(string functionName)");
@@ -2002,7 +2012,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var quickSortSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "QuickSortRangePlanner.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
@@ -2152,7 +2162,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FlashFillRangePlanner.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var commandPresentationSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Editing", "WorksheetCommandPresentationCatalog.cs"));
         var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
@@ -3387,7 +3397,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
 
@@ -3659,7 +3669,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
         var commandPresentationSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Editing", "WorksheetCommandPresentationCatalog.cs"));
@@ -3777,7 +3787,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         sessionSource.Should().Contain("public WorkbookCellEditResult ClearSelectedRangeAll()");
@@ -4206,7 +4216,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresBordersThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly DropDownButton _bordersButton = new();");
@@ -4257,7 +4267,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresMergeAndCenterThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly Button _mergeAndCenterButton = new();");
@@ -4331,7 +4341,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresCellStylesThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         source.Should().Contain("private readonly DropDownButton _cellStylesButton = new();");
@@ -4858,7 +4868,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresSheetLifecycleThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
@@ -5194,20 +5204,20 @@ public sealed class AvaloniaShellSourceTests
         // line endings.
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
 
         source.Should().Contain("AutomationProperties.SetAutomationId(_formulaBox, \"FormulaBox\");");
         source.Should().Contain("AutomationProperties.SetName(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey));");
         source.Should().Contain("AutomationProperties.SetHelpText(_formulaBox, FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_statusText, \"StatusText\");");
-        source.Should().Contain("AutomationProperties.SetName(_statusText, \"Status\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_statusText, \"Shows the current workbook status.\");");
+        source.Should().Contain("AutomationProperties.SetName(_statusText, UiText.Get(\"Toolbar_StatusAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_statusText, UiText.Get(\"Toolbar_StatusHelpText\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_cellAddressText, \"CellAddressText\");");
-        source.Should().Contain("AutomationProperties.SetName(_cellAddressText, \"Cell address\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_cellAddressText, \"Shows the active cell address.\");");
+        source.Should().Contain("AutomationProperties.SetName(_cellAddressText, UiText.Get(\"Toolbar_CellAddressAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_cellAddressText, UiText.Get(\"Toolbar_CellAddressHelpText\"));");
         source.Should().Contain("AutomationProperties.SetAutomationId(_selectionStatsText, \"SelectionStatsText\");");
-        source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, \"Selection statistics\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, \"Shows statistics for the current selection.\");");
+        source.Should().Contain("AutomationProperties.SetName(_selectionStatsText, UiText.Get(\"Toolbar_SelectionStatisticsAutomationName\"));");
+        source.Should().Contain("AutomationProperties.SetHelpText(_selectionStatsText, UiText.Get(\"Toolbar_SelectionStatisticsHelpText\"));");
         source.Should().Contain("HasFormulaBoxAutomationName: string.Equals(");
         source.Should().Contain("FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey)");
         source.Should().Contain("HasFormulaBoxAutomationHelp: string.Equals(");
@@ -5245,7 +5255,7 @@ public sealed class AvaloniaShellSourceTests
         var findReplaceServiceSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceService.cs"));
         var findReplaceSearchPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceSearchPlanner.cs"));
         var findReplaceDialogPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FindReplaceDialogPlanner.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
@@ -5541,7 +5551,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
@@ -5621,7 +5631,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeWindowMenuToMacOsWindowActionsAndLaunchSmoke()
     {
         var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
 
         windowSource.Should().Contain("private readonly NativeMenuItem _minimizeWindowMenuItem = new();");
@@ -5662,7 +5672,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var cfSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ConditionalFormat.cs"));
         var windowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
 
         // New Formatting Rule editor: rule-type picker, presets, per-type controls, automation ids.
         cfSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"ConditionalFormatRuleDialog\");");

@@ -188,10 +188,11 @@ jobs:
           launch_smoke_report="$artifact_root/freex-$runtime-linux-launch-smoke.txt"
           app_diagnostics_dir="$artifact_root/freex-$runtime-linux-app-diagnostics"
           published="$RUNNER_TEMP/freex-$runtime-publish"
+          validation_published="$RUNNER_TEMP/freex-$runtime-validation-publish"
           dist="$artifact_root"
 
-          rm -rf "$published" "$app_diagnostics_dir"
-          mkdir -p "$published" "$app_diagnostics_dir"
+          rm -rf "$published" "$validation_published" "$app_diagnostics_dir"
+          mkdir -p "$published" "$validation_published" "$app_diagnostics_dir"
 
           dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj \
             --configuration Release \
@@ -203,8 +204,19 @@ jobs:
             -p:PublishSingleFile=false \
             --output "$published"
 
+          dotnet publish tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj \
+            --configuration Release \
+            --framework net10.0 \
+            --runtime "$runtime" \
+            --self-contained true \
+            -p:UseAppHost=true \
+            -p:PublishReadyToRun=false \
+            -p:PublishSingleFile=false \
+            --output "$validation_published"
+
           test -x "$published/FreeX"
           test -f "$published/FreeX.dll"
+          test -x "$validation_published/FreeX.Validation.Avalonia"
           file "$published/FreeX" | tee -a "$evidence_path"
 
           # Validate desktop integration assets before packaging.
@@ -274,7 +286,7 @@ jobs:
           # GUI launch smoke under a virtual X server (software rendering).
           launch_smoke_file="$RUNNER_TEMP/freex-$runtime-launch.csv"
           printf 'Name,Amount\nFreeX Launch,84\n' > "$launch_smoke_file"
-          xvfb-run -a "$published/FreeX" \
+          xvfb-run -a "$validation_published/FreeX.Validation.Avalonia" \
             --launch-smoke "$launch_smoke_report" \
             --launch-smoke-diagnostics-dir "$app_diagnostics_dir" \
             "$launch_smoke_file"

@@ -19,19 +19,31 @@ internal static class Program
         if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
             return smokeExitCode;
 
-        if (!MacOsLaunchSmokeOptions.TryParse(
-                args,
-                out var launchSmokeOptions,
-                out var startupArguments,
-                out var launchSmokeError))
-        {
-            Console.Error.WriteLine(launchSmokeError);
-            return 1;
-        }
+        return RunApplication(args, diagnosticsDirectory: null, externalStartupCoordinator: null);
+    }
 
+    internal static int RunToolHost(
+        IReadOnlyList<string> startupArguments,
+        string? diagnosticsDirectory,
+        Action<MainWindow.LaunchSmokeAccessAdapter, LocalAppDiagnostics?> externalStartupCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(startupArguments);
+        ArgumentNullException.ThrowIfNull(externalStartupCoordinator);
+        return RunApplication(
+            startupArguments.ToArray(),
+            diagnosticsDirectory,
+            (window, diagnostics) =>
+                externalStartupCoordinator(window.CreateLaunchSmokeAccessAdapter(), diagnostics));
+    }
+
+    private static int RunApplication(
+        string[] startupArguments,
+        string? diagnosticsDirectory,
+        Action<MainWindow, LocalAppDiagnostics?>? externalStartupCoordinator)
+    {
         var diagnostics = LocalAppDiagnostics.Create(
             AppHelpInfo.GetVersionText(typeof(Program).Assembly),
-            launchSmokeOptions?.DiagnosticsDirectory);
+            diagnosticsDirectory);
         return SisterAvaloniaApplicationStartupRunner.Run(
             startupArguments,
             new SisterAvaloniaApplicationStartupSpec(
@@ -49,7 +61,7 @@ internal static class Program
                 });
 
                 App.StartupArguments = startupArguments;
-                App.LaunchSmokeOptions = launchSmokeOptions;
+                App.ExternalStartupCoordinator = externalStartupCoordinator;
                 App.Diagnostics = diagnostics;
             },
             AfterRun = _ => diagnostics.RecordEvent("app_exit", new Dictionary<string, string?>

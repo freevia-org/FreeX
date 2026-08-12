@@ -16,15 +16,7 @@ internal static class Program
         if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
             return smokeExitCode;
 
-        if (!MacOsLaunchSmokeOptions.TryParse(
-                args,
-                out var launchSmokeOptions,
-                out var startupArguments,
-                out var launchSmokeError))
-        {
-            Console.Error.WriteLine(launchSmokeError);
-            return 1;
-        }
+        var startupArguments = args;
 
         if (!ParityCaptureOptions.TryParse(
                 startupArguments,
@@ -58,7 +50,7 @@ internal static class Program
 
         var diagnostics = LocalAppDiagnostics.Create(
             AppHelpInfo.GetVersionText(typeof(Program).Assembly),
-            launchSmokeOptions?.DiagnosticsDirectory);
+            diagnosticsDirectory: null);
         return SisterAvaloniaApplicationStartupRunner.Run(
             startupArguments,
             new SisterAvaloniaApplicationStartupSpec(
@@ -76,7 +68,6 @@ internal static class Program
                     });
 
                     App.StartupArguments = startupArguments;
-                    App.LaunchSmokeOptions = launchSmokeOptions;
                     App.Diagnostics = diagnostics;
                     if (parityCaptureOptions is not null ||
                         gridCaptureOptions is not null ||

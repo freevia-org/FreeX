@@ -630,7 +630,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var catalogSource = File.ReadAllText(RepoFile("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
-        var smokeSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var smokeSource = File.ReadAllText(RepoFile("tools", "FreeX.Validation.Avalonia", "MacOsLaunchSmoke.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
         var normalizedCatalogSource = catalogSource.Replace("\r\n", "\n", StringComparison.Ordinal);
 

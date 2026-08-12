@@ -128,7 +128,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("open_with_report=\"$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt\"");
         script.Should().Contain("open_with_smoke_file=\"$RUNNER_TEMP/freex-$runtime-open-with.csv\"");
         script.Should().Contain("app_path=\"$unzip_root/FreeX.app\"");
-        script.Should().Contain("open -W -n -a \"$app_path\" \"$open_with_smoke_file\" --args --macos-launch-smoke \"$open_with_report\"");
+        script.Should().Contain("run_launchservices_with_validation \"$open_with_report\" \"$open_with_smoke_file\"");
+        script.Should().Contain("open -W -n -a \"$app_path\" \"$open_with_smoke_file\"");
         script.Should().Contain("--macos-launch-smoke-diagnostics-dir \"$app_diagnostics_dir\"");
         script.Should().Contain("app_diagnostics_directory_configured=true");
         script.Should().Contain("app_diagnostics_events_path=\"$app_diagnostics_dir/events.jsonl\"");
@@ -141,7 +142,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("default_open_report=\"$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt\"");
         script.Should().Contain("default_open_smoke_file=\"$RUNNER_TEMP/freex-$runtime-default-open.fxl\"");
         script.Should().Contain("\"FileFormat\": \"FreeX.NativeJsonWorkbook\"");
-        script.Should().Contain("open -W -n \"$default_open_smoke_file\" --args --macos-launch-smoke \"$default_open_report\"");
+        script.Should().Contain("run_launchservices_with_validation \"$default_open_report\" \"$default_open_smoke_file\"");
+        script.Should().Contain("open -W -n \"$default_open_smoke_file\"");
         script.Should().Contain("opened_source_path=.*freex-$runtime-default-open.fxl");
         script.Should().Contain("launchservices_default_open_app_override=false");
         script.Should().Contain("launchservices_default_open_document_extension=fxl");
@@ -749,7 +751,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
         script.Should().Contain("VerifyImageClipboardPasteArgument");
         script.Should().Contain("VerifyLiveCommandKeysArgument");
-        script.Should().Contain("await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();");
+        script.Should().Contain("await access.TryPasteClipboardImageAsync();");
         script.Should().Contain("BeginLaunchSmokeLiveCommandKeyProbe");
         script.Should().Contain("live_command_key_smoke_required=");
         script.Should().Contain("external_image_clipboard_paste_required=");
@@ -1314,6 +1316,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
                       default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
                       app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"
+                      validation_published="$RUNNER_TEMP/freex-$runtime-validation-publish"
+                      validation_host="$validation_published/FreeX.Validation.Avalonia"
                       distribution_candidate="$FREEX_DISTRIBUTION_CANDIDATE"
                       artifact_channel="internal-preview"
                       distribution_contract="internal_preview_not_for_distribution_notarization_optional"
@@ -1354,6 +1358,11 @@ public sealed class MacOsAppReadinessPreflightTests
                         -p:PublishReadyToRun=false \
                         -p:PublishSingleFile=false \
                         --output "$app/Contents/MacOS"
+                      dotnet publish tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj \
+                        --configuration Release --framework net10.0 --runtime "$runtime" \
+                        --self-contained true -p:UseAppHost=true -p:PublishReadyToRun=false \
+                        -p:PublishSingleFile=false --output "$validation_published"
+                      test -x "$validation_host"
                       cp src/FreeX.App.Avalonia/Packaging/macos/Info.plist "$app/Contents/Info.plist"
                       cp src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns "$app/Contents/Resources/FreeX.icns"
                       plutil -lint "$app/Contents/Info.plist"
@@ -1431,13 +1440,22 @@ public sealed class MacOsAppReadinessPreflightTests
                         echo "launchservices_smoke_name=$smoke_name"
                         cat "$report_path" >> "$evidence_path"
                       {"}"}
+                      run_launchservices_with_validation() {"{"}
+                        local report_path="$1"
+                        local source_path="$2"
+                        shift 2
+                        "$@" &
+                        "$validation_host" --macos-launch-smoke "$report_path" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir" "$source_path"
+                      {"}"}
                       /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$unzip_root/FreeX.app"
                       run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report" \
-                        open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv" --args --macos-launch-smoke "$launch_smoke_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                        run_launchservices_with_validation "$launch_smoke_report" "$RUNNER_TEMP/launch.csv" \
+                          open -W -n -b io.github.tony-xmelon.freex "$RUNNER_TEMP/launch.csv"
                       osascript -e 'tell application id "io.github.tony-xmelon.freex" to quit' || true
                       open_with_smoke_file="$RUNNER_TEMP/freex-$runtime-open-with.csv"
                       run_bounded_launchservices_smoke "open_with" "$open_with_report" \
-                        open -W -n -a "$app_path" "$open_with_smoke_file" --args --macos-launch-smoke "$open_with_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                        run_launchservices_with_validation "$open_with_report" "$open_with_smoke_file" \
+                          open -W -n -a "$app_path" "$open_with_smoke_file"
                       grep -q "macos_launch_smoke=passed" "$open_with_report"
                       grep -q "app_diagnostics_directory_configured=true" "$open_with_report"
                       grep -q "window_shown=true" "$open_with_report"
@@ -1451,7 +1469,8 @@ public sealed class MacOsAppReadinessPreflightTests
                       {"{"} "FileFormat": "FreeX.NativeJsonWorkbook" {"}"}
                       JSON
                       run_bounded_launchservices_smoke "default_open" "$default_open_report" \
-                        open -W -n "$default_open_smoke_file" --args --macos-launch-smoke "$default_open_report" --macos-launch-smoke-diagnostics-dir "$app_diagnostics_dir"
+                        run_launchservices_with_validation "$default_open_report" "$default_open_smoke_file" \
+                          open -W -n "$default_open_smoke_file"
                       grep -q "app_diagnostics_directory_configured=true" "$default_open_report"
                       launchservices_default_open_app_override=false
                       launchservices_default_open_document_extension=fxl
@@ -1844,26 +1863,37 @@ public sealed class MacOsAppReadinessPreflightTests
                     if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
                         return smokeExitCode;
 
-                    MacOsLaunchSmokeOptions.TryParse(args, out var launchSmokeOptions, out var startupArguments, out var launchSmokeError);
+                    var startupArguments = args;
                     var diagnostics = LocalAppDiagnostics.Create(
                         AppHelpInfo.GetVersionText(typeof(Program).Assembly),
-                        launchSmokeOptions?.DiagnosticsDirectory);
-                    diagnostics.RegisterCrashHandlers();
-                    diagnostics.RecordEvent("app_start");
+                        diagnosticsDirectory: null);
+                    return SisterAvaloniaApplicationStartupRunner.Run(
+                        startupArguments,
+                        new SisterAvaloniaApplicationStartupSpec(
+                            StartApplication: _ => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments),
+                            RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers(),
+                            RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source))
+                    {
+                        BeforeRun = () =>
+                        {
+                            diagnostics.RecordEvent("app_start");
+                            App.StartupArguments = startupArguments;
+                            App.ExternalStartupCoordinator = null;
+                            App.Diagnostics = diagnostics;
+                        },
+                        AfterRun = _ => diagnostics.RecordEvent("app_exit"),
+                        CompletedExitCode = 0
+                    });
+                }
+
+                internal static int RunToolHost(
+                    IReadOnlyList<string> startupArguments,
+                    string? diagnosticsDirectory,
+                    Action<MainWindow.LaunchSmokeAccessAdapter, LocalAppDiagnostics?> externalStartupCoordinator)
+                {
                     App.StartupArguments = startupArguments;
-                    App.LaunchSmokeOptions = launchSmokeOptions;
-                    App.Diagnostics = diagnostics;
-                    try
-                    {
-                        BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments);
-                        diagnostics.RecordEvent("app_exit");
-                        return 0;
-                    }
-                    catch (Exception ex)
-                    {
-                        diagnostics.RecordCrash(ex, "avalonia_startup");
-                        throw;
-                    }
+                    App.ExternalStartupCoordinator = externalStartupCoordinator;
+                    return 0;
                 }
             }
             """);
@@ -1889,7 +1919,26 @@ public sealed class MacOsAppReadinessPreflightTests
                         return;
 
                     await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);
-                    MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
+                    ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "tools/FreeX.Validation.Avalonia/Program.cs",
+            """
+            namespace FreeX.Validation.Avalonia;
+
+            internal static class Program
+            {
+                public static int Main(string[] args)
+                {
+                    MacOsLaunchSmokeOptions.TryParse(args, out var options, out var startupArguments, out var error);
+                    return FreeX.App.Avalonia.Program.RunToolHost(
+                        startupArguments,
+                        options.DiagnosticsDirectory,
+                        (window, diagnostics) => MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics));
                 }
             }
             """);
@@ -2786,7 +2835,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _sheetGridHost.Focusable = true;
                     AutomationProperties.SetName(_sheetGridHost, "Worksheet");
                     _zoomText.Focusable = true;
-                    AutomationProperties.SetName(_zoomText, "Zoom");
+                    AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get("Common_Zoom")));
                     Focusable = true,
                     Tag = tab.Id,
                     button.ContextMenu = CreateSheetTabContextMenu(tab);
@@ -3464,7 +3513,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Avalonia/MacOsLaunchSmoke.cs",
+            "tools/FreeX.Validation.Avalonia/MacOsLaunchSmoke.cs",
             """
             namespace FreeX.App.Avalonia;
 
@@ -3491,12 +3540,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     startupArguments = filteredArguments.ToArray();
                 }
 
-                public static void Start(MainWindow mainWindow, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics = null)
+                public static void Start(MainWindow.LaunchSmokeAccessAdapter access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics = null)
                 {
-                    RunAsync(mainWindow, options, diagnostics);
+                    RunAsync(access, options, diagnostics);
                 }
 
-                private static void RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
+                private static void RunAsync(MainWindow.LaunchSmokeAccessAdapter access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
                 {
                     diagnostics?.RecordEvent("macos_launch_smoke");
                     diagnostics?.RecordCrash(ex, "macos_launch_smoke");
@@ -3870,18 +3919,24 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeCoordinator
             {
-                private static async Task RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options)
+                private static async Task RunAsync(MainWindow.LaunchSmokeAccessAdapter access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
                 {
-                    var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
+                    var snapshot = access.CreateSnapshot();
                     var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
-                    var liveCommandKeyEvidence = mainWindow.BeginLaunchSmokeLiveCommandKeyProbe();
+                    var commandKeyEvidence = CaptureCommandKeyEvidence(access);
+                    var liveCommandKeyEvidence = access.BeginLiveCommandKeyProbe();
                     liveCommandKeyEvidence.IsPassed.ToString();
-                    await mainWindow.TryPasteLaunchSmokeClipboardImageAsync();
+                    await access.TryPasteClipboardImageAsync();
                     IsPassed(snapshot, options, initialExternalImageClipboardPictureCount).ToString();
                     HasExternalImageClipboardPasteEvidence(snapshot, initialExternalImageClipboardPictureCount).ToString();
                 }
 
-                private static bool HasMainWindowDirectCommandRouteSourceSupport(params string[] requiredMarkers) => true;
+                private static MacOsLaunchSmokeCommandKeySnapshot CaptureCommandKeyEvidence(MainWindow.LaunchSmokeAccessAdapter access) => new()
+                {
+                    HasFindDirectRouteSourceGuard = MainWindow.LaunchSmokeAccessAdapter.HasMethods("MainWindow_KeyDown"),
+                    HasPageUpDirectRouteSourceGuard = MainWindow.LaunchSmokeAccessAdapter.HasMethods("SelectAdjacentVisibleSheetFromKeyboard"),
+                    HasPageDownDirectRouteSourceGuard = MainWindow.LaunchSmokeAccessAdapter.HasMethods("SelectAdjacentVisibleSheetFromKeyboard")
+                };
             }
             """);
 
