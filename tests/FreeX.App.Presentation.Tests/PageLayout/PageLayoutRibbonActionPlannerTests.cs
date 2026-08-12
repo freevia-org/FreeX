@@ -19,16 +19,16 @@ public sealed class PageLayoutRibbonActionPlannerTests
     [Fact]
     public void RibbonActionDescriptors_RoutePageSetupButtonsThroughSharedOpenSources()
     {
-        Descriptor("pageLayout.margins").Should().BeEquivalentTo(new PageLayoutRibbonActionDescriptor(
-            "pageLayout.margins",
+        Descriptor("Margins").Should().BeEquivalentTo(new PageLayoutRibbonActionDescriptor(
+            "Margins",
             PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.CustomMargins));
-        Descriptor("pageLayout.printArea").Should().BeEquivalentTo(new PageLayoutRibbonActionDescriptor(
-            "pageLayout.printArea",
+        Descriptor("Print Area").Should().BeEquivalentTo(new PageLayoutRibbonActionDescriptor(
+            "Print Area",
             PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.PrintArea));
-        Descriptor("pageLayout.printTitles").Should().BeEquivalentTo(new PageLayoutRibbonActionDescriptor(
-            "pageLayout.printTitles",
+        Descriptor("Print Titles").Should().BeEquivalentTo(new PageLayoutRibbonActionDescriptor(
+            "Print Titles",
             PageLayoutRibbonActionKind.OpenPageSetupDialog,
             PageSetupOpenSource: PageLayoutPageSetupOpenSource.PrintTitles));
         Descriptor("Scale to Fit").Should().BeEquivalentTo(new PageLayoutRibbonActionDescriptor(
