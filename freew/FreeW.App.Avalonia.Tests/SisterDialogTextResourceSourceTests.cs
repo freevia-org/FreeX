@@ -52,7 +52,7 @@ public sealed class SisterDialogTextResourceSourceTests
         outputWorkflow.Should().Contain("FreeWFileTextResources.ExportXpsPickerTitle");
         source.Should().Contain("showOverwritePrompt: true");
         source.Should().Contain("FreeWExportWorkflow.ExecuteAsync(");
-        outputWorkflow.Should().Contain("ExportAtomicWriter.ReplaceTarget(");
+        outputWorkflow.Should().Contain("AtomicFileWriter.ReplaceTarget(");
         fragmentWorkflow.Should().Contain("InsertDialogTextResources.TextFromFilePickerTitle");
         fragmentWorkflow.Should().Contain("SisterAppFileTextPlanner.FormatUnsupportedFileType(");
         fragmentWorkflow.Should().Contain("SisterAppFileTextPlanner.FormatCommandFailed(");

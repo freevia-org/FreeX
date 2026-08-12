@@ -1114,7 +1114,7 @@ internal static partial class XlsxChartXmlWriter
             : new XElement(chartNs + "spPr",
                 new XElement(drawingNs + "ln",
                     format.StrokeThickness is { } strokeThickness
-                        ? new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(strokeThickness, 0.5, 10) * DrawingMlUnits.EmuPerPoint)))
+                        ? new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(strokeThickness, 0.5, 10) * DrawingMlCoordinateUnits.EmuPerPoint)))
                         : null,
                     fill,
                     format.DashStyle is { } dashStyle
@@ -1197,7 +1197,7 @@ internal static partial class XlsxChartXmlWriter
                 hasLineFormatting
                     ? new XElement(drawingNs + "ln",
                         format.StrokeThickness is { } strokeThickness
-                            ? new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(strokeThickness, 0.5, 10) * DrawingMlUnits.EmuPerPoint)))
+                            ? new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(strokeThickness, 0.5, 10) * DrawingMlCoordinateUnits.EmuPerPoint)))
                             : null,
                         lineFill ?? (format.NoLine ? new XElement(drawingNs + "noFill") : null),
                         format.DashStyle is { } dashStyle

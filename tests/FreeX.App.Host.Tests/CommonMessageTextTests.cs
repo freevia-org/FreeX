@@ -99,18 +99,6 @@ public sealed class CommonMessageTextTests
     }
 
     [Fact]
-    public void SharedFileCommandMessageBox_IsServiceBacked()
-    {
-        var source = DialogSourceTestSupport.ReadShellSources("FileCommandMessageBox.cs");
-
-        source.Should().Contain("IUserMessageService messageService");
-        source.Should().Contain("messageService.PromptSaveChanges(");
-        source.Should().Contain("messageService.ShowFileCommandError(");
-        source.Should().NotContain("WpfMessageBoxRealizer.Show(");
-        source.Should().NotContain("MessageBox.Show(");
-    }
-
-    [Fact]
     public void SharedDialogChromeResources_LiveInShellWpfWithRibbonCompatibilityWrapper()
     {
         var shellDialogWindow = DialogSourceTestSupport.ReadShellSources("DialogWindow.cs");

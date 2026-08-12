@@ -183,23 +183,13 @@ public class DocumentCommandBusTests
         paragraph.ParagraphFormatRevision!.PreviousParagraphFormatting.Alignment.Should().Be(TextAlignment.Left);
         paragraph.ParagraphFormatRevision.Author.Should().Be("Ada Reviewer");
 
-        bus.Execute(new SetRunFormattingCommand(
-            0,
-            0,
-            paragraph.Runs[0].Formatting with { Bold = true }));
-        paragraph.Runs[0].FormatRevision.Should().NotBeNull();
-        paragraph.Runs[0].FormatRevision!.PreviousFormatting.Bold.Should().BeFalse();
-
         bus.Execute(new FormatParagraphRunsCommand(0, formatting => formatting with { Italic = true }));
         paragraph.Runs.Should().OnlyContain(run => run.FormatRevision != null);
         paragraph.Runs[1].FormatRevision!.PreviousFormatting.Italic.Should().BeFalse();
 
         bus.Undo().Should().BeTrue();
-        paragraph.Runs[0].FormatRevision.Should().NotBeNull("its earlier bold revision predates the paragraph-wide command");
-        paragraph.Runs[1].FormatRevision.Should().BeNull();
-
-        bus.Undo().Should().BeTrue();
         paragraph.Runs[0].FormatRevision.Should().BeNull();
+        paragraph.Runs[1].FormatRevision.Should().BeNull();
 
         bus.Undo().Should().BeTrue();
         paragraph.ParagraphFormatRevision.Should().BeNull();
@@ -269,40 +259,6 @@ public class DocumentCommandBusTests
         bus.Undo();
         doc.Paragraphs.First().Formatting.SpaceBeforePt.Should().Be(0);
         doc.Paragraphs.First().Formatting.SpaceAfterPt.Should().Be(8); // model default
-    }
-
-    [Fact]
-    public void SetRunFormattingCommand_AppliesCharacterBorderAndShading_AndReverts()
-    {
-        var (doc, bus) = New();
-        var paragraph = new Paragraph();
-        paragraph.Runs.Add(new Run("decorated"));
-        doc.Blocks.Add(paragraph);
-        var border = new ParagraphBorder("#0070C0", 1.5)
-        {
-            LineStyle = BorderLineStyle.Dashed,
-        };
-        var formatted = RunFormatting.Default with
-        {
-            CharacterBorder = border,
-            CharacterShadingHex = "#FFF2CC",
-            CharacterShadingPattern = ShadingPattern.Pct25,
-        };
-
-        bus.Execute(new SetRunFormattingCommand(0, 0, formatted));
-
-        paragraph.Runs[0].Formatting.CharacterBorder.Should().Be(border);
-        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().Be("#FFF2CC");
-        paragraph.Runs[0].Formatting.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
-
-        bus.Undo().Should().BeTrue();
-        paragraph.Runs[0].Formatting.CharacterBorder.Should().BeNull();
-        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().BeNull();
-        paragraph.Runs[0].Formatting.CharacterShadingPattern.Should().Be(ShadingPattern.Clear);
-
-        bus.Redo().Should().BeTrue();
-        paragraph.Runs[0].Formatting.CharacterBorder.Should().Be(border);
-        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().Be("#FFF2CC");
     }
 
     [Fact]

@@ -1203,6 +1203,29 @@ public sealed class DocumentReferenceEditingCoordinatorTests
         ((Paragraph)document.Blocks[0]).Runs.Should()
             .Contain(run => run.Citation != null);
     }
+
+    [Fact]
+    public void IndexEntryInsertion_RejectsEquivalentMarksAndRoundTripsHistory()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Host"));
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.References.InsertIndexEntry(0, 2, new IndexMark("Host"))
+            .Applied.Should().BeTrue();
+        session.References.InsertIndexEntry(0, 2, new IndexMark(" host "))
+            .Applied.Should().BeFalse();
+        ((Paragraph)document.Blocks[0]).Runs
+            .Count(run => DocumentIndex.MarkedEntry(run) is not null).Should().Be(1);
+
+        session.Commands.Undo().Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).Runs.Should()
+            .NotContain(run => DocumentIndex.MarkedEntry(run) != null);
+        session.Commands.Redo().Should().BeTrue();
+        ((Paragraph)document.Blocks[0]).Runs.Should()
+            .ContainSingle(run => DocumentIndex.MarkedEntry(run) != null);
+    }
 }
 
 public sealed class DocumentPortableEditingOwnershipTests

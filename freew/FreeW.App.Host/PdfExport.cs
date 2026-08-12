@@ -51,7 +51,7 @@ internal static class PdfExport
     /// <summary>
     /// Renders the supplied paginator to PDF bytes in memory. Must be called on the UI / STA thread
     /// because it walks the WPF visual tree (the caller can then flush the bytes to disk off-thread via
-    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>).
+    /// <see cref="Free.Shared.AppServices.AtomicFileWriter"/>).
     /// </summary>
     /// <param name="paginator">A laid-out paginator, e.g. from <see cref="PrintLayout.BuildPaginator"/>.</param>
     /// <param name="title">Optional document title written into the PDF metadata.</param>

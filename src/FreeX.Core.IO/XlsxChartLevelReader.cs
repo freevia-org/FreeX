@@ -159,7 +159,7 @@ internal static class XlsxChartLevelReader
             return;
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-            dataTable.BorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+            dataTable.BorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         var lineFill = line.Element(DrawingNs + "solidFill");
         if (lineFill is null)
@@ -246,7 +246,7 @@ internal static class XlsxChartLevelReader
         if (line is not null)
         {
             if (int.TryParse(line.Attribute("w")?.Value, out var emus))
-                chart.LegendBorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+                chart.LegendBorderThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
             var lineFill = line.Element(DrawingNs + "solidFill");
             if (lineFill is not null)

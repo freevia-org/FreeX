@@ -457,7 +457,7 @@ public sealed class AvaloniaShellSourceTests
         printSaveBlock.IndexOf("if (!TryBeginFileOperation())", StringComparison.Ordinal)
             .Should().BeLessThan(printSaveBlock.IndexOf("ShowPortablePdfSavePickerAsync", StringComparison.Ordinal));
         printSaveBlock.Should().Contain(
-            "await ExportAtomicWriter.WriteAllBytesAsync(path, documentBytes, cancellationToken)");
+            "await AtomicFileWriter.WriteAllBytesAsync(path, documentBytes, cancellationToken)");
         printSaveBlock.Should().NotContain("File.WriteAllBytesAsync(");
     }
 

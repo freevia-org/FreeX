@@ -117,8 +117,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (!TryReadAnchorCoordinate(from, spreadsheetDrawingNs, out var fromRow, out var fromCol, out var fromRowOffset, out var fromColOffset))
             return null;
 
-        var width = DrawingMlUnits.EmuToPixels(ext.Attribute("cx")?.Value);
-        var height = DrawingMlUnits.EmuToPixels(ext.Attribute("cy")?.Value);
+        var width = DrawingMlCoordinateUnits.EmuToPixels(ext.Attribute("cx")?.Value);
+        var height = DrawingMlCoordinateUnits.EmuToPixels(ext.Attribute("cy")?.Value);
         // A schema-valid ext CAN be zero on one axis alone (e.g. a flat/degenerate shape flush against a
         // cell edge); only reject the anchor outright when BOTH axes are non-positive, since then there is
         // no usable size or position information left at all. Rejecting on a single zero axis used to drop
@@ -153,10 +153,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (pos is null || ext is null)
             return null;
 
-        var left = DrawingMlUnits.EmuToPixels(pos.Attribute("x")?.Value);
-        var top = DrawingMlUnits.EmuToPixels(pos.Attribute("y")?.Value);
-        var width = DrawingMlUnits.EmuToPixels(ext.Attribute("cx")?.Value);
-        var height = DrawingMlUnits.EmuToPixels(ext.Attribute("cy")?.Value);
+        var left = DrawingMlCoordinateUnits.EmuToPixels(pos.Attribute("x")?.Value);
+        var top = DrawingMlCoordinateUnits.EmuToPixels(pos.Attribute("y")?.Value);
+        var width = DrawingMlCoordinateUnits.EmuToPixels(ext.Attribute("cx")?.Value);
+        var height = DrawingMlCoordinateUnits.EmuToPixels(ext.Attribute("cy")?.Value);
         // See the matching comment in TryReadOneCellAnchor: only reject when BOTH axes are non-positive,
         // otherwise the still-meaningful position (pos) and the non-degenerate axis are lost too.
         if (width <= 0 && height <= 0)
@@ -190,8 +190,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
     {
         rowZeroBased = 0;
         columnZeroBased = 0;
-        rowOffset = DrawingMlUnits.EmuToPixels(marker.Element(spreadsheetDrawingNs + "rowOff")?.Value);
-        columnOffset = DrawingMlUnits.EmuToPixels(marker.Element(spreadsheetDrawingNs + "colOff")?.Value);
+        rowOffset = DrawingMlCoordinateUnits.EmuToPixels(marker.Element(spreadsheetDrawingNs + "rowOff")?.Value);
+        columnOffset = DrawingMlCoordinateUnits.EmuToPixels(marker.Element(spreadsheetDrawingNs + "colOff")?.Value);
         return uint.TryParse(marker.Element(spreadsheetDrawingNs + "row")?.Value, out rowZeroBased) &&
                uint.TryParse(marker.Element(spreadsheetDrawingNs + "col")?.Value, out columnZeroBased);
     }

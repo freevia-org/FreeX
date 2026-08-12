@@ -1502,7 +1502,7 @@ internal static class PptxChartReader
         style.Dash = ReadLineDash(lnEl.Element(A + "prstDash")?.Attribute("val")?.Value);
 
         if (long.TryParse(lnEl.Attribute("w")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var widthEmu) && widthEmu > 0)
-            style.WidthPt = DrawingMlUnits.EmuToPoints(widthEmu);
+            style.WidthPt = DrawingMlCoordinateUnits.EmuToPoints(widthEmu);
 
         return style;
     }

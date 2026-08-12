@@ -65,7 +65,7 @@ internal static class XlsxChartSeriesFormatReader
 
         double? strokeThickness = null;
         if (int.TryParse(line?.Attribute("w")?.Value, out var emus))
-            strokeThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.5, 10);
+            strokeThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10);
 
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
@@ -119,7 +119,7 @@ internal static class XlsxChartSeriesFormatReader
 
         double? strokeThickness = null;
         if (int.TryParse(line?.Attribute("w")?.Value, out var emus))
-            strokeThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0.5, 10);
+            strokeThickness = Math.Clamp(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0.5, 10);
 
         ChartLineDashStyle? dashStyle = line?.Element(DrawingNs + "prstDash") is { } dashElement
             ? XlsxChartTrendlineErrorBarReader.FromXlsxPresetDash(dashElement.Attribute("val")?.Value)
@@ -156,7 +156,7 @@ internal static class XlsxChartSeriesFormatReader
 
         double? markerBorderThickness = null;
         if (int.TryParse(markerLine?.Attribute("w")?.Value, out var markerLineEmus))
-            markerBorderThickness = Math.Clamp(markerLineEmus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+            markerBorderThickness = Math.Clamp(markerLineEmus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         if (strokeColor is null &&
             strokeThemeColor is null &&
@@ -273,7 +273,7 @@ internal static class XlsxChartSeriesFormatReader
 
         double? borderThickness = null;
         if (int.TryParse(markerLine?.Attribute("w")?.Value, out var markerLineEmus))
-            borderThickness = Math.Clamp(markerLineEmus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+            borderThickness = Math.Clamp(markerLineEmus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 0, 10);
 
         if (markerStyle is null &&
             markerSize is null &&

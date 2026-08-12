@@ -27,7 +27,7 @@ namespace FreeW.App.Host;
 /// XPS export must run on the STA / UI thread because <see cref="XpsDocumentWriter.Write(DocumentPaginator)"/>
 /// walks the WPF visual tree. We render into an in-memory OPC package (a <see cref="MemoryStream"/>) and
 /// return the bytes so the caller can flush them atomically off-thread via
-/// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>. Rendering into a fresh in-memory package side-steps
+/// <see cref="Free.Shared.AppServices.AtomicFileWriter"/>. Rendering into a fresh in-memory package side-steps
 /// dotnet/wpf #9418 (the <c>IOException</c> seen when <see cref="XpsDocument"/> reopens an existing file in
 /// update mode).
 /// </para>
@@ -37,7 +37,7 @@ internal static class XpsExport
     /// <summary>
     /// Renders the supplied paginator to XPS bytes in memory. Must be called on the UI / STA thread
     /// because it walks the WPF visual tree (the caller can then flush the bytes to disk off-thread via
-    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>).
+    /// <see cref="Free.Shared.AppServices.AtomicFileWriter"/>).
     /// </summary>
     /// <param name="paginator">A laid-out paginator, e.g. from <see cref="PrintLayout.BuildPaginator"/>.</param>
     public static byte[] RenderToBytes(DocumentPaginator paginator)

@@ -111,7 +111,7 @@ public sealed class FilePickerPlannerSourceTests
         session.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         ports.Should().Contain("StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions");
         source.Should().Contain("PresentationExportPlanner.BuildCurrentSlideRangeRequest(Editor.CurrentSlideIndex)");
-        session.Should().Contain("ExportAtomicWriter.WriteAllBytes(selection.Path!, artifact.Bytes)");
+        session.Should().Contain("AtomicFileWriter.WriteAllBytes(selection.Path!, artifact.Bytes)");
         session.Should().Contain("PresentationFilePersistenceWorkflow.Open(path)");
         session.Should().Contain("PresentationFilePersistenceWorkflow.Save(path, _getPresentation())");
         ports.Should().Contain("AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(");

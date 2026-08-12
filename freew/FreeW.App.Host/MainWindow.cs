@@ -3182,7 +3182,7 @@ public sealed class MainWindow : Window
     /// (<see cref="PrintLayout.BuildPaginator"/>) so the exported pages match Print / Print Preview
     /// exactly (page geometry, header/footer, watermark, border, footnotes), renders them to PDF via
     /// <see cref="PdfExport"/>, and flushes atomically through the shared
-    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// <see cref="Free.Shared.AppServices.AtomicFileWriter"/>.
     /// </summary>
     private void ExportToPdf()
     {
@@ -3239,7 +3239,7 @@ public sealed class MainWindow : Window
     /// (<see cref="PrintLayout.BuildPaginator"/>) as Print / Export to PDF so the exported pages match
     /// exactly (page geometry, header/footer, watermark, border, footnotes), serialises them as vector
     /// glyph runs via <see cref="XpsExport"/>, and flushes atomically through the shared
-    /// <see cref="Free.Shared.Shell.ExportAtomicWriter"/>.
+    /// <see cref="Free.Shared.AppServices.AtomicFileWriter"/>.
     /// </summary>
     private void ExportToXps()
     {

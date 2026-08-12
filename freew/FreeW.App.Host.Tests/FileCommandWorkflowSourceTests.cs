@@ -5,15 +5,18 @@ namespace FreeW.App.Host.Tests;
 public sealed class FileCommandWorkflowSourceTests
 {
     [Theory]
-    [InlineData("freew", "FreeW.App.Host")]
-    [InlineData("freep", "FreeP.App.Host")]
-    public void SisterAppFileCommands_UseSharedWorkflow(string appFolder, string projectFolder)
+    [InlineData("freew", "FreeW.App.Host", "FileCommands.cs")]
+    [InlineData("freep", "FreeP.App.Host", "WpfPresentationFileCommandPorts.cs")]
+    public void SisterAppFileCommands_UseSharedWorkflow(
+        string appFolder,
+        string projectFolder,
+        string sourceFileName)
     {
         var source = File.ReadAllText(Path.Combine(
             TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             appFolder,
             projectFolder,
-            "FileCommands.cs"));
+            sourceFileName));
 
         source.Should().Contain("SisterWpfFileCommandWorkflow");
         if (appFolder == "freep")
@@ -55,7 +58,7 @@ public sealed class FileCommandWorkflowSourceTests
             source.Should().NotContain("DocumentFileFormatResolver.FindOpenAdapter");
             source.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter");
             source.Should().NotContain("FileDialogSaveSelectionResolver.ResolveAdapter");
-            source.Should().NotContain("ExportAtomicWriter.CreateTempPath");
+            source.Should().NotContain("AtomicFileWriter.CreateTempPath");
             source.Should().NotContain("_persistence.Open(path)");
             source.Should().NotContain("_persistence.Save(_editor.Model, target)");
             source.Should().NotContain("_persistence.TryResolveSaveTarget(");

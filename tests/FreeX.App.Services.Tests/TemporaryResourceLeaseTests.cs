@@ -194,7 +194,7 @@ public sealed class TemporaryResourceLeaseTests
         freeXPrintWorkflow.Should().NotContain("Path.GetTempPath()");
         freeXPrintWorkflow.Should().NotContain("private static void TryDelete");
 
-        freeWOutput.Should().Contain("ExportAtomicWriter.CreateTempLease(path)");
+        freeWOutput.Should().Contain("AtomicFileWriter.CreateTempLease(path)");
         freeWOutput.Should().Contain("TemporaryFileLease.Create(\"FreeW-print-\", \".pdf\")");
         freeWOutput.Should().NotContain("Path.GetTempPath()");
         freeWOutput.Should().NotContain("File.Delete(");
@@ -212,10 +212,10 @@ public sealed class TemporaryResourceLeaseTests
         atomicWriter.Should().Contain("temporaryFile.Commit();");
         atomicWriter.Should().NotContain("private static void TryDelete");
 
-        freeWDocumentSave.Should().Contain("ExportAtomicWriter.CreateTempLease(target.Path)");
-        freeWDocumentSave.Should().NotContain("ExportAtomicWriter.CreateTempPath(");
-        freeXWpfExport.Should().Contain("ExportAtomicWriter.CreateTempLease(xpsPath)");
-        freeXWpfExport.Should().NotContain("ExportAtomicWriter.CreateTempPath(");
+        freeWDocumentSave.Should().Contain("AtomicFileWriter.CreateTempLease(target.Path)");
+        freeWDocumentSave.Should().NotContain("AtomicFileWriter.CreateTempPath(");
+        freeXWpfExport.Should().Contain("AtomicFileWriter.CreateTempLease(xpsPath)");
+        freeXWpfExport.Should().NotContain("AtomicFileWriter.CreateTempPath(");
     }
 
     [Fact]

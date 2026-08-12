@@ -226,51 +226,6 @@ public class ShapesTests
         shape.FlipH.Should().BeFalse("setting FlipV must not affect FlipH");
     }
 
-    [Fact]
-    public void SetShapeRotationCommand_AppliesAndReverts()
-    {
-        var doc = new TextDocument();
-        var paragraph = new Paragraph();
-        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
-        paragraph.Runs.Add(Run.FromShape(shape));
-        doc.Blocks.Add(paragraph);
-        var context = new ShapeTestContext(doc);
-
-        var cmd = new SetShapeRotationCommand(0, 0, 90, flipH: true, flipV: false);
-        cmd.Apply(context);
-
-        shape.RotationAngle.Should().Be(90);
-        shape.FlipH.Should().BeTrue();
-        shape.FlipV.Should().BeFalse();
-
-        cmd.Revert(context);
-
-        shape.RotationAngle.Should().Be(0);
-        shape.FlipH.Should().BeFalse();
-        shape.FlipV.Should().BeFalse();
-    }
-
-    [Fact]
-    public void SetShapeWrappingCommand_AppliesAndReverts()
-    {
-        var doc = new TextDocument();
-        var paragraph = new Paragraph();
-        var shape = Shape.Preset(ShapeKind.Rectangle, widthPt: 100, heightPt: 60);
-        paragraph.Runs.Add(Run.FromShape(shape));
-        doc.Blocks.Add(paragraph);
-        var context = new ShapeTestContext(doc);
-
-        var cmd = new SetShapeWrappingCommand(0, 0, ImageWrapping.Square);
-        cmd.Apply(context);
-
-        shape.Placement.Should().NotBeNull("SetShapeWrappingCommand must create FloatingPlacement if absent");
-        shape.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
-
-        cmd.Revert(context);
-
-        shape.Placement.Wrapping.Should().Be(ImageWrapping.Inline, "Revert must restore original wrapping");
-    }
-
     private sealed class ShapeTestContext(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document => document;

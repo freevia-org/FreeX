@@ -673,12 +673,12 @@ internal static class XlsxWorksheetDrawingObjectWriter
         new(spreadsheetDrawingNs + "oneCellAnchor",
             new XElement(spreadsheetDrawingNs + "from",
                 new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
-                new XElement(spreadsheetDrawingNs + "colOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
+                new XElement(spreadsheetDrawingNs + "colOff", DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
                 new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)picture.Anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
-                new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetY)).ToString(CultureInfo.InvariantCulture))),
+                new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetY)).ToString(CultureInfo.InvariantCulture))),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(picture.Width)),
-                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(picture.Height))),
+                new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(picture.Width)),
+                new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(picture.Height))),
             new XElement(spreadsheetDrawingNs + "pic",
                 new XElement(spreadsheetDrawingNs + "nvPicPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -741,12 +741,12 @@ internal static class XlsxWorksheetDrawingObjectWriter
         new(spreadsheetDrawingNs + "oneCellAnchor",
             new XElement(spreadsheetDrawingNs + "from",
                 new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
-                new XElement(spreadsheetDrawingNs + "colOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
+                new XElement(spreadsheetDrawingNs + "colOff", DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
                 new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)picture.Anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
-                new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetY)).ToString(CultureInfo.InvariantCulture))),
+                new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetY)).ToString(CultureInfo.InvariantCulture))),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(picture.Width)),
-                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(picture.Height))),
+                new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(picture.Width)),
+                new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(picture.Height))),
             new XElement(spreadsheetDrawingNs + "pic",
                 new XElement(spreadsheetDrawingNs + "nvPicPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -789,8 +789,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs)
     {
-        var widthEmu = Math.Max(1, DrawingMlUnits.PixelsToEmu(picture.Width));
-        var heightEmu = Math.Max(1, DrawingMlUnits.PixelsToEmu(picture.Height));
+        var widthEmu = Math.Max(1, DrawingMlCoordinateUnits.PixelsToEmu(picture.Width));
+        var heightEmu = Math.Max(1, DrawingMlCoordinateUnits.PixelsToEmu(picture.Height));
         var rows = Math.Max(1u, picture.SourceRowCount);
         var cols = Math.Max(1u, picture.SourceColumnCount);
         var cellWidthEmu = Math.Max(1, widthEmu / cols);
@@ -831,9 +831,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         return new(spreadsheetDrawingNs + "oneCellAnchor",
             new XElement(spreadsheetDrawingNs + "from",
                 new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)picture.Anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
-                new XElement(spreadsheetDrawingNs + "colOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
+                new XElement(spreadsheetDrawingNs + "colOff", DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
                 new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)picture.Anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
-                new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetY)).ToString(CultureInfo.InvariantCulture))),
+                new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, picture.AnchorOffsetY)).ToString(CultureInfo.InvariantCulture))),
             new XElement(spreadsheetDrawingNs + "ext",
                 new XAttribute("cx", widthEmu),
                 new XAttribute("cy", heightEmu)),
@@ -891,7 +891,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
                     new XElement(drawingNs + "avLst")),
                 new XElement(drawingNs + "solidFill", XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(255, 255, 255), drawingNs)),
                 new XElement(drawingNs + "ln",
-                    new XAttribute("w", DrawingMlUnits.PointsToEmu(0.75)),
+                    new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(0.75)),
                     new XElement(drawingNs + "solidFill", XlsxDrawingColorWriter.ToRgbColorElement(new CellColor(120, 120, 120), drawingNs)))));
 
     private static XElement ToPictureSnapshotCellShape(
@@ -1051,8 +1051,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(textBox.Anchor, spreadsheetDrawingNs, textBox.AnchorOffsetX, textBox.AnchorOffsetY),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(textBox.Width)),
-                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(textBox.Height))),
+                new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(textBox.Width)),
+                new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(textBox.Height))),
             new XElement(spreadsheetDrawingNs + "sp",
                 new XElement(spreadsheetDrawingNs + "nvSpPr",
                     new XElement(spreadsheetDrawingNs + "cNvPr",
@@ -1210,8 +1210,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         return new(spreadsheetDrawingNs + "oneCellAnchor",
             ToDrawingAnchorFrom(shape.Anchor, spreadsheetDrawingNs, shape.AnchorOffsetX, shape.AnchorOffsetY),
             new XElement(spreadsheetDrawingNs + "ext",
-                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(shape.Width)),
-                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(shape.Height))),
+                new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(shape.Width)),
+                new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(shape.Height))),
             shapeOrConnectorElement,
             new XElement(spreadsheetDrawingNs + "clientData"));
     }
@@ -1272,7 +1272,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
         {
             var textLn = new XElement(drawingNs + "ln");
             if (shape.ShapeTextOutlineWidthPoints > 0)
-                textLn.Add(new XAttribute("w", DrawingMlUnits.PointsToEmu(shape.ShapeTextOutlineWidthPoints).ToString(CultureInfo.InvariantCulture)));
+                textLn.Add(new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(shape.ShapeTextOutlineWidthPoints).ToString(CultureInfo.InvariantCulture)));
             var outlineFill = ToSolidFill(shape.ShapeTextOutlineThemeColor, shape.ShapeTextOutlineColor, drawingNs);
             if (outlineFill is not null)
                 textLn.Add(outlineFill);
@@ -1347,9 +1347,9 @@ internal static class XlsxWorksheetDrawingObjectWriter
         double anchorOffsetY = 0) =>
         new(spreadsheetDrawingNs + "from",
             new XElement(spreadsheetDrawingNs + "col", Math.Max(0, (long)anchor.Col - 1).ToString(CultureInfo.InvariantCulture)),
-            new XElement(spreadsheetDrawingNs + "colOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, anchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
+            new XElement(spreadsheetDrawingNs + "colOff", DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, anchorOffsetX)).ToString(CultureInfo.InvariantCulture)),
             new XElement(spreadsheetDrawingNs + "row", Math.Max(0, (long)anchor.Row - 1).ToString(CultureInfo.InvariantCulture)),
-            new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlUnits.PixelsToEmu(Math.Max(0, anchorOffsetY)).ToString(CultureInfo.InvariantCulture)));
+            new XElement(spreadsheetDrawingNs + "rowOff", DrawingMlCoordinateUnits.PixelsToEmu(Math.Max(0, anchorOffsetY)).ToString(CultureInfo.InvariantCulture)));
 
     private static XElement ToShapePropertiesForDrawingObject(
         string preset,
@@ -1434,8 +1434,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         if (shapeWidthPixels > 0 && shapeHeightPixels > 0)
         {
             extElement = new XElement(drawingNs + "ext",
-                new XAttribute("cx", DrawingMlUnits.PixelsToEmu(shapeWidthPixels)),
-                new XAttribute("cy", DrawingMlUnits.PixelsToEmu(shapeHeightPixels)));
+                new XAttribute("cx", DrawingMlCoordinateUnits.PixelsToEmu(shapeWidthPixels)),
+                new XAttribute("cy", DrawingMlCoordinateUnits.PixelsToEmu(shapeHeightPixels)));
         }
 
         return new XElement(drawingNs + "xfrm",
@@ -1551,7 +1551,7 @@ internal static class XlsxWorksheetDrawingObjectWriter
             return null;
 
         // Omit zero/default outline widths to keep output compact.
-        var wEmu = outlineWidthPoints > 0 ? DrawingMlUnits.PointsToEmu(outlineWidthPoints) : 0;
+        var wEmu = outlineWidthPoints > 0 ? DrawingMlCoordinateUnits.PointsToEmu(outlineWidthPoints) : 0;
         var prstDashVal = outlineDash switch
         {
             DrawingShapeOutlineDash.Dash => "dash",

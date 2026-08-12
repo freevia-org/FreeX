@@ -213,6 +213,32 @@ public sealed class DocumentObjectEditingCoordinatorTests
         chart.RotationAngle.Should().Be(350);
     }
 
+    [Fact]
+    public void ShapeWrapAndRotation_UseCanonicalCommandsAndUndo()
+    {
+        var shape = new Shape(ShapeKind.Rectangle, 72, 36);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromShape(shape));
+        var session = SessionWith(paragraph);
+        var target = new DocumentObjectTarget(0, 0);
+
+        session.Objects.SetWrap(target, ImageWrapping.Square).Applied.Should().BeTrue();
+        shape.Placement.Should().NotBeNull();
+        shape.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
+
+        session.Objects.SetRotation(target, 90, flipH: true, flipV: false)
+            .Applied.Should().BeTrue();
+        shape.RotationAngle.Should().Be(90);
+        shape.FlipH.Should().BeTrue();
+        shape.FlipV.Should().BeFalse();
+
+        session.Commands.Undo().Should().BeTrue();
+        shape.RotationAngle.Should().Be(0);
+        shape.FlipH.Should().BeFalse();
+        session.Commands.Undo().Should().BeTrue();
+        shape.Placement.Wrapping.Should().Be(ImageWrapping.Inline);
+    }
+
     private static DocumentEditingSession SessionWith(Paragraph paragraph)
     {
         var document = new TextDocument();
@@ -252,7 +278,6 @@ public sealed class DocumentObjectEditingOwnershipSourceTests
         "ApplyShapeStyleCommand",
         "SetShapeExtendedFillCommand",
         "SetShapeEffectsCommand",
-        "SetShapeRotationCommand",
         "SetShapePositionCommand",
         "SetChartKindCommand",
         "SetChartStyleCommand",

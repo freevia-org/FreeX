@@ -117,6 +117,41 @@ public sealed class RunFormattingEditingSessionTests
     }
 
     [Fact]
+    public void TryApplyRunFormatting_AppliesCharacterDecorationsAndRoundTripsHistory()
+    {
+        var document = Document("decorated");
+        var paragraph = (Paragraph)document.Blocks[0];
+        var border = new ParagraphBorder("#0070C0", 1.5)
+        {
+            LineStyle = BorderLineStyle.Dashed,
+        };
+        var session = new DocumentEditingSession();
+        session.LoadDocument(document);
+
+        session.TryApplyRunFormatting(
+            [Range(0, 0, 9)],
+            formatting => formatting with
+            {
+                CharacterBorder = border,
+                CharacterShadingHex = "#FFF2CC",
+                CharacterShadingPattern = ShadingPattern.Pct25,
+            }).Should().BeTrue();
+
+        paragraph.Runs[0].Formatting.CharacterBorder.Should().Be(border);
+        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().Be("#FFF2CC");
+        paragraph.Runs[0].Formatting.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
+
+        session.Commands.Undo().Should().BeTrue();
+        paragraph.Runs[0].Formatting.CharacterBorder.Should().BeNull();
+        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().BeNull();
+        paragraph.Runs[0].Formatting.CharacterShadingPattern.Should().Be(ShadingPattern.Clear);
+
+        session.Commands.Redo().Should().BeTrue();
+        paragraph.Runs[0].Formatting.CharacterBorder.Should().Be(border);
+        paragraph.Runs[0].Formatting.CharacterShadingHex.Should().Be("#FFF2CC");
+    }
+
+    [Fact]
     public void SetMultiLevelNumberFormats_NormalizesAndUndoesAsOneFormattingEdit()
     {
         var document = Document("body");

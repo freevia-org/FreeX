@@ -92,7 +92,7 @@ public static class PresentationImageExportExecutor
             if (bytes.Length == 0)
                 throw new InvalidOperationException($"Image export renderer returned no bytes for slide {slideNumber}.");
 
-            ExportAtomicWriter.WriteAllBytes(path, bytes);
+            AtomicFileWriter.WriteAllBytes(path, bytes);
             exported.Add(new PresentationImageExportedSlide(slideNumber, slideIndex, fileName, path, bytes.Length));
         }
 

@@ -246,7 +246,7 @@ public partial class MainWindow
                 UiText.Get("Progress_ExportingFileWriting"),
                 50);
 
-            await Task.Run(() => ExportAtomicWriter.WriteAllBytes(pdfPath, pdfBytes));
+            await Task.Run(() => AtomicFileWriter.WriteAllBytes(pdfPath, pdfBytes));
 
             ShowOwnedMessage(
                 UiText.Format("MainWindowMessage_ExportPdfSavedFormat", optionSummary, pdfPath),
@@ -333,7 +333,7 @@ public partial class MainWindow
 
             // Write to a sibling temp file so that a mid-write failure does not corrupt or lock the
             // destination the user chose, then atomically replace the destination on success.
-            using var temporaryFile = ExportAtomicWriter.CreateTempLease(xpsPath);
+            using var temporaryFile = AtomicFileWriter.CreateTempLease(xpsPath);
             var tempPath = temporaryFile.Path;
             try
             {
@@ -367,7 +367,7 @@ public partial class MainWindow
                     writer.Write(paginator);
                 }
 
-                ExportAtomicWriter.ReplaceTarget(tempPath, xpsPath);
+                AtomicFileWriter.ReplaceTarget(tempPath, xpsPath);
                 temporaryFile.Commit();
             }
             catch

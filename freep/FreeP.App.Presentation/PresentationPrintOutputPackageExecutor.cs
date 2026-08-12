@@ -397,7 +397,7 @@ public static class PresentationPrintOutputPackageExecutor
                 descriptor.DisabledReason);
         }
 
-        ExportAtomicWriter.WriteAllBytes(targetPath, package.Bytes);
+        AtomicFileWriter.WriteAllBytes(targetPath, package.Bytes);
         return new PresentationPrintOutputPackageMaterializationResult(
             descriptor,
             targetPath,

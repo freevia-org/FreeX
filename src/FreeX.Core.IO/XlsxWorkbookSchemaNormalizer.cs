@@ -247,11 +247,11 @@ internal static class XlsxWorkbookSchemaNormalizer
 
         var changed = false;
         if (root.Element(workbookNs + "fileSharing") is { } fileSharing)
-            changed |= XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileSharing);
         if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
-            changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(workbookPr);
         if (root.Element(workbookNs + "workbookProtection") is { } workbookProtection)
-            changed |= XlsxWorkbookProtectionNormalizer.NormalizeElement(workbookProtection);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(workbookProtection);
         if (root.Element(workbookNs + "bookViews") is { } bookViews)
             changed |= XlsxWorkbookViewNormalizer.NormalizeBookViewsElement(bookViews);
         foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
@@ -297,11 +297,11 @@ internal static class XlsxWorkbookSchemaNormalizer
         changed |= XlsxWorkbookExtensionListNormalizer.NormalizeWorkbookRoot(root, workbookNs);
 
         if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
-            changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileVersion);
         if (root.Element(workbookNs + "calcPr") is { } calcPr)
-            changed |= XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(calcPr);
         foreach (var fileRecoveryPr in root.Elements(workbookNs + "fileRecoveryPr"))
-            changed |= XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(fileRecoveryPr);
+            changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileRecoveryPr);
         // functionGroups is now handled by XlsxWorkbookContainerElementSchemas above.
         if (root.Element(workbookNs + "smartTagPr") is { } smartTagPr)
             changed |= XlsxWorkbookSmartTagNormalizer.NormalizeSmartTagPropertiesElement(smartTagPr);

@@ -78,7 +78,7 @@ public static class PresentationFilePersistenceWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(presentation);
 
-        ExportAtomicWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
+        AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));
         return new PresentationFileSaveResult(
             SavedPath: path,
             SuppressRecentFiles: false);

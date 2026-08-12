@@ -20,13 +20,6 @@ public enum HeaderFooterSlotActivationKind
     RequiresDifferentFirstPage
 }
 
-public enum HeaderFooterInsertKind
-{
-    PageNumber,
-    DateTime,
-    DocumentInfo
-}
-
 public sealed record HeaderFooterSlotActivationPlan(
     HeaderFooterSlotKind Slot,
     string SlotName,

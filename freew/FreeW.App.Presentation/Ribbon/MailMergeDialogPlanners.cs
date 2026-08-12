@@ -97,56 +97,6 @@ public static class MailMergeRecipientDialogPlanner
             : value;
 }
 
-public enum MailMergeInsertionKind
-{
-    MergeField,
-    AddressBlock,
-    GreetingLine,
-}
-
-public readonly record struct MailMergeInsertionPlan(
-    bool IsEnabled,
-    string Placeholder,
-    string DisabledMessage);
-
-public static class MailMergeInsertionPlanner
-{
-    public static MailMergeInsertionPlan Plan(MailMergeInsertionKind kind, bool hasRecipients)
-    {
-        var placeholder = kind switch
-        {
-            MailMergeInsertionKind.MergeField => string.Empty,
-            MailMergeInsertionKind.AddressBlock => "AddressBlock",
-            MailMergeInsertionKind.GreetingLine => "GreetingLine",
-            _ => string.Empty,
-        };
-        var requiresRecipients = kind != MailMergeInsertionKind.MergeField;
-        return new(
-            !requiresRecipients || hasRecipients,
-            placeholder,
-            requiresRecipients && !hasRecipients
-                ? "Select recipients first (Mailings > Select Recipients)."
-                : string.Empty);
-    }
-
-    public static string? NormalizeFieldName(string? name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return null;
-
-        var trimmed = name.Trim().Trim(MailMerge.FieldOpen, MailMerge.FieldClose).Trim();
-        return trimmed.Length == 0 ? null : trimmed;
-    }
-
-    public static string CreatePlaceholder(MailMergeInsertionKind kind, string? fieldName = null)
-    {
-        var name = kind == MailMergeInsertionKind.MergeField
-            ? NormalizeFieldName(fieldName) ?? string.Empty
-            : Plan(kind, hasRecipients: true).Placeholder;
-        return name.Length == 0 ? string.Empty : $"{MailMerge.FieldOpen}{name}{MailMerge.FieldClose}";
-    }
-}
-
 public readonly record struct MailMergeFilterSortDialogPlan(
     IReadOnlyList<string> SortColumns,
     string SelectedSortColumn,

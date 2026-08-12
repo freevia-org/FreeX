@@ -183,39 +183,6 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
         (Paragraph)context.Document.Blocks[index];
 }
 
-/// <summary>Replace one run's formatting, snapshotting the previous value for undo.</summary>
-public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, RunFormatting formatting) : IDocumentCommand
-{
-    private RunFormatting? _previous;
-    private FormatRevision? _previousRevision;
-
-    public string Label => "Character Formatting";
-
-    public void Apply(IDocumentCommandContext context)
-    {
-        var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
-        _previous = run.Formatting;
-        _previousRevision = run.FormatRevision;
-        run.Formatting = formatting;
-        if (TrackedFormattingRevisionFactory.ShouldTrack(context.Document)
-            && formatting != _previous
-            && run.FormatRevision is null)
-        {
-            run.FormatRevision = TrackedFormattingRevisionFactory.ForRun(_previous, context.RevisionAuthor);
-        }
-    }
-
-    public void Revert(IDocumentCommandContext context)
-    {
-        if (_previous is not null)
-        {
-            var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
-            run.Formatting = _previous;
-            run.FormatRevision = _previousRevision;
-        }
-    }
-}
-
 /// <summary>
 /// Replace a paragraph's run list wholesale (snapshotting the prior runs and drop-cap intent for
 /// undo). Used by edits that restructure a paragraph's runs — e.g. applying a drop cap, which splits
@@ -2060,76 +2027,6 @@ public enum ZOrderOperation
 }
 
 /// <summary>
-/// Switches a drawing object's wrapping between <see cref="ImageWrapping.Inline"/> and a floating
-/// mode (<see cref="ImageWrapping.Square"/> by default), applying to <see cref="InlineImage"/>,
-/// <see cref="Shape"/>, <see cref="Chart"/>, <see cref="SmartArt"/> and <see cref="WordArt"/>.
-/// When converting Inline to floating, the wrapping is set to <paramref name="floatingWrapping"/>
-/// (Square if omitted) and <see cref="FloatingPlacement"/> is created/populated. When converting
-/// floating to Inline, the wrapping is set to Inline (placement fields are preserved so a
-/// subsequent float-again restores the last position). Undoable.
-/// </summary>
-public sealed class ToggleObjectWrappingCommand(
-    int paragraphIndex,
-    int runIndex,
-    ImageWrapping floatingWrapping = ImageWrapping.Square) : IDocumentCommand
-{
-    private ImageWrapping _previousWrapping;
-    private bool _applied;
-
-    public string Label => "Set Wrap";
-
-    public void Apply(IDocumentCommandContext context)
-    {
-        ApplyTo(context, floatingWrapping);
-        _applied = true;
-    }
-
-    public void Revert(IDocumentCommandContext context)
-    {
-        if (!_applied) return;
-        ApplyTo(context, _previousWrapping);
-        _applied = false;
-    }
-
-    private void ApplyTo(IDocumentCommandContext context, ImageWrapping targetWrapping)
-    {
-        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
-        if (runIndex < 0 || runIndex >= p.Runs.Count) return;
-        var run = p.Runs[runIndex];
-
-        if (run.Image is { } img)
-        {
-            _previousWrapping = img.Wrapping;
-            img.Wrapping = targetWrapping;
-        }
-        else if (run.Shape is { } shape)
-        {
-            shape.Placement ??= new FloatingPlacement();
-            _previousWrapping = shape.Placement.Wrapping;
-            shape.Placement.Wrapping = targetWrapping;
-        }
-        else if (run.Chart is { } chart)
-        {
-            chart.Placement ??= new FloatingPlacement();
-            _previousWrapping = chart.Placement.Wrapping;
-            chart.Placement.Wrapping = targetWrapping;
-        }
-        else if (run.SmartArt is { } smartArt)
-        {
-            smartArt.Placement ??= new FloatingPlacement();
-            _previousWrapping = smartArt.Placement.Wrapping;
-            smartArt.Placement.Wrapping = targetWrapping;
-        }
-        else if (run.WordArt is { } wordArt)
-        {
-            wordArt.Placement ??= new FloatingPlacement();
-            _previousWrapping = wordArt.Placement.Wrapping;
-            wordArt.Placement.Wrapping = targetWrapping;
-        }
-    }
-}
-
-/// <summary>
 /// Apply a formatting transform to every run in a paragraph (e.g. toggle bold), snapshotting
 /// each run's prior formatting. The building block the ribbon will call for selection-wide format.
 /// </summary>
@@ -2747,72 +2644,6 @@ public sealed class MergeShapeTextParagraphWithPreviousCommand(
         result.RemoveAt(paragraphIndex);
         return result;
     }
-}
-
-/// <summary>
-/// Set the rotation angle and flip flags on the inline shape at the given paragraph/run indices,
-/// snapshotting prior values for undo. Mirrors <see cref="SetImageRotationCommand"/> for shapes.
-/// </summary>
-public sealed class SetShapeRotationCommand(int paragraphIndex, int runIndex, double angleDeg, bool flipH, bool flipV) : IDocumentCommand
-{
-    private double _prevAngle;
-    private bool _prevFlipH, _prevFlipV;
-    private bool _applied;
-
-    public string Label => "Rotate/Flip Shape";
-
-    public void Apply(IDocumentCommandContext context)
-    {
-        if (ShapeAt(context) is not { } shape) return;
-        _prevAngle = shape.RotationAngle; _prevFlipH = shape.FlipH; _prevFlipV = shape.FlipV;
-        shape.RotationAngle = angleDeg; shape.FlipH = flipH; shape.FlipV = flipV;
-        _applied = true;
-    }
-
-    public void Revert(IDocumentCommandContext context)
-    {
-        if (!_applied || ShapeAt(context) is not { } shape) return;
-        shape.RotationAngle = _prevAngle; shape.FlipH = _prevFlipH; shape.FlipV = _prevFlipV;
-        _applied = false;
-    }
-
-    private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
-}
-
-/// <summary>
-/// Set the floating wrapping mode on the inline shape at the given paragraph/run indices,
-/// snapshotting the prior value for undo. Mirrors <see cref="SetImagePositionCommand"/> for shapes.
-/// </summary>
-public sealed class SetShapeWrappingCommand(int paragraphIndex, int runIndex, ImageWrapping wrapping) : IDocumentCommand
-{
-    private ImageWrapping _previous;
-    private bool _applied;
-
-    public string Label => "Shape Wrap Text";
-
-    public void Apply(IDocumentCommandContext context)
-    {
-        if (ShapeAt(context) is not { } shape) return;
-        // Ensure a FloatingPlacement exists before writing wrapping.
-        shape.Placement ??= new FloatingPlacement();
-        _previous = shape.Placement.Wrapping;
-        shape.Placement.Wrapping = wrapping;
-        _applied = true;
-    }
-
-    public void Revert(IDocumentCommandContext context)
-    {
-        if (!_applied || ShapeAt(context) is not { } shape) return;
-        if (shape.Placement is not null)
-            shape.Placement.Wrapping = _previous;
-        _applied = false;
-    }
-
-    private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
 }
 
 /// <summary>

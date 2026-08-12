@@ -80,7 +80,7 @@ internal static class PdfDocumentExporter
     /// <summary>
     /// Renders <paramref name="document"/> into PDF bytes without writing any file.  The caller
     /// may then flush the bytes to disk on a background thread via
-    /// <see cref="ExportAtomicWriter.WriteAllBytes"/>.  This overload must be called on the
+    /// <see cref="AtomicFileWriter.WriteAllBytes"/>.  This overload must be called on the
     /// UI / STA thread because it accesses WPF visual objects.
     /// </summary>
     public static byte[] RenderToBytes(

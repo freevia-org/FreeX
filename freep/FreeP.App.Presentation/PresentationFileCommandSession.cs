@@ -648,7 +648,7 @@ public sealed class PresentationFileCommandSession
                 _getPresentation(),
                 request: null,
                 _render);
-            ExportAtomicWriter.WriteAllBytes(selection.Path!, artifact.Bytes);
+            AtomicFileWriter.WriteAllBytes(selection.Path!, artifact.Bytes);
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
                     command,
@@ -710,7 +710,7 @@ public sealed class PresentationFileCommandSession
                 presentation,
                 request,
                 _render);
-            ExportAtomicWriter.WriteAllBytes(selection.Path!, artifact.Bytes);
+            AtomicFileWriter.WriteAllBytes(selection.Path!, artifact.Bytes);
             return await CompleteAsync(
                 PresentationFileCommandResult.Success(
                     command,

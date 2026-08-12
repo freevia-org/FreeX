@@ -44,25 +44,16 @@ public sealed class MailMergeDialogPlannerTests
         valid.Data.Rows[0]["Name"].Should().Be("Ada");
     }
 
-    [Theory]
-    [InlineData(MailMergeInsertionKind.MergeField, false, true)]
-    [InlineData(MailMergeInsertionKind.AddressBlock, false, false)]
-    [InlineData(MailMergeInsertionKind.GreetingLine, true, true)]
-    public void InsertionPlanner_MatchesWpfEligibility(
-        MailMergeInsertionKind kind,
-        bool hasRecipients,
-        bool expectedEnabled)
-    {
-        MailMergeInsertionPlanner.Plan(kind, hasRecipients).IsEnabled.Should().Be(expectedEnabled);
-    }
-
     [Fact]
-    public void InsertionPlanner_NormalizesWrappedFieldNames()
+    public void FieldAuthoringPlanner_NormalizesNamesAndCreatesNativePlaceholders()
     {
-        MailMergeInsertionPlanner.NormalizeFieldName("  «First» ").Should().Be("First");
-        MailMergeInsertionPlanner.CreatePlaceholder(MailMergeInsertionKind.AddressBlock)
-            .Should().Be("«AddressBlock»");
-        MailMergeInsertionPlanner.NormalizeFieldName(" «  » ").Should().BeNull();
+        MailMergeFieldAuthoringPlanner.CreateMergeFieldPlan("  «First» ")!
+            .CachedLabel.Should().Be("«First»");
+        MailMergeFieldAuthoringPlanner.CreateAddressBlockPlan()
+            .CachedLabel.Should().Be("«AddressBlock»");
+        MailMergeFieldAuthoringPlanner.CreateGreetingLinePlan()
+            .CachedLabel.Should().Be("«GreetingLine»");
+        MailMergeFieldAuthoringPlanner.CreateMergeFieldPlan(" «  » ").Should().BeNull();
     }
 
     [Fact]

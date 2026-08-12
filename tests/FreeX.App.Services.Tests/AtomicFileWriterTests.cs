@@ -89,22 +89,4 @@ public sealed class AtomicFileWriterTests
         File.Exists(tempPath).Should().BeFalse();
     }
 
-    [Fact]
-    public void ExportAtomicWriter_IsAThinAdapterOverTheSingleAtomicIoOwner()
-    {
-        var source = File.ReadAllText(RepositoryFileLocator.Find(
-            "shared",
-            "Free.Shared.Shell",
-            "ExportAtomicWriter.cs"));
-
-        source.Should().Contain("AtomicFileWriter.CreateTempPath(targetPath)");
-        source.Should().Contain("AtomicFileWriter.CreateTempLease(targetPath)");
-        source.Should().Contain("AtomicFileWriter.WriteAllBytes(targetPath, bytes)");
-        source.Should().Contain("AtomicFileWriter.WriteAllBytesAsync(targetPath, bytes, cancellationToken)");
-        source.Should().Contain("AtomicFileWriter.ReplaceTarget(sourceTempPath, destinationPath)");
-        source.Should().NotContain("File.");
-        source.Should().NotContain("Directory.");
-        source.Should().NotContain("Path.");
-        source.Should().NotContain("Guid.");
-    }
 }

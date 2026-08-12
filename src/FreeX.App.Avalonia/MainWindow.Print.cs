@@ -510,7 +510,7 @@ public sealed partial class MainWindow
 
                 try
                 {
-                    await ExportAtomicWriter.WriteAllBytesAsync(path, documentBytes, cancellationToken);
+                    await AtomicFileWriter.WriteAllBytesAsync(path, documentBytes, cancellationToken);
                     return WorkbookPrintFallbackResult.Success(
                         UiText.Format("Print_SavedPdf", Path.GetFileName(path)),
                         path);

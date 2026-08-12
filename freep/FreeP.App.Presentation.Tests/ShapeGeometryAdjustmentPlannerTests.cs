@@ -32,7 +32,7 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
-    public void BuildMutationPlan_Ribbon_MapsFoldHandlesToDrawingMlUnits()
+    public void BuildMutationPlan_Ribbon_MapsFoldHandlesToDrawingMlCoordinateUnits()
     {
         var shape = new SlideShape
         {
@@ -75,7 +75,7 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
-    public void BuildMutationPlan_Wave_MapsAmplitudeAndPhaseToDrawingMlUnits()
+    public void BuildMutationPlan_Wave_MapsAmplitudeAndPhaseToDrawingMlCoordinateUnits()
     {
         var shape = new SlideShape
         {
@@ -142,7 +142,7 @@ public sealed class ShapeGeometryAdjustmentPlannerTests
     }
 
     [Fact]
-    public void BuildMutationPlan_MapsPointerToEllipseAngleInDrawingMlUnits()
+    public void BuildMutationPlan_MapsPointerToEllipseAngleInDrawingMlCoordinateUnits()
     {
         var shape = new SlideShape
         {

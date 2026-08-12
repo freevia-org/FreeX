@@ -22,7 +22,7 @@ public sealed class DrawingMlUnitDedupTests
     }
 
     [Fact]
-    public void FreePPresentationUnitConsumers_UseSharedDrawingMlUnits()
+    public void FreePPresentationUnitConsumers_UseSharedDrawingMlCoordinateUnits()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var appFiles = new[]
@@ -52,8 +52,8 @@ public sealed class DrawingMlUnitDedupTests
 
         Read(root, "freep", "FreeP.Core.IO", "PptxPackageWriter.cs")
             .Should()
-            .Contain("DrawingMlUnits.EmuPerInch * 15 / 2")
-            .And.Contain("DrawingMlUnits.EmuPerInch * 10")
+            .Contain("DrawingMlCoordinateUnits.EmuPerInch * 15 / 2")
+            .And.Contain("DrawingMlCoordinateUnits.EmuPerInch * 10")
             .And.NotContain("6858000")
             .And.NotContain("9144000");
     }

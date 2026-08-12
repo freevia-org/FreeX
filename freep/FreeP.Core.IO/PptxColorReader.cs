@@ -244,7 +244,7 @@ internal static class PptxColorReader
         var wAttr = lnElement.Attribute("w")?.Value;
         double widthPt = 0.75;
         if (long.TryParse(wAttr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var wEmu) && wEmu > 0)
-            widthPt = DrawingMlUnits.EmuToPoints(wEmu);
+            widthPt = DrawingMlCoordinateUnits.EmuToPoints(wEmu);
 
         // a:prstDash
         var dashVal = lnElement.Element(A + "prstDash")?.Attribute("val")?.Value;

@@ -1692,7 +1692,7 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
-    public void RoundTrip_PointBasedDrawingMlUnits_PreservedInPptxIo()
+    public void RoundTrip_PointBasedDrawingMlCoordinateUnits_PreservedInPptxIo()
     {
         var pres = new Presentation();
         var slide = new Slide();
@@ -1826,7 +1826,7 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     private static string EmuText(double points) =>
-        DrawingMlUnits.PointsToEmu(points).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        DrawingMlCoordinateUnits.PointsToEmu(points).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     // ─────────────────────────────────────────────────────────────────────────────
     // Bug-fix regression tests (Q1–Q7)

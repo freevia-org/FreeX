@@ -227,13 +227,6 @@ public sealed class ShapeEffectLst
     public bool ReflectionRotWithShape { get; set; }
     public int ReflectionDist   { get; set; } = 23000;
 
-    /// <summary>Compatibility alias for the reflection start alpha.</summary>
-    public int ReflectionAlpha
-    {
-        get => ReflectionStartAlpha;
-        set => ReflectionStartAlpha = value;
-    }
-
     // Bevel / 3-D (a:sp3d — best-effort; carried through round-trip, rendered as border highlight)
     public bool HasBevel { get; set; }
     public int BevelW { get; set; } = 63500;              // EMU (5 pt)

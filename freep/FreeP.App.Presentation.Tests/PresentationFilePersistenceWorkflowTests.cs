@@ -153,7 +153,7 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
             "FreeP.App.Presentation",
             "PresentationFilePersistenceWorkflow.cs"));
 
-        source.Should().Contain("ExportAtomicWriter.WriteAllBytes(path, SerializePresentation(path, presentation));");
+        source.Should().Contain("AtomicFileWriter.WriteAllBytes(path, SerializePresentation(path, presentation));");
         source.Should().Contain("FxpFormat.Serialize(presentation)");
         source.Should().Contain("PptxPackageWriter.Write(presentation, stream, ResolvePackageKind(path))");
         source.Should().NotContain("FxpFormat.Write(");

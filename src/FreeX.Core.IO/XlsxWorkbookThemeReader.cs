@@ -286,7 +286,7 @@ public static class XlsxWorkbookThemeReader
     {
         var widthText = line?.Attribute("w")?.Value;
         return int.TryParse(widthText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var emus) && emus > 0
-            ? Math.Round(emus / (double)DrawingMlUnits.EmuPerPoint, 3)
+            ? Math.Round(emus / (double)DrawingMlCoordinateUnits.EmuPerPoint, 3)
             : null;
     }
 

@@ -13,7 +13,7 @@ public sealed class OutputWorkflowArchitectureTests
 
         source.Should().Contain("public static class FreeWExportWorkflow");
         source.Should().Contain("Func<Stream, CancellationToken, ValueTask<FreeWExportArtifact>> renderAsync");
-        source.Should().Contain("ExportAtomicWriter.ReplaceTarget(");
+        source.Should().Contain("AtomicFileWriter.ReplaceTarget(");
         source.Should().Contain("public static class FreeWPrintRequestPlanner");
         source.Should().Contain("public sealed class FreeWPortablePrintWorkflow");
         source.Should().Contain("Func<Stream, PrintSelection, CancellationToken, ValueTask> renderPdfAsync");
@@ -44,9 +44,9 @@ public sealed class OutputWorkflowArchitectureTests
 
         foreach (var renderer in new[] { wpf, avalonia })
         {
-            renderer.Should().NotContain("ExportAtomicWriter.CreateTempPath(");
-            renderer.Should().NotContain("ExportAtomicWriter.ReplaceTarget(");
-            renderer.Should().NotContain("ExportAtomicWriter.CleanupTempFile(");
+            renderer.Should().NotContain("AtomicFileWriter.CreateTempPath(");
+            renderer.Should().NotContain("AtomicFileWriter.ReplaceTarget(");
+            renderer.Should().NotContain("AtomicFileWriter.CleanupTempFile(");
         }
 
         avalonia.Should().NotContain("_printService.SubmitAsync(");

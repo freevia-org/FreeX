@@ -495,7 +495,7 @@ internal static partial class XlsxChartXmlWriter
 
         return new XElement(chartNs + "spPr",
             new XElement(drawingNs + "ln",
-                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(thickness, 0.5, 10) * DrawingMlUnits.EmuPerPoint))),
+                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(thickness, 0.5, 10) * DrawingMlCoordinateUnits.EmuPerPoint))),
                 fill,
                 ToPresetDash(dashStyle, drawingNs)));
     }

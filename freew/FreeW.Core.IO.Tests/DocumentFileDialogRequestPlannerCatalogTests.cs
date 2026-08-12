@@ -7,14 +7,14 @@ namespace FreeW.Core.IO.Tests;
 /// The open/save dialog filter strings and extension dispatch are a pure function of the registered formats.
 /// Ported from the sibling FreeX app's filter-builder test.
 /// </summary>
-public class DocumentFileDialogFilterBuilderTests
+public class DocumentFileDialogRequestPlannerCatalogTests
 {
     private static IReadOnlyList<IDocumentFileAdapter> Catalog() => DocumentFileAdapterCatalog.CreateDefaultAdapters();
 
     [Fact]
     public void OpenFilter_LeadsWithAllSupported_AndEndsWithAllFiles()
     {
-        var filter = DocumentFileDialogFilterBuilder.BuildOpenFilter(Catalog());
+        var filter = DocumentFileDialogRequestPlanner.BuildOpenDialogPlan(Catalog()).Filter;
 
         filter.Should().StartWith("All supported files (");
         filter.Should().EndWith("All files (*.*)|*.*");
@@ -27,7 +27,7 @@ public class DocumentFileDialogFilterBuilderTests
     [Fact]
     public void SaveFilter_HasNoAllFilesOrAllSupportedRow()
     {
-        var filter = DocumentFileDialogFilterBuilder.BuildSaveFilter(Catalog());
+        var filter = DocumentFileDialogRequestPlanner.BuildSaveDialogPlan(Catalog(), "", ".docx").Filter;
 
         filter.Should().NotContain("All files");
         filter.Should().NotContain("All supported");
@@ -38,7 +38,7 @@ public class DocumentFileDialogFilterBuilderTests
     [Fact]
     public void SaveFilter_ListsEveryWritableFormatInCatalogOrder()
     {
-        var filter = DocumentFileDialogFilterBuilder.BuildSaveFilter(Catalog());
+        var filter = DocumentFileDialogRequestPlanner.BuildSaveDialogPlan(Catalog(), "", ".docx").Filter;
 
         filter.Split('|').Should().Equal(
             "Word Document (*.docx)", "*.docx",
@@ -73,7 +73,8 @@ public class DocumentFileDialogFilterBuilderTests
         var saveFormats = Catalog().SelectMany(a => a.Formats).Where(f => f.CanSave).ToList();
         var expected = saveFormats.FindIndex(f => DocumentFileFormatResolver.NormalizeExtension(f.Extension) == ".txt") + 1;
 
-        DocumentFileDialogFilterBuilder.FindSaveFilterIndex(Catalog(), extension).Should().Be(expected);
+        DocumentFileDialogRequestPlanner.BuildSaveDialogPlan(Catalog(), "", extension)
+            .FilterIndex.Should().Be(expected);
     }
 
     [Theory]
@@ -81,7 +82,8 @@ public class DocumentFileDialogFilterBuilderTests
     [InlineData("")]
     public void FindSaveFilterIndex_DefaultsToOne_ForUnknownOrEmpty(string extension)
     {
-        DocumentFileDialogFilterBuilder.FindSaveFilterIndex(Catalog(), extension).Should().Be(1);
+        DocumentFileDialogRequestPlanner.BuildSaveDialogPlan(Catalog(), "", extension)
+            .FilterIndex.Should().Be(1);
     }
 
     [Theory]

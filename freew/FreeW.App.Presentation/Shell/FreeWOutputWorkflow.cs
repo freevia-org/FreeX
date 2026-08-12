@@ -94,7 +94,7 @@ public static class FreeWExportWorkflow
             if (!string.IsNullOrWhiteSpace(directory))
                 Directory.CreateDirectory(directory);
 
-            temporaryFile = ExportAtomicWriter.CreateTempLease(path);
+            temporaryFile = AtomicFileWriter.CreateTempLease(path);
             FreeWExportArtifact artifact;
             await using (var stream = temporaryFile.OpenWrite(useAsync: true))
             {
@@ -102,7 +102,7 @@ public static class FreeWExportWorkflow
                 await stream.FlushAsync(cancellationToken);
             }
             cancellationToken.ThrowIfCancellationRequested();
-            ExportAtomicWriter.ReplaceTarget(temporaryFile.Path, path);
+            AtomicFileWriter.ReplaceTarget(temporaryFile.Path, path);
             temporaryFile.Commit();
             return new(
                 FreeWExportExecutionOutcome.Succeeded,

@@ -1890,14 +1890,14 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             AnchorOffsets = new DrawingAnchorRange(
                 new DrawingAnchorPoint(
                     (uint)fromCol,
-                    DrawingMlUnits.PixelsToEmu(HssfColumnOffsetToPixels(sheet, ToModelIndex(fromCol), Math.Min(anchor.Dx1, anchor.Dx2))),
+                    DrawingMlCoordinateUnits.PixelsToEmu(HssfColumnOffsetToPixels(sheet, ToModelIndex(fromCol), Math.Min(anchor.Dx1, anchor.Dx2))),
                     (uint)fromRow,
-                    DrawingMlUnits.PixelsToEmu(HssfRowOffsetToPixels(sheet, ToModelIndex(fromRow), Math.Min(anchor.Dy1, anchor.Dy2)))),
+                    DrawingMlCoordinateUnits.PixelsToEmu(HssfRowOffsetToPixels(sheet, ToModelIndex(fromRow), Math.Min(anchor.Dy1, anchor.Dy2)))),
                 new DrawingAnchorPoint(
                     (uint)toCol,
-                    DrawingMlUnits.PixelsToEmu(HssfColumnOffsetToPixels(sheet, ToModelIndex(toCol), Math.Max(anchor.Dx1, anchor.Dx2))),
+                    DrawingMlCoordinateUnits.PixelsToEmu(HssfColumnOffsetToPixels(sheet, ToModelIndex(toCol), Math.Max(anchor.Dx1, anchor.Dx2))),
                     (uint)toRow,
-                    DrawingMlUnits.PixelsToEmu(HssfRowOffsetToPixels(sheet, ToModelIndex(toRow), Math.Max(anchor.Dy1, anchor.Dy2)))))
+                    DrawingMlCoordinateUnits.PixelsToEmu(HssfRowOffsetToPixels(sheet, ToModelIndex(toRow), Math.Max(anchor.Dy1, anchor.Dy2)))))
         };
 
         TryPopulateFormControlListMetadata(sourceWorkbook, sourceControl, control);

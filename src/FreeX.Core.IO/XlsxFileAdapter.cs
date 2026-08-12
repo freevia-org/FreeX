@@ -1680,7 +1680,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
 
             var changed = false;
             if (root.Element(workbookNs + "workbookPr") is { } workbookPr)
-                changed |= XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookPr);
+                changed |= XlsxWorkbookLeafElementNormalizer.Normalize(workbookPr);
             foreach (var customWorkbookViews in root.Elements(workbookNs + "customWorkbookViews").ToList())
             {
                 changed |= XlsxWorkbookCustomViewNormalizer.NormalizeCustomWorkbookViewsElement(customWorkbookViews);
@@ -1696,7 +1696,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter, IWarningCollectingFi
             changed |= XlsxWorkbookPivotCachesNormalizer.NormalizeWorkbookRoot(root, workbookNs);
             changed |= XlsxWorkbookExtensionListNormalizer.NormalizeWorkbookRoot(root, workbookNs);
             if (root.Element(workbookNs + "fileVersion") is { } fileVersion)
-                changed |= XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+                changed |= XlsxWorkbookLeafElementNormalizer.Normalize(fileVersion);
             if (root.Element(workbookNs + "functionGroups") is { } functionGroups)
                 changed |= XlsxWorkbookFunctionGroupsNormalizer.NormalizeElement(functionGroups);
 

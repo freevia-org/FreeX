@@ -4670,10 +4670,10 @@ public static class PptxPackageReader
         if (tcPr is not null)
         {
             // Insets (EMU -> points)
-            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = DrawingMlUnits.EmuToPoints(ml);
-            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = DrawingMlUnits.EmuToPoints(mr);
-            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = DrawingMlUnits.EmuToPoints(mt);
-            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = DrawingMlUnits.EmuToPoints(mb);
+            if (ParseLongNullable(tcPr.Attribute("marL")?.Value) is { } ml) cell.InsetLeftPt   = DrawingMlCoordinateUnits.EmuToPoints(ml);
+            if (ParseLongNullable(tcPr.Attribute("marR")?.Value) is { } mr) cell.InsetRightPt  = DrawingMlCoordinateUnits.EmuToPoints(mr);
+            if (ParseLongNullable(tcPr.Attribute("marT")?.Value) is { } mt) cell.InsetTopPt    = DrawingMlCoordinateUnits.EmuToPoints(mt);
+            if (ParseLongNullable(tcPr.Attribute("marB")?.Value) is { } mb) cell.InsetBottomPt = DrawingMlCoordinateUnits.EmuToPoints(mb);
 
             // Vertical anchor
             cell.Anchor = tcPr.Attribute("anchor")?.Value switch
@@ -5719,10 +5719,10 @@ public static class PptxPackageReader
                 _ => (VerticalAnchor?)null
             };
 
-            if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = DrawingMlUnits.EmuToPoints(li);
-            if (ParseLongNullable(bodyPr.Attribute("rIns")?.Value) is { } ri) body.InsetRightPt = DrawingMlUnits.EmuToPoints(ri);
-            if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = DrawingMlUnits.EmuToPoints(ti);
-            if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = DrawingMlUnits.EmuToPoints(bi);
+            if (ParseLongNullable(bodyPr.Attribute("lIns")?.Value) is { } li) body.InsetLeftPt = DrawingMlCoordinateUnits.EmuToPoints(li);
+            if (ParseLongNullable(bodyPr.Attribute("rIns")?.Value) is { } ri) body.InsetRightPt = DrawingMlCoordinateUnits.EmuToPoints(ri);
+            if (ParseLongNullable(bodyPr.Attribute("tIns")?.Value) is { } ti) body.InsetTopPt = DrawingMlCoordinateUnits.EmuToPoints(ti);
+            if (ParseLongNullable(bodyPr.Attribute("bIns")?.Value) is { } bi) body.InsetBottomPt = DrawingMlCoordinateUnits.EmuToPoints(bi);
             body.Wrap = bodyPr.Attribute("wrap")?.Value != "none";
             var normAf = bodyPr.Element(A + "normAutofit");
             var spAf   = bodyPr.Element(A + "spAutoFit");
@@ -6421,8 +6421,8 @@ public static class PptxPackageReader
                         alpha = (byte)Math.Clamp((int)Math.Round(av / 100000.0 * 255), 0, 255);
                 }
                 double blurPt = 2.0, distPt = 2.0, dirDeg = 45.0;
-                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlUnits.EmuToPoints(blurEmu);
-                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = DrawingMlUnits.EmuToPoints(distEmu);
+                if (long.TryParse(outerShdw.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(outerShdw.Attribute("dist")?.Value,    out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
                 if (long.TryParse(outerShdw.Attribute("dir")?.Value,     out var dirRaw))  dirDeg = dirRaw  / 60000.0;
                 run.TextShadow = new RunTextShadow
                 {
@@ -6447,8 +6447,8 @@ public static class PptxPackageReader
                     alpha = (byte)Math.Clamp((int)Math.Round(stA / 100000.0 * 255), 0, 255);
 
                 double blurPt = 0, distPt = 0, dirDeg = 90.0, scaleY = -1.0, endPos = 1.0;
-                if (long.TryParse(reflection.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlUnits.EmuToPoints(blurEmu);
-                if (long.TryParse(reflection.Attribute("dist")?.Value, out var distEmu)) distPt = DrawingMlUnits.EmuToPoints(distEmu);
+                if (long.TryParse(reflection.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlCoordinateUnits.EmuToPoints(blurEmu);
+                if (long.TryParse(reflection.Attribute("dist")?.Value, out var distEmu)) distPt = DrawingMlCoordinateUnits.EmuToPoints(distEmu);
                 if (long.TryParse(reflection.Attribute("dir")?.Value, out var dirRaw)) dirDeg = dirRaw / 60000.0;
                 if (long.TryParse(reflection.Attribute("sy")?.Value, out var syRaw) && syRaw != 0) scaleY = syRaw / 100000.0;
                 if (long.TryParse(reflection.Attribute("endPos")?.Value, out var endPosRaw)) endPos = Math.Clamp(endPosRaw / 100000.0, 0.0, 1.0);
@@ -6470,7 +6470,7 @@ public static class PptxPackageReader
             {
                 double radiusPt = 0;
                 if (long.TryParse(glow.Attribute("rad")?.Value, out var radEmu))
-                    radiusPt = DrawingMlUnits.EmuToPoints(radEmu);
+                    radiusPt = DrawingMlCoordinateUnits.EmuToPoints(radEmu);
 
                 byte alpha = 0xA0;
                 var glowColorEl = glow.Elements().FirstOrDefault();
@@ -6492,7 +6492,7 @@ public static class PptxPackageReader
             {
                 double radiusPt = 0;
                 if (long.TryParse(softEdge.Attribute("rad")?.Value, out var radEmu))
-                    radiusPt = DrawingMlUnits.EmuToPoints(radEmu);
+                    radiusPt = DrawingMlCoordinateUnits.EmuToPoints(radEmu);
 
                 run.TextSoftEdge = new RunTextSoftEdge
                 {

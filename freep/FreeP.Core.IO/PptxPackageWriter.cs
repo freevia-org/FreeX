@@ -1127,16 +1127,16 @@ public static class PptxPackageWriter
     {
         var slideWidthEmu = p.SlideSizeCxEmu > 0
             ? p.SlideSizeCxEmu
-            : DrawingMlUnits.EmuPerInch * 40 / 3;
+            : DrawingMlCoordinateUnits.EmuPerInch * 40 / 3;
         var slideHeightEmu = p.SlideSizeCyEmu > 0
             ? p.SlideSizeCyEmu
-            : DrawingMlUnits.EmuPerInch * 15 / 2;
+            : DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;
         var notesPageWidthEmu = p.NotesPageSizeCxEmu > 0
             ? p.NotesPageSizeCxEmu
-            : DrawingMlUnits.EmuPerInch * 15 / 2;
+            : DrawingMlCoordinateUnits.EmuPerInch * 15 / 2;
         var notesPageHeightEmu = p.NotesPageSizeCyEmu > 0
             ? p.NotesPageSizeCyEmu
-            : DrawingMlUnits.EmuPerInch * 10;
+            : DrawingMlCoordinateUnits.EmuPerInch * 10;
 
         var presEl = new XElement(P + "presentation",
             NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
@@ -3088,7 +3088,7 @@ public static class PptxPackageWriter
         new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr")));
 
     private static XElement LnStyle(double widthPt) =>
-        new XElement(A + "ln", new XAttribute("w", DrawingMlUnits.PointsToEmu(widthPt)),
+        new XElement(A + "ln", new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(widthPt)),
             new XElement(A + "solidFill", new XElement(A + "schemeClr", new XAttribute("val", "phClr"))),
             new XElement(A + "prstDash", new XAttribute("val", "solid")));
 
@@ -4059,10 +4059,10 @@ public static class PptxPackageWriter
 
         // tcPr
         var tcPr = new XElement(A + "tcPr");
-        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", DrawingMlUnits.PointsToEmu(cell.InsetLeftPt.Value)));
-        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", DrawingMlUnits.PointsToEmu(cell.InsetRightPt.Value)));
-        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", DrawingMlUnits.PointsToEmu(cell.InsetTopPt.Value)));
-        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", DrawingMlUnits.PointsToEmu(cell.InsetBottomPt.Value)));
+        if (cell.InsetLeftPt.HasValue)   tcPr.Add(new XAttribute("marL", DrawingMlCoordinateUnits.PointsToEmu(cell.InsetLeftPt.Value)));
+        if (cell.InsetRightPt.HasValue)  tcPr.Add(new XAttribute("marR", DrawingMlCoordinateUnits.PointsToEmu(cell.InsetRightPt.Value)));
+        if (cell.InsetTopPt.HasValue)    tcPr.Add(new XAttribute("marT", DrawingMlCoordinateUnits.PointsToEmu(cell.InsetTopPt.Value)));
+        if (cell.InsetBottomPt.HasValue) tcPr.Add(new XAttribute("marB", DrawingMlCoordinateUnits.PointsToEmu(cell.InsetBottomPt.Value)));
         if (cell.Anchor.HasValue)
             tcPr.Add(new XAttribute("anchor", cell.Anchor.Value switch
             {
@@ -4110,7 +4110,7 @@ public static class PptxPackageWriter
         {
             var children = new List<object>
             {
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(v.WidthPt)),
+                new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(v.WidthPt)),
                 new XElement(A + "solidFill", BuildColorEl(v.Color))
             };
             if (v.Dash != OutlineDash.Solid)
@@ -4123,7 +4123,7 @@ public static class PptxPackageWriter
         {
             var children = new List<object>
             {
-                new XAttribute("w", DrawingMlUnits.PointsToEmu(gv.WidthPt)),
+                new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(gv.WidthPt)),
                 BuildGradFillEl(gv.Gradient)
             };
             if (gv.Dash != OutlineDash.Solid)
@@ -4276,7 +4276,7 @@ public static class PptxPackageWriter
     {
         var children = new List<object?>
         {
-            new XAttribute("w", DrawingMlUnits.PointsToEmu(outline.WidthPt)),
+            new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(outline.WidthPt)),
             new XElement(A + "solidFill", BuildColorEl(outline.Color)),
             outline.Dash != OutlineDash.Solid
                 ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(outline.Dash)))
@@ -4290,7 +4290,7 @@ public static class PptxPackageWriter
     {
         var children = new List<object?>
         {
-            new XAttribute("w", DrawingMlUnits.PointsToEmu(outline.WidthPt)),
+            new XAttribute("w", DrawingMlCoordinateUnits.PointsToEmu(outline.WidthPt)),
             BuildGradFillEl(outline.Gradient),
             outline.Dash != OutlineDash.Solid
                 ? new XElement(A + "prstDash", new XAttribute("val", ToDashStr(outline.Dash)))
@@ -4397,10 +4397,10 @@ public static class PptxPackageWriter
         }
 
         if (!body.Wrap) bodyPr.Add(new XAttribute("wrap", "none"));
-        if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", DrawingMlUnits.PointsToEmu(body.InsetLeftPt.Value)));
-        if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", DrawingMlUnits.PointsToEmu(body.InsetRightPt.Value)));
-        if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", DrawingMlUnits.PointsToEmu(body.InsetTopPt.Value)));
-        if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", DrawingMlUnits.PointsToEmu(body.InsetBottomPt.Value)));
+        if (body.InsetLeftPt.HasValue) bodyPr.Add(new XAttribute("lIns", DrawingMlCoordinateUnits.PointsToEmu(body.InsetLeftPt.Value)));
+        if (body.InsetRightPt.HasValue) bodyPr.Add(new XAttribute("rIns", DrawingMlCoordinateUnits.PointsToEmu(body.InsetRightPt.Value)));
+        if (body.InsetTopPt.HasValue) bodyPr.Add(new XAttribute("tIns", DrawingMlCoordinateUnits.PointsToEmu(body.InsetTopPt.Value)));
+        if (body.InsetBottomPt.HasValue) bodyPr.Add(new XAttribute("bIns", DrawingMlCoordinateUnits.PointsToEmu(body.InsetBottomPt.Value)));
         // Wave 19A / LA1: re-emit the ORIGINAL autofit element kind so an spAutoFit shape
         // round-trips as spAutoFit (never rewritten as normAutofit) and vice versa.
         switch (body.AutoFitKind)
@@ -4741,7 +4741,7 @@ public static class PptxPackageWriter
                 glowColorEl.Add(new XElement(A + "alpha",
                     new XAttribute("val", (long)Math.Round(glow.Alpha / 255.0 * 100000))));
                 effectLst.Add(new XElement(A + "glow",
-                    new XAttribute("rad", DrawingMlUnits.PointsToEmu(glow.RadiusPt)),
+                    new XAttribute("rad", DrawingMlCoordinateUnits.PointsToEmu(glow.RadiusPt)),
                     glowColorEl));
             }
 
@@ -4755,8 +4755,8 @@ public static class PptxPackageWriter
                     shdwColorEl.Add(new XElement(A + "alpha",
                         new XAttribute("val", (long)Math.Round(ts.Alpha / 255.0 * 100000))));
                 effectLst.Add(new XElement(A + "outerShdw",
-                    new XAttribute("blurRad", DrawingMlUnits.PointsToEmu(ts.BlurPt)),
-                    new XAttribute("dist",    DrawingMlUnits.PointsToEmu(ts.DistPt)),
+                    new XAttribute("blurRad", DrawingMlCoordinateUnits.PointsToEmu(ts.BlurPt)),
+                    new XAttribute("dist",    DrawingMlCoordinateUnits.PointsToEmu(ts.DistPt)),
                     new XAttribute("dir",     (long)Math.Round(ts.DirDeg * 60000)),
                     shdwColorEl));
             }
@@ -4765,9 +4765,9 @@ public static class PptxPackageWriter
             {
                 var reflection = run.TextReflection;
                 effectLst.Add(new XElement(A + "reflection",
-                    new XAttribute("blurRad", DrawingMlUnits.PointsToEmu(reflection.BlurPt)),
+                    new XAttribute("blurRad", DrawingMlCoordinateUnits.PointsToEmu(reflection.BlurPt)),
                     new XAttribute("stA", (long)Math.Round(reflection.Alpha / 255.0 * 100000)),
-                    new XAttribute("dist", DrawingMlUnits.PointsToEmu(reflection.DistPt)),
+                    new XAttribute("dist", DrawingMlCoordinateUnits.PointsToEmu(reflection.DistPt)),
                     new XAttribute("dir", (long)Math.Round(reflection.DirDeg * 60000)),
                     new XAttribute("sy", (long)Math.Round(reflection.ScaleY * 100000)),
                     new XAttribute("endPos", (long)Math.Round(Math.Clamp(reflection.EndPos, 0.0, 1.0) * 100000))));
@@ -4776,7 +4776,7 @@ public static class PptxPackageWriter
             if (run.TextSoftEdge is not null)
             {
                 effectLst.Add(new XElement(A + "softEdge",
-                    new XAttribute("rad", DrawingMlUnits.PointsToEmu(run.TextSoftEdge.RadiusPt))));
+                    new XAttribute("rad", DrawingMlCoordinateUnits.PointsToEmu(run.TextSoftEdge.RadiusPt))));
             }
 
             rPr.Add(effectLst);

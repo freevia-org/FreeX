@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Avalonia.Tests.TestSupport;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;

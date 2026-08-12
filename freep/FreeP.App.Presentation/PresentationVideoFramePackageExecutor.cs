@@ -382,7 +382,7 @@ public static class PresentationVideoFramePackageExecutor
                 descriptor.DisabledReason);
         }
 
-        ExportAtomicWriter.WriteAllBytes(targetPath, package.Bytes);
+        AtomicFileWriter.WriteAllBytes(targetPath, package.Bytes);
         return new PresentationVideoFramePackageMaterializationResult(
             descriptor,
             targetPath,

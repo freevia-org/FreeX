@@ -171,22 +171,6 @@ internal sealed class AvaloniaScreenClipService : IScreenClipService
     }
 }
 
-/// <summary>Headless adapter that returns a deterministic capture without touching the OS desktop.</summary>
-internal sealed class DeterministicScreenClipService(ScreenClipCapture? capture) : IScreenClipService
-{
-    public int CallCount { get; private set; }
-
-    public Task<ScreenClipCapture?> CaptureAsync(
-        Window owner,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-        cancellationToken.ThrowIfCancellationRequested();
-        CallCount++;
-        return Task.FromResult(capture);
-    }
-}
-
 internal static class WindowsScreenCapture
 {
     private const int Srccopy = 0x00CC0020;

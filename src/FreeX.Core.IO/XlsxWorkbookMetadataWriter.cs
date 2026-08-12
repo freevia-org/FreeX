@@ -109,7 +109,7 @@ internal static class XlsxWorkbookMetadataWriter
         }
 
         workbookProperties.SetAttributeValue("date1904", workbook.Uses1904DateSystem ? "1" : null);
-        XlsxWorkbookPropertiesNormalizer.NormalizeElement(workbookProperties);
+        XlsxWorkbookLeafElementNormalizer.Normalize(workbookProperties);
         return true;
     }
 
@@ -181,7 +181,7 @@ internal static class XlsxWorkbookMetadataWriter
         fileSharing.SetAttributeValue(
             "reservationPassword",
             string.IsNullOrWhiteSpace(workbook.FileSharing.ReservationPassword) ? null : workbook.FileSharing.ReservationPassword);
-        XlsxWorkbookFileSharingNormalizer.NormalizeElement(fileSharing);
+        XlsxWorkbookLeafElementNormalizer.Normalize(fileSharing);
 
         InsertFileSharingInOrder(root, fileSharing);
 
@@ -220,7 +220,7 @@ internal static class XlsxWorkbookMetadataWriter
                 element,
                 "repairLoad",
                 preserveRepairLoad || item.RepairLoad != true ? item.RepairLoad : null);
-            XlsxWorkbookFileRecoveryPropertyNormalizer.NormalizeElement(element);
+            XlsxWorkbookLeafElementNormalizer.Normalize(element);
             return element;
         }).ToArray();
 
@@ -266,7 +266,7 @@ internal static class XlsxWorkbookMetadataWriter
         fileVersion.SetAttributeValue("lowestEdited", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.LowestEdited));
         fileVersion.SetAttributeValue("rupBuild", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.RupBuild));
         fileVersion.SetAttributeValue("codeName", XlsxWorkbookMetadataXmlHelper.NullIfWhiteSpace(workbook.FileVersion.CodeName));
-        XlsxWorkbookFileVersionNormalizer.NormalizeElement(fileVersion);
+        XlsxWorkbookLeafElementNormalizer.Normalize(fileVersion);
 
         root.AddFirst(fileVersion);
         return true;
@@ -408,7 +408,7 @@ internal static class XlsxWorkbookMetadataWriter
             protection.SetAttributeValue("workbookPassword", ProtectionPasswordHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
         }
 
-        XlsxWorkbookProtectionNormalizer.NormalizeElement(protection);
+        XlsxWorkbookLeafElementNormalizer.Normalize(protection);
 
         InsertWorkbookProtectionInOrder(root, protection);
 
@@ -505,7 +505,7 @@ internal static class XlsxWorkbookMetadataWriter
         // so — mirroring the fullCalcOnLoad pattern — only write it when the workbook deviates
         // from that default (precision-as-displayed, fullPrecision="0").
         calcPr.SetAttributeValue("fullPrecision", workbook.FullPrecision ? null : "0");
-        XlsxWorkbookCalculationPropertyNormalizer.NormalizeElement(calcPr);
+        XlsxWorkbookLeafElementNormalizer.Normalize(calcPr);
 
         return true;
 

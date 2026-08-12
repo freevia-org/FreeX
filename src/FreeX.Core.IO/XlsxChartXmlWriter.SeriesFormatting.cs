@@ -316,7 +316,7 @@ internal static partial class XlsxChartXmlWriter
 
         return new XElement(chartNs + "spPr",
             new XElement(drawingNs + "ln",
-                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.TrendlineThickness, 0.5, 10) * DrawingMlUnits.EmuPerPoint))),
+                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.TrendlineThickness, 0.5, 10) * DrawingMlCoordinateUnits.EmuPerPoint))),
                 fill,
                 ToPresetDash(chart.TrendlineDashStyle, drawingNs)));
     }
@@ -419,7 +419,7 @@ internal static partial class XlsxChartXmlWriter
 
         return new XElement(chartNs + "spPr",
             new XElement(drawingNs + "ln",
-                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.ErrorBarThickness, 0.5, 10) * DrawingMlUnits.EmuPerPoint))),
+                new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(chart.ErrorBarThickness, 0.5, 10) * DrawingMlCoordinateUnits.EmuPerPoint))),
                 fill,
                 ToPresetDash(chart.ErrorBarDashStyle, drawingNs)));
     }

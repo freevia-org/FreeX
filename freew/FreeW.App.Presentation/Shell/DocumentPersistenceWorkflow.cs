@@ -182,11 +182,11 @@ public sealed class DocumentPersistenceWorkflow
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
-        using var temporaryFile = ExportAtomicWriter.CreateTempLease(target.Path);
+        using var temporaryFile = AtomicFileWriter.CreateTempLease(target.Path);
         using (var stream = temporaryFile.OpenWrite())
             target.Adapter.Save(document, stream);
 
-        ExportAtomicWriter.ReplaceTarget(temporaryFile.Path, target.Path);
+        AtomicFileWriter.ReplaceTarget(temporaryFile.Path, target.Path);
         temporaryFile.Commit();
     }
 

@@ -54,62 +54,6 @@ public sealed class FloatingObjectTests
         p.IsFloating.Should().BeTrue();
     }
 
-    private static (TextDocument doc, int bi, int ri) DocWithShape()
-    {
-        var doc = new TextDocument();
-        var para = new Paragraph();
-        para.Runs.Add(Run.FromShape(new Shape(ShapeKind.Ellipse, 72, 36)));
-        doc.Blocks.Add(para);
-        return (doc, 0, 0);
-    }
-
-    private static (TextDocument doc, int bi, int ri) DocWithChart()
-    {
-        var doc = new TextDocument();
-        var para = new Paragraph();
-        para.Runs.Add(new Run(string.Empty) { Chart = new Chart { Kind = ChartKind.Line } });
-        doc.Blocks.Add(para);
-        return (doc, 0, 0);
-    }
-
-    [Fact]
-    public void ToggleWrapping_Shape_SetsFloating()
-    {
-        var (doc, bi, ri) = DocWithShape();
-        var cmd = new ToggleObjectWrappingCommand(bi, ri, ImageWrapping.Square);
-        cmd.Apply(new SimpleCommandContext(doc));
-
-        var shape = ((Paragraph)doc.Blocks[0]).Runs[ri].Shape!;
-        shape.IsFloating.Should().BeTrue();
-        shape.Placement!.Wrapping.Should().Be(ImageWrapping.Square);
-    }
-
-    [Fact]
-    public void ToggleWrapping_Shape_Reverts()
-    {
-        var (doc, bi, ri) = DocWithShape();
-        var ctx = new SimpleCommandContext(doc);
-        var cmd = new ToggleObjectWrappingCommand(bi, ri, ImageWrapping.Square);
-        cmd.Apply(ctx);
-        cmd.Revert(ctx);
-
-        var shape = ((Paragraph)doc.Blocks[0]).Runs[ri].Shape!;
-        shape.IsFloating.Should().BeFalse();
-        shape.Placement!.Wrapping.Should().Be(ImageWrapping.Inline);
-    }
-
-    [Fact]
-    public void ToggleWrapping_Chart_SetsFloating()
-    {
-        var (doc, bi, ri) = DocWithChart();
-        var cmd = new ToggleObjectWrappingCommand(bi, ri, ImageWrapping.InFront);
-        cmd.Apply(new SimpleCommandContext(doc));
-
-        var chart = ((Paragraph)doc.Blocks[0]).Runs[ri].Chart!;
-        chart.IsFloating.Should().BeTrue();
-        chart.Placement!.Wrapping.Should().Be(ImageWrapping.InFront);
-    }
-
     [Fact]
     public void ChangeZOrder_GeneralizedToShape()
     {

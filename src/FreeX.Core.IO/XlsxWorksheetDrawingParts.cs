@@ -1543,7 +1543,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
 
         var scaleX = effectiveGroupTransform.ScaleX;
         var scaleY = effectiveGroupTransform.ScaleY;
-        return (DrawingMlUnits.EmuToPixels(cxEmu * scaleX), DrawingMlUnits.EmuToPixels(cyEmu * scaleY));
+        return (DrawingMlCoordinateUnits.EmuToPixels(cxEmu * scaleX), DrawingMlCoordinateUnits.EmuToPixels(cyEmu * scaleY));
     }
 
     /// <summary>
@@ -1886,8 +1886,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var absoluteOffXEmu = groupTransform.MatrixA * localOffXEmu + groupTransform.MatrixB * localOffYEmu + groupTransform.OffsetXEmu;
         var absoluteOffYEmu = groupTransform.MatrixC * localOffXEmu + groupTransform.MatrixD * localOffYEmu + groupTransform.OffsetYEmu;
 
-        var deltaXPixels = DrawingMlUnits.EmuToPixels(absoluteOffXEmu);
-        var deltaYPixels = DrawingMlUnits.EmuToPixels(absoluteOffYEmu);
+        var deltaXPixels = DrawingMlCoordinateUnits.EmuToPixels(absoluteOffXEmu);
+        var deltaYPixels = DrawingMlCoordinateUnits.EmuToPixels(absoluteOffYEmu);
 
         return anchor with
         {
@@ -1910,7 +1910,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var wValue = lnElement?.Attribute("w")?.Value;
         if (!double.TryParse(wValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var emu) || emu <= 0)
             return 0;
-        return emu / DrawingMlUnits.EmuPerPoint;
+        return emu / DrawingMlCoordinateUnits.EmuPerPoint;
     }
 
     /// <summary>
