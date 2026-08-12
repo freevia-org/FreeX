@@ -664,18 +664,21 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
-    public void ParityCaptureContext_IgnoresNormalContextRefreshUntilCleared()
+    public void ParityCaptureToolContextOverride_IgnoresNormalContextRefreshUntilCleared()
     {
         var source = new AvaloniaRibbonContextSource();
 
+        source.OnTableActive(true);
         source.SetParityCaptureContext("pivot.active");
-        source.OnPivotActive(false);
+        source.OnTableActive(false);
 
         Assert.True(source.Current.IsActive("pivot.active"));
+        Assert.False(source.Current.IsActive(DrawingObjectContextualRibbonPlanner.TableContextKey));
 
         source.SetParityCaptureContext(null);
 
         Assert.False(source.Current.IsActive("pivot.active"));
+        Assert.True(source.Current.IsActive(DrawingObjectContextualRibbonPlanner.TableContextKey));
     }
 
     [Fact]

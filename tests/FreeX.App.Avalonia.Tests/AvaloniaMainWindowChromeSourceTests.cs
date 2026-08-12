@@ -511,6 +511,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     public void ParityCapture_UsesSameResolutionAndDoesNotMislabelBackstageDialogs()
     {
         var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var captureContextSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "RibbonContextSource.ParityCapture.cs"));
+        var rendererContextSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "RibbonContextSource.cs"));
         var hostCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
         var runnerSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCompare", "CaptureRunner.cs"));
 
@@ -560,6 +562,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         captureSource.Should().Contain("CreateParityCapturedStatusBarFooter()");
         captureSource.Should().Contain("_ribbonContextSource.SetParityCaptureContext(null);");
         captureSource.Should().Contain("_ribbonContextSource.SetParityCaptureContext(activationKey);");
+        captureContextSource.Should().Contain("internal void SetParityCaptureContext(string? activationKey)");
+        captureContextSource.Should().Contain("private string? _parityCaptureActivationKey;");
+        rendererContextSource.Should().NotContain("ParityCapture");
+        rendererContextSource.Should().NotContain("_parityCaptureActivationKey");
+        rendererContextSource.Should().Contain("partial void ConfigureOptionalContextMutation(ref bool suppress);");
+        rendererContextSource.Should().Contain("partial void ApplyOptionalContextOverride(ref RibbonContextState state);");
         captureSource.Should().Contain("LayoutWindow();");
         captureSource.Should().NotContain("ShowBackstageInfoDialogAsync()");
         captureSource.Should().NotContain("ShowBackstageExportDialogAsync()");
