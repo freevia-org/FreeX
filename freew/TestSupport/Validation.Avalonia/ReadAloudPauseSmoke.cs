@@ -1,8 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Free.Shared.AppServices;
+using FreeW.App.Avalonia;
 
-namespace FreeW.App.Avalonia.Smoke;
+namespace FreeW.Validation.Avalonia;
 
 /// <summary>
 /// Headless Linux validation for the production command-line speech adapter. It synthesizes to a WAV file,
@@ -10,11 +11,11 @@ namespace FreeW.App.Avalonia.Smoke;
 /// </summary>
 internal static class ReadAloudPauseSmoke
 {
-    private const string Option = "--read-aloud-pause-smoke";
+    public const string Argument = "--read-aloud-pause-smoke";
 
     public static bool TryRun(IReadOnlyList<string> args, TextWriter output, TextWriter error, out int exitCode)
     {
-        if (!args.Contains(Option, StringComparer.Ordinal))
+        if (!args.Contains(Argument, StringComparer.Ordinal))
         {
             exitCode = 0;
             return false;

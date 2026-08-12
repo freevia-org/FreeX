@@ -1,4 +1,4 @@
-using FreeW.App.Avalonia.Smoke;
+using FreeW.Validation.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
 

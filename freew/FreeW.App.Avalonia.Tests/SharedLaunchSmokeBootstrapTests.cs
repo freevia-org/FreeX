@@ -23,9 +23,16 @@ public sealed class SharedLaunchSmokeBootstrapTests
         var smoke = File.ReadAllText(Path.Combine(
             root,
             "freew",
-            "FreeW.App.Avalonia",
-            "Smoke",
+            "TestSupport",
+            "Validation.Avalonia",
             "LaunchSmoke.cs"));
+        var program = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Program.cs"));
+        var validationProgram = File.ReadAllText(Path.Combine(
+            root,
+            "freew",
+            "TestSupport",
+            "Validation.Avalonia",
+            "Program.cs"));
 
         app.Should().Contain("FreeWApplicationStartup.Theme.Apply(");
         app.Should().Contain("AvaloniaThemeApplier.BuildResources(theme, resourceKeyPrefix)");
@@ -34,8 +41,11 @@ public sealed class SharedLaunchSmokeBootstrapTests
         app.Should().NotContain("Styles.Add(new FluentTheme())");
         app.Should().NotContain("desktop.MainWindow = mainWindow;");
 
-        smoke.Should().Contain("global using LaunchSmokeOptions = Free.Shared.Shell.Avalonia.SisterAppLaunchSmokeOptions;");
-        smoke.Should().Contain("SisterAppLaunchSmokeCoordinator.Start(");
+        app.Should().NotContain("LaunchSmokeOptions");
+        program.Should().NotContain("--launch-smoke");
+        validationProgram.Should().Contain("SisterAppLaunchSmokeOptions.TryParse(");
+        validationProgram.Should().Contain("FreeW.App.Avalonia.Program.RunToolHost(");
+        smoke.Should().Contain("access.StartLaunchSmoke(");
         smoke.Should().Contain("new SisterAppLaunchSmokeReport(snapshot.IsPassed, snapshot.ToReport())");
     }
 

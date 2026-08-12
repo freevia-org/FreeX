@@ -1,5 +1,6 @@
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia;
 
@@ -18,6 +19,28 @@ public sealed partial class MainWindow
             ArgumentNullException.ThrowIfNull(operation);
             _owner.Opened += async (_, _) => await operation();
         }
+
+        internal void StartLaunchSmoke(
+            SisterAppLaunchSmokeOptions options,
+            Func<ValidationAccessAdapter, SisterAppLaunchSmokeReport> capture)
+        {
+            ArgumentNullException.ThrowIfNull(options);
+            ArgumentNullException.ThrowIfNull(capture);
+            SisterAppLaunchSmokeCoordinator.Start(
+                _owner,
+                options,
+                _ => capture(this));
+        }
+
+        internal bool IsWindowVisible => _owner.IsVisible;
+
+        internal bool HasToolbar => _owner.HasToolbar;
+
+        internal int BlockCount => _owner.Editor.BlockCount;
+
+        internal int ParagraphCount => _owner.Editor.ParagraphCount;
+
+        internal int PlacedGlyphCount => _owner.Editor.PlacedGlyphCount;
 
         internal void InsertTable(int rows, int columns) => _owner._editor.InsertTable(rows, columns);
 

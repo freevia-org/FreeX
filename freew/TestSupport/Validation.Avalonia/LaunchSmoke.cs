@@ -1,8 +1,7 @@
-global using LaunchSmokeOptions = Free.Shared.Shell.Avalonia.SisterAppLaunchSmokeOptions;
-
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Avalonia;
 
-namespace FreeW.App.Avalonia.Smoke;
+namespace FreeW.Validation.Avalonia;
 
 internal sealed record LaunchSmokeSnapshot(
     bool WindowShown,
@@ -24,25 +23,26 @@ internal sealed record LaunchSmokeSnapshot(
 
 internal static class LaunchSmokeCoordinator
 {
-    public static void Start(MainWindow window, LaunchSmokeOptions options)
+    public static void Start(
+        MainWindow.ValidationAccessAdapter access,
+        SisterAppLaunchSmokeOptions options)
     {
-        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(access);
         ArgumentNullException.ThrowIfNull(options);
 
-        SisterAppLaunchSmokeCoordinator.Start(
-            window,
+        access.StartLaunchSmoke(
             options,
-            mainWindow =>
+            current =>
             {
-                var snapshot = Capture(mainWindow);
+                var snapshot = Capture(current);
                 return new SisterAppLaunchSmokeReport(snapshot.IsPassed, snapshot.ToReport());
             });
     }
 
-    private static LaunchSmokeSnapshot Capture(MainWindow window) => new(
-        WindowShown: window.IsVisible,
-        HasToolbar: window.HasToolbar,
-        BlockCount: window.Editor.BlockCount,
-        ParagraphCount: window.Editor.ParagraphCount,
-        PlacedGlyphCount: window.Editor.PlacedGlyphCount);
+    private static LaunchSmokeSnapshot Capture(MainWindow.ValidationAccessAdapter access) => new(
+        access.IsWindowVisible,
+        access.HasToolbar,
+        access.BlockCount,
+        access.ParagraphCount,
+        access.PlacedGlyphCount);
 }

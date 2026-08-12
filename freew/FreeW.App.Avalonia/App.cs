@@ -3,7 +3,6 @@ using Free.Shared.AppServices;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using Free.Shared.Shell.Avalonia;
-using FreeW.App.Avalonia.Smoke;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 
@@ -12,7 +11,6 @@ namespace FreeW.App.Avalonia;
 public sealed class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
-    internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
     internal static Action<MainWindow>? ExternalStartupCoordinator { get; set; }
     internal static Theme ActiveTheme { get; private set; } = FreeWApplicationStartup.Theme.DefaultTheme;
 
@@ -44,10 +42,7 @@ public sealed class App : Application
                     if (ExternalStartupCoordinator is { } externalStartupCoordinator)
                     {
                         externalStartupCoordinator(mainWindow);
-                        return;
                     }
-                    if (LaunchSmokeOptions is { } options)
-                        LaunchSmokeCoordinator.Start(mainWindow, options);
                 }));
 
         base.OnFrameworkInitializationCompleted();

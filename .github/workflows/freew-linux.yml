@@ -109,6 +109,7 @@ jobs:
           smoke_log="$artifact_root/freew-$runtime-linux-packaging-smoke.log"
           launch_smoke_report="$artifact_root/freew-$runtime-linux-launch-smoke.txt"
           published="$RUNNER_TEMP/freew-$runtime-publish"
+          validation_published="$RUNNER_TEMP/freew-$runtime-validation-publish"
           dist="$artifact_root"
 
           mkdir -p "$published" "$artifact_root"
@@ -127,6 +128,14 @@ jobs:
             --self-contained true \
             -p:UseAppHost=true \
             --output "$published"
+
+          dotnet publish freew/TestSupport/Validation.Avalonia/FreeW.Validation.Avalonia.csproj \
+            --configuration Release \
+            --framework net10.0 \
+            --runtime "$runtime" \
+            --self-contained true \
+            -p:UseAppHost=true \
+            --output "$validation_published"
 
           test -x "$published/FreeW"
           test -f "$published/FreeW.dll"
@@ -194,14 +203,14 @@ jobs:
           echo "appimage_status=$appimage_status" >> "$evidence_path"
 
           # Headless packaging smoke (no display).
-          "$published/FreeW" --packaging-smoke | tee "$smoke_log"
+          "$validation_published/FreeW.Validation.Avalonia" --packaging-smoke | tee "$smoke_log"
           grep -q "freew_packaging_smoke=passed" "$smoke_log"
           grep -q "text_preserved=true" "$smoke_log"
           grep -q "blocks_preserved=true" "$smoke_log"
           echo "packaging_smoke_status=passed" >> "$evidence_path"
 
           # GUI launch smoke under a virtual X server (software rendering).
-          xvfb-run -a "$published/FreeW" --launch-smoke "$launch_smoke_report"
+          xvfb-run -a "$validation_published/FreeW.Validation.Avalonia" --launch-smoke "$launch_smoke_report"
           grep -q "freew_launch_smoke=passed" "$launch_smoke_report"
           grep -q "window_shown=true" "$launch_smoke_report"
           grep -q "has_toolbar=true" "$launch_smoke_report"

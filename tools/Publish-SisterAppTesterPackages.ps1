@@ -71,8 +71,10 @@ $config = switch ($App) {
         @{
             WpfProject = "freew\FreeW.App.Host\FreeW.App.Host.csproj"
             AvaloniaProject = "freew\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj"
+            AvaloniaValidationProject = "freew\TestSupport\Validation.Avalonia\FreeW.Validation.Avalonia.csproj"
             WpfHost = "FreeW.App.Host"
             AvaloniaHost = "FreeW"
+            AvaloniaValidationHost = "FreeW.Validation.Avalonia"
         }
     }
     "FreeP" {
@@ -186,12 +188,38 @@ foreach ($runtime in $Runtimes) {
         $smokeRan = $true
         $smokeArguments = @("--packaging-smoke")
         $smokeReportPath = $null
+        $smokeExecutable = $expectedExe
+        if ($App -eq "FreeW") {
+            $validationPublishDir = Join-Path $OutputDir "validation\$App-$runtime"
+            if (Test-Path -LiteralPath $validationPublishDir) {
+                Remove-Item -LiteralPath $validationPublishDir -Recurse -Force
+            }
+            New-Item -ItemType Directory -Force -Path $validationPublishDir | Out-Null
+            $validationProject = Join-Path $repoRoot $config.AvaloniaValidationProject
+            & dotnet publish $validationProject `
+                --configuration $Configuration `
+                --framework net10.0 `
+                --runtime $runtime `
+                --self-contained true `
+                -p:UseAppHost=true `
+                -p:PublishSingleFile=false `
+                -p:Version=$Version `
+                -p:InformationalVersion=$Version+$shortSha `
+                --output $validationPublishDir
+            if ($LASTEXITCODE -ne 0) {
+                throw "dotnet publish failed for $App $runtime validation host with exit code $LASTEXITCODE."
+            }
+            $smokeExecutable = Join-Path $validationPublishDir $config.AvaloniaValidationHost
+            if (-not (Test-Path -LiteralPath $smokeExecutable)) {
+                throw "Validation publish output missing expected apphost '$smokeExecutable'."
+            }
+        }
         if ($App -eq "FreeP") {
             $smokeReportPath = Join-Path $OutputDir "$App-$runtime-packaging-smoke.txt"
             $smokeArguments += $smokeReportPath
         }
 
-        & $expectedExe @smokeArguments
+        & $smokeExecutable @smokeArguments
         if ($LASTEXITCODE -ne 0) {
             throw "$App $runtime packaging smoke failed with exit code $LASTEXITCODE."
         }

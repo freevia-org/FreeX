@@ -1,8 +1,9 @@
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Free.Shared.AppServices;
+using FreeW.App.Avalonia;
 
-namespace FreeW.App.Avalonia.Smoke;
+namespace FreeW.Validation.Avalonia;
 
 /// <summary>
 /// Headless engine smoke (no display) for the Linux packaging lane: builds a document, edits it,

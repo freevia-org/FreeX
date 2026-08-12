@@ -95,22 +95,21 @@ public sealed class FreeWApplicationStartupTests : IDisposable
     }
 
     [Fact]
-    public void AvaloniaProgram_PreservesSmokeOrderingFailureMessageAndPlatformActivation()
+    public void AvaloniaProgram_LeavesValidationCommandsOutsideShippingAndPreservesPlatformActivation()
     {
         var source = ReadSource("freew", "FreeW.App.Avalonia", "Program.cs");
+        var validation = ReadSource("freew", "TestSupport", "Validation.Avalonia", "Program.cs");
 
-        SourceIndex(source, "PackagingSmoke.TryRun")
-            .Should().BeLessThan(SourceIndex(source, "ReadAloudPauseSmoke.TryRun"));
-        SourceIndex(source, "ReadAloudPauseSmoke.TryRun")
-            .Should().BeLessThan(SourceIndex(source, "LaunchSmokeOptions.TryParse"));
-        SourceIndex(source, "LaunchSmokeOptions.TryParse")
-            .Should().BeLessThan(SourceIndex(source, "App.StartupArguments = startupArguments"));
-        SourceIndex(source, "App.StartupArguments = startupArguments")
-            .Should().BeLessThan(SourceIndex(source, "SisterAvaloniaLaunchPreparation.Continue(startupArguments)"));
+        source.Should().NotContain("PackagingSmoke.TryRun");
+        source.Should().NotContain("ReadAloudPauseSmoke.TryRun");
+        source.Should().NotContain("SisterAppLaunchSmokeOptions.TryParse");
+        SourceIndex(source, "App.StartupArguments = args")
+            .Should().BeLessThan(SourceIndex(source, "SisterAvaloniaLaunchPreparation.Continue(args)"));
         source.Should().Contain("SisterAvaloniaProgramRunner.Run(");
         source.Should().Contain("FreeWApplicationStartup.ProductIdentity");
-        source.Should().Contain("Console.Error.WriteLine(error);");
-        source.Should().Contain("SisterAvaloniaLaunchPreparation.Exit(1)");
+        validation.Should().Contain("PackagingSmoke.TryRun");
+        validation.Should().Contain("ReadAloudPauseSmoke.TryRun");
+        validation.Should().Contain("SisterAppLaunchSmokeOptions.TryParse");
     }
 
     private string WriteText(string fileName, string text)
