@@ -220,7 +220,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private const uint PortablePdfRowsPerPage = 28;
     private const string WorkbookShareSheetLabel = "macOS Share Sheet";
     private const string NativeWorkbookExtension = ".fxl";
-    private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush TitleBarSurface =
         AvaloniaThemeResourceResolver.Find<IBrush>(ThemeResources.TitleBarBrush) ?? Brush(23, 50, 77);
@@ -1599,8 +1598,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private Control BuildWorksheetViewportChrome()
     {
         _sheetGridHost.Focusable = true;
-        AutomationProperties.SetName(_sheetGridHost, "Worksheet");
-        AutomationProperties.SetHelpText(_sheetGridHost, "Shows the active workbook sheet.");
+        AutomationProperties.SetName(_sheetGridHost, UiText.Get("MainWindow_AutomationName_Worksheet"));
+        AutomationProperties.SetHelpText(
+            _sheetGridHost,
+            UiText.Get("MainWindow_AutomationHelpText_SpreadsheetGridUseArrowKeysToNavigateCellsF2ToEditAndTabEnterToMoveFocus"));
         _sheetGridHost.PointerMoved += SheetGridHost_PointerMoved;
         _sheetGridHost.PointerExited += (_, _) => _sheetGridHost.Cursor = Cursor.Default;
         AttachSplitPanePointerHandlers();
@@ -1658,8 +1659,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _newSheetButton.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center;
         _newSheetButton.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
         _newSheetButton.Click += (_, _) => AddNewSheet();
-        AutomationProperties.SetName(_newSheetButton, "New Sheet");
-        AutomationProperties.SetHelpText(_newSheetButton, "Adds a worksheet to the current workbook.");
+        AutomationProperties.SetName(_newSheetButton, UiText.Get("AvaloniaNativeMenu_NewSheet"));
+        AutomationProperties.SetHelpText(
+            _newSheetButton,
+            UiText.Get("MainWindow_AutomationHelpText_AddANewSheetToTheWorkbook"));
         _sheetTabsHost.Content = BuildSheetTabs();
 
         _horizontalWorksheetScrollBar.Orientation = Orientation.Horizontal;
@@ -1686,7 +1689,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetAutomationId(
             _updateReadyIndicator,
             FreeXAutomationIdCatalog.RibbonShellUpdateReadyIndicator);
-        AutomationProperties.SetName(_updateReadyIndicator, "Update ready");
+        AutomationProperties.SetName(_updateReadyIndicator, UiText.Get("MainWindow_AutomationName_UpdateReady"));
         AutomationProperties.SetHelpText(
             _updateReadyIndicator,
             "A new version of FreeX has been downloaded. Click to restart and update.");
@@ -4356,7 +4359,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             button.KeyDown += (_, args) => HandleSheetTabKeyDown(tab.Id, button, args);
             button.Click += (_, _) => CompleteSheetTabClick(tab.Id);
             AutomationProperties.SetName(button, tab.Name);
-            AutomationProperties.SetHelpText(button, SheetTabContextHelpText);
+            AutomationProperties.SetHelpText(button, UiText.Get("SheetTabs_ContextHelpText"));
             panel.Children.Add(button);
         }
 
@@ -4384,25 +4387,39 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private IEnumerable<Control> CreateSheetTabContextMenuItems(WorkbookSheetTab tab, bool isIdle, int sheetTabIndex)
     {
-        yield return CreateSheetTabContextMenuItem(tab, "Rename...", async () => await RenameActiveSheetAsync(), isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, "Insert Sheet", AddNewSheet, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, "Duplicate", DuplicateActiveSheet, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MoveCopySheet_MenuItem"), ShowMoveOrCopySheetDialog, isIdle);
-        yield return CreateSheetTabContextMenuItem(tab, "Delete Sheet", DeleteActiveSheet, isIdle);
+        var commonCommands = SheetTabContextMenuPlanner.BuildSheetTabCommands(
+                new SheetTabContextMenuState(
+                    CanDeleteSheet: _session.SheetTabs.Count > 1,
+                    CanHideSheet: _session.SheetTabs.Count > 1,
+                    CanUnhideSheet: _session.HiddenSheets.Count > 0,
+                    CanSelectAllSheets: _session.SheetTabs.Count > 1,
+                    CanUngroupSheets: _session.IsWorkbookGrouped))
+            .Where(command => !command.IsSeparator)
+            .ToDictionary(command => command.Action);
+
+        SheetTabContextMenuCommand Common(SheetTabContextMenuAction action) => commonCommands[action];
+        string Header(SheetTabContextMenuAction action) => UiText.Get(Common(action).ResourceKey);
+        bool Enabled(SheetTabContextMenuAction action) => isIdle && Common(action).IsEnabled;
+
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Rename), async () => await RenameActiveSheetAsync(), Enabled(SheetTabContextMenuAction.Rename));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.InsertSheet), AddNewSheet, Enabled(SheetTabContextMenuAction.InsertSheet));
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_Duplicate"), DuplicateActiveSheet, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.MoveOrCopy), ShowMoveOrCopySheetDialog, Enabled(SheetTabContextMenuAction.MoveOrCopy));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.DeleteSheet), DeleteActiveSheet, Enabled(SheetTabContextMenuAction.DeleteSheet));
         yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, "Hide", HideActiveSheet, isIdle && _session.SheetTabs.Count > 1);
-        yield return CreateSheetTabContextMenuItem(tab, "Unhide...", async () => await UnhideSheetAsync(), isIdle && _session.HiddenSheets.Count > 0);
-        yield return CreateSheetTabColorContextMenuItem(tab, isIdle);
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Hide), HideActiveSheet, Enabled(SheetTabContextMenuAction.Hide));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.Unhide), async () => await UnhideSheetAsync(), Enabled(SheetTabContextMenuAction.Unhide));
+        yield return CreateSheetTabColorContextMenuItem(tab, Header(SheetTabContextMenuAction.TabColor), Enabled(SheetTabContextMenuAction.TabColor));
         yield return new Separator();
         yield return CreateSheetTabContextMenuItem(tab, UiText.Get("OutlineSettings_MenuItem"), ShowOutlineSettingsDialog, isIdle);
         yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, "Select All Sheets", SelectAllVisibleSheets, isIdle && _session.SheetTabs.Count > 1);
-        yield return CreateSheetTabContextMenuItem(tab, "Ungroup Sheets", UngroupSheets, isIdle && _session.IsWorkbookGrouped);
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.SelectAllSheets), SelectAllVisibleSheets, Enabled(SheetTabContextMenuAction.SelectAllSheets));
+        yield return CreateSheetTabContextMenuItem(tab, Header(SheetTabContextMenuAction.UngroupSheets), UngroupSheets, Enabled(SheetTabContextMenuAction.UngroupSheets));
         yield return new Separator();
-        yield return CreateSheetTabContextMenuItem(tab, "Move Left", MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
+        yield return CreateSheetTabContextMenuItem(tab, UiText.Get("MainWindow_Header_MoveLeft"), MoveActiveSheetLeft, isIdle && sheetTabIndex > 0);
         yield return CreateSheetTabContextMenuItem(
             tab,
-            "Move Right",
+            UiText.Get("MainWindow_Header_MoveRight"),
             MoveActiveSheetRight,
             isIdle && sheetTabIndex >= 0 && sheetTabIndex < _session.SheetTabs.Count - 1);
     }
@@ -4441,11 +4458,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return menuItem;
     }
 
-    private MenuItem CreateSheetTabColorContextMenuItem(WorkbookSheetTab tab, bool isEnabled)
+    private MenuItem CreateSheetTabColorContextMenuItem(WorkbookSheetTab tab, string header, bool isEnabled)
     {
         var menuItem = new MenuItem
         {
-            Header = UiText.Get("RibbonWire_TabColorTitle"),
+            Header = header,
             IsEnabled = isEnabled,
             ItemsSource = CreateSheetTabColorContextMenuItems(tab).ToArray(),
         };
@@ -5214,7 +5231,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Child = panel,
         };
         AutomationProperties.SetAutomationId(border, "WorksheetDvInputMessagePopup");
-        AutomationProperties.SetName(border, "Data validation input message");
+        AutomationProperties.SetName(border, UiText.Get("DataValidation_InputMessage"));
 
         Canvas.SetLeft(border, left);
         Canvas.SetTop(border, top);
@@ -5237,10 +5254,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Cursor = new Cursor(StandardCursorType.Hand)
         };
 
-        ToolTip.SetTip(dropdown, "Pick from list");
+        ToolTip.SetTip(dropdown, UiText.Get("DataValidation_SelectAValueFromList"));
         AutomationProperties.SetAutomationId(dropdown, "WorksheetDataValidationDropdown");
-        AutomationProperties.SetName(dropdown, "Data validation list");
-        AutomationProperties.SetHelpText(dropdown, "Pick a permitted value for the active cell.");
+        AutomationProperties.SetName(dropdown, UiText.Get("DataValidation_List"));
+        AutomationProperties.SetHelpText(dropdown, UiText.Get("DataValidation_SelectAValueFromList"));
         dropdown.SelectionChanged += DataValidationDropdown_SelectionChanged;
         return dropdown;
     }
@@ -7961,7 +7978,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var dialog = new Window
         {
-            Title = "Confirm",
+            Title = UiText.Get("Common_ConfirmTitle"),
             Width = 420,
             Height = 180,
             MinWidth = 380,
@@ -7978,11 +7995,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var yesButton = new Button { Content = UiText.Get("ManageConditionalFormats_Yes"), MinWidth = 92, Padding = new Thickness(10, 4), IsDefault = true };
         AutomationProperties.SetAutomationId(yesButton, "SelectionMoveOverwriteYesButton");
-        AutomationProperties.SetName(yesButton, "Yes");
+        AutomationProperties.SetName(yesButton, UiText.Get("ManageConditionalFormats_Yes"));
 
-        var noButton = new Button { Content = "No", MinWidth = 92, Padding = new Thickness(10, 4), IsCancel = true };
+        var noButton = new Button { Content = UiText.Get("SelectionMoveOverwrite_No"), MinWidth = 92, Padding = new Thickness(10, 4), IsCancel = true };
         AutomationProperties.SetAutomationId(noButton, "SelectionMoveOverwriteNoButton");
-        AutomationProperties.SetName(noButton, "No");
+        AutomationProperties.SetName(noButton, UiText.Get("SelectionMoveOverwrite_No"));
 
         var confirmed = false;
         void Finish(bool value)
@@ -12356,7 +12373,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        RefreshShell("Selected all visible sheets");
+        RefreshShell(UiText.Get("SheetTabs_SelectedAllVisibleStatus"));
     }
 
     private void UngroupSheets()
@@ -15003,13 +15020,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var screenTipButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTip")) };
         ApplyDialogButtonChrome(screenTipButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
-        AutomationProperties.SetName(screenTipButton, "ScreenTip");
+        AutomationProperties.SetName(screenTipButton, UiText.CreateAutomationName(UiText.Get("Hyperlink_ScreenTip")));
         AutomationProperties.SetAutomationId(screenTipButton, "HyperlinkScreenTipButton");
         AutomationProperties.SetHelpText(screenTipButton, "Set the ScreenTip text shown when hovering the hyperlink.");
 
         var bookmarkButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_Bookmark")) };
         ApplyDialogButtonChrome(bookmarkButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
-        AutomationProperties.SetName(bookmarkButton, "Bookmark");
+        AutomationProperties.SetName(bookmarkButton, UiText.CreateAutomationName(UiText.Get("Hyperlink_Bookmark")));
         AutomationProperties.SetAutomationId(bookmarkButton, "HyperlinkBookmarkButton");
         AutomationProperties.SetHelpText(bookmarkButton, "Choose a bookmark or cell reference within the destination.");
 
@@ -15423,11 +15440,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(6, 4),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Top,
         };
-        AutomationProperties.SetName(statisticsBlock, "Workbook Statistics");
+        AutomationProperties.SetName(statisticsBlock, UiText.Get("WorkbookStatistics_WorkbookStatistics"));
         AutomationProperties.SetAutomationId(
             statisticsBlock,
             FreeXAutomationIdCatalog.WorkbookStatisticsSummary);
-        AutomationProperties.SetHelpText(statisticsBlock, "Summarizes sheet, cell, formula, comment, and object counts for the workbook.");
+        AutomationProperties.SetHelpText(
+            statisticsBlock,
+            UiText.Get("WorkbookStatistics_SummarizesSheetCellFormulaCommentAndObjectCountsForTheWorkbook"));
 
         var buttonRow = new StackPanel
         {

@@ -20136,4 +20136,16 @@ and {0} more.</value>
   <data name="MainLoc_FormatPainterFailed" xml:space="preserve">
     <value>Format Painter failed.</value>
   </data>
+  <data name="SelectionMoveOverwrite_No" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="DataValidation_SelectAValueFromList" xml:space="preserve">
+    <value>Pick a permitted value for the active cell.</value>
+  </data>
+  <data name="SheetTabs_ContextHelpText" xml:space="preserve">
+    <value>Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.</value>
+  </data>
+  <data name="SheetTabs_SelectedAllVisibleStatus" xml:space="preserve">
+    <value>Selected all visible sheets</value>
+  </data>
 </root>
