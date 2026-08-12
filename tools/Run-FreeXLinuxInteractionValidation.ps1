@@ -636,7 +636,9 @@ function Start-ValidationSession {
         [string[]]$AppArgument = @(),
         [string]$DocumentPath = "",
         [string]$MemoryLimit = "",
-        [switch]$ReusePublishedPayload
+        [switch]$ReusePublishedPayload,
+        [ValidateSet("Application", "Validation", "TestSupport")]
+        [string]$HostMode = "Application"
     )
 
     $metadataPath = Join-Path $sessionBindingDirectory ("session-$([guid]::NewGuid().ToString('N')).json")
@@ -647,6 +649,7 @@ function Start-ValidationSession {
         Replace = $true
         SessionMetadataPath = $metadataPath
         AppArgument = $AppArgument
+        HostMode = $HostMode
     }
     if (-not [string]::IsNullOrWhiteSpace($DocumentPath)) {
         $startArguments.DocumentPath = $DocumentPath
@@ -1252,8 +1255,10 @@ try {
         } elseif ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
             $x11AppArguments += "--freex-name-box-dropdown-parity-physical"
         }
-        $x11Session = Start-ValidationSession -AppArgument $x11AppArguments -DocumentPath $PhysicalDocumentPath
-        Ensure-ReportProvenance
+        $x11Session = Start-ValidationSession -HostMode TestSupport -AppArgument $x11AppArguments -DocumentPath $PhysicalDocumentPath
+        if ($PhysicalOnly) {
+            Ensure-ReportProvenance
+        }
 
         & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
         if ($LASTEXITCODE -ne 0) { throw "Could not copy X11 input probes into '$containerName'." }
@@ -1273,6 +1278,13 @@ try {
         $x11Manifest = Get-Content -LiteralPath $x11ManifestPath -Raw | ConvertFrom-Json
 
         & $harness -Action Stop -App FreeX -Port $Port
+        if (-not $PhysicalOnly) {
+            # The pivot probe uses the external test-support executable. Refresh the canonical
+            # application payload before the managed interaction batches reuse that image.
+            Start-ValidationSession -AppArgument @() | Out-Null
+            Ensure-ReportProvenance
+            & $harness -Action Stop -App FreeX -Port $Port
+        }
     }
 
     $requiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {

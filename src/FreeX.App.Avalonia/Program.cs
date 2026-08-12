@@ -36,6 +36,14 @@ internal static class Program
                 externalStartupCoordinator(window.CreateLaunchSmokeAccessAdapter(), diagnostics));
     }
 
+    internal static int RunPivotRuntimeObservationHost(
+        IReadOnlyList<string> startupArguments,
+        Action<MainWindow.PivotRuntimeObservationAccessAdapter> externalStartupCoordinator) =>
+        RunApplication(
+            startupArguments.ToArray(),
+            diagnosticsDirectory: null,
+            (window, _) => externalStartupCoordinator(window.CreatePivotRuntimeObservationAccessAdapter()));
+
     private static int RunApplication(
         string[] startupArguments,
         string? diagnosticsDirectory,

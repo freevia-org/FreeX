@@ -24,7 +24,7 @@ param(
     [ValidateSet("FreeX", "FreeW", "FreeP")]
     [string]$App = "FreeX",
 
-    [ValidateSet("Application", "Validation")]
+    [ValidateSet("Application", "Validation", "TestSupport")]
     [Alias("Host")]
     [string]$HostMode = "Application",
 
@@ -120,9 +120,22 @@ if ($HostMode -eq "Validation") {
     } else {
         throw "The Validation host is not available for $App."
     }
+} elseif ($HostMode -eq "TestSupport") {
+    if ($App -ne "FreeX") {
+        throw "The TestSupport host is currently available only for FreeX."
+    }
+    $definition = @{
+        Project = "tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj"
+        Executable = "FreeX.Validation.Avalonia"
+        WindowTitle = "FreeX"
+    }
 }
 $appKey = $App.ToLowerInvariant()
-$publishKey = if ($HostMode -eq "Validation") { "$appKey-validation" } else { $appKey }
+$publishKey = if ($HostMode -eq "Application" -or ($App -eq "FreeX" -and $HostMode -eq "TestSupport")) {
+    $appKey
+} else {
+    "$appKey-$($HostMode.ToLowerInvariant())"
+}
 $containerName = "freex-linux-interactive-$appKey-$Port"
 $appImage = "freex-linux-interactive-app-$publishKey-$workspaceKey`:current"
 $appOutputRoot = Join-Path $resolvedOutputRoot $appKey
