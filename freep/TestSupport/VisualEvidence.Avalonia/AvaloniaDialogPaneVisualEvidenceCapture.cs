@@ -56,135 +56,125 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             outputRoot,
             FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
             FreePVisualEvidenceRoutes.DialogPane);
-        outputPlan.EnsureDirectories();
-        FreePVisualEvidenceCaptureOrchestration.ResetProgress(outputPlan);
-        var captures = new List<DialogPaneVisualEvidenceCapture>();
-        var hostLimitations = new List<string>();
 
         anchor.Width = DialogPaneVisualEvidenceCatalog.LogicalShellWidth;
         anchor.Height = DialogPaneVisualEvidenceCatalog.LogicalShellHeight;
         anchor.Position = new PixelPoint(40, 40);
         anchor.Show();
 
-        var scenarios = FreePVisualEvidenceCaptureOrchestration.SelectScenarios(
+        var run = await FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
             DialogPaneVisualEvidenceCatalog.All,
             scenarioId,
-            scenario => scenario.Id);
-
-        foreach (var scenario in scenarios)
-        {
-            FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"start {scenario.Id}");
-            Window? dialog = null;
-            try
+            scenario => scenario.Id,
+            outputPlan,
+            logProgress: true,
+            async scenario =>
             {
-                var preparation = DialogPaneVisualEvidencePreparationSession.Create(scenario);
-                var access = anchor.CreateVisualCaptureAdapter();
-                var routeHost = new AvaloniaDialogPaneVisualEvidenceRouteHost(access);
-                var dialogAdapter = new AvaloniaDialogPaneVisualEvidenceAdapter(anchor);
-                var assertions = preparation.PrepareRoute(routeHost).ToList();
-                Window target = anchor;
-                if (scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog)
+                Window? dialog = null;
+                try
                 {
-                    dialog = preparation.CreateDialog(dialogAdapter, assertions);
-                    dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-                    dialog.Show(anchor);
-                    target = dialog;
+                    var preparation = DialogPaneVisualEvidencePreparationSession.Create(scenario);
+                    var access = anchor.CreateVisualCaptureAdapter();
+                    var routeHost = new AvaloniaDialogPaneVisualEvidenceRouteHost(access);
+                    var dialogAdapter = new AvaloniaDialogPaneVisualEvidenceAdapter(anchor);
+                    var assertions = preparation.PrepareRoute(routeHost).ToList();
+                    Window target = anchor;
+                    if (scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog)
+                    {
+                        dialog = preparation.CreateDialog(dialogAdapter, assertions);
+                        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                        dialog.Show(anchor);
+                        target = dialog;
+                    }
+
+                    await PumpLayout();
+                    preparation.PrepareLoadedDialogState(dialog, dialogAdapter, assertions);
+                    target.Activate();
+                    FocusFirstInputIfNeeded(target, preparation.Plan.FocusIntent);
+                    await PumpLayout();
+
+                    var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                        ? target
+                        : access.DialogMetadataRoot(scenario.RouteId);
+                    if (scenario.RouteId == "review.comments-pane")
+                    {
+                        Descendants(metadataRoot).OfType<ScrollViewer>().FirstOrDefault()?.SetCurrentValue(
+                            ScrollViewer.OffsetProperty,
+                            default(Vector));
+                        await PumpLayout();
+                    }
+
+                    var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                        outputRoot,
+                        FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+                        scenario.Id,
+                        FreePVisualEvidenceRoutes.DialogPane);
+                    var imagePath = scenarioOutput.ImagePath!;
+                    var raster = Capture(target, imagePath);
+                    var focus = DescribeFocus(target.FocusManager?.GetFocusedElement());
+                    var comparisonPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                        ? imagePath
+                        : scenarioOutput.ComparisonImagePath!;
+                    var pixelTarget = DialogPaneVisualEvidenceCatalog.PixelTargetFor(scenario);
+                    var comparisonRaster = ReferenceEquals(metadataRoot, target)
+                        ? raster
+                        : Capture(metadataRoot, comparisonPath, pixelTarget?.Width, pixelTarget?.Height);
+                    var buttons = Buttons(metadataRoot);
+                    var controls = Controls(metadataRoot);
+                    assertions.AddRange(preparation.CompleteRoute(routeHost));
+
+                    return new DialogPaneVisualEvidenceCapture(
+                        scenario.Id,
+                        scenario.RouteId,
+                        scenario.StateId,
+                        "avalonia",
+                        raster.NonBackgroundPixelCount > 0 ? "complete" : "blocked",
+                        scenarioOutput.ImageRelativePath!,
+                        target.ClientSize.Width,
+                        target.ClientSize.Height,
+                        raster.PixelWidth,
+                        raster.PixelHeight,
+                        96,
+                        96,
+                        raster.NonBackgroundPixelCount,
+                        focus.Role,
+                        focus.Label,
+                        buttons,
+                        controls,
+                        assertions,
+                        [],
+                        96,
+                        96,
+                        "logical-96-dpi",
+                        scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                            ? scenarioOutput.ImageRelativePath!
+                            : scenarioOutput.ComparisonImageRelativePath!,
+                        comparisonRaster.LogicalWidth,
+                        comparisonRaster.LogicalHeight);
                 }
-
-                await PumpLayout();
-                preparation.PrepareLoadedDialogState(dialog, dialogAdapter, assertions);
-                target.Activate();
-                FocusFirstInputIfNeeded(target, preparation.Plan.FocusIntent);
-                await PumpLayout();
-
-                var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                    ? target
-                    : access.DialogMetadataRoot(scenario.RouteId);
-                if (scenario.RouteId == "review.comments-pane")
+                finally
                 {
-                    Descendants(metadataRoot).OfType<ScrollViewer>().FirstOrDefault()?.SetCurrentValue(
-                        ScrollViewer.OffsetProperty,
-                        default(Vector));
+                    dialog?.Close();
                     await PumpLayout();
                 }
-
-                var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
-                    outputRoot,
-                    FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
-                    scenario.Id,
-                    FreePVisualEvidenceRoutes.DialogPane);
-                var imagePath = scenarioOutput.ImagePath!;
-                var raster = Capture(target, imagePath);
-                var focus = DescribeFocus(target.FocusManager?.GetFocusedElement());
-                var comparisonPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                    ? imagePath
-                    : scenarioOutput.ComparisonImagePath!;
-                var pixelTarget = DialogPaneVisualEvidenceCatalog.PixelTargetFor(scenario);
-                var comparisonRaster = ReferenceEquals(metadataRoot, target)
-                    ? raster
-                    : Capture(metadataRoot, comparisonPath, pixelTarget?.Width, pixelTarget?.Height);
-                var buttons = Buttons(metadataRoot);
-                var controls = Controls(metadataRoot);
-                assertions.AddRange(preparation.CompleteRoute(routeHost));
-
-                captures.Add(new DialogPaneVisualEvidenceCapture(
-                    scenario.Id,
-                    scenario.RouteId,
-                    scenario.StateId,
-                    "avalonia",
-                    raster.NonBackgroundPixelCount > 0 ? "complete" : "blocked",
-                    scenarioOutput.ImageRelativePath!,
-                    target.ClientSize.Width,
-                    target.ClientSize.Height,
-                    raster.PixelWidth,
-                    raster.PixelHeight,
-                    96,
-                    96,
-                    raster.NonBackgroundPixelCount,
-                    focus.Role,
-                    focus.Label,
-                    buttons,
-                    controls,
-                    assertions,
-                    [],
-                    96,
-                    96,
-                    "logical-96-dpi",
-                    scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                        ? scenarioOutput.ImageRelativePath!
-                        : scenarioOutput.ComparisonImageRelativePath!,
-                    comparisonRaster.LogicalWidth,
-                    comparisonRaster.LogicalHeight));
-                FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"complete {scenario.Id}");
-            }
-            catch (Exception ex)
-            {
-                FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"failed {scenario.Id}: {ex}");
-                captures.Add(BlockedCapture(scenario, ex));
-            }
-            finally
-            {
-                dialog?.Close();
-                await PumpLayout();
-            }
-        }
+            },
+            createBlockedCapture: BlockedCapture,
+            createLimitation: (_, _) => null);
 
         anchor.Close();
-        var manifest = new DialogPaneVisualEvidenceHostManifest(
-            1,
-            "avalonia",
-            "visible-app-owned-render-target",
-            DialogPaneVisualEvidenceCatalog.TargetDpi,
-            DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
-            DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
-            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
-            captures,
-            hostLimitations);
-        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
-            outputPlan.ManifestPath,
-            manifest,
-            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
-        return captures.Count == scenarios.Count ? 0 : 1;
+        return FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+            outputPlan,
+            run,
+            (captures, limitations) => new DialogPaneVisualEvidenceHostManifest(
+                1,
+                "avalonia",
+                "visible-app-owned-render-target",
+                DialogPaneVisualEvidenceCatalog.TargetDpi,
+                DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
+                DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
+                FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
+                captures,
+                limitations));
     }
 
     private sealed class AvaloniaDialogPaneVisualEvidenceAdapter(MainWindow owner)

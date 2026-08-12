@@ -138,6 +138,12 @@ internal sealed record VisualEvidenceScenarioManifest<TManifest, TCapture>(
     where TManifest : class
     where TCapture : class;
 
+internal sealed record VisualEvidenceScenarioRun<TScenario, TCapture>(
+    IReadOnlyList<TScenario> Scenarios,
+    IReadOnlyList<TCapture> Captures,
+    IReadOnlyList<string> Limitations)
+    where TCapture : class;
+
 internal static class FreePVisualEvidenceCaptureOrchestration
 {
     internal const string WpfHost = "wpf";
@@ -182,6 +188,76 @@ internal static class FreePVisualEvidenceCaptureOrchestration
         {
             scenarios.Single(scenario => StringComparer.Ordinal.Equals(idSelector(scenario), scenarioId)),
         };
+    }
+
+    internal static async Task<VisualEvidenceScenarioRun<TScenario, TCapture>> RunScenariosAsync<TScenario, TCapture>(
+        IReadOnlyList<TScenario> catalog,
+        string? scenarioId,
+        Func<TScenario, string> idSelector,
+        VisualEvidenceHostOutputPlan outputPlan,
+        bool logProgress,
+        Func<TScenario, Task<TCapture>> captureScenario,
+        Func<TScenario, Exception, TCapture?> createBlockedCapture,
+        Func<TScenario, Exception, string?> createLimitation,
+        Action<TScenario, Exception>? reportFailure = null)
+        where TCapture : class
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(idSelector);
+        ArgumentNullException.ThrowIfNull(outputPlan);
+        ArgumentNullException.ThrowIfNull(captureScenario);
+        ArgumentNullException.ThrowIfNull(createBlockedCapture);
+        ArgumentNullException.ThrowIfNull(createLimitation);
+
+        outputPlan.EnsureDirectories();
+        if (logProgress)
+            ResetProgress(outputPlan);
+
+        var scenarios = SelectScenarios(catalog, scenarioId, idSelector);
+        var captures = new List<TCapture>(scenarios.Count);
+        var limitations = new List<string>();
+        foreach (var scenario in scenarios)
+        {
+            var id = idSelector(scenario);
+            if (logProgress)
+                AppendProgress(outputPlan, $"start {id}");
+
+            try
+            {
+                captures.Add(await captureScenario(scenario));
+                if (logProgress)
+                    AppendProgress(outputPlan, $"complete {id}");
+            }
+            catch (Exception exception)
+            {
+                if (logProgress)
+                    AppendProgress(outputPlan, $"failed {id}: {exception}");
+                if (createBlockedCapture(scenario, exception) is { } blockedCapture)
+                    captures.Add(blockedCapture);
+                if (createLimitation(scenario, exception) is { Length: > 0 } limitation)
+                    limitations.Add(limitation);
+                reportFailure?.Invoke(scenario, exception);
+            }
+        }
+
+        return new(scenarios, captures, limitations);
+    }
+
+    internal static int FinalizeHostRun<TScenario, TCapture, TManifest>(
+        VisualEvidenceHostOutputPlan outputPlan,
+        VisualEvidenceScenarioRun<TScenario, TCapture> run,
+        Func<IReadOnlyList<TCapture>, IReadOnlyList<string>, TManifest> createManifest)
+        where TCapture : class
+    {
+        ArgumentNullException.ThrowIfNull(outputPlan);
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(createManifest);
+
+        WriteManifest(
+            outputPlan.ManifestPath,
+            createManifest(run.Captures, run.Limitations),
+            HostManifestJsonOptions);
+        return run.Captures.Count == run.Scenarios.Count ? 0 : 1;
     }
 
     internal static VisualEvidenceHostOutputPlan CreateHostOutputPlan(

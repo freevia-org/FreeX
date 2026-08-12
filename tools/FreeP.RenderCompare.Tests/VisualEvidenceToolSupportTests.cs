@@ -194,7 +194,103 @@ public sealed class VisualEvidenceToolSupportTests
             .Should().Be(Path.Combine(temporaryDirectory.Path, "wpf", "review.comments-pane.seeded.png"));
     }
 
+    [Fact]
+    public async Task Scenario_runner_preserves_order_progress_and_blocked_capture_projection()
+    {
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-visual-evidence-runner-");
+        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            temporaryDirectory.Path,
+            FreePVisualEvidenceCaptureOrchestration.WpfHost,
+            FreePVisualEvidenceRoutes.DialogPane);
+        var visited = new List<string>();
+        var failures = new List<string>();
+        var scenarios = new[] { new RunnerScenario("first"), new RunnerScenario("second"), new RunnerScenario("third") };
+
+        var run = await FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
+            scenarios,
+            scenarioId: null,
+            scenario => scenario.Id,
+            outputPlan,
+            logProgress: true,
+            scenario =>
+            {
+                visited.Add(scenario.Id);
+                return scenario.Id == "second"
+                    ? Task.FromException<RunnerCapture>(new InvalidOperationException("expected failure"))
+                    : Task.FromResult(new RunnerCapture(scenario.Id, "complete"));
+            },
+            createBlockedCapture: (scenario, _) => new RunnerCapture(scenario.Id, "blocked"),
+            createLimitation: (_, _) => null,
+            reportFailure: (scenario, exception) => failures.Add($"{scenario.Id}: {exception.Message}"));
+
+        visited.Should().Equal("first", "second", "third");
+        run.Scenarios.Select(scenario => scenario.Id).Should().Equal("first", "second", "third");
+        run.Captures.Should().Equal(
+            new RunnerCapture("first", "complete"),
+            new RunnerCapture("second", "blocked"),
+            new RunnerCapture("third", "complete"));
+        run.Limitations.Should().BeEmpty();
+        failures.Should().Equal("second: expected failure");
+
+        var progress = File.ReadAllText(outputPlan.ProgressPath!);
+        progress.IndexOf("start first", StringComparison.Ordinal).Should().BeLessThan(
+            progress.IndexOf("complete first", StringComparison.Ordinal));
+        progress.IndexOf("complete first", StringComparison.Ordinal).Should().BeLessThan(
+            progress.IndexOf("start second", StringComparison.Ordinal));
+        progress.IndexOf("failed second", StringComparison.Ordinal).Should().BeLessThan(
+            progress.IndexOf("start third", StringComparison.Ordinal));
+
+        FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+                outputPlan,
+                run,
+                (captures, limitations) => new RunnerManifest(captures, limitations))
+            .Should().Be(0);
+        FreePVisualEvidenceCaptureOrchestration.ReadManifest<RunnerManifest>(
+                outputPlan.ManifestPath,
+                FreePVisualEvidenceCaptureOrchestration.ToolManifestJsonOptions,
+                "missing",
+                "invalid")
+            .Captures.Should().Equal(run.Captures);
+    }
+
+    [Fact]
+    public async Task Scenario_runner_records_limitations_and_fails_when_capture_is_omitted()
+    {
+        using var temporaryDirectory = new TestTemporaryDirectory("freep-visual-evidence-runner-");
+        var outputPlan = FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(
+            temporaryDirectory.Path,
+            FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
+            FreePVisualEvidenceRoutes.WholeWindow);
+        var scenarios = new[] { new RunnerScenario("first"), new RunnerScenario("second") };
+
+        var run = await FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
+            scenarios,
+            scenarioId: null,
+            scenario => scenario.Id,
+            outputPlan,
+            logProgress: false,
+            scenario => scenario.Id == "second"
+                ? Task.FromException<RunnerCapture>(new InvalidOperationException("expected failure"))
+                : Task.FromResult(new RunnerCapture(scenario.Id, "complete")),
+            createBlockedCapture: (_, _) => null,
+            createLimitation: (scenario, exception) => $"{scenario.Id}: {exception.Message}");
+
+        run.Captures.Should().Equal(new RunnerCapture("first", "complete"));
+        run.Limitations.Should().Equal("second: expected failure");
+        outputPlan.ProgressPath.Should().BeNull();
+        FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+                outputPlan,
+                run,
+                (captures, limitations) => new RunnerManifest(captures, limitations))
+            .Should().Be(1);
+    }
+
     private sealed record ManifestStub(string Name);
     private sealed record ScenarioManifest(IReadOnlyList<ScenarioCapture> Captures);
     private sealed record ScenarioCapture(string ScenarioId, string ImagePath);
+    private sealed record RunnerScenario(string Id);
+    private sealed record RunnerCapture(string ScenarioId, string Status);
+    private sealed record RunnerManifest(
+        IReadOnlyList<RunnerCapture> Captures,
+        IReadOnlyList<string> Limitations);
 }

@@ -51,22 +51,19 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
             outputRoot,
             FreePVisualEvidenceCaptureOrchestration.AvaloniaHost,
             FreePVisualEvidenceRoutes.WholeWindow);
-        outputPlan.EnsureDirectories();
-        var captures = new List<WholeWindowVisualEvidenceCapture>();
-        var limitations = new List<string>();
 
         anchor.Width = WholeWindowVisualEvidenceCatalog.LogicalClientWidth;
         anchor.Height = WholeWindowVisualEvidenceCatalog.LogicalClientHeight;
         anchor.Position = new PixelPoint(40, 40);
         anchor.Show();
 
-        var scenarios = FreePVisualEvidenceCaptureOrchestration.SelectScenarios(
+        var run = await FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
             WholeWindowVisualEvidenceCatalog.All,
             scenarioId,
-            scenario => scenario.Id);
-        foreach (var scenario in scenarios)
-        {
-            try
+            scenario => scenario.Id,
+            outputPlan,
+            logProgress: false,
+            async scenario =>
             {
                 var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
                 var coordinator = new AvaloniaWholeWindowVisualEvidenceCoordinator(anchor.CreateVisualCaptureAdapter());
@@ -90,7 +87,7 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                     WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
                     WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
                 var semantic = coordinator.CaptureSemantic(scenario, assertions);
-                captures.Add(new WholeWindowVisualEvidenceCapture(
+                return new WholeWindowVisualEvidenceCapture(
                     scenario.Id,
                     "avalonia",
                     fullRaster.NonBackgroundPixelCount > 0 && clientRaster.NonBackgroundPixelCount > 0
@@ -110,31 +107,28 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                     FreePVisualEvidenceCaptureOrchestration.Sha256(fullPath),
                     FreePVisualEvidenceCaptureOrchestration.Sha256(clientPath),
                     semantic,
-                    []));
-            }
-            catch (Exception ex)
-            {
-                limitations.Add($"{scenario.Id}: {ex.GetType().Name}: {ex.Message}");
-                Console.Error.WriteLine($"Avalonia whole-window capture failed for {scenario.Id}: {ex}");
-            }
-        }
+                    []);
+            },
+            createBlockedCapture: (_, _) => null,
+            createLimitation: (scenario, exception) =>
+                $"{scenario.Id}: {exception.GetType().Name}: {exception.Message}",
+            reportFailure: (scenario, exception) =>
+                Console.Error.WriteLine($"Avalonia whole-window capture failed for {scenario.Id}: {exception}"));
 
         anchor.Close();
-        var manifest = new WholeWindowVisualEvidenceHostManifest(
-            1,
-            "avalonia",
-            "visible-app-owned-full-client-render-target; native-non-client-excluded; scenario-isolated-process",
-            WholeWindowVisualEvidenceCatalog.TargetDpi,
-            WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
-            WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
-            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
-            captures,
-            limitations);
-        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
-            outputPlan.ManifestPath,
-            manifest,
-            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
-        return captures.Count == scenarios.Count ? 0 : 1;
+        return FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+            outputPlan,
+            run,
+            (captures, limitations) => new WholeWindowVisualEvidenceHostManifest(
+                1,
+                "avalonia",
+                "visible-app-owned-full-client-render-target; native-non-client-excluded; scenario-isolated-process",
+                WholeWindowVisualEvidenceCatalog.TargetDpi,
+                WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
+                FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
+                captures,
+                limitations));
     }
 
     private static CaptureRaster Capture(

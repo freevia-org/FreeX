@@ -69,104 +69,102 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             outputRoot,
             FreePVisualEvidenceCaptureOrchestration.WpfHost,
             FreePVisualEvidenceRoutes.WholeWindow);
-        outputPlan.EnsureDirectories();
-        var captures = new List<WholeWindowVisualEvidenceCapture>();
-        var limitations = new List<string>();
-        var scenarios = FreePVisualEvidenceCaptureOrchestration.SelectScenarios(
+        var run = FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
             WholeWindowVisualEvidenceCatalog.All,
             scenarioId,
-            scenario => scenario.Id);
+            scenario => scenario.Id,
+            outputPlan,
+            logProgress: false,
+            scenario =>
+            {
+                var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
+                var owner = new MainWindow
+                {
+                    Width = WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                    Height = WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
+                    WindowState = WindowState.Normal,
+                    WindowStartupLocation = WindowStartupLocation.Manual,
+                    Left = 40,
+                    Top = 40,
+                };
+                try
+                {
+                    owner.Show();
+                    NormalizeContentSize(owner);
+                    owner.Activate();
+                    var coordinator = new WpfWholeWindowVisualEvidenceCoordinator(owner.CreateVisualCaptureAdapter());
+                    var assertions = coordinator.Prepare(scenario, fixture);
+                    PumpLayout(owner);
+                    owner.Activate();
+                    PumpLayout(owner);
+                    coordinator.Normalize(scenario);
+                    owner.UpdateLayout();
 
-        foreach (var scenario in scenarios)
-        {
-            var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
-            var owner = new MainWindow
-            {
-                Width = WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
-                Height = WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
-                WindowState = WindowState.Normal,
-                WindowStartupLocation = WindowStartupLocation.Manual,
-                Left = 40,
-                Top = 40,
-            };
-            try
-            {
-                owner.Show();
-                NormalizeContentSize(owner);
-                owner.Activate();
-                var coordinator = new WpfWholeWindowVisualEvidenceCoordinator(owner.CreateVisualCaptureAdapter());
-                var assertions = coordinator.Prepare(scenario, fixture);
-                PumpLayout(owner);
-                owner.Activate();
-                PumpLayout(owner);
-                coordinator.Normalize(scenario);
-                owner.UpdateLayout();
+                    var root = owner.Content as FrameworkElement
+                        ?? throw new InvalidOperationException("The WPF whole-window capture has no app-owned client root.");
+                    var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                        outputRoot,
+                        FreePVisualEvidenceCaptureOrchestration.WpfHost,
+                        scenario.Id,
+                        FreePVisualEvidenceRoutes.WholeWindow);
+                    var fullPath = scenarioOutput.FullImagePath!;
+                    var clientPath = scenarioOutput.ClientImagePath!;
+                    var fullRaster = Capture(root, fullPath);
+                    var clientRaster = Capture(
+                        root,
+                        clientPath,
+                        WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                        WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
+                    var semantic = coordinator.CaptureSemantic(scenario, assertions);
+                    return Task.FromResult(new WholeWindowVisualEvidenceCapture(
+                        scenario.Id,
+                        "wpf",
+                        fullRaster.NonBackgroundPixelCount > 0 && clientRaster.NonBackgroundPixelCount > 0
+                            ? "complete"
+                            : "blocked",
+                        scenarioOutput.FullImageRelativePath!,
+                        scenarioOutput.ClientImageRelativePath!,
+                        clientRaster.LogicalWidth,
+                        clientRaster.LogicalHeight,
+                        clientRaster.PixelWidth,
+                        clientRaster.PixelHeight,
+                        clientRaster.DpiX,
+                        clientRaster.DpiY,
+                        clientRaster.SourceDpiX,
+                        clientRaster.SourceDpiY,
+                        clientRaster.NonBackgroundPixelCount,
+                        FreePVisualEvidenceCaptureOrchestration.Sha256(fullPath),
+                        FreePVisualEvidenceCaptureOrchestration.Sha256(clientPath),
+                        semantic,
+                        []));
+                }
+                finally
+                {
+                    owner.Close();
+                    PumpDispatcher();
+                }
+            },
+            createBlockedCapture: (_, _) => null,
+            createLimitation: (scenario, exception) =>
+                $"{scenario.Id}: {exception.GetType().Name}: {exception.Message}",
+            reportFailure: (scenario, exception) =>
+                Console.Error.WriteLine($"WPF whole-window capture failed for {scenario.Id}: {exception}"))
+            .GetAwaiter()
+            .GetResult();
 
-                var root = owner.Content as FrameworkElement
-                    ?? throw new InvalidOperationException("The WPF whole-window capture has no app-owned client root.");
-                var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
-                    outputRoot,
-                    FreePVisualEvidenceCaptureOrchestration.WpfHost,
-                    scenario.Id,
-                    FreePVisualEvidenceRoutes.WholeWindow);
-                var fullPath = scenarioOutput.FullImagePath!;
-                var clientPath = scenarioOutput.ClientImagePath!;
-                var fullRaster = Capture(root, fullPath);
-                var clientRaster = Capture(
-                    root,
-                    clientPath,
-                    WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
-                    WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
-                var semantic = coordinator.CaptureSemantic(scenario, assertions);
-                captures.Add(new WholeWindowVisualEvidenceCapture(
-                    scenario.Id,
-                    "wpf",
-                    fullRaster.NonBackgroundPixelCount > 0 && clientRaster.NonBackgroundPixelCount > 0
-                        ? "complete"
-                        : "blocked",
-                    scenarioOutput.FullImageRelativePath!,
-                    scenarioOutput.ClientImageRelativePath!,
-                    clientRaster.LogicalWidth,
-                    clientRaster.LogicalHeight,
-                    clientRaster.PixelWidth,
-                    clientRaster.PixelHeight,
-                    clientRaster.DpiX,
-                    clientRaster.DpiY,
-                    clientRaster.SourceDpiX,
-                    clientRaster.SourceDpiY,
-                    clientRaster.NonBackgroundPixelCount,
-                    FreePVisualEvidenceCaptureOrchestration.Sha256(fullPath),
-                    FreePVisualEvidenceCaptureOrchestration.Sha256(clientPath),
-                    semantic,
-                    []));
-            }
-            catch (Exception ex)
-            {
-                limitations.Add($"{scenario.Id}: {ex.GetType().Name}: {ex.Message}");
-                Console.Error.WriteLine($"WPF whole-window capture failed for {scenario.Id}: {ex}");
-            }
-            finally
-            {
-                owner.Close();
-                PumpDispatcher();
-            }
-        }
-
-        var manifest = new WholeWindowVisualEvidenceHostManifest(
-            1,
-            "wpf",
-            "visible-app-owned-full-client-render-target; native-non-client-excluded; scenario-isolated-process",
-            WholeWindowVisualEvidenceCatalog.TargetDpi,
-            WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
-            WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
-            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
-            captures,
-            limitations);
-        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
-            outputPlan.ManifestPath,
-            manifest,
-            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
-        return captures.Count == scenarios.Count ? 0 : 1;
+        return FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+            outputPlan,
+            run,
+            (captures, limitations) => new WholeWindowVisualEvidenceHostManifest(
+                1,
+                "wpf",
+                "visible-app-owned-full-client-render-target; native-non-client-excluded; scenario-isolated-process",
+                WholeWindowVisualEvidenceCatalog.TargetDpi,
+                WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
+                WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
+                FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
+                captures,
+                limitations));
     }
 
     private static CaptureRaster Capture(

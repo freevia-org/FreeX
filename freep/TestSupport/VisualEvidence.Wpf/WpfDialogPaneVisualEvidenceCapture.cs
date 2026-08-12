@@ -74,142 +74,132 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             outputRoot,
             FreePVisualEvidenceCaptureOrchestration.WpfHost,
             FreePVisualEvidenceRoutes.DialogPane);
-        outputPlan.EnsureDirectories();
-        var captures = new List<DialogPaneVisualEvidenceCapture>();
-        FreePVisualEvidenceCaptureOrchestration.ResetProgress(outputPlan);
-        var hostLimitations = new List<string>();
-
-        var scenarios = FreePVisualEvidenceCaptureOrchestration.SelectScenarios(
+        var run = FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
             DialogPaneVisualEvidenceCatalog.All,
             scenarioId,
-            scenario => scenario.Id);
-
-        foreach (var scenario in scenarios)
-        {
-            FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"start {scenario.Id}");
-            var preparation = DialogPaneVisualEvidencePreparationSession.Create(scenario);
-
-            var owner = new MainWindow
+            scenario => scenario.Id,
+            outputPlan,
+            logProgress: true,
+            scenario =>
             {
-                Width = DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
-                Height = DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
-                WindowStartupLocation = WindowStartupLocation.Manual,
-                Left = 40,
-                Top = 40,
-            };
-            Window? dialog = null;
-            try
-            {
-                owner.Show();
-                NormalizeOwnerContentSize(owner);
-                owner.Activate();
-                var access = owner.CreateVisualCaptureAdapter();
-                var routeHost = new WpfDialogPaneVisualEvidenceRouteHost(access);
-                var dialogAdapter = new WpfDialogPaneVisualEvidenceAdapter(owner);
-                var assertions = preparation.PrepareRoute(routeHost).ToList();
-                Window target = owner;
-
-                if (scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog)
+                var preparation = DialogPaneVisualEvidencePreparationSession.Create(scenario);
+                var owner = new MainWindow
                 {
-                    dialog = preparation.CreateDialog(dialogAdapter, assertions);
-                    dialog.Owner = owner;
-                    dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-                    dialog.Show();
-                    target = dialog;
+                    Width = DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
+                    Height = DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
+                    WindowStartupLocation = WindowStartupLocation.Manual,
+                    Left = 40,
+                    Top = 40,
+                };
+                Window? dialog = null;
+                try
+                {
+                    owner.Show();
+                    NormalizeOwnerContentSize(owner);
+                    owner.Activate();
+                    var access = owner.CreateVisualCaptureAdapter();
+                    var routeHost = new WpfDialogPaneVisualEvidenceRouteHost(access);
+                    var dialogAdapter = new WpfDialogPaneVisualEvidenceAdapter(owner);
+                    var assertions = preparation.PrepareRoute(routeHost).ToList();
+                    Window target = owner;
+
+                    if (scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog)
+                    {
+                        dialog = preparation.CreateDialog(dialogAdapter, assertions);
+                        dialog.Owner = owner;
+                        dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+                        dialog.Show();
+                        target = dialog;
+                    }
+
+                    PumpLayout(target);
+                    preparation.PrepareLoadedDialogState(dialog, dialogAdapter, assertions);
+                    target.Activate();
+                    FocusFirstInputIfNeeded(target, preparation.Plan.FocusIntent);
+                    PumpLayout(target);
+
+                    var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
+                        outputRoot,
+                        FreePVisualEvidenceCaptureOrchestration.WpfHost,
+                        scenario.Id,
+                        FreePVisualEvidenceRoutes.DialogPane);
+                    var imagePath = scenarioOutput.ImagePath!;
+                    var captureRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                        ? AppOwnedClientRoot(target)
+                        : target.Content as FrameworkElement ?? target;
+                    var raster = Capture(captureRoot, imagePath);
+                    var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                        ? target
+                        : access.DialogMetadataRoot(scenario.RouteId);
+                    var comparisonRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                        ? captureRoot
+                        : metadataRoot as FrameworkElement ?? captureRoot;
+                    var comparisonPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                        ? imagePath
+                        : scenarioOutput.ComparisonImagePath!;
+                    var pixelTarget = DialogPaneVisualEvidenceCatalog.PixelTargetFor(scenario);
+                    var comparisonRaster = ReferenceEquals(comparisonRoot, captureRoot)
+                        ? raster
+                        : Capture(comparisonRoot, comparisonPath, pixelTarget?.Width, pixelTarget?.Height);
+
+                    var focus = DescribeFocus(Keyboard.FocusedElement);
+                    var buttons = Buttons(metadataRoot);
+                    var controls = Controls(metadataRoot);
+                    assertions.AddRange(preparation.CompleteRoute(routeHost));
+                    return Task.FromResult(new DialogPaneVisualEvidenceCapture(
+                        scenario.Id,
+                        scenario.RouteId,
+                        scenario.StateId,
+                        "wpf",
+                        raster.NonBackgroundPixelCount > 0 ? "complete" : "blocked",
+                        scenarioOutput.ImageRelativePath!,
+                        raster.LogicalWidth,
+                        raster.LogicalHeight,
+                        raster.PixelWidth,
+                        raster.PixelHeight,
+                        raster.DpiX,
+                        raster.DpiY,
+                        raster.NonBackgroundPixelCount,
+                        focus.Role,
+                        focus.Label,
+                        buttons,
+                        controls,
+                        assertions,
+                        [],
+                        raster.SourceDpiX,
+                        raster.SourceDpiY,
+                        "logical-96-dpi",
+                        scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
+                            ? scenarioOutput.ImageRelativePath!
+                            : scenarioOutput.ComparisonImageRelativePath!,
+                        comparisonRaster.LogicalWidth,
+                        comparisonRaster.LogicalHeight));
                 }
+                finally
+                {
+                    dialog?.Close();
+                    owner.Close();
+                    PumpDispatcher();
+                }
+            },
+            createBlockedCapture: BlockedCapture,
+            createLimitation: (_, _) => null)
+            .GetAwaiter()
+            .GetResult();
 
-                PumpLayout(target);
-                preparation.PrepareLoadedDialogState(dialog, dialogAdapter, assertions);
-                target.Activate();
-                FocusFirstInputIfNeeded(target, preparation.Plan.FocusIntent);
-                PumpLayout(target);
-
-                var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
-                    outputRoot,
-                    FreePVisualEvidenceCaptureOrchestration.WpfHost,
-                    scenario.Id,
-                    FreePVisualEvidenceRoutes.DialogPane);
-                var imagePath = scenarioOutput.ImagePath!;
-                var captureRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                    ? AppOwnedClientRoot(target)
-                    : target.Content as FrameworkElement ?? target;
-                var raster = Capture(captureRoot, imagePath);
-                var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                    ? target
-                    : access.DialogMetadataRoot(scenario.RouteId);
-                var comparisonRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                    ? captureRoot
-                    : metadataRoot as FrameworkElement ?? captureRoot;
-                var comparisonPath = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                    ? imagePath
-                    : scenarioOutput.ComparisonImagePath!;
-                var pixelTarget = DialogPaneVisualEvidenceCatalog.PixelTargetFor(scenario);
-                var comparisonRaster = ReferenceEquals(comparisonRoot, captureRoot)
-                    ? raster
-                    : Capture(comparisonRoot, comparisonPath, pixelTarget?.Width, pixelTarget?.Height);
-
-                var focus = DescribeFocus(Keyboard.FocusedElement);
-                var buttons = Buttons(metadataRoot);
-                var controls = Controls(metadataRoot);
-                assertions.AddRange(preparation.CompleteRoute(routeHost));
-                captures.Add(new DialogPaneVisualEvidenceCapture(
-                    scenario.Id,
-                    scenario.RouteId,
-                    scenario.StateId,
-                    "wpf",
-                    raster.NonBackgroundPixelCount > 0 ? "complete" : "blocked",
-                    scenarioOutput.ImageRelativePath!,
-                    raster.LogicalWidth,
-                    raster.LogicalHeight,
-                    raster.PixelWidth,
-                    raster.PixelHeight,
-                    raster.DpiX,
-                    raster.DpiY,
-                    raster.NonBackgroundPixelCount,
-                    focus.Role,
-                    focus.Label,
-                    buttons,
-                    controls,
-                    assertions,
-                    [],
-                    raster.SourceDpiX,
-                    raster.SourceDpiY,
-                    "logical-96-dpi",
-                    scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
-                        ? scenarioOutput.ImageRelativePath!
-                        : scenarioOutput.ComparisonImageRelativePath!,
-                    comparisonRaster.LogicalWidth,
-                    comparisonRaster.LogicalHeight));
-                FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"complete {scenario.Id}");
-            }
-            catch (Exception ex)
-            {
-                FreePVisualEvidenceCaptureOrchestration.AppendProgress(outputPlan, $"failed {scenario.Id}: {ex}");
-                captures.Add(BlockedCapture(scenario, ex));
-            }
-            finally
-            {
-                dialog?.Close();
-                owner.Close();
-                PumpDispatcher();
-            }
-        }
-
-        var manifest = new DialogPaneVisualEvidenceHostManifest(
-            1,
-            "wpf",
-            "visible-app-owned-render-target",
-            DialogPaneVisualEvidenceCatalog.TargetDpi,
-            DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
-            DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
-            FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
-            captures,
-            hostLimitations);
-        FreePVisualEvidenceCaptureOrchestration.WriteManifest(
-            outputPlan.ManifestPath,
-            manifest,
-            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
-        return captures.Count == scenarios.Count ? 0 : 1;
+        return FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+            outputPlan,
+            run,
+            (captures, limitations) => new DialogPaneVisualEvidenceHostManifest(
+                1,
+                "wpf",
+                "visible-app-owned-render-target",
+                DialogPaneVisualEvidenceCatalog.TargetDpi,
+                DialogPaneVisualEvidenceCatalog.LogicalShellWidth,
+                DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
+                FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
+                captures,
+                limitations));
     }
 
     private sealed class WpfDialogPaneVisualEvidenceAdapter(MainWindow owner)
