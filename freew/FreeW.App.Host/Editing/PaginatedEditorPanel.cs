@@ -1445,39 +1445,4 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             return null;
         }
     }
-
-    // ── Phase 3a even-distribution sharding (kept for reference; no longer called) ────────────────
-
-    /// <summary>
-    /// Distributes <paramref name="blocks"/> across <paramref name="pageCount"/> page slots as
-    /// evenly as possible (round-robin assignment).  Superseded by <see cref="ShardByPageAssignment"/>
-    /// in Phase 3b-1; retained here for reference only.
-    /// </summary>
-    internal static IReadOnlyList<IReadOnlyList<System.Windows.Documents.Block>> ShardBlocks(
-        IReadOnlyList<System.Windows.Documents.Block> blocks,
-        int pageCount)
-    {
-        var result = new List<List<System.Windows.Documents.Block>>(pageCount);
-        for (var i = 0; i < pageCount; i++)
-            result.Add([]);
-
-        if (blocks.Count == 0 || pageCount <= 0)
-        {
-            if (result.Count == 0)
-                result.Add([]);
-            return result;
-        }
-
-        var baseCount = blocks.Count / pageCount;
-        var remainder = blocks.Count % pageCount;
-        var blockIndex = 0;
-        for (var p = 0; p < pageCount; p++)
-        {
-            var count = baseCount + (p < remainder ? 1 : 0);
-            for (var j = 0; j < count && blockIndex < blocks.Count; j++, blockIndex++)
-                result[p].Add(blocks[blockIndex]);
-        }
-
-        return result;
-    }
 }

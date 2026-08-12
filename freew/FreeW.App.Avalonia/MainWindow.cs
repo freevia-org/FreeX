@@ -366,12 +366,6 @@ public sealed partial class MainWindow : Window
         _editor.ContextMenuCommandRequested += OnEditorContextMenuCommandRequested;
 
         UpdateViewModeButtons();
-        _editor.CellEditRequested += async req =>
-        {
-            var result = await new CellEditDialog(req.Text).ShowDialog<string?>(this);
-            if (result is not null)
-                _editor.SetCellText(req.Block, req.Row, req.Col, result);
-        };
         var startupDocument = FreeWApplicationStartup.TryOpenStartupDocument(
             startupArguments,
             _documentPersistence);

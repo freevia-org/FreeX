@@ -1269,7 +1269,11 @@ public sealed class DocumentPortableEditingOwnershipTests
                 source.Should().NotContain(constructor);
         }
 
-        avalonia.Should().Contain("TableEdits.SetCellText(address, text)");
+        avalonia.Should().Contain("public void PlaceCaretInCell(");
+        avalonia.Should().NotContain("CellEditRequested");
+        avalonia.Should().NotContain("CellEditRequest");
+        avalonia.Should().NotContain("public string GetCellText(");
+        avalonia.Should().NotContain("public void SetCellText(");
 
         File.Exists(Path.Combine(
                 TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),

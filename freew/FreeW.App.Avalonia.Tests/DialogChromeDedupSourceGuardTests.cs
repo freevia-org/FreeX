@@ -6,6 +6,16 @@ namespace FreeW.App.Avalonia.Tests;
 public sealed class DialogChromeDedupSourceGuardTests
 {
     [Fact]
+    public void ObsoleteModalCellEditingFallback_IsAbsent()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+
+        File.Exists(Path.Combine(root, "freew", "FreeW.App.Avalonia", "CellEditDialog.cs"))
+            .Should().BeFalse("table cells are edited in place");
+        ReadAvaloniaSource("MainWindow.cs").Should().NotContain("CellEditRequested");
+    }
+
+    [Fact]
     public void ResidualAvaloniaDialogs_DelegateCompactChromeToSharedHelper()
     {
         var expectations = new (string FileName, string[] RequiredSnippets)[]
@@ -15,12 +25,6 @@ public sealed class DialogChromeDedupSourceGuardTests
                 "using Free.Shared.Shell.Avalonia;",
                 "AvaloniaCompactDialogChrome.ApplyButton(yes, DialogChromeStyle, minWidth: 82, isDefault: true);",
                 "AvaloniaCompactDialogChrome.CreateActionRow([yes, no], new Thickness(16, 0, 16, 16));",
-            ]),
-            ("CellEditDialog.cs",
-            [
-                "using Free.Shared.Shell.Avalonia;",
-                "AvaloniaCompactDialogChrome.ApplyTextBox(_box, DialogChromeStyle);",
-                "AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 10, 0, 0));",
             ]),
             ("DesignDialogs.cs",
             [

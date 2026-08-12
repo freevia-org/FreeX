@@ -398,7 +398,6 @@ public static class FreeWDialogEvidenceCatalog
 
             AvaloniaOnly("bookmark", "BookmarkDialog"),
             AvaloniaOnly("caption", "CaptionDialog"),
-            AvaloniaOnly("cell-edit", "CellEditDialog"),
             AvaloniaOnly("citation-source-picker", "CitationSourcePickerDialog"),
             AvaloniaOnly("comment-list", "CommentListDialog"),
             AvaloniaOnly("comment-reply", "CommentReplyDialog"),

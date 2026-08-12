@@ -403,16 +403,6 @@ public sealed class DocumentView : Control
         FloatingSelectionChanged?.Invoke();
     }
 
-    /// <summary>
-    /// Raised when a table cell double-click is received and no in-place caret placement is possible
-    /// (e.g., the cell has no placed glyphs yet). Kept for shell compatibility; normal editing now
-    /// routes the caret directly into the cell via <see cref="PlaceCaretInCell"/>.
-    /// AV-TBL: this event is now only fired as a fallback; in-place editing supersedes it.
-    /// </summary>
-#pragma warning disable CS0067 // event may remain un-raised when in-place path is always taken
-    public event Action<CellEditRequest>? CellEditRequested;
-#pragma warning restore CS0067
-
     /// <summary>Raised when <see cref="ViewMode"/> changes so the shell can update the status bar / ribbon state.</summary>
     public event Action? ViewModeChanged;
 
@@ -475,25 +465,6 @@ public sealed class DocumentView : Control
         _viewDepthLayout = layout;
         _laidOutWidth = -1;
         InvalidateVisual();
-    }
-
-    public sealed record CellEditRequest(int Block, int Row, int Col, string Text);
-
-    public string GetCellText(int block, int row, int col)
-    {
-        if (block >= 0 && block < _doc.Blocks.Count && _doc.Blocks[block] is Table table
-            && row >= 0 && row < table.Rows.Count && col >= 0 && col < table.Rows[row].Cells.Count)
-            return table.Rows[row].Cells[col].PlainText;
-        return string.Empty;
-    }
-
-    public void SetCellText(int block, int row, int col, string text)
-    {
-        if (IsEditingLocked)
-            return;
-
-        if (TableEdits.AddressFromCellIndex(block, row, col) is { } address)
-            TableEdits.SetCellText(address, text);
     }
 
     /// <summary>
