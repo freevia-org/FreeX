@@ -40,7 +40,10 @@ namespace FreeP.App.Host;
 ///   │  Status bar                              │
 ///   └──────────────────────────────────────────┘
 /// </summary>
-public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostView, IPresentationMediaPaneHostView
+public sealed partial class MainWindow : Window,
+    IPresentationAltTextPaneHostView,
+    IPresentationMediaPaneHostView,
+    IPresentationReadingOrderPaneHostView
 {
     // Identity/palette for the shared window shell (PowerPoint-style brick title bar; "P" badge).
     private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
@@ -149,6 +152,7 @@ public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostVie
     private StackPanel _readingOrderPaneItemsPanel = null!;
     private Button _readingOrderMoveEarlierButton = null!;
     private Button _readingOrderMoveLaterButton = null!;
+    private readonly PresentationReadingOrderPaneHostCoordinator _readingOrderPaneHostCoordinator;
     private Border _proofingPaneHost = null!;
     private TextBlock _proofingPaneHeading = null!;
     private TextBlock _proofingPaneMessage = null!;
@@ -360,7 +364,7 @@ public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostVie
         return true;
     }
     internal bool IsReadingOrderPaneVisible =>
-        _workareaSession.Panes.IsVisible(PresentationWorkareaPane.ReadingOrder);
+        _readingOrderPaneHostCoordinator.IsPaneVisible;
     internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
     internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
     internal string ReadingOrderPaneMessage => _readingOrderPaneMessage?.Text ?? string.Empty;
@@ -472,6 +476,7 @@ public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostVie
         ShellChrome.ConfigureWindow(this, chromeOptions);
 
         _workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());
+        _readingOrderPaneHostCoordinator = new(_workareaSession.Panes, this);
         _reviewWorkflowSession = new(
             () => Editor,
             new PresentationReviewWorkflowSessionCallbacks(
@@ -485,8 +490,8 @@ public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostVie
                 OpenMediaCaptionPane: () => ShowMediaCaptionPane(),
                 RenderCommentPane: RenderCommentPane,
                 RenderAltTextPaneIfVisible: RenderAltTextPaneIfVisible,
-                RenderReadingOrderPaneIfVisible: RenderReadingOrderPaneIfVisible,
-                PresentReadingOrderPane: PresentReadingOrderPane,
+                RenderReadingOrderPaneIfVisible: plan => _readingOrderPaneHostCoordinator.RenderIfVisible(plan),
+                PresentReadingOrderPane: plan => _readingOrderPaneHostCoordinator.Present(plan),
                 RenderProofingPaneIfVisible: RenderProofingPaneIfVisible,
                 PresentProofingPane: PresentProofingPane,
                 UpdateAfterCommentMutation: UpdateTitle,
@@ -3264,26 +3269,22 @@ public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostVie
     void IPresentationAltTextPaneHostView.RefreshAccessibilityMetadata() =>
         RefreshPaneAccessibilityMetadata();
 
-    private void RenderReadingOrderPane(PresentationReadingOrderPlan plan)
+    void IPresentationReadingOrderPaneHostView.SetPaneVisible(bool visible) =>
+        _readingOrderPaneHost.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
+    void IPresentationReadingOrderPaneHostView.Render(PresentationReadingOrderPaneHostRenderPlan plan)
     {
         _readingOrderPaneHeading.Text = plan.Heading;
-        _readingOrderPaneMessage.Text = plan.DisplayMessage;
-
-        var moveEarlier = GetReadingOrderAction(
-            plan,
-            PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId);
-        var moveLater = GetReadingOrderAction(
-            plan,
-            PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId);
-        ApplyReadingOrderButtonPlan(_readingOrderMoveEarlierButton, moveEarlier);
-        ApplyReadingOrderButtonPlan(_readingOrderMoveLaterButton, moveLater);
+        _readingOrderPaneMessage.Text = plan.Message;
+        ApplyReadingOrderButtonPlan(_readingOrderMoveEarlierButton, plan.MoveEarlierAction);
+        ApplyReadingOrderButtonPlan(_readingOrderMoveLaterButton, plan.MoveLaterAction);
 
         _readingOrderPaneItemsPanel.Children.Clear();
-        if (plan.Items.Count == 0)
+        if (plan.ShouldShowEmptyState)
         {
             _readingOrderPaneItemsPanel.Children.Add(new TextBlock
             {
-                Text = PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage,
+                Text = plan.EmptyStateMessage,
                 Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
@@ -3295,28 +3296,12 @@ public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostVie
             _readingOrderPaneItemsPanel.Children.Add(BuildReadingOrderItemCard(item));
     }
 
-    private void RenderReadingOrderPaneIfVisible(PresentationReadingOrderPlan plan)
-    {
-        if (IsReadingOrderPaneVisible)
-            RenderReadingOrderPane(plan);
-    }
-
-    private void PresentReadingOrderPane(PresentationReadingOrderPlan plan)
-    {
-        _workareaSession.Panes.Show(PresentationWorkareaPane.ReadingOrder);
-        RenderReadingOrderPane(plan);
-        _readingOrderPaneHost.Visibility = Visibility.Visible;
+    void IPresentationReadingOrderPaneHostView.RefreshAccessibilityMetadata() =>
         RefreshPaneAccessibilityMetadata();
-    }
-
-    private static PresentationReviewWorkflowActionPlan GetReadingOrderAction(
-        PresentationReadingOrderPlan plan,
-        string commandId)
-        => plan.Actions.Single(action => action.CommandId == commandId);
 
     private static void ApplyReadingOrderButtonPlan(
         Button button,
-        PresentationReviewWorkflowActionPlan action)
+        PresentationReadingOrderPaneActionRenderPlan action)
     {
         button.Content = action.Label;
         button.IsEnabled = action.IsEnabled;
