@@ -11,6 +11,24 @@
     <StartupObject>FreeW.App.Host.Program</StartupObject>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
+             Link="MainWindow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\DocumentView.TestAccess.cs"
+             Link="Editing\DocumentView.TestAccess.cs" />
+  </ItemGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWHostTestSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
     <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
     <!-- The on-demand DOCX visual-fidelity harness (tools/FreeW.RenderCompare) renders pages through the

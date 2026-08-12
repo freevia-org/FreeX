@@ -38,7 +38,7 @@ namespace FreeW.App.Host;
 /// model and rendered by a small local renderer; the status bar shows that the shared storage
 /// helpers resolve FreeW's own data folder (because Program.Main set AppProduct = "FreeW").
 /// </summary>
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private FileCommands _file = null!;
     private AutosaveCoordinator _autosave = null!;
@@ -2207,28 +2207,6 @@ public sealed class MainWindow : Window
     private static System.Windows.Media.Brush ReadModeBrush(string colorHex) =>
         new System.Windows.Media.SolidColorBrush(
             WpfRgbColorAdapter.ParseColorToken(colorHex));
-
-    internal bool IsReadModeActiveForTests => _editorInteraction.IsReadModeActive;
-    internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
-    internal string ReadModeColumnWidthForTests => _editorInteraction.ReadModeColumnWidth;
-    internal string ReadModePageColorForTests => _editorInteraction.ReadModePageColor;
-    internal bool IsTitleBarVisibleForTests => _titleBar.Visibility == Visibility.Visible;
-    internal bool IsRibbonVisibleForTests => _ribbon.Visibility == Visibility.Visible;
-    internal bool IsNavigationPaneVisibleForTests => _navPane.Visibility == Visibility.Visible;
-    internal bool IsRevealPaneVisibleForTests => _revealPane.Visibility == Visibility.Visible;
-    internal bool IsReviewingPaneVisibleForTests => _reviewPane.Visibility == Visibility.Visible;
-    internal void SetReadModePaneVisibilityForTests(bool navigation, bool reveal, bool reviewing)
-    {
-        _navPaneVisible = navigation;
-        _revealPaneVisible = reveal;
-        _reviewPaneVisible = reviewing;
-        _navPane.Visibility = navigation ? Visibility.Visible : Visibility.Collapsed;
-        _revealPane.Visibility = reveal ? Visibility.Visible : Visibility.Collapsed;
-        _reviewPane.Visibility = reviewing ? Visibility.Visible : Visibility.Collapsed;
-    }
-    internal void ToggleReadModeForTests() => ToggleReadMode();
-    internal void ApplyReadModeColumnWidthForTests(string token) => ApplyReadModeColumnWidth(token);
-    internal void ApplyReadModePageColorForTests(string token) => ApplyReadModePageColor(token);
 
     // Feature 5 — New Window: open a fresh MainWindow. If the current document has a saved path, load it
     // into the new window (read-only by design — both windows can edit independently, last-save wins).

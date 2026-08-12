@@ -17,6 +17,24 @@
     <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TestAccess.cs"
+             Link="MainWindow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\DocumentView.TestAccess.cs"
+             Link="Editing\DocumentView.TestAccess.cs" />
+  </ItemGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWHostTestSupport</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup Condition="'$(FreeWValidationHost)' == 'true'">
     <Compile Include="..\TestSupport\Validation.Avalonia\Program.ValidationHost.cs"
              Link="Program.ValidationHost.cs" />

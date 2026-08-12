@@ -47,7 +47,7 @@ namespace FreeW.App.Host.Editing;
 /// commits edits back into the model. Caret, selection, typing, delete and Enter come from the
 /// RichTextBox; <see cref="CommitToModel"/> maps the edited view back to the model.
 /// </summary>
-public sealed class DocumentView : RichTextBox
+public sealed partial class DocumentView : RichTextBox
 {
     // Setting RichTextBox.Document with SpellCheck enabled routes through WPF's
     // System.Windows.Documents.MsSpellCheckLib.WinRTSpellerInterop, which lazily activates and registers
@@ -61,10 +61,6 @@ public sealed class DocumentView : RichTextBox
     // disabling spell check or changing any user-visible behavior (a single Document swap is fast, and
     // real interactive usage never has two DocumentViews racing to swap Document at the same instant).
     private static readonly object SpellCheckDocumentAssignmentGate = new();
-
-    // The WPF spell-checker is process-global COM state and cannot be shared reliably by the many
-    // short-lived STA threads in the host test runner. Production never sets this test seam.
-    internal static bool SuppressNativeSpellCheckForTests { get; set; }
 
     private const double PxPerPoint = 96.0 / 72.0;
     // TableCell and BlockUIContainer already contribute this much horizontal content inset.
@@ -314,7 +310,7 @@ public sealed class DocumentView : RichTextBox
         _editingSession = new DocumentEditingSession(() => CurrentRevisionAuthor());
         AcceptsTab = true;
         IsDocumentEnabled = true;
-        SpellCheck.IsEnabled = !SuppressNativeSpellCheckForTests;
+        SpellCheck.IsEnabled = !IsNativeSpellCheckSuppressed();
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
         BorderThickness = new Thickness(1);
         BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0));
@@ -470,12 +466,19 @@ public sealed class DocumentView : RichTextBox
             .Where(diagnostic => diagnostic.Kind == ProofingDiagnosticKind.Grammar)
             .ToList();
 
-    internal bool NativeSpellCheckEnabledForTest => SpellCheck.IsEnabled;
-
     private void ApplySpellCheckVisibility() =>
-        SpellCheck.IsEnabled = !SuppressNativeSpellCheckForTests
+        SpellCheck.IsEnabled = !IsNativeSpellCheckSuppressed()
             && _spellCheckEnabled
             && !_model.HideSpellingErrors;
+
+    private static bool IsNativeSpellCheckSuppressed()
+    {
+        var suppressed = false;
+        ApplyNativeSpellCheckOverride(ref suppressed);
+        return suppressed;
+    }
+
+    static partial void ApplyNativeSpellCheckOverride(ref bool suppressed);
 
     /// <summary>
     /// Register a custom dictionary (<c>.lex</c>) file with this control's spell checker so the words it

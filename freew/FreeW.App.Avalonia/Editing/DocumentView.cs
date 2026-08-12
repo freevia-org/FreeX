@@ -747,17 +747,6 @@ public sealed partial class DocumentView : Control
 
     public double CaretLeft => TryGetCaretRect(out var rect) ? rect.X : 0;
 
-    /// <summary>Headless geometry seam used by the page-flow parity tests.</summary>
-    internal Rect? CaretRectForTest => TryGetCaretRect(out var rect) ? rect : null;
-
-    internal double HorizontalPageExtentForTest =>
-        _surfacePlan.UsesProjectedPageFlow
-            ? _surfacePlan.ScrollableWidthForPages(_pageCount)
-            : 0;
-
-    internal Point RenderedPageOriginForTest(int pageIndex) =>
-        new(_surfacePlan.RenderedPageLeftDip(pageIndex), _surfacePlan.RenderedPageTopDip(pageIndex));
-
     /// <summary>
     /// Returns the Y coordinate (top edge) of the first placed character in <paramref name="blockIndex"/>,
     /// in control coordinates. Returns -1 when the block is not found in the current layout (e.g. out of

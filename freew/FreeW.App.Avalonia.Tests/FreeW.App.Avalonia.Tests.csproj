@@ -27,7 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj" />
+    <ProjectReference Include="..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj"
+                      AdditionalProperties="FreeWHostTestSupport=true" />
     <ProjectReference Include="..\TestSupport\Validation.Avalonia\FreeW.Validation.Avalonia.csproj" />
     <ProjectReference Include="..\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj" />
     <ProjectReference Include="..\tools\FreeW.DialogVisualHarness\FreeW.DialogVisualHarness.csproj" Aliases="Harness" />
