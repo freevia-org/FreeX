@@ -82,33 +82,28 @@ public sealed record SlideShowSettingsDialogInput(
     bool ShowMediaControls,
     bool ShowMasterShapes);
 
-public readonly record struct SlideShowSettingsDialogFieldValue(
-    bool? IsChecked = null,
-    int SelectedIndex = -1,
-    string Text = "");
-
 public sealed class SlideShowSettingsDialogInputProjection
 {
     private readonly IReadOnlyDictionary<
         SlideShowSettingsDialogField,
-        SlideShowSettingsDialogFieldValue> _fields;
+        PresentationDialogFieldValue> _fields;
 
     public SlideShowSettingsDialogInputProjection(
-        IReadOnlyDictionary<SlideShowSettingsDialogField, SlideShowSettingsDialogFieldValue> fields)
+        IReadOnlyDictionary<SlideShowSettingsDialogField, PresentationDialogFieldValue> fields)
     {
         ArgumentNullException.ThrowIfNull(fields);
-        _fields = new Dictionary<SlideShowSettingsDialogField, SlideShowSettingsDialogFieldValue>(fields);
+        _fields = new Dictionary<SlideShowSettingsDialogField, PresentationDialogFieldValue>(fields);
     }
 
     public IReadOnlyDictionary<
         SlideShowSettingsDialogField,
-        SlideShowSettingsDialogFieldValue> Fields => _fields;
+        PresentationDialogFieldValue> Fields => _fields;
 
     public static SlideShowSettingsDialogInputProjection FromInput(
         SlideShowSettingsDialogInput input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        return new(new Dictionary<SlideShowSettingsDialogField, SlideShowSettingsDialogFieldValue>
+        return new(new Dictionary<SlideShowSettingsDialogField, PresentationDialogFieldValue>
         {
             [SlideShowSettingsDialogField.UseTimings] = new(IsChecked: input.UseSlideTimings),
             [SlideShowSettingsDialogField.ShowWithoutAnimation] = new(IsChecked: input.ShowWithoutAnimation),
@@ -134,10 +129,10 @@ public sealed class SlideShowSettingsDialogInputProjection
             IsChecked(SlideShowSettingsDialogField.ShowMediaControls),
             IsChecked(SlideShowSettingsDialogField.ShowMasterGraphics));
 
-    private SlideShowSettingsDialogFieldValue Value(SlideShowSettingsDialogField field) =>
+    private PresentationDialogFieldValue Value(SlideShowSettingsDialogField field) =>
         _fields.TryGetValue(field, out var value)
             ? value
-            : default;
+            : new();
 
     private bool IsChecked(SlideShowSettingsDialogField field) =>
         Value(field).IsChecked == true;
@@ -151,12 +146,12 @@ public sealed class SlideShowSettingsDialogFormSession<TControl>
     where TControl : class
 {
     private readonly Dictionary<SlideShowSettingsDialogField, TControl> _controls = [];
-    private readonly Func<TControl, SlideShowSettingsDialogFieldValue> _captureValue;
-    private readonly Action<TControl, SlideShowSettingsDialogFieldValue> _applyValue;
+    private readonly Func<TControl, PresentationDialogFieldValue> _captureValue;
+    private readonly Action<TControl, PresentationDialogFieldValue> _applyValue;
 
     public SlideShowSettingsDialogFormSession(
-        Func<TControl, SlideShowSettingsDialogFieldValue> captureValue,
-        Action<TControl, SlideShowSettingsDialogFieldValue> applyValue)
+        Func<TControl, PresentationDialogFieldValue> captureValue,
+        Action<TControl, PresentationDialogFieldValue> applyValue)
     {
         _captureValue = captureValue ?? throw new ArgumentNullException(nameof(captureValue));
         _applyValue = applyValue ?? throw new ArgumentNullException(nameof(applyValue));

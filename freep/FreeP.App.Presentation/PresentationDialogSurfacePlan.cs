@@ -12,6 +12,15 @@ public enum PresentationDialogControlKind
     Label,
 }
 
+/// <summary>
+/// Renderer-neutral value carried by presentation dialog text, choice, and toggle controls.
+/// Native adapters are responsible only for mapping this value to framework controls.
+/// </summary>
+public sealed record PresentationDialogFieldValue(
+    string Text = "",
+    int SelectedIndex = -1,
+    bool? IsChecked = false);
+
 public sealed record PresentationDialogFieldPlan<TField> : DialogFieldPlan<TField>
     where TField : notnull
 {

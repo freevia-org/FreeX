@@ -54,7 +54,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
         };
-        ApplySemantic(intro, surface.Field(MotionPathEditorDialogField.Introduction));
+        PresentationDialogControlAdapter.ApplySemantic(intro, surface.Field(MotionPathEditorDialogField.Introduction));
         DockPanel.SetDock(intro, Dock.Top);
         DockPanel.SetDock(actions, Dock.Bottom);
         root.Children.Add(intro);
@@ -117,14 +117,6 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return button;
     }
 
-    private static void ApplySemantic(
-        DependencyObject control,
-        PresentationDialogFieldPlan<MotionPathEditorDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-    }
-
     private static void ApplyAction(
         DependencyObject control,
         PresentationDialogActionPlan<MotionPathEditorDialogAction> action)
@@ -165,7 +157,7 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _kind.Width = 76;
             _kind.Margin = new Thickness(2);
             _kind.SelectionChanged += (_, _) => UpdateControlState();
-            ApplySemantic(
+            PresentationDialogControlAdapter.ApplySemantic(
                 _kind,
                 _surface.Field(MotionPathEditorDialogField.SegmentKind, plan.RowIndex));
             Set(_x, plan.X);
@@ -174,12 +166,12 @@ public sealed class MotionPathEditorDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Set(_y1, plan.Y1);
             Set(_x2, plan.X2);
             Set(_y2, plan.Y2);
-            ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X, plan.RowIndex));
-            ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y, plan.RowIndex));
-            ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1, plan.RowIndex));
-            ApplySemantic(_y1, _surface.Field(MotionPathEditorDialogField.Y1, plan.RowIndex));
-            ApplySemantic(_x2, _surface.Field(MotionPathEditorDialogField.X2, plan.RowIndex));
-            ApplySemantic(_y2, _surface.Field(MotionPathEditorDialogField.Y2, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_y1, _surface.Field(MotionPathEditorDialogField.Y1, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_x2, _surface.Field(MotionPathEditorDialogField.X2, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_y2, _surface.Field(MotionPathEditorDialogField.Y2, plan.RowIndex));
 
             var grid = new Grid { Margin = new Thickness(2) };
             foreach (var width in new[] { 76.0, 78.0, 78.0, 78.0, 78.0, 78.0, 78.0, 52.0, 58.0 })

@@ -73,14 +73,14 @@ internal sealed class HyperlinkDialog : Window
             GroupName = "HyperlinkTarget",
             Margin = new Thickness(0, 0, 0, 8),
         };
-        ApplySemantic(_urlRadio, _surface.TargetField(HyperlinkDialogTargetKind.Url));
-        ApplySemantic(_slideRadio, _surface.TargetField(HyperlinkDialogTargetKind.Slide));
+        PresentationDialogControlAdapter.ApplySemantic(_urlRadio, _surface.TargetField(HyperlinkDialogTargetKind.Url));
+        PresentationDialogControlAdapter.ApplySemantic(_slideRadio, _surface.TargetField(HyperlinkDialogTargetKind.Slide));
         _urlBox = new TextBox
         {
             Margin = new Thickness(0, 0, 0, 4),
             MinWidth = 260,
         };
-        ApplySemantic(_urlBox, _surface.Field(HyperlinkDialogField.Url));
+        PresentationDialogControlAdapter.ApplySemantic(_urlBox, _surface.Field(HyperlinkDialogField.Url));
         _slideCombo = new ComboBox
         {
             Margin = new Thickness(0, 0, 0, 2),
@@ -88,20 +88,20 @@ internal sealed class HyperlinkDialog : Window
             ItemsSource = _session.SlideOptions,
             SelectedIndex = _session.State.SelectedSlideIndex,
         };
-        ApplySemantic(_slideCombo, _surface.Field(HyperlinkDialogField.Slide));
+        PresentationDialogControlAdapter.ApplySemantic(_slideCombo, _surface.Field(HyperlinkDialogField.Slide));
         _tooltipBox = new TextBox
         {
             Margin = new Thickness(0, 0, 0, 8),
             MinWidth = 260,
         };
-        ApplySemantic(_tooltipBox, _surface.Field(HyperlinkDialogField.Tooltip));
+        PresentationDialogControlAdapter.ApplySemantic(_tooltipBox, _surface.Field(HyperlinkDialogField.Tooltip));
         _validationText = new TextBlock
         {
             Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8),
         };
-        ApplySemantic(_validationText, _surface.Field(HyperlinkDialogField.Validation));
+        PresentationDialogControlAdapter.ApplySemantic(_validationText, _surface.Field(HyperlinkDialogField.Validation));
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_urlRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyCompactRadioButton(_slideRadio, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_urlBox, DialogChromeStyle);
@@ -259,16 +259,6 @@ internal sealed class HyperlinkDialog : Window
             : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
         button.Click += (_, _) => onClick();
         return button;
-    }
-
-    private static void ApplySemantic(
-        Control control,
-        PresentationDialogFieldPlan<HyperlinkDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-        if (!string.IsNullOrWhiteSpace(field.HelpText))
-            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private void RenderTargetState(HyperlinkDialogViewState state)

@@ -55,7 +55,7 @@ internal sealed class FindReplaceDialog : Window
             MinWidth = 260,
             Margin = new Thickness(6, 4, 0, 4),
         };
-        ApplySemantic(_findBox, findField);
+        PresentationDialogControlAdapter.ApplySemantic(_findBox, findField);
         var replacementField = surface.Field(FindReplaceDialogField.Replacement);
         _replaceLabel = BuildLabel(replacementField.Label);
         _replaceBox = new TextBox
@@ -64,7 +64,7 @@ internal sealed class FindReplaceDialog : Window
             MinWidth = 260,
             Margin = new Thickness(6, 4, 0, 4),
         };
-        ApplySemantic(_replaceBox, replacementField);
+        PresentationDialogControlAdapter.ApplySemantic(_replaceBox, replacementField);
         _matchCaseCheck = new CheckBox
         {
             Content = surface.OptionLabel(FindReplaceDialogOptionKind.MatchCase),
@@ -76,8 +76,8 @@ internal sealed class FindReplaceDialog : Window
             Content = surface.OptionLabel(FindReplaceDialogOptionKind.WholeWord),
             IsChecked = initial.WholeWord,
         };
-        ApplySemantic(_matchCaseCheck, surface.Field(FindReplaceDialogField.MatchCase));
-        ApplySemantic(_wholeWordCheck, surface.Field(FindReplaceDialogField.WholeWord));
+        PresentationDialogControlAdapter.ApplySemantic(_matchCaseCheck, surface.Field(FindReplaceDialogField.MatchCase));
+        PresentationDialogControlAdapter.ApplySemantic(_wholeWordCheck, surface.Field(FindReplaceDialogField.WholeWord));
         _findNextButton = BuildButton(
             surface.Action(FindReplaceDialogAction.FindNext),
             () => ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.FindNext)));
@@ -99,7 +99,7 @@ internal sealed class FindReplaceDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
         };
-        ApplySemantic(_statusText, surface.Field(FindReplaceDialogField.Status));
+        PresentationDialogControlAdapter.ApplySemantic(_statusText, surface.Field(FindReplaceDialogField.Status));
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_findBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_replaceBox, DialogChromeStyle);
@@ -259,13 +259,4 @@ internal sealed class FindReplaceDialog : Window
         return button;
     }
 
-    private static void ApplySemantic(
-        Control control,
-        PresentationDialogFieldPlan<FindReplaceDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-        if (!string.IsNullOrWhiteSpace(field.HelpText))
-            AutomationProperties.SetHelpText(control, field.HelpText);
-    }
 }

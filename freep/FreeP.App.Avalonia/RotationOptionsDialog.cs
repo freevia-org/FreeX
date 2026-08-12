@@ -28,7 +28,7 @@ internal sealed class RotationOptionsDialog : Window
 
         var rotationField = surface.Field(RotationOptionsDialogField.Rotation);
         _rotationBox = new TextBox { Text = _session.InitialRotationText, MinWidth = 160 };
-        ApplySemantic(_rotationBox, rotationField);
+        PresentationDialogControlAdapter.ApplySemantic(_rotationBox, rotationField);
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -88,7 +88,7 @@ internal sealed class RotationOptionsDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Opacity = 0.7,
         };
-        ApplySemantic(hint, surface.Field(RotationOptionsDialogField.Hint));
+        PresentationDialogControlAdapter.ApplySemantic(hint, surface.Field(RotationOptionsDialogField.Hint));
         return hint;
     }
 
@@ -114,13 +114,4 @@ internal sealed class RotationOptionsDialog : Window
         return button;
     }
 
-    private static void ApplySemantic(
-        Control control,
-        PresentationDialogFieldPlan<RotationOptionsDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-        if (!string.IsNullOrWhiteSpace(field.HelpText))
-            AutomationProperties.SetHelpText(control, field.HelpText);
-    }
 }

@@ -331,6 +331,6 @@ public sealed class DialogTailSessionTests
 
     private sealed class FakeSettingsControl
     {
-        public SlideShowSettingsDialogFieldValue Value { get; set; }
+        public PresentationDialogFieldValue Value { get; set; } = new();
     }
 }

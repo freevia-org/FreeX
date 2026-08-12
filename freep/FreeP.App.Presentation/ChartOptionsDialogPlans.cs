@@ -282,30 +282,25 @@ public sealed class ChartOptionsDialogPlan
             : throw new KeyNotFoundException($"The dialog plan does not define {fieldId}.");
 }
 
-public sealed record ChartOptionsDialogFieldValue(
-    string Text = "",
-    int SelectedIndex = -1,
-    bool? IsChecked = false);
-
 public sealed class ChartOptionsDialogValues
 {
-    private readonly IReadOnlyDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue> _values;
+    private readonly IReadOnlyDictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue> _values;
 
     public ChartOptionsDialogValues(
-        IReadOnlyDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue> values)
+        IReadOnlyDictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue> values)
     {
         ArgumentNullException.ThrowIfNull(values);
-        _values = new ReadOnlyDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue>(
-            new Dictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue>(values));
+        _values = new ReadOnlyDictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue>(
+            new Dictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue>(values));
     }
 
     public string Text(ChartOptionsDialogFieldId fieldId) => Value(fieldId).Text;
     public int SelectedIndex(ChartOptionsDialogFieldId fieldId) => Value(fieldId).SelectedIndex;
     public bool IsChecked(ChartOptionsDialogFieldId fieldId) => Value(fieldId).IsChecked == true;
     public bool? NullableChecked(ChartOptionsDialogFieldId fieldId) => Value(fieldId).IsChecked;
-    public IReadOnlyDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue> Fields => _values;
+    public IReadOnlyDictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue> Fields => _values;
 
-    private ChartOptionsDialogFieldValue Value(ChartOptionsDialogFieldId fieldId) =>
+    private PresentationDialogFieldValue Value(ChartOptionsDialogFieldId fieldId) =>
         _values.TryGetValue(fieldId, out var value)
             ? value
             : throw new KeyNotFoundException($"The dialog values do not contain {fieldId}.");

@@ -94,8 +94,8 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
 
         _formSession = new(
-            CaptureValue,
-            ApplyValue,
+            PresentationDialogControlAdapter.CaptureValue,
+            PresentationDialogControlAdapter.ApplyValue,
             static (control, enabled) => control.IsEnabled = enabled,
             static control => control.Focus(),
             SelectAllText);
@@ -243,32 +243,8 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Control control,
         PresentationDialogFieldPlan<HeaderFooterDialogField> field)
     {
-        ApplySemantic(control, field);
+        PresentationDialogControlAdapter.ApplySemantic(control, field);
         _formSession.Register(field.Id, control);
-    }
-
-    private static HeaderFooterDialogFieldValue CaptureValue(Control control) => control switch
-    {
-        TextBox textBox => new(Text: textBox.Text ?? string.Empty),
-        ComboBox comboBox => new(SelectedIndex: comboBox.SelectedIndex),
-        CheckBox checkBox => new(IsChecked: checkBox.IsChecked),
-        _ => throw new InvalidOperationException($"Unsupported header/footer control: {control.GetType().Name}."),
-    };
-
-    private static void ApplyValue(Control control, HeaderFooterDialogFieldValue value)
-    {
-        switch (control)
-        {
-            case TextBox textBox:
-                textBox.Text = value.Text;
-                break;
-            case ComboBox comboBox:
-                comboBox.SelectedIndex = value.SelectedIndex;
-                break;
-            case CheckBox checkBox:
-                checkBox.IsChecked = value.IsChecked;
-                break;
-        }
     }
 
     private static void SelectAllText(Control control)
@@ -277,11 +253,4 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             textBox.SelectAll();
     }
 
-    private static void ApplySemantic(
-        DependencyObject control,
-        PresentationDialogFieldPlan<HeaderFooterDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-    }
 }

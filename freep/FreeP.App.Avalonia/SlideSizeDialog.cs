@@ -77,12 +77,12 @@ internal sealed class SlideSizeDialog : Window
         _heightUnitLabel = BuildUnitLabel();
         _validationText = new TextBlock();
 
-        ApplySemantic(_presetCombo, surface.Field(SlideSizeDialogSurfaceField.Preset));
-        ApplySemantic(_inchesRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Inches");
-        ApplySemantic(_centimetersRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Centimeters");
-        ApplySemantic(_widthBox, surface.Field(SlideSizeDialogSurfaceField.Width));
-        ApplySemantic(_heightBox, surface.Field(SlideSizeDialogSurfaceField.Height));
-        ApplySemantic(_validationText, surface.Field(SlideSizeDialogSurfaceField.Validation));
+        PresentationDialogControlAdapter.ApplySemantic(_presetCombo, surface.Field(SlideSizeDialogSurfaceField.Preset));
+        PresentationDialogControlAdapter.ApplySemantic(_inchesRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Inches");
+        PresentationDialogControlAdapter.ApplySemantic(_centimetersRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Centimeters");
+        PresentationDialogControlAdapter.ApplySemantic(_widthBox, surface.Field(SlideSizeDialogSurfaceField.Width));
+        PresentationDialogControlAdapter.ApplySemantic(_heightBox, surface.Field(SlideSizeDialogSurfaceField.Height));
+        PresentationDialogControlAdapter.ApplySemantic(_validationText, surface.Field(SlideSizeDialogSurfaceField.Validation));
 
         AvaloniaCompactDialogChrome.ApplyComboBox(_presetCombo, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyRadioButton(_inchesRadio, DialogChromeStyle);
@@ -321,15 +321,6 @@ internal sealed class SlideSizeDialog : Window
             isDefault: plan.IsDefault);
         button.Click += (_, _) => action();
         return button;
-    }
-
-    private static void ApplySemantic(
-        Control control,
-        PresentationDialogFieldPlan<SlideSizeDialogSurfaceField> field,
-        string automationSuffix = "")
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId + automationSuffix);
     }
 
 }

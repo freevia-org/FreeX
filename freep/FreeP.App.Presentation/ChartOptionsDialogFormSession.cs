@@ -10,14 +10,14 @@ public sealed class ChartOptionsDialogFormSession<TControl, TRow>
 {
     private readonly Dictionary<ChartOptionsDialogFieldId, TControl> _controls = [];
     private readonly Dictionary<ChartOptionsDialogFieldId, TRow> _rows = [];
-    private readonly Func<TControl, ChartOptionsDialogFieldValue> _captureValue;
-    private readonly Action<TControl, ChartOptionsDialogFieldValue> _applyValue;
+    private readonly Func<TControl, PresentationDialogFieldValue> _captureValue;
+    private readonly Action<TControl, PresentationDialogFieldValue> _applyValue;
     private readonly Action<TControl, ChartOptionsDialogFieldPlan> _applyPlan;
     private readonly Action<TRow, bool> _setRowVisibility;
 
     public ChartOptionsDialogFormSession(
-        Func<TControl, ChartOptionsDialogFieldValue> captureValue,
-        Action<TControl, ChartOptionsDialogFieldValue> applyValue,
+        Func<TControl, PresentationDialogFieldValue> captureValue,
+        Action<TControl, PresentationDialogFieldValue> applyValue,
         Action<TControl, ChartOptionsDialogFieldPlan> applyPlan,
         Action<TRow, bool> setRowVisibility)
     {
@@ -44,7 +44,7 @@ public sealed class ChartOptionsDialogFormSession<TControl, TRow>
             pair => pair.Key,
             pair => Normalize(_captureValue(pair.Value))));
 
-    public ChartOptionsDialogFieldValue Value(ChartOptionsDialogFieldId fieldId) =>
+    public PresentationDialogFieldValue Value(ChartOptionsDialogFieldId fieldId) =>
         _controls.TryGetValue(fieldId, out var control)
             ? Normalize(_captureValue(control))
             : throw new KeyNotFoundException($"The chart options form does not define {fieldId}.");
@@ -91,7 +91,7 @@ public sealed class ChartOptionsDialogFormSession<TControl, TRow>
     public bool TryGetControl(ChartOptionsDialogFieldId fieldId, out TControl control) =>
         _controls.TryGetValue(fieldId, out control!);
 
-    private static ChartOptionsDialogFieldValue Normalize(ChartOptionsDialogFieldValue value) =>
+    private static PresentationDialogFieldValue Normalize(PresentationDialogFieldValue value) =>
         value.Text is null
             ? value with { Text = string.Empty }
             : value;

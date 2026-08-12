@@ -76,15 +76,15 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
     {
         var text = new FakeControl
         {
-            Value = new ChartOptionsDialogFieldValue(Text: null!),
+            Value = new PresentationDialogFieldValue(Text: null!),
         };
         var choice = new FakeControl
         {
-            Value = new ChartOptionsDialogFieldValue(SelectedIndex: 2),
+            Value = new PresentationDialogFieldValue(SelectedIndex: 2),
         };
         var toggle = new FakeControl
         {
-            Value = new ChartOptionsDialogFieldValue(IsChecked: null),
+            Value = new PresentationDialogFieldValue(IsChecked: null),
         };
         var form = new ChartOptionsDialogFormSession<FakeControl, FakeRow>(
             static control => control.Value,
@@ -133,7 +133,7 @@ public sealed class ChartOptionsDialogFormSessionOwnershipTests
 
     private sealed class FakeControl
     {
-        public ChartOptionsDialogFieldValue Value { get; set; } = new();
+        public PresentationDialogFieldValue Value { get; set; } = new();
     }
 
     private sealed class FakeRow

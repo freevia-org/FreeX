@@ -29,7 +29,7 @@ public sealed class ChartOptionsDialogPlanTests
     {
         var session = new ChartBubbleOptionsDialogSession(CreateEditor(CreateBubbleChart()));
         var values = new ChartOptionsDialogValues(
-            new Dictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue>
+            new Dictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue>
             {
                 [ChartOptionsDialogFieldId.BubbleScale] = new(Text: "225"),
                 [ChartOptionsDialogFieldId.BubbleSizeRepresents] = new(SelectedIndex: 1),
@@ -301,7 +301,7 @@ public sealed class ChartOptionsDialogPlanTests
     private static ChartOptionsDialogValues ValuesFromPlan(ChartOptionsDialogPlan plan) => new(
         plan.Fields.ToDictionary(
             pair => pair.Key,
-            pair => new ChartOptionsDialogFieldValue(
+            pair => new PresentationDialogFieldValue(
                 pair.Value.Text,
                 pair.Value.SelectedIndex,
                 pair.Value.IsChecked)));

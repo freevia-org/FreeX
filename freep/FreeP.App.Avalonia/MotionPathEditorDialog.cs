@@ -35,7 +35,7 @@ internal sealed class MotionPathEditorDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         AutomationProperties.SetName(this, surface.Schema.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
-        ApplySemantic(
+        PresentationDialogControlAdapter.ApplySemantic(
             _validationText,
             surface.Field(MotionPathEditorDialogField.Validation));
         foreach (var segment in _session.InitialSegments)
@@ -62,7 +62,7 @@ internal sealed class MotionPathEditorDialog : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
         };
-        ApplySemantic(intro, surface.Field(MotionPathEditorDialogField.Introduction));
+        PresentationDialogControlAdapter.ApplySemantic(intro, surface.Field(MotionPathEditorDialogField.Introduction));
         DockPanel.SetDock(intro, Dock.Top);
         root.Children.Add(intro);
 
@@ -145,14 +145,6 @@ internal sealed class MotionPathEditorDialog : Window
         return button;
     }
 
-    private static void ApplySemantic(
-        Control control,
-        PresentationDialogFieldPlan<MotionPathEditorDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-    }
-
     private static void ApplyAction(
         Control control,
         PresentationDialogActionPlan<MotionPathEditorDialogAction> action)
@@ -193,7 +185,7 @@ internal sealed class MotionPathEditorDialog : Window
             _kind.Width = 78;
             _kind.Margin = new Thickness(2);
             _kind.SelectionChanged += (_, _) => UpdateControlState();
-            ApplySemantic(
+            PresentationDialogControlAdapter.ApplySemantic(
                 _kind,
                 _surface.Field(MotionPathEditorDialogField.SegmentKind, plan.RowIndex));
             Set(_x, plan.X);
@@ -202,12 +194,12 @@ internal sealed class MotionPathEditorDialog : Window
             Set(_y1, plan.Y1);
             Set(_x2, plan.X2);
             Set(_y2, plan.Y2);
-            ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X, plan.RowIndex));
-            ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y, plan.RowIndex));
-            ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1, plan.RowIndex));
-            ApplySemantic(_y1, _surface.Field(MotionPathEditorDialogField.Y1, plan.RowIndex));
-            ApplySemantic(_x2, _surface.Field(MotionPathEditorDialogField.X2, plan.RowIndex));
-            ApplySemantic(_y2, _surface.Field(MotionPathEditorDialogField.Y2, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_x, _surface.Field(MotionPathEditorDialogField.X, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_y, _surface.Field(MotionPathEditorDialogField.Y, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_x1, _surface.Field(MotionPathEditorDialogField.X1, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_y1, _surface.Field(MotionPathEditorDialogField.Y1, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_x2, _surface.Field(MotionPathEditorDialogField.X2, plan.RowIndex));
+            PresentationDialogControlAdapter.ApplySemantic(_y2, _surface.Field(MotionPathEditorDialogField.Y2, plan.RowIndex));
 
             var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(2) };
             panel.Children.Add(new TextBlock { Text = plan.RowLabel, Width = 62, VerticalAlignment = VerticalAlignment.Center });

@@ -117,8 +117,8 @@ internal sealed class ChartOptionsDialogForm
 
         _valueChanged = valueChanged;
         _formSession = new ChartOptionsDialogFormSession<Control, FrameworkElement>(
-            CaptureValue,
-            ApplyValue,
+            PresentationDialogControlAdapter.CaptureValue,
+            PresentationDialogControlAdapter.ApplyValue,
             ApplyFieldPlan,
             static (row, isVisible) =>
                 row.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed);
@@ -218,8 +218,10 @@ internal sealed class ChartOptionsDialogForm
         };
         control.MinWidth = field.MinimumControlWidth;
         control.IsEnabled = field.IsEnabled;
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
+        PresentationDialogControlAdapter.ApplySemantic(
+            control,
+            field.AccessibleName,
+            field.AutomationId);
 
         FrameworkElement row = field.IsStandalone
             ? control
@@ -246,30 +248,6 @@ internal sealed class ChartOptionsDialogForm
     {
         if (!_formSession.IsApplyingPlan)
             _valueChanged?.Invoke(fieldId);
-    }
-
-    private static ChartOptionsDialogFieldValue CaptureValue(Control control) => control switch
-    {
-        TextBox textBox => new ChartOptionsDialogFieldValue(Text: textBox.Text),
-        ComboBox comboBox => new ChartOptionsDialogFieldValue(SelectedIndex: comboBox.SelectedIndex),
-        CheckBox checkBox => new ChartOptionsDialogFieldValue(IsChecked: checkBox.IsChecked),
-        _ => throw new InvalidOperationException($"Unsupported chart dialog control: {control.GetType().Name}."),
-    };
-
-    private static void ApplyValue(Control control, ChartOptionsDialogFieldValue value)
-    {
-        switch (control)
-        {
-            case TextBox textBox:
-                textBox.Text = value.Text;
-                break;
-            case ComboBox comboBox:
-                comboBox.SelectedIndex = value.SelectedIndex;
-                break;
-            case CheckBox checkBox:
-                checkBox.IsChecked = value.IsChecked;
-                break;
-        }
     }
 
     private static void ApplyFieldPlan(Control control, ChartOptionsDialogFieldPlan field)

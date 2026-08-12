@@ -88,8 +88,8 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Content = surface.TargetLabel(HyperlinkDialogTargetKind.Slide),
             Margin = new Thickness(0, 0, 0, 8),
         };
-        ApplySemantic(_urlRadio, surface.TargetField(HyperlinkDialogTargetKind.Url));
-        ApplySemantic(_slideRadio, surface.TargetField(HyperlinkDialogTargetKind.Slide));
+        PresentationDialogControlAdapter.ApplySemantic(_urlRadio, surface.TargetField(HyperlinkDialogTargetKind.Url));
+        PresentationDialogControlAdapter.ApplySemantic(_slideRadio, surface.TargetField(HyperlinkDialogTargetKind.Slide));
 
         var radioPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 6) };
         radioPanel.Children.Add(_urlRadio);
@@ -105,7 +105,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(urlLabel);
 
         _urlBox = new TextBox { Margin = new Thickness(0, 0, 0, 4), VerticalAlignment = VerticalAlignment.Center };
-        ApplySemantic(_urlBox, urlField);
+        PresentationDialogControlAdapter.ApplySemantic(_urlBox, urlField);
         Grid.SetRow(_urlBox, 1); Grid.SetColumn(_urlBox, 1);
         grid.Children.Add(_urlBox);
 
@@ -116,7 +116,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(slideLabel);
 
         _slideCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 4), VerticalAlignment = VerticalAlignment.Center };
-        ApplySemantic(_slideCombo, slideField);
+        PresentationDialogControlAdapter.ApplySemantic(_slideCombo, slideField);
         foreach (var option in _session.SlideOptions)
         {
             _slideCombo.Items.Add(option);
@@ -132,7 +132,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(tooltipLabel);
 
         _tooltipBox = new TextBox { Margin = new Thickness(0, 0, 0, 8), VerticalAlignment = VerticalAlignment.Center };
-        ApplySemantic(_tooltipBox, tooltipField);
+        PresentationDialogControlAdapter.ApplySemantic(_tooltipBox, tooltipField);
         Grid.SetRow(_tooltipBox, 3); Grid.SetColumn(_tooltipBox, 1);
         grid.Children.Add(_tooltipBox);
 
@@ -142,7 +142,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8),
         };
-        ApplySemantic(_validationText, surface.Field(HyperlinkDialogField.Validation));
+        PresentationDialogControlAdapter.ApplySemantic(_validationText, surface.Field(HyperlinkDialogField.Validation));
         Grid.SetRow(_validationText, 4);
         Grid.SetColumnSpan(_validationText, 2);
         grid.Children.Add(_validationText);
@@ -239,16 +239,6 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             DialogFocus.FocusAndSelect(_urlBox);
         else if (field == HyperlinkDialogField.Slide)
             _slideCombo.Focus();
-    }
-
-    private static void ApplySemantic(
-        DependencyObject control,
-        PresentationDialogFieldPlan<HyperlinkDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-        if (!string.IsNullOrWhiteSpace(field.HelpText))
-            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private static void ApplyAction(

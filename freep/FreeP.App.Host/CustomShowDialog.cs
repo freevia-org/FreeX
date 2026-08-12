@@ -62,15 +62,15 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
-        ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
+        PresentationDialogControlAdapter.ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
         _showList.SelectionChanged += (_, _) => OnSelectedShowChanged();
 
         _nameBox.MinWidth = 260;
         _nameBox.Margin = new Thickness(0, 0, 0, 8);
-        ApplySemantic(_nameBox, Surface.Field(SlideShowCustomShowDialogField.Name));
+        PresentationDialogControlAdapter.ApplySemantic(_nameBox, Surface.Field(SlideShowCustomShowDialogField.Name));
 
         _customShowSlideList.MinHeight = 92;
-        ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
+        PresentationDialogControlAdapter.ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
         _customShowSlideList.SelectionChanged += (_, _) =>
             ApplyTransition(_session.SelectSlide(_formSession.SelectedSlideIndex));
         _customShowSlideList.AllowDrop = true;
@@ -82,7 +82,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.TextWrapping = TextWrapping.Wrap;
         _validationText.Margin = new Thickness(0, 4, 0, 8);
-        ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
+        PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
         _renameButton = MakeButton(SlideShowCustomShowDialogAction.Rename, OnRename);
         _updateButton = MakeButton(SlideShowCustomShowDialogAction.UpdateSlides, OnUpdateSlides);
@@ -256,7 +256,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 Tag = slide.SlideId,
                 Margin = new Thickness(0, 2, 0, 2),
             };
-            ApplySemantic(
+            PresentationDialogControlAdapter.ApplySemantic(
                 checkBox,
                 Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId));
             _slideCheckBoxes.Add(checkBox);
@@ -413,16 +413,6 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (automationSuffix is null)
             _formSession.RegisterAction(actionId, button);
         return button;
-    }
-
-    private static void ApplySemantic(
-        DependencyObject control,
-        PresentationDialogFieldPlan<SlideShowCustomShowDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-        if (!string.IsNullOrWhiteSpace(field.HelpText))
-            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private static void SetItemsSource(FrameworkElement control, object? items) =>

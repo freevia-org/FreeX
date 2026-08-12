@@ -105,7 +105,11 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                             ? new Thickness(0, 4, 0, 0)
                             : default,
                 };
-                ApplySemantic(checkBox, plan);
+                PresentationDialogControlAdapter.ApplySemantic(
+                    checkBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
                 checkBox.IsCheckedChanged += (_, _) =>
                     Dispatch(plan.Field, checkBox.IsChecked == true);
                 return checkBox;
@@ -117,7 +121,11 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                     MinWidth = inputMinWidth,
                     PlaceholderText = plan.PlaceholderText,
                 };
-                ApplySemantic(textBox, plan);
+                PresentationDialogControlAdapter.ApplySemantic(
+                    textBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
                 textBox.TextChanged += (_, _) => Dispatch(plan.Field, textBox.Text);
                 return textBox;
             }
@@ -128,7 +136,11 @@ internal sealed class ZoomObjectPropertiesDialog : Window
                     ItemsSource = plan.Options,
                     MinWidth = inputMinWidth,
                 };
-                ApplySemantic(comboBox, plan);
+                PresentationDialogControlAdapter.ApplySemantic(
+                    comboBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
                 comboBox.SelectionChanged += (_, _) => Dispatch(plan.Field, comboBox.SelectedItem);
                 return comboBox;
             }
@@ -198,16 +210,6 @@ internal sealed class ZoomObjectPropertiesDialog : Window
         control.Focus();
         if (selectAll && control is TextBox textBox)
             textBox.SelectAll();
-    }
-
-    private static void ApplySemantic(
-        Control control,
-        ZoomObjectPropertiesDialogControlPlan plan)
-    {
-        AutomationProperties.SetName(control, plan.AccessibleName);
-        AutomationProperties.SetAutomationId(control, plan.AutomationId);
-        if (!string.IsNullOrWhiteSpace(plan.HelpText))
-            AutomationProperties.SetHelpText(control, plan.HelpText);
     }
 
     private static void ApplyAction(

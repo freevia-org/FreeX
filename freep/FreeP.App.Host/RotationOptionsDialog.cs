@@ -33,7 +33,7 @@ public sealed class RotationOptionsDialog : DialogWindow
             MinWidth = 160,
             Margin = new Thickness(4),
         };
-        ApplySemantic(_rotationBox, rotationField);
+        PresentationDialogControlAdapter.ApplySemantic(_rotationBox, rotationField);
 
         var buttons = DialogButtonRowFactory.Create(OnOk, buttonWidth: 80,
             rowMargin: new Thickness(4, 8, 8, 8),
@@ -55,7 +55,7 @@ public sealed class RotationOptionsDialog : DialogWindow
             Opacity = 0.7,
             Margin = new Thickness(4, 4, 4, 0),
         };
-        ApplySemantic(hint, surface.Field(RotationOptionsDialogField.Hint));
+        PresentationDialogControlAdapter.ApplySemantic(hint, surface.Field(RotationOptionsDialogField.Hint));
         panel.Children.Add(hint);
         panel.Children.Add(buttons);
         Content = panel;
@@ -86,16 +86,6 @@ public sealed class RotationOptionsDialog : DialogWindow
             return false;
         }
         return true;
-    }
-
-    private static void ApplySemantic(
-        DependencyObject control,
-        PresentationDialogFieldPlan<RotationOptionsDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-        if (!string.IsNullOrWhiteSpace(field.HelpText))
-            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private static void ApplyAction(

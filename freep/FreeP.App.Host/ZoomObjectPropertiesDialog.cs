@@ -113,7 +113,11 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                             ? new Thickness(0, 4, 0, 0)
                             : default,
                 };
-                ApplySemantic(checkBox, plan);
+                PresentationDialogControlAdapter.ApplySemantic(
+                    checkBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
                 checkBox.Checked += (_, _) => Dispatch(plan.Field, true);
                 checkBox.Unchecked += (_, _) => Dispatch(plan.Field, false);
                 return checkBox;
@@ -125,7 +129,11 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                     MinWidth = inputMinWidth,
                     ToolTip = plan.ToolTipText,
                 };
-                ApplySemantic(textBox, plan);
+                PresentationDialogControlAdapter.ApplySemantic(
+                    textBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
                 textBox.TextChanged += (_, _) => Dispatch(plan.Field, textBox.Text);
                 return textBox;
             }
@@ -136,7 +144,11 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                     ItemsSource = plan.Options,
                     MinWidth = inputMinWidth,
                 };
-                ApplySemantic(comboBox, plan);
+                PresentationDialogControlAdapter.ApplySemantic(
+                    comboBox,
+                    plan.AccessibleName,
+                    plan.AutomationId,
+                    plan.HelpText);
                 comboBox.SelectionChanged += (_, _) => Dispatch(plan.Field, comboBox.SelectedItem);
                 return comboBox;
             }
@@ -207,16 +219,6 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         control.Focus();
         if (selectAll && control is TextBox textBox)
             textBox.SelectAll();
-    }
-
-    private static void ApplySemantic(
-        DependencyObject control,
-        ZoomObjectPropertiesDialogControlPlan plan)
-    {
-        AutomationProperties.SetName(control, plan.AccessibleName);
-        AutomationProperties.SetAutomationId(control, plan.AutomationId);
-        if (!string.IsNullOrWhiteSpace(plan.HelpText))
-            AutomationProperties.SetHelpText(control, plan.HelpText);
     }
 
     private static void ApplyAction(

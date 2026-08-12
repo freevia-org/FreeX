@@ -86,32 +86,27 @@ public sealed record HeaderFooterDialogViewState(
     HeaderFooterDialogEnabledState Enabled,
     IReadOnlyList<HeaderFooterDateFormatOption> DateFormatOptions);
 
-public readonly record struct HeaderFooterDialogFieldValue(
-    string Text = "",
-    int SelectedIndex = -1,
-    bool? IsChecked = null);
-
 public sealed record HeaderFooterDialogFocusPlan(
     HeaderFooterDialogField Field,
     bool SelectAllText = false);
 
 public sealed class HeaderFooterDialogInputProjection
 {
-    private readonly IReadOnlyDictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue> _fields;
+    private readonly IReadOnlyDictionary<HeaderFooterDialogField, PresentationDialogFieldValue> _fields;
 
     public HeaderFooterDialogInputProjection(
-        IReadOnlyDictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue> fields)
+        IReadOnlyDictionary<HeaderFooterDialogField, PresentationDialogFieldValue> fields)
     {
         ArgumentNullException.ThrowIfNull(fields);
-        _fields = new Dictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue>(fields);
+        _fields = new Dictionary<HeaderFooterDialogField, PresentationDialogFieldValue>(fields);
     }
 
-    public IReadOnlyDictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue> Fields => _fields;
+    public IReadOnlyDictionary<HeaderFooterDialogField, PresentationDialogFieldValue> Fields => _fields;
 
     public static HeaderFooterDialogInputProjection FromInput(HeaderFooterDialogInputState input)
     {
         ArgumentNullException.ThrowIfNull(input);
-        return new(new Dictionary<HeaderFooterDialogField, HeaderFooterDialogFieldValue>
+        return new(new Dictionary<HeaderFooterDialogField, PresentationDialogFieldValue>
         {
             [HeaderFooterDialogField.DateTime] = new(IsChecked: input.ShowDateTime),
             [HeaderFooterDialogField.DateFormat] = new(SelectedIndex: input.DateFormatIndex),
@@ -134,7 +129,7 @@ public sealed class HeaderFooterDialogInputProjection
         SelectedIndex(HeaderFooterDialogField.DateFormat),
         Text(HeaderFooterDialogField.FixedDateTimeText));
 
-    private HeaderFooterDialogFieldValue Value(HeaderFooterDialogField field) =>
+    private PresentationDialogFieldValue Value(HeaderFooterDialogField field) =>
         _fields.TryGetValue(field, out var value)
             ? value
             : throw new KeyNotFoundException($"The header/footer projection does not contain {field}.");
@@ -153,15 +148,15 @@ public sealed class HeaderFooterDialogFormSession<TControl>
     where TControl : class
 {
     private readonly Dictionary<HeaderFooterDialogField, TControl> _controls = [];
-    private readonly Func<TControl, HeaderFooterDialogFieldValue> _captureValue;
-    private readonly Action<TControl, HeaderFooterDialogFieldValue> _applyValue;
+    private readonly Func<TControl, PresentationDialogFieldValue> _captureValue;
+    private readonly Action<TControl, PresentationDialogFieldValue> _applyValue;
     private readonly Action<TControl, bool> _setEnabled;
     private readonly Action<TControl> _focus;
     private readonly Action<TControl> _selectAllText;
 
     public HeaderFooterDialogFormSession(
-        Func<TControl, HeaderFooterDialogFieldValue> captureValue,
-        Action<TControl, HeaderFooterDialogFieldValue> applyValue,
+        Func<TControl, PresentationDialogFieldValue> captureValue,
+        Action<TControl, PresentationDialogFieldValue> applyValue,
         Action<TControl, bool> setEnabled,
         Action<TControl> focus,
         Action<TControl> selectAllText)

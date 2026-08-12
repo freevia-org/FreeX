@@ -72,11 +72,11 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _widthUnitLabel = new Label { Content = _session.State.Display.UnitLabel, Width = 30 };
         _heightUnitLabel = new Label { Content = _session.State.Display.UnitLabel, Width = 30 };
 
-        ApplySemantic(_presetCombo, surface.Field(SlideSizeDialogSurfaceField.Preset));
-        ApplySemantic(_inchesRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Inches");
-        ApplySemantic(_cmRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Centimeters");
-        ApplySemantic(_widthBox, surface.Field(SlideSizeDialogSurfaceField.Width));
-        ApplySemantic(_heightBox, surface.Field(SlideSizeDialogSurfaceField.Height));
+        PresentationDialogControlAdapter.ApplySemantic(_presetCombo, surface.Field(SlideSizeDialogSurfaceField.Preset));
+        PresentationDialogControlAdapter.ApplySemantic(_inchesRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Inches");
+        PresentationDialogControlAdapter.ApplySemantic(_cmRadio, surface.Field(SlideSizeDialogSurfaceField.Unit), ".Centimeters");
+        PresentationDialogControlAdapter.ApplySemantic(_widthBox, surface.Field(SlideSizeDialogSurfaceField.Width));
+        PresentationDialogControlAdapter.ApplySemantic(_heightBox, surface.Field(SlideSizeDialogSurfaceField.Height));
 
         LoadInitialState();
 
@@ -278,12 +278,4 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(lbl);
     }
 
-    private static void ApplySemantic(
-        DependencyObject control,
-        PresentationDialogFieldPlan<SlideSizeDialogSurfaceField> field,
-        string automationSuffix = "")
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId + automationSuffix);
-    }
 }

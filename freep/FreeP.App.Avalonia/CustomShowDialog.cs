@@ -70,17 +70,17 @@ internal sealed class CustomShowDialog : Window
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
         ApplyListChrome(_showList);
-        ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
+        PresentationDialogControlAdapter.ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
         _showList.SelectionChanged += (_, _) => OnSelectedShowChanged();
 
         _nameBox.MinWidth = 260;
         _nameBox.Margin = new Thickness(0, 0, 0, 8);
         AvaloniaCompactDialogChrome.ApplyTextBox(_nameBox, DialogChromeStyle);
-        ApplySemantic(_nameBox, Surface.Field(SlideShowCustomShowDialogField.Name));
+        PresentationDialogControlAdapter.ApplySemantic(_nameBox, Surface.Field(SlideShowCustomShowDialogField.Name));
 
         _customShowSlideList.MinHeight = 92;
         ApplyListChrome(_customShowSlideList);
-        ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
+        PresentationDialogControlAdapter.ApplySemantic(_customShowSlideList, Surface.Field(SlideShowCustomShowDialogField.OrderedSlides));
         _customShowSlideList.SelectionChanged += (_, _) =>
             ApplyTransition(_session.SelectSlide(_formSession.SelectedSlideIndex));
         DragDrop.SetAllowDrop(_customShowSlideList, true);
@@ -94,7 +94,7 @@ internal sealed class CustomShowDialog : Window
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.TextWrapping = TextWrapping.Wrap;
         _validationText.Margin = new Thickness(0, 4, 0, 8);
-        ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
+        PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
 
         _renameButton = MakeButton(SlideShowCustomShowDialogAction.Rename, OnRename);
         _updateButton = MakeButton(SlideShowCustomShowDialogAction.UpdateSlides, OnUpdateSlides);
@@ -298,7 +298,7 @@ internal sealed class CustomShowDialog : Window
             checkBox.MinHeight = 20;
             checkBox.MaxHeight = 20;
             checkBox.Padding = new Thickness(0);
-            ApplySemantic(
+            PresentationDialogControlAdapter.ApplySemantic(
                 checkBox,
                 Surface.Field(SlideShowCustomShowDialogField.AvailableSlides, slide.SlideId));
             _slideCheckBoxes.Add(checkBox);
@@ -547,16 +547,6 @@ internal sealed class CustomShowDialog : Window
         if (automationSuffix is null)
             _formSession.RegisterAction(actionId, button);
         return button;
-    }
-
-    private static void ApplySemantic(
-        Control control,
-        PresentationDialogFieldPlan<SlideShowCustomShowDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-        if (!string.IsNullOrWhiteSpace(field.HelpText))
-            AutomationProperties.SetHelpText(control, field.HelpText);
     }
 
     private static void SetItemsSource(Control control, object? items) =>

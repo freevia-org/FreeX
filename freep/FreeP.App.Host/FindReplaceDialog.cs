@@ -98,7 +98,7 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         _findBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetQuery(_findBox.Text));
         _findBox.KeyDown += OnFindBoxKeyDown;
-        ApplySemantic(_findBox, findField);
+        PresentationDialogControlAdapter.ApplySemantic(_findBox, findField);
         Grid.SetRow(_findBox, 0);
         Grid.SetColumn(_findBox, 1);
         grid.Children.Add(_findBox);
@@ -116,7 +116,7 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin = new Thickness(6, 4, 0, 4),
         };
         _replaceBox.TextChanged += (_, _) => ApplyWorkflowPlan(_session.SetReplacement(_replaceBox.Text));
-        ApplySemantic(_replaceBox, replacementField);
+        PresentationDialogControlAdapter.ApplySemantic(_replaceBox, replacementField);
         Grid.SetRow(_replaceBox, 1);
         Grid.SetColumn(_replaceBox, 1);
         grid.Children.Add(_replaceBox);
@@ -143,8 +143,8 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _matchCaseBox.Unchecked += (_, _) => ApplyWorkflowPlan(_session.SetMatchCase(false));
         _wholeWordBox.Checked   += (_, _) => ApplyWorkflowPlan(_session.SetWholeWord(true));
         _wholeWordBox.Unchecked += (_, _) => ApplyWorkflowPlan(_session.SetWholeWord(false));
-        ApplySemantic(_matchCaseBox, surface.Field(FindReplaceDialogField.MatchCase));
-        ApplySemantic(_wholeWordBox, surface.Field(FindReplaceDialogField.WholeWord));
+        PresentationDialogControlAdapter.ApplySemantic(_matchCaseBox, surface.Field(FindReplaceDialogField.MatchCase));
+        PresentationDialogControlAdapter.ApplySemantic(_wholeWordBox, surface.Field(FindReplaceDialogField.WholeWord));
         optPanel.Children.Add(_matchCaseBox);
         optPanel.Children.Add(_wholeWordBox);
         Grid.SetRow(optPanel, 2);
@@ -200,7 +200,7 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             FontSize   = 11,
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66))
         };
-        ApplySemantic(_statusText, surface.Field(FindReplaceDialogField.Status));
+        PresentationDialogControlAdapter.ApplySemantic(_statusText, surface.Field(FindReplaceDialogField.Status));
         Grid.SetRow(_statusText, 5);
         Grid.SetColumnSpan(_statusText, 2);
         grid.Children.Add(_statusText);
@@ -349,13 +349,4 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return btn;
     }
 
-    private static void ApplySemantic(
-        DependencyObject control,
-        PresentationDialogFieldPlan<FindReplaceDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-        if (!string.IsNullOrWhiteSpace(field.HelpText))
-            AutomationProperties.SetHelpText(control, field.HelpText);
-    }
 }

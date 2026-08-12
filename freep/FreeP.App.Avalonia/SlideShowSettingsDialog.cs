@@ -92,17 +92,19 @@ internal sealed class SlideShowSettingsDialog : Window
             MinWidth = 76,
         };
 
-        ApplySemantic(_useTimingsCheck, surface.Field(SlideShowSettingsDialogField.UseTimings));
-        ApplySemantic(_showAnimationCheck, surface.Field(SlideShowSettingsDialogField.ShowWithoutAnimation));
-        ApplySemantic(_showNarrationCheck, surface.Field(SlideShowSettingsDialogField.PlayNarration));
-        ApplySemantic(_showMediaControlsCheck, surface.Field(SlideShowSettingsDialogField.ShowMediaControls));
-        ApplySemantic(_showMasterShapesCheck, surface.Field(SlideShowSettingsDialogField.ShowMasterGraphics));
-        ApplySemantic(_loopCheck, surface.Field(SlideShowSettingsDialogField.LoopUntilStopped));
-        ApplySemantic(_showTypeCombo, surface.Field(SlideShowSettingsDialogField.ShowType));
-        ApplySemantic(_showScrollbarCheck, surface.Field(SlideShowSettingsDialogField.ShowBrowseScrollbar));
-        ApplySemantic(_kioskRestartText, surface.Field(SlideShowSettingsDialogField.KioskRestartMilliseconds));
+        PresentationDialogControlAdapter.ApplySemantic(_useTimingsCheck, surface.Field(SlideShowSettingsDialogField.UseTimings));
+        PresentationDialogControlAdapter.ApplySemantic(_showAnimationCheck, surface.Field(SlideShowSettingsDialogField.ShowWithoutAnimation));
+        PresentationDialogControlAdapter.ApplySemantic(_showNarrationCheck, surface.Field(SlideShowSettingsDialogField.PlayNarration));
+        PresentationDialogControlAdapter.ApplySemantic(_showMediaControlsCheck, surface.Field(SlideShowSettingsDialogField.ShowMediaControls));
+        PresentationDialogControlAdapter.ApplySemantic(_showMasterShapesCheck, surface.Field(SlideShowSettingsDialogField.ShowMasterGraphics));
+        PresentationDialogControlAdapter.ApplySemantic(_loopCheck, surface.Field(SlideShowSettingsDialogField.LoopUntilStopped));
+        PresentationDialogControlAdapter.ApplySemantic(_showTypeCombo, surface.Field(SlideShowSettingsDialogField.ShowType));
+        PresentationDialogControlAdapter.ApplySemantic(_showScrollbarCheck, surface.Field(SlideShowSettingsDialogField.ShowBrowseScrollbar));
+        PresentationDialogControlAdapter.ApplySemantic(_kioskRestartText, surface.Field(SlideShowSettingsDialogField.KioskRestartMilliseconds));
 
-        _formSession = new(CaptureValue, ApplyValue);
+        _formSession = new(
+            PresentationDialogControlAdapter.CaptureValue,
+            PresentationDialogControlAdapter.ApplyValue);
         _formSession.Register(SlideShowSettingsDialogField.UseTimings, _useTimingsCheck);
         _formSession.Register(SlideShowSettingsDialogField.ShowWithoutAnimation, _showAnimationCheck);
         _formSession.Register(SlideShowSettingsDialogField.PlayNarration, _showNarrationCheck);
@@ -214,38 +216,6 @@ internal sealed class SlideShowSettingsDialog : Window
         if (applied && IsVisible)
             Close(true);
         return applied;
-    }
-
-    private static void ApplySemantic(
-        Control control,
-        PresentationDialogFieldPlan<SlideShowSettingsDialogField> field)
-    {
-        AutomationProperties.SetName(control, field.AccessibleName);
-        AutomationProperties.SetAutomationId(control, field.AutomationId);
-    }
-
-    private static SlideShowSettingsDialogFieldValue CaptureValue(Control control) => control switch
-    {
-        CheckBox checkBox => new(IsChecked: checkBox.IsChecked),
-        ComboBox comboBox => new(SelectedIndex: comboBox.SelectedIndex),
-        TextBox textBox => new(Text: textBox.Text ?? string.Empty),
-        _ => throw new InvalidOperationException($"Unsupported slide show settings control: {control.GetType().Name}.")
-    };
-
-    private static void ApplyValue(Control control, SlideShowSettingsDialogFieldValue value)
-    {
-        switch (control)
-        {
-            case CheckBox checkBox:
-                checkBox.IsChecked = value.IsChecked;
-                break;
-            case ComboBox comboBox:
-                comboBox.SelectedIndex = value.SelectedIndex;
-                break;
-            case TextBox textBox:
-                textBox.Text = value.Text;
-                break;
-        }
     }
 
 }

@@ -469,7 +469,7 @@ public static class ChartOptionsDialogTestPlanCatalog
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(settings);
-        var values = new Dictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue>
+        var values = new Dictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue>
         {
             [ChartOptionsDialogFieldId.Series] = Selection(settings.SeriesIndex),
             [ChartOptionsDialogFieldId.SmoothLine] = Check(settings.SmoothLine),
@@ -519,7 +519,7 @@ public static class ChartOptionsDialogTestPlanCatalog
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(settings);
-        var values = new Dictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue>();
+        var values = new Dictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue>();
         AddText(values, ChartOptionsDialogFieldId.ChartTitle, settings.Title);
         AddCheck(values, ChartOptionsDialogFieldId.TitleOverlay, settings.TitleOverlay);
         AddChoice(values, ChartOptionsDialogFieldId.TitlePosition, settings.TitlePosition, session.FindTitlePositionIndex);
@@ -616,7 +616,7 @@ public static class ChartOptionsDialogTestPlanCatalog
         ChartOptionsDialogValues values) => session.BuildCommitPlan(session.BuildInput(values));
 
     private static ChartOptionsDialogValues Values(
-        params (ChartOptionsDialogFieldId Id, ChartOptionsDialogFieldValue Value)[] values) => new(
+        params (ChartOptionsDialogFieldId Id, PresentationDialogFieldValue Value)[] values) => new(
             values.ToDictionary(item => item.Id, item => item.Value));
 
     private static ChartOptionsDialogValues Overlay(
@@ -625,7 +625,7 @@ public static class ChartOptionsDialogTestPlanCatalog
     {
         var values = plan.Fields.ToDictionary(
             pair => pair.Key,
-            pair => new ChartOptionsDialogFieldValue(
+            pair => new PresentationDialogFieldValue(
                 pair.Value.Text,
                 pair.Value.SelectedIndex,
                 pair.Value.IsChecked));
@@ -634,25 +634,25 @@ public static class ChartOptionsDialogTestPlanCatalog
         return new ChartOptionsDialogValues(values);
     }
 
-    private static (ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue) Text(
+    private static (ChartOptionsDialogFieldId, PresentationDialogFieldValue) Text(
         ChartOptionsDialogFieldId id,
         string? value) => (id, TextValue(value));
 
-    private static (ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue) Choice(
+    private static (ChartOptionsDialogFieldId, PresentationDialogFieldValue) Choice(
         ChartOptionsDialogFieldId id,
         int value) => (id, Selection(value));
 
-    private static (ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue) Checked(
+    private static (ChartOptionsDialogFieldId, PresentationDialogFieldValue) Checked(
         ChartOptionsDialogFieldId id,
         bool? value) => (id, Check(value));
 
-    private static ChartOptionsDialogFieldValue TextValue(string? value) =>
+    private static PresentationDialogFieldValue TextValue(string? value) =>
         new(Text: value ?? string.Empty);
 
-    private static ChartOptionsDialogFieldValue Selection(int value) =>
+    private static PresentationDialogFieldValue Selection(int value) =>
         new(SelectedIndex: value);
 
-    private static ChartOptionsDialogFieldValue Check(bool? value) =>
+    private static PresentationDialogFieldValue Check(bool? value) =>
         new(IsChecked: value);
 
     private static string Format(double? value, CultureInfo culture) =>
@@ -672,7 +672,7 @@ public static class ChartOptionsDialogTestPlanCatalog
         ChartDialogOptionProjection.FindIndex(options, value, selector, comparer: comparer);
 
     private static void AddText(
-        IDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue> values,
+        IDictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue> values,
         ChartOptionsDialogFieldId id,
         string? value)
     {
@@ -681,7 +681,7 @@ public static class ChartOptionsDialogTestPlanCatalog
     }
 
     private static void AddText<T>(
-        IDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue> values,
+        IDictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue> values,
         ChartOptionsDialogFieldId id,
         T? value,
         Func<T?, string> format)
@@ -692,7 +692,7 @@ public static class ChartOptionsDialogTestPlanCatalog
     }
 
     private static void AddCheck(
-        IDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue> values,
+        IDictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue> values,
         ChartOptionsDialogFieldId id,
         bool? value)
     {
@@ -701,7 +701,7 @@ public static class ChartOptionsDialogTestPlanCatalog
     }
 
     private static void AddChoice<T>(
-        IDictionary<ChartOptionsDialogFieldId, ChartOptionsDialogFieldValue> values,
+        IDictionary<ChartOptionsDialogFieldId, PresentationDialogFieldValue> values,
         ChartOptionsDialogFieldId id,
         T? value,
         Func<T, int> findIndex)

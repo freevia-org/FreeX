@@ -246,7 +246,7 @@ public sealed class HeaderFooterDialogSessionTests
 
     private sealed class FakeControl
     {
-        public HeaderFooterDialogFieldValue Value { get; set; }
+        public PresentationDialogFieldValue Value { get; set; } = new();
         public bool IsEnabled { get; set; } = true;
         public bool IsFocused { get; set; }
         public bool IsTextSelected { get; set; }
