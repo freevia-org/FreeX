@@ -185,7 +185,7 @@ public sealed partial class MainWindow
         });
         content.Children.Add(new TextBlock
         {
-            Text = UiText.Get("MainWindow_Text_New"),
+            Text = UiText.Get("Common_New"),
             FontFamily = FormulaBarFontFamily,
             FontSize = 17,
             Foreground = PrimaryInk,

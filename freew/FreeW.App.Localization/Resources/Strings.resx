@@ -112,9 +112,6 @@
   <data name="Ribbon_Command_FontColor_Label" xml:space="preserve">
     <value>Font Colour</value>
   </data>
-  <data name="Ribbon_Command_FontColorDropdown_Label" xml:space="preserve">
-    <value>Font Color</value>
-  </data>
   <data name="Ribbon_Command_CharacterBorder_Label" xml:space="preserve">
     <value>Character Border</value>
   </data>
@@ -435,7 +432,6 @@
   <data name="TableFormula_CursorOutsideTable_Message" xml:space="preserve"><value>The cursor must be inside a table cell to insert a formula.</value></data>
   <data name="TableProperties_CursorOutsideTable_Message" xml:space="preserve"><value>The cursor must be inside a table to edit its properties.</value></data>
   <data name="FreeW_Backstage_Recent_EmptyText" xml:space="preserve"><value>No recent documents.</value></data>
-  <data name="FreeW_Backstage_New_Heading" xml:space="preserve"><value>New</value></data>
   <data name="FreeW_Backstage_New_BlankDocument" xml:space="preserve"><value>Blank document</value></data>
   <data name="FreeW_Backstage_New_FooterText" xml:space="preserve"><value>More templates are not available in this build.</value></data>
   <data name="FreeW_Backstage_Options_Description" xml:space="preserve"><value>FreeW application settings. These persist between sessions and apply immediately.</value></data>
@@ -450,8 +446,6 @@
   <data name="SourceManagement_Picker_Title" xml:space="preserve"><value>Insert Citation</value></data>
   <data name="SourceManagement_Picker_Source_Label" xml:space="preserve"><value>Source:</value></data>
   <data name="SourceManagement_Picker_AddNew_Label" xml:space="preserve"><value>Add New Source...</value></data>
-  <data name="SourceManagement_Picker_Insert_Label" xml:space="preserve"><value>Insert</value></data>
-  <data name="SourceManagement_Cancel_Label" xml:space="preserve"><value>Cancel</value></data>
   <data name="SourceManagement_Picker_SelectSource_Validation" xml:space="preserve"><value>Select a source or add a new one.</value></data>
   <data name="SourceManagement_Manage_Title" xml:space="preserve"><value>Manage Sources</value></data>
   <data name="SourceManagement_Add_Label" xml:space="preserve"><value>Add...</value></data>
@@ -459,7 +453,6 @@
   <data name="SourceManagement_Delete_Label" xml:space="preserve"><value>Delete</value></data>
   <data name="SourceManagement_CopyToCurrent_Label" xml:space="preserve"><value>Copy &#x2192;</value></data>
   <data name="SourceManagement_CopyToMaster_Label" xml:space="preserve"><value>Copy &#x2190;</value></data>
-  <data name="SourceManagement_Ok_Label" xml:space="preserve"><value>OK</value></data>
   <data name="SourceManagement_Conflict_Title" xml:space="preserve"><value>Source Conflict</value></data>
   <data name="SourceManagement_Conflict_KeepCurrent_Label" xml:space="preserve"><value>Keep Current Document</value></data>
   <data name="SourceManagement_Conflict_ReplaceCurrent_Label" xml:space="preserve"><value>Replace Current Document</value></data>
@@ -520,14 +513,11 @@
   <data name="ProofingLanguage_Language_Label" xml:space="preserve"><value>Language:</value></data>
   <data name="ProofingLanguage_Instruction" xml:space="preserve"><value>Select the proofing language for the selected text:</value></data>
   <data name="ProofingLanguage_Clear_Label" xml:space="preserve"><value>(None - clear language)</value></data>
-  <data name="AltText_Dialog_Title" xml:space="preserve"><value>Alt Text</value></data>
   <data name="AltText_Description_Label" xml:space="preserve"><value>Description:</value></data>
   <data name="AltText_ImageSelectionRequired_Message" xml:space="preserve"><value>Select an image first, then choose Alt Text.</value></data>
   <data name="AltText_ShapeSelectionRequired_Message" xml:space="preserve"><value>Select a shape or WordArt first, then choose Alt Text.</value></data>
-  <data name="Shell_Zoom_Label" xml:space="preserve"><value>Zoom</value></data>
   <data name="Shell_ZoomIn_Label" xml:space="preserve"><value>Zoom in</value></data>
   <data name="Shell_ZoomOut_Label" xml:space="preserve"><value>Zoom out</value></data>
-  <data name="Design_Themes_Title" xml:space="preserve"><value>Themes</value></data>
   <data name="Design_Colors_Title" xml:space="preserve"><value>Colors</value></data>
   <data name="Design_Fonts_Title" xml:space="preserve"><value>Fonts</value></data>
   <data name="Design_ParagraphSpacing_Title" xml:space="preserve"><value>Paragraph Spacing</value></data>
@@ -571,7 +561,6 @@
   <data name="Pane_Thesaurus_Preposition" xml:space="preserve"><value>preposition</value></data>
   <data name="Pane_Thesaurus_Pronoun" xml:space="preserve"><value>pronoun</value></data>
   <data name="Pane_Notes_Heading" xml:space="preserve"><value>Notes</value></data>
-  <data name="Pane_Notes_Apply" xml:space="preserve"><value>Apply</value></data>
   <data name="Pane_Notes_Delete" xml:space="preserve"><value>Delete</value></data>
   <data name="Pane_Notes_ApplyToolTip" xml:space="preserve"><value>Commit edits back to this note</value></data>
   <data name="Pane_Notes_DeleteToolTip" xml:space="preserve"><value>Delete this note and its marker</value></data>

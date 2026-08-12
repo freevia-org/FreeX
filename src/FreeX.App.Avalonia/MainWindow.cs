@@ -3420,7 +3420,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _zoomText.TextAlignment = TextAlignment.Right;
         _zoomText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _zoomText.Focusable = true;
-        AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get("StatusBar_Zoom")));
+        AutomationProperties.SetName(_zoomText, UiText.CreateAutomationName(UiText.Get("Common_Zoom")));
         AutomationProperties.SetHelpText(_zoomText, UiText.Get("Toolbar_ZoomHelpText"));
 
         _openButton.Content = UiText.Get("MainWindow_Text_Open");

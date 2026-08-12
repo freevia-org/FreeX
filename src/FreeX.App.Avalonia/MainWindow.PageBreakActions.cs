@@ -68,7 +68,7 @@ public sealed partial class MainWindow
 
         var cancelButton = new Button
         {
-            Content = UiText.Get("MoveCopySheet_Cancel"),
+            Content = UiText.Get("Common_CancelText"),
             IsCancel = true,
             MinWidth = 84,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,

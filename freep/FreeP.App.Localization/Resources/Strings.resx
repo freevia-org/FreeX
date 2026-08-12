@@ -82,9 +82,6 @@
   <data name="Ribbon_Group_File_KeyTip" xml:space="preserve">
     <value>F</value>
   </data>
-  <data name="Ribbon_Command_FileNew_Label" xml:space="preserve">
-    <value>New</value>
-  </data>
   <data name="Ribbon_Command_FileNew_KeyTip" xml:space="preserve">
     <value>N</value>
   </data>
@@ -144,9 +141,6 @@
   </data>
   <data name="Ribbon_Command_FormatPainter_KeyTip" xml:space="preserve">
     <value>F</value>
-  </data>
-  <data name="Ribbon_Command_FontColor_Label" xml:space="preserve">
-    <value>Font Color</value>
   </data>
   <data name="Ribbon_Command_FontFamily_KeyTip" xml:space="preserve">
     <value>FON</value>
@@ -384,9 +378,6 @@
   </data>
   <data name="Ribbon_Command_SlideShowSetup_KeyTip" xml:space="preserve">
     <value>S</value>
-  </data>
-  <data name="Ribbon_Tab_Insert_Label" xml:space="preserve">
-    <value>Insert</value>
   </data>
   <data name="Ribbon_Tab_Insert_KeyTip" xml:space="preserve">
     <value>N</value>
@@ -1374,9 +1365,6 @@
   </data>
   <data name="Ribbon_Tab_Design_KeyTip" xml:space="preserve">
     <value>G</value>
-  </data>
-  <data name="Ribbon_Group_Themes_Label" xml:space="preserve">
-    <value>Themes</value>
   </data>
   <data name="Ribbon_Group_Themes_KeyTip" xml:space="preserve">
     <value>T</value>
@@ -2986,9 +2974,6 @@
   <data name="Ribbon_Command_ViewSelectionPane_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
-  <data name="Ribbon_Group_ViewZoom_Label" xml:space="preserve">
-    <value>Zoom</value>
-  </data>
   <data name="Ribbon_Group_ViewZoom_KeyTip" xml:space="preserve">
     <value>Z</value>
   </data>
@@ -3072,12 +3057,6 @@
   </data>
   <data name="Dialog_ZoomFormat_Title" xml:space="preserve">
     <value>Zoom Format</value>
-  </data>
-  <data name="Dialog_ZoomFormat_Accept" xml:space="preserve">
-    <value>OK</value>
-  </data>
-  <data name="Dialog_ZoomFormat_Cancel" xml:space="preserve">
-    <value>Cancel</value>
   </data>
   <data name="Dialog_ZoomFormat_ReturnToParent" xml:space="preserve">
     <value>Return to parent after following the Zoom</value>
@@ -3285,9 +3264,6 @@
   </data>
   <data name="Pane_Media_DeleteBookmark" xml:space="preserve">
     <value>Delete bookmark</value>
-  </data>
-  <data name="Pane_AltText_Heading" xml:space="preserve">
-    <value>Alt Text</value>
   </data>
   <data name="Pane_Accessibility_Heading" xml:space="preserve">
     <value>Accessibility</value>
@@ -3525,9 +3501,6 @@
   </data>
   <data name="Pane_SmartArt_RemovePicture" xml:space="preserve">
     <value>Remove picture</value>
-  </data>
-  <data name="Pane_SmartArt_Apply" xml:space="preserve">
-    <value>Apply</value>
   </data>
   <data name="Pane_SmartArt_Close" xml:space="preserve">
     <value>Close</value>

@@ -108,7 +108,7 @@ internal static class FreeWRibbonText
         "Ribbon_Command_FontColor_Label");
 
     public static readonly RibbonText FontColorDropdownCommand = new(
-        "Ribbon_Command_FontColorDropdown_Label");
+        "Common_FontColor");
 
     public static readonly RibbonText CharacterBorderCommand = new(
         "Ribbon_Command_CharacterBorder_Label");

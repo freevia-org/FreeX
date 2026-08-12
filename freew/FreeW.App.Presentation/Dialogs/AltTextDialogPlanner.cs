@@ -15,7 +15,7 @@ public static class AltTextDialogPlanner
 {
     private static readonly ResourceTextDescriptor[] Texts =
     [
-        new("AltText_Dialog_Title", "Alt Text"),
+        new("Common_AltText", "Alt Text"),
         new("AltText_Description_Label", "Description:"),
         new("AltText_ImageSelectionRequired_Message", "Select an image first, then choose Alt Text."),
         new("AltText_ShapeSelectionRequired_Message", "Select a shape or WordArt first, then choose Alt Text."),

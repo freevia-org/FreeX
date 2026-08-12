@@ -1447,7 +1447,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         labels["freew.char-border"].Should().Be(Loc.Get("Ribbon_Command_CharacterBorder_Label"));
         labels["freew.char-shading"].Should().Be(Loc.Get("Ribbon_Command_CharacterShading_Label"));
         labels["freew.clear-formatting"].Should().Be(Loc.Get("Ribbon_Command_ClearFormattingCompact_Label"));
-        labels["freew.font-color"].Should().Be(Loc.Get("Ribbon_Command_FontColorDropdown_Label"));
+        labels["freew.font-color"].Should().Be(Loc.Get("Common_FontColor"));
         labels["freew.change-case"].Should().Be(Loc.Get("Ribbon_Command_ChangeCaseCompact_Label"));
     }
 

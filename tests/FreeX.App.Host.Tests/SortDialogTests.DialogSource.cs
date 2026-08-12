@@ -38,7 +38,7 @@ public sealed partial class SortDialogTests
         source.Should().Contain("Header = UiText.Get(\"Sort_Color\")");
         source.Should().Contain("UiText.Get(\"Sort_SortOnCellValues\")");
         source.Should().Contain("UiText.Get(\"Sort_SortOnCellColor\")");
-        source.Should().Contain("UiText.Get(\"Sort_SortOnFontColor\")");
+        source.Should().Contain("UiText.Get(\"Common_FontColor\")");
         source.Should().Contain("UiText.Get(\"Sort_OrderOnTop\")");
         source.Should().Contain("UiText.Get(\"Sort_OrderOnBottom\")");
         source.Should().Contain("CreateOrderColumn");

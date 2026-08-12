@@ -42,7 +42,7 @@ public sealed class FinalCommandParityPlannerTests
     {
         var text = AltTextDialogPlanner.ResolveText(key => $"localized:{key}");
 
-        text.Title.Should().Be("localized:AltText_Dialog_Title");
+        text.Title.Should().Be("localized:Common_AltText");
         text.DescriptionLabel.Should().Be("localized:AltText_Description_Label");
         text.ImageSelectionRequiredMessage.Should().Be("localized:AltText_ImageSelectionRequired_Message");
         text.ShapeSelectionRequiredMessage.Should().Be("localized:AltText_ShapeSelectionRequired_Message");

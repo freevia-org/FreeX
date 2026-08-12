@@ -7,10 +7,10 @@ public static class FreeWUiTextCatalog
 {
     public static IReadOnlyList<string> RequiredResourceKeys { get; } =
     [
-        "Shell_Zoom_Label",
+        "Common_Zoom",
         "Shell_ZoomIn_Label",
         "Shell_ZoomOut_Label",
-        "Design_Themes_Title",
+        "Common_Themes",
         "Design_StyleSets_Title",
         "Design_Colors_Title",
         "Design_Fonts_Title",
@@ -56,7 +56,7 @@ public static class FreeWUiTextCatalog
         "Pane_Thesaurus_Preposition",
         "Pane_Thesaurus_Pronoun",
         "Pane_Notes_Heading",
-        "Pane_Notes_Apply",
+        "Common_Apply",
         "Pane_Notes_Delete",
         "Pane_Notes_ApplyToolTip",
         "Pane_Notes_DeleteToolTip",
@@ -70,10 +70,10 @@ public static class FreeWUiTextCatalog
         "Dialog_Note_Cancel",
     ];
 
-    public static string Zoom => Text("Shell_Zoom_Label");
+    public static string Zoom => Text("Common_Zoom");
     public static string ZoomIn => Text("Shell_ZoomIn_Label");
     public static string ZoomOut => Text("Shell_ZoomOut_Label");
-    public static string Themes => Text("Design_Themes_Title");
+    public static string Themes => Text("Common_Themes");
     public static string StyleSets => Text("Design_StyleSets_Title");
     public static string Colors => Text("Design_Colors_Title");
     public static string Fonts => Text("Design_Fonts_Title");
@@ -149,7 +149,7 @@ public static class FreeWUiTextCatalog
     };
 
     public static string NotesHeading => Text("Pane_Notes_Heading");
-    public static string NotesApply => Text("Pane_Notes_Apply");
+    public static string NotesApply => Text("Common_Apply");
     public static string NotesDelete => Text("Pane_Notes_Delete");
     public static string NotesApplyToolTip => Text("Pane_Notes_ApplyToolTip");
     public static string NotesDeleteToolTip => Text("Pane_Notes_DeleteToolTip");

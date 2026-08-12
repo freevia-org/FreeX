@@ -3225,7 +3225,7 @@
   <data name="MainWindow_Content_AllowUsersToEditRangesCompact" xml:space="preserve">
     <value>Rasponi</value>
   </data>
-  <data name="MainWindow_Content_AltText" xml:space="preserve">
+  <data name="Common_AltText" xml:space="preserve">
     <value>Zamjenski tekst</value>
   </data>
   <data name="MainWindow_Content_Apply" xml:space="preserve">
@@ -3519,7 +3519,7 @@
   <data name="MainWindow_Content_InkToShape" xml:space="preserve">
     <value>Tinta za oblikovanje</value>
   </data>
-  <data name="MainWindow_Content_Insert" xml:space="preserve">
+  <data name="Common_Insert" xml:space="preserve">
     <value>Ubacite</value>
   </data>
   <data name="MainWindow_Content_InsertFunction" xml:space="preserve">
@@ -3882,7 +3882,7 @@
   <data name="MainWindow_Content_TextBox" xml:space="preserve">
     <value>Tekstni okvir</value>
   </data>
-  <data name="MainWindow_Content_Themes" xml:space="preserve">
+  <data name="Common_Themes" xml:space="preserve">
     <value>Teme</value>
   </data>
   <data name="MainWindow_Content_Timeline" xml:space="preserve">
@@ -5002,7 +5002,7 @@
   <data name="MainWindow_Text_Name" xml:space="preserve">
     <value>Naziv</value>
   </data>
-  <data name="MainWindow_Text_New" xml:space="preserve">
+  <data name="Common_New" xml:space="preserve">
     <value>Novo</value>
   </data>
   <data name="MainWindow_Text_Notes" xml:space="preserve">
@@ -13697,7 +13697,7 @@
   <data name="Sort_SortOnCellValues" xml:space="preserve">
     <value>Vrijednosti ćelije</value>
   </data>
-  <data name="Sort_SortOnFontColor" xml:space="preserve">
+  <data name="Common_FontColor" xml:space="preserve">
     <value>Boja fonta</value>
   </data>
   <data name="SortOptions_FirstKeyJanToDecShort" xml:space="preserve">
@@ -15704,9 +15704,6 @@
   </data>
   <data name="StatusBar_ViewShortcuts" xml:space="preserve">
     <value>View Shortcuts</value>
-  </data>
-  <data name="StatusBar_Zoom" xml:space="preserve">
-    <value>Zoom</value>
   </data>
   <data name="StatusBar_ZoomSlider" xml:space="preserve">
     <value>Zoom Slider</value>

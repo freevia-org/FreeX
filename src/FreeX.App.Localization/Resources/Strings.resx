@@ -59,9 +59,6 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <!-- Common buttons / chrome -->
-  <data name="Common_Apply" xml:space="preserve">
-    <value>Apply</value>
-  </data>
   <data name="Common_Close" xml:space="preserve">
     <value>Close</value>
   </data>
@@ -1721,12 +1718,6 @@
   </data>
   <data name="MoveCopySheet_CreateACopy" xml:space="preserve">
     <value>Create a copy</value>
-  </data>
-  <data name="MoveCopySheet_Ok" xml:space="preserve">
-    <value>OK</value>
-  </data>
-  <data name="MoveCopySheet_Cancel" xml:space="preserve">
-    <value>Cancel</value>
   </data>
   <data name="MoveCopySheet_MovedStatus" xml:space="preserve">
     <value>Moved {0}</value>
@@ -4962,9 +4953,6 @@ Use Show Calculation Steps to trace the formula, Ignore Error to suppress this i
   <data name="StatusBar_ViewShortcuts" xml:space="preserve">
     <value>View Shortcuts</value>
   </data>
-  <data name="StatusBar_Zoom" xml:space="preserve">
-    <value>Zoom</value>
-  </data>
   <data name="StatusBar_ZoomSlider" xml:space="preserve">
     <value>Zoom Slider</value>
   </data>
@@ -4983,9 +4971,6 @@ Use Show Calculation Steps to trace the formula, Ignore Error to suppress this i
   </data>
   <data name="MainWindow_Text_Info" xml:space="preserve">
     <value>Info</value>
-  </data>
-  <data name="MainWindow_Text_New" xml:space="preserve">
-    <value>New</value>
   </data>
   <data name="MainWindow_Text_Open" xml:space="preserve">
     <value>Open</value>
@@ -6327,9 +6312,6 @@ Changing cell value: {2}</value>
   <data name="PasteSpecial_SubtractCopiedValuesFromDestinationValues" xml:space="preserve">
     <value>Subtract copied values from destination values.</value>
   </data>
-  <data name="MainWindow_Content_Themes" xml:space="preserve">
-    <value>Themes</value>
-  </data>
   <data name="MainWindow_Header_Dotted" xml:space="preserve">
     <value>Dotted</value>
   </data>
@@ -7474,9 +7456,6 @@ Changing cell value: {2}</value>
   <data name="Options_UserName" xml:space="preserve">
     <value>User _name:</value>
   </data>
-  <data name="Sort_SortOnFontColor" xml:space="preserve">
-    <value>Font Color</value>
-  </data>
   <data name="HeaderFooter_Footer" xml:space="preserve">
     <value>Footer</value>
   </data>
@@ -7918,9 +7897,6 @@ Changing cell value: {2}</value>
   <data name="MainWindow_Content_CalculateNow" xml:space="preserve">
     <value>Calculate Now</value>
   </data>
-  <data name="MainWindow_Content_Insert" xml:space="preserve">
-    <value>Insert</value>
-  </data>
   <data name="PageSetup_Book1Xlsx" xml:space="preserve">
     <value>Book1.xlsx</value>
   </data>
@@ -8346,9 +8322,6 @@ Changing cell value: {2}</value>
   </data>
   <data name="MainWindowMessage_CommandErrorTitle" xml:space="preserve">
     <value>Command Error</value>
-  </data>
-  <data name="MainWindow_Content_AltText" xml:space="preserve">
-    <value>Alt Text</value>
   </data>
   <data name="AutoFilter_Criteria_Contains" xml:space="preserve">
     <value>Contains</value>

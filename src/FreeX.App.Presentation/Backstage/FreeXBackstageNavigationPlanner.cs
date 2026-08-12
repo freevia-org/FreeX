@@ -69,12 +69,12 @@ public static class FreeXBackstageNavigationPlanner
 
         Command(
             FreeXBackstageCommandId.New,
-            "MainWindow_Text_New",
+            "Common_New",
             BackstageIconKind.Insert,
             "New",
             "N",
             "BackstageNewButton",
-            "MainWindow_Text_New",
+            "Common_New",
             "MainWindow_TooltipDescription_CreateANewWorkbook",
             "MainWindow_TooltipTitle_New"),
 

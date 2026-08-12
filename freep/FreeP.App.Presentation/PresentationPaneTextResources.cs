@@ -150,7 +150,7 @@ public static class PresentationPaneTextResources
     public static string AddBookmark => Loc.Get("Pane_Media_AddBookmark");
     public static string ReplaceBookmark => Loc.Get("Pane_Media_ReplaceBookmark");
     public static string DeleteBookmark => Loc.Get("Pane_Media_DeleteBookmark");
-    public static string AltTextHeading => Loc.Get("Pane_AltText_Heading");
+    public static string AltTextHeading => Loc.Get("Common_AltText");
     public static string ReadingOrderHeading => Loc.Get("Pane_ReadingOrder_Heading");
     public static string ReadingOrderSelectedItem => Loc.Get("Pane_ReadingOrder_SelectedItem");
     public static string ProofingHeading => Loc.Get("Pane_Proofing_Heading");
@@ -170,7 +170,7 @@ public static class PresentationPaneTextResources
             Loc.Get("Pane_SmartArt_ToggleAssistant"),
             Loc.Get("Pane_SmartArt_ReplacePicture"),
             Loc.Get("Pane_SmartArt_RemovePicture"),
-            Loc.Get("Pane_SmartArt_Apply"),
+            Loc.Get("Common_Apply"),
             Loc.Get("Pane_SmartArt_Close"),
             [
                 SmartArtAction(SmartArtNodeEditKind.AddSiblingAfter, "AddSibling"),

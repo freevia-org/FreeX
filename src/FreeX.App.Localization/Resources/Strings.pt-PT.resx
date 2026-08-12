@@ -3235,7 +3235,7 @@ Enviar relat?rios de falhas para esta compila??o de teste?</value>
   <data name="MainWindow_Content_AllowUsersToEditRangesCompact" xml:space="preserve">
     <value>Intervalos</value>
   </data>
-  <data name="MainWindow_Content_AltText" xml:space="preserve">
+  <data name="Common_AltText" xml:space="preserve">
     <value>Texto alternativo</value>
   </data>
   <data name="MainWindow_Content_Apply" xml:space="preserve">
@@ -3529,7 +3529,7 @@ Enviar relat?rios de falhas para esta compila??o de teste?</value>
   <data name="MainWindow_Content_InkToShape" xml:space="preserve">
     <value>Tinta para Forma</value>
   </data>
-  <data name="MainWindow_Content_Insert" xml:space="preserve">
+  <data name="Common_Insert" xml:space="preserve">
     <value>Inserir</value>
   </data>
   <data name="MainWindow_Content_InsertFunction" xml:space="preserve">
@@ -3892,7 +3892,7 @@ Enviar relat?rios de falhas para esta compila??o de teste?</value>
   <data name="MainWindow_Content_TextBox" xml:space="preserve">
     <value>Caixa de Texto</value>
   </data>
-  <data name="MainWindow_Content_Themes" xml:space="preserve">
+  <data name="Common_Themes" xml:space="preserve">
     <value>Temas</value>
   </data>
   <data name="MainWindow_Content_Timeline" xml:space="preserve">
@@ -5012,7 +5012,7 @@ Enviar relat?rios de falhas para esta compila??o de teste?</value>
   <data name="MainWindow_Text_Name" xml:space="preserve">
     <value>Nome</value>
   </data>
-  <data name="MainWindow_Text_New" xml:space="preserve">
+  <data name="Common_New" xml:space="preserve">
     <value>Novo</value>
   </data>
   <data name="MainWindow_Text_Notes" xml:space="preserve">
@@ -13713,7 +13713,7 @@ Valor da c?lula vari?vel: {2}</value>
   <data name="Sort_SortOnCellValues" xml:space="preserve">
     <value>Valores da célula</value>
   </data>
-  <data name="Sort_SortOnFontColor" xml:space="preserve">
+  <data name="Common_FontColor" xml:space="preserve">
     <value>Cor da fonte</value>
   </data>
   <data name="SortOptions_FirstKeyJanToDecShort" xml:space="preserve">
@@ -15741,9 +15741,6 @@ e {0} mais.</value>
   </data>
   <data name="StatusBar_ViewShortcuts" xml:space="preserve">
     <value>View Shortcuts</value>
-  </data>
-  <data name="StatusBar_Zoom" xml:space="preserve">
-    <value>Zoom</value>
   </data>
   <data name="StatusBar_ZoomSlider" xml:space="preserve">
     <value>Zoom Slider</value>

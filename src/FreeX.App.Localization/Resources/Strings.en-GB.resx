@@ -3225,9 +3225,6 @@
   <data name="MainWindow_Content_AllowUsersToEditRangesCompact" xml:space="preserve">
     <value>Ranges</value>
   </data>
-  <data name="MainWindow_Content_AltText" xml:space="preserve">
-    <value>Alt Text</value>
-  </data>
   <data name="MainWindow_Content_Apply" xml:space="preserve">
     <value>Apply</value>
   </data>
@@ -3518,9 +3515,6 @@
   </data>
   <data name="MainWindow_Content_InkToShape" xml:space="preserve">
     <value>Ink to Shape</value>
-  </data>
-  <data name="MainWindow_Content_Insert" xml:space="preserve">
-    <value>Insert</value>
   </data>
   <data name="MainWindow_Content_InsertFunction" xml:space="preserve">
     <value>Insert Function</value>
@@ -3881,9 +3875,6 @@
   </data>
   <data name="MainWindow_Content_TextBox" xml:space="preserve">
     <value>Text Box</value>
-  </data>
-  <data name="MainWindow_Content_Themes" xml:space="preserve">
-    <value>Themes</value>
   </data>
   <data name="MainWindow_Content_Timeline" xml:space="preserve">
     <value>Timeline</value>
@@ -5001,9 +4992,6 @@
   </data>
   <data name="MainWindow_Text_Name" xml:space="preserve">
     <value>Name</value>
-  </data>
-  <data name="MainWindow_Text_New" xml:space="preserve">
-    <value>New</value>
   </data>
   <data name="MainWindow_Text_Notes" xml:space="preserve">
     <value>Notes</value>
@@ -13700,7 +13688,7 @@ Changing cell value: {2}</value>
   <data name="Sort_SortOnCellValues" xml:space="preserve">
     <value>Cell Values</value>
   </data>
-  <data name="Sort_SortOnFontColor" xml:space="preserve">
+  <data name="Common_FontColor" xml:space="preserve">
     <value>Font Colour</value>
   </data>
   <data name="SortOptions_FirstKeyJanToDecShort" xml:space="preserve">
@@ -15728,9 +15716,6 @@ and {0} more.</value>
   </data>
   <data name="StatusBar_ViewShortcuts" xml:space="preserve">
     <value>View Shortcuts</value>
-  </data>
-  <data name="StatusBar_Zoom" xml:space="preserve">
-    <value>Zoom</value>
   </data>
   <data name="StatusBar_ZoomSlider" xml:space="preserve">
     <value>Zoom Slider</value>

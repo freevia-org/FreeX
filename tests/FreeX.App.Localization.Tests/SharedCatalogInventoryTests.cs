@@ -18,9 +18,18 @@ public sealed class SharedCatalogInventoryTests
         // Tripwire so shared-catalog growth is a deliberate act: bump this only after confirming the
         // dedup loop below still passes, i.e. that the new keys were removed from every app catalog.
         // The merged catalog contains the shared media-insert strings plus the campaign's shell text.
-        sharedKeys.Should().HaveCount(70);
+        sharedKeys.Should().HaveCount(79);
         sharedKeys.Should().Contain([
             "Common_Cancel",
+            "Common_AltText",
+            "Common_Apply",
+            "Common_CancelText",
+            "Common_FontColor",
+            "Common_Insert",
+            "Common_New",
+            "Common_OkText",
+            "Common_Themes",
+            "Common_Zoom",
             "Backstage_Recent_LastOpenedTodayAt",
             "Ribbon_Command_Bold_Label",
             "Ribbon_Command_Subscript_Label",
@@ -49,8 +58,23 @@ public sealed class SharedCatalogInventoryTests
 
         var expectedSatelliteOverrides = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal)
         {
-            ["FreeX"] = new(StringComparer.Ordinal) { "Options_AppLanguageSystemDefault" },
-            ["FreeW"] = new(StringComparer.Ordinal),
+            ["FreeX"] = new(StringComparer.Ordinal)
+            {
+                "Common_AltText",
+                "Common_Apply",
+                "Common_CancelText",
+                "Common_FontColor",
+                "Common_Insert",
+                "Common_New",
+                "Common_Themes",
+                "Options_AppLanguageSystemDefault"
+            },
+            ["FreeW"] = new(StringComparer.Ordinal)
+            {
+                "Common_AltText",
+                "Common_Apply",
+                "Common_Themes"
+            },
             ["FreeP"] = new(StringComparer.Ordinal)
         };
 

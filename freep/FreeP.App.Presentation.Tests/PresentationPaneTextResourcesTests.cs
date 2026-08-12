@@ -180,7 +180,7 @@ public sealed class PresentationPaneTextResourcesTests
             "Pane_MediaCaptions_Heading",
             "Pane_Accessibility_Heading",
             "Pane_Media_StartOnClick",
-            "Pane_AltText_Heading",
+            "Common_AltText",
             "Pane_ReadingOrder_HeadingFormat",
             "Pane_Proofing_SelectedFormat",
             "Pane_Comments_NewCommentDefault",

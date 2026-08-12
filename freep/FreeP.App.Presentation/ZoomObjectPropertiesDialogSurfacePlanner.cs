@@ -155,8 +155,8 @@ public static class ZoomObjectPropertiesDialogSurfacePlanner
         return new ZoomObjectPropertiesDialogSurfacePlan(
             new PresentationDialogChromePlan(
                 Loc.Get("Dialog_ZoomFormat_Title"),
-                Loc.Get("Dialog_ZoomFormat_Accept"),
-                Loc.Get("Dialog_ZoomFormat_Cancel"),
+                Loc.Get("Common_OkText"),
+                Loc.Get("Common_CancelText"),
                 Width: 440),
             new ZoomObjectPropertiesDialogLayoutPlan(
                 ContentMargin: 14,

@@ -210,7 +210,7 @@ public sealed class LocTests
         // returned [[key]] placeholders in the Avalonia/Linux backstage nav rail.
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Info")).Should().Be("Info");
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Home")).Should().Be("Home");
-        WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_New")).Should().Be("New");
+        WithUiCulture("en-US", () => Loc.Get("Common_New")).Should().Be("New");
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Open")).Should().Be("Open");
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Share")).Should().Be("Share");
         WithUiCulture("en-US", () => Loc.Get("MainWindow_Text_Print")).Should().Be("Print");

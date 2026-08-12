@@ -7,7 +7,7 @@ public sealed partial class SortDialog
     internal static SortDialogPlannerText PlannerText => new(
         UiText.Get("Sort_SortOnCellValues"),
         UiText.Get("Sort_SortOnCellColor"),
-        UiText.Get("Sort_SortOnFontColor"),
+        UiText.Get("Common_FontColor"),
         UiText.Get("Sort_OrderAToZ"),
         UiText.Get("Sort_OrderZToA"),
         UiText.Get("Sort_OrderOnTop"),

@@ -6,7 +6,7 @@ namespace FreeW.App.Presentation.Backstage;
 public static class FreeWBackstagePaneResourceKeys
 {
     public const string RecentEmptyText = "FreeW_Backstage_Recent_EmptyText";
-    public const string TemplateHeading = "FreeW_Backstage_New_Heading";
+    public const string TemplateHeading = "Common_New";
     public const string TemplateTileCaption = "FreeW_Backstage_New_BlankDocument";
     public const string TemplateFooterText = "FreeW_Backstage_New_FooterText";
     public const string OptionsDescription = "FreeW_Backstage_Options_Description";

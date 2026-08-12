@@ -134,7 +134,7 @@ public sealed class LocTests
             "Ribbon_Tab_Home_KeyTip",
             "Ribbon_Group_File_Label",
             "Ribbon_Group_File_KeyTip",
-            "Ribbon_Command_FileNew_Label",
+            "Common_New",
             "Ribbon_Command_FileNew_KeyTip",
             "Ribbon_Command_FileOpen_Label",
             "Ribbon_Command_FileOpen_KeyTip",
@@ -213,7 +213,7 @@ public sealed class LocTests
     public void GetNeutralResourceKeys_CoversRibbonInsertFoundation()
     {
         Loc.GetNeutralResourceKeys().Should().Contain([
-            "Ribbon_Tab_Insert_Label",
+            "Common_Insert",
             "Ribbon_Tab_Insert_KeyTip",
             "Ribbon_Group_Text_Label",
             "Ribbon_Group_Text_KeyTip",
@@ -464,7 +464,7 @@ public sealed class LocTests
             "Ribbon_Command_ArrangeDistributeVertical_KeyTip",
             "Ribbon_Tab_Design_Label",
             "Ribbon_Tab_Design_KeyTip",
-            "Ribbon_Group_Themes_Label",
+            "Common_Themes",
             "Ribbon_Group_Themes_KeyTip",
             "Ribbon_Command_ThemeOffice_Label",
             "Ribbon_Command_ThemeOffice_KeyTip",

@@ -133,7 +133,7 @@ public sealed class LocTests
             "Ribbon_Command_TextHighlightColor_Label",
             "Ribbon_Command_HighlightCompact_Label",
             "Ribbon_Command_FontColor_Label",
-            "Ribbon_Command_FontColorDropdown_Label",
+            "Common_FontColor",
             "Ribbon_Command_CharacterBorder_Label",
             "Ribbon_Command_CharacterShading_Label",
             "Ribbon_Command_ClearAllFormatting_Label",

@@ -74,4 +74,13 @@
   <data name="Ribbon_Group_Paragraph_Label" xml:space="preserve"><value>Paragraph</value></data>
   <data name="Ribbon_Tab_Home_KeyTip" xml:space="preserve"><value>H</value></data>
   <data name="Ribbon_Tab_Home_Label" xml:space="preserve"><value>Home</value></data>
+  <data name="Common_AltText" xml:space="preserve"><value>Alt Text</value></data>
+  <data name="Common_Apply" xml:space="preserve"><value>Apply</value></data>
+  <data name="Common_CancelText" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_FontColor" xml:space="preserve"><value>Font Color</value></data>
+  <data name="Common_Insert" xml:space="preserve"><value>Insert</value></data>
+  <data name="Common_New" xml:space="preserve"><value>New</value></data>
+  <data name="Common_OkText" xml:space="preserve"><value>OK</value></data>
+  <data name="Common_Themes" xml:space="preserve"><value>Themes</value></data>
+  <data name="Common_Zoom" xml:space="preserve"><value>Zoom</value></data>
 </root>

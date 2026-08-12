@@ -18,7 +18,7 @@ public sealed partial class MainWindow
         WorkbookTheme? picked = null;
         var dialog = new Window
         {
-            Title = UiText.Get("MainWindow_Content_Themes"),
+            Title = UiText.Get("Common_Themes"),
             Width = 280,
             Height = 200,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,

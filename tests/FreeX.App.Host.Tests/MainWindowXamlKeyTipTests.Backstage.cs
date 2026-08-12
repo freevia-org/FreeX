@@ -104,7 +104,7 @@ public sealed partial class MainWindowXamlKeyTipTests
         {
             ("BackstageBackButton", UiText.Get("MainWindow_TooltipTitle_Back"), "workbook"),
             ("BackstageHomeButton", UiText.Get("MainWindow_Text_Home"), "Home"),
-            ("BackstageNewButton", UiText.Get("MainWindow_Text_New"), "new workbook"),
+            ("BackstageNewButton", UiText.Get("Common_New"), "new workbook"),
             ("BackstageOpenButton", UiText.Get("MainWindow_Text_Open"), "existing workbook"),
             ("BackstageSaveButton", UiText.Get("MainWindow_AutomationName_Save"), "Save the workbook"),
             ("BackstageSaveAsButton", UiText.Get("MainWindow_TooltipTitle_SaveAs"), "new name"),

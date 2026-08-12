@@ -1417,7 +1417,7 @@
                 <Border Grid.Row="1" Padding="40,18,40,6">
                     <StackPanel>
                         <DockPanel LastChildFill="False" Margin="0,0,0,10">
-                            <TextBlock DockPanel.Dock="Left" Text="{local:Loc Key=MainWindow_Text_New}"
+                            <TextBlock DockPanel.Dock="Left" Text="{local:Loc Key=Common_New}"
                                        FontSize="14" FontWeight="SemiBold" Foreground="#1F1F1F"/>
                             <Button DockPanel.Dock="Right" Content="{local:Loc Key=MainWindow_Content_MoreTemplatesExcluded}"
                                     Background="Transparent" BorderThickness="0" Padding="0"

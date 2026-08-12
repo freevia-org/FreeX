@@ -3238,7 +3238,7 @@ Envoyer des rapports d'erreur pour cette version de testeur?</value>&#xD;
   <data name="MainWindow_Content_AllowUsersToEditRangesCompact" xml:space="preserve">&#xD;
     <value>Plages</value>&#xD;
   </data>
-  <data name="MainWindow_Content_AltText" xml:space="preserve">&#xD;
+  <data name="Common_AltText" xml:space="preserve">&#xD;
     <value>Texte alternatif</value>&#xD;
   </data>
   <data name="MainWindow_Content_Apply" xml:space="preserve">&#xD;
@@ -3532,7 +3532,7 @@ Envoyer des rapports d'erreur pour cette version de testeur?</value>&#xD;
   <data name="MainWindow_Content_InkToShape" xml:space="preserve">&#xD;
     <value>Encre pour façonner</value>&#xD;
   </data>
-  <data name="MainWindow_Content_Insert" xml:space="preserve">&#xD;
+  <data name="Common_Insert" xml:space="preserve">&#xD;
     <value>Insertion</value>&#xD;
   </data>
   <data name="MainWindow_Content_InsertFunction" xml:space="preserve">&#xD;
@@ -3895,7 +3895,7 @@ Envoyer des rapports d'erreur pour cette version de testeur?</value>&#xD;
   <data name="MainWindow_Content_TextBox" xml:space="preserve">&#xD;
     <value>Zone de texte</value>&#xD;
   </data>
-  <data name="MainWindow_Content_Themes" xml:space="preserve">&#xD;
+  <data name="Common_Themes" xml:space="preserve">&#xD;
     <value>Thèmes</value>&#xD;
   </data>
   <data name="MainWindow_Content_Timeline" xml:space="preserve">&#xD;
@@ -5017,7 +5017,7 @@ Envoyer des rapports d'erreur pour cette version de testeur?</value>&#xD;
   <data name="MainWindow_Text_Name" xml:space="preserve">&#xD;
     <value>Nom</value>&#xD;
   </data>
-  <data name="MainWindow_Text_New" xml:space="preserve">&#xD;
+  <data name="Common_New" xml:space="preserve">&#xD;
     <value>Nouveau</value>&#xD;
   </data>
   <data name="MainWindow_Text_Notes" xml:space="preserve">&#xD;
@@ -12838,7 +12838,7 @@ Valeur de la cellule variable : {2}</value>&#xD;
   <data name="Sort_SortOnCellValues" xml:space="preserve">&#xD;
     <value>Valeurs des cellules</value>&#xD;
   </data>
-  <data name="Sort_SortOnFontColor" xml:space="preserve">&#xD;
+  <data name="Common_FontColor" xml:space="preserve">&#xD;
     <value>Couleur de la police</value>&#xD;
   </data>
   <data name="SortOptions_FirstKeyJanToDecShort" xml:space="preserve">&#xD;
@@ -14872,9 +14872,6 @@ et {0} plus.</value>&#xD;
   <data name="StatusBar_ViewShortcuts" xml:space="preserve">&#xD;
     <value>View Shortcuts</value>&#xD;
   </data>
-  <data name="StatusBar_Zoom" xml:space="preserve">&#xD;
-    <value>Zoom</value>&#xD;
-  </data>
   <data name="StatusBar_ZoomSlider" xml:space="preserve">&#xD;
     <value>Zoom Slider</value>&#xD;
   </data>
@@ -15796,9 +15793,6 @@ and {0} more.</value>&#xD;
   </data>
   <data name="ShellLoc_SheetOptionPrint" xml:space="preserve">
     <value>Imprimer</value>
-  </data>
-  <data name="MoveCopySheet_Ok" xml:space="preserve">
-    <value>OK</value>
   </data>
   <data name="PivotStyleGallery_Title" xml:space="preserve">
     <value>Styles de tableau croisé dynamique</value>
@@ -17642,7 +17636,7 @@ and {0} more.</value>&#xD;
   <data name="PivotCalcItem_Saved" xml:space="preserve">
     <value>Élément calculé « {0} » enregistré.</value>
   </data>
-  <data name="MoveCopySheet_Cancel" xml:space="preserve">
+  <data name="Common_CancelText" xml:space="preserve">
     <value>Annuler</value>
   </data>
   <data name="ShellLoc_InsertedEquation" xml:space="preserve">
