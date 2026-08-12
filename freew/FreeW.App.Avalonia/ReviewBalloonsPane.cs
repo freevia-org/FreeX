@@ -14,7 +14,7 @@ namespace FreeW.App.Avalonia;
 /// Avalonia Review > Show Markup > Show Revisions in Balloons surface. The pane shares the same
 /// source enumeration and right-margin leader-line layout contract as the WPF balloon overlay.
 /// </summary>
-public sealed class ReviewBalloonsPane : SidePaneBase
+public sealed partial class ReviewBalloonsPane : SidePaneBase
 {
     private static readonly ReviewBalloonLayoutOptions LayoutOptions = new(
         StripWidth: 260,
@@ -89,9 +89,6 @@ public sealed class ReviewBalloonsPane : SidePaneBase
     }
 
     internal int BalloonItemCount => _layouts.Count;
-    internal IReadOnlyList<ReviewBalloonLayout> LayoutsForTest => _layouts;
-    internal int VisualChildCountForTest => _balloonCanvas.Children.Count;
-
     internal static IReadOnlyList<ReviewBalloonSource> EnumerateBalloons(
         TextDocument document,
         ReviewDisplayPolicy policy) =>

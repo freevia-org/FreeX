@@ -212,7 +212,7 @@ public sealed class ColumnsDialog : FreeWDialogWindow
     }
 }
 
-public sealed class CustomParagraphSpacingDialog : FreeWDialogWindow
+public sealed partial class CustomParagraphSpacingDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private readonly CustomParagraphSpacingDialogSession _session;
@@ -256,8 +256,6 @@ public sealed class CustomParagraphSpacingDialog : FreeWDialogWindow
         Opened += (_, _) => PageLayoutDialogChrome.FocusAndSelect(_before);
         PageLayoutDialogChrome.WireEscape<DocumentParagraphSpacingSet?>(this);
     }
-
-    internal bool AcceptForTests() => TryAccept(closeOnSuccess: false);
 
     private void Accept() => TryAccept(closeOnSuccess: true);
 

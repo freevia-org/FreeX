@@ -10,7 +10,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class MultilevelListDialog : FreeWDialogWindow
+internal sealed partial class MultilevelListDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(AvaloniaCompactDialogChrome.WindowsUiFontFamily)
     {
@@ -131,17 +131,6 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         await AvaloniaUserMessageDialog.ShowWarningAsync(
             this,
             acceptance.Validation?.Message ?? MultilevelListDialogPlanner.PositiveStartAtMessage);
-        FocusValidationTarget(acceptance.Validation);
-    }
-
-    // The visual harness and headless tests need the WPF validation state without opening a
-    // nested modal warning window that would block their dispatcher.
-    internal void ValidateForTest()
-    {
-        SynchronizeSession();
-        var acceptance = _session.PlanAcceptance();
-        if (acceptance.IsAccepted)
-            return;
         FocusValidationTarget(acceptance.Validation);
     }
 

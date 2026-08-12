@@ -1,5 +1,5 @@
 using System.IO;
-using System.Reflection;
+using FreeW.TestSupport;
 
 namespace FreeW.App.Host.Tests;
 
@@ -8,31 +8,50 @@ public sealed class HostAccessOwnershipTests
     [Fact]
     public void TestVariant_OwnsMovedAccess_WhileShippingSourcesDoNot()
     {
-        MemberNames(typeof(MainWindow)).Should().Contain("IsReadModeActiveForTests");
-        MemberNames(typeof(Editing.DocumentView)).Should().Contain("NativeSpellCheckEnabledForTest");
+        var assembly = typeof(MainWindow).Assembly;
+        AssertSupportMember(assembly, "FreeW.App.Host.MainWindow", "IsReadModeActiveForTests");
+        AssertSupportMember(assembly, "FreeW.App.Host.Editing.DocumentView", "NativeSpellCheckEnabledForTest");
+        AssertSupportMember(assembly, "FreeW.App.Host.Editing.DocumentView", "SimulateTypeText");
+        AssertSupportMember(assembly, "FreeW.App.Host.AutosaveCoordinator", "SnapshotNowForTests");
+        AssertSupportMember(assembly, "FreeW.App.Host.CompareDocumentsDialog", "CreateForTest");
+        AssertSupportMember(assembly, "FreeW.App.Host.Editing.OutlineView", "VisibleRows");
 
-        var root = FindRepositoryRoot();
-        File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "MainWindow.cs"))
-            .Should().NotContain("IsReadModeActiveForTests");
-        File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Editing", "DocumentView.cs"))
-            .Should().NotContain("NativeSpellCheckEnabledForTest");
+        var root = HostAccessOwnershipAssertions.FindRepositoryRoot();
+        var projectDirectory = Path.Combine(root, "freew", "FreeW.App.Host");
+        HostAccessOwnershipAssertions.ShippingSourceHookViolations(projectDirectory).Should().BeEmpty();
         File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"))
             .Should().Contain("Condition=\"'$(FreeWHostTestSupport)' == 'true'\"");
     }
 
-    private static string[] MemberNames(Type type) =>
-        type.GetMembers(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-            .Select(member => member.Name)
-            .ToArray();
-
-    private static string FindRepositoryRoot()
+    [Fact]
+    public void NormalShippingAssembly_ExcludesMovedAccess()
     {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
+        var root = HostAccessOwnershipAssertions.FindRepositoryRoot();
+        var assemblyPath = Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Host",
+            "bin",
+            HostAccessOwnershipAssertions.CurrentConfiguration(),
+            "net10.0-windows10.0.19041.0",
+            "FreeW.App.Host.dll");
+        File.Exists(assemblyPath).Should().BeTrue($"the normal shipping variant must be built at {assemblyPath}");
 
-        throw new DirectoryNotFoundException("Repository root was not found.");
+        var names = HostAccessOwnershipAssertions.AssemblyMemberNames(assemblyPath);
+        names.Should().NotContain(name => name.Contains("ForTest", StringComparison.Ordinal));
+        foreach (var movedMember in new[]
+        {
+            "FreeW.App.Host.Editing.DocumentView.SimulateTypeText",
+            "FreeW.App.Host.Editing.DocumentView.ViewDepthLayout",
+            "FreeW.App.Host.Editing.OutlineView.VisibleRows"
+        })
+            names.Should().NotContain(movedMember);
+    }
+
+    private static void AssertSupportMember(System.Reflection.Assembly assembly, string typeName, string memberName)
+    {
+        var type = assembly.GetType(typeName);
+        type.Should().NotBeNull();
+        HostAccessOwnershipAssertions.MemberNames(type!).Should().Contain(memberName);
     }
 }

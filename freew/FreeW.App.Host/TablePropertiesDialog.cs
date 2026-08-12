@@ -10,7 +10,7 @@ namespace FreeW.App.Host;
 /// Word's "Table Properties" dialog (Table Tools &gt; Layout &gt; Properties), edited across four tabs that
 /// mirror Word's layout.
 /// </summary>
-internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly TablePropertiesDialogSession _session;
     private readonly CheckBox _preferredWidthOn;
@@ -447,17 +447,6 @@ internal sealed class TablePropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
         _result = acceptance.Result;
         Close();
-    }
-
-    internal static TablePropertiesDialog CreateForTest(
-        ModelTableContext context,
-        TablePropertiesDialogTabKind initialTab = TablePropertiesDialogTabKind.Table) =>
-        new(owner: null, context, initialTab);
-
-    internal TablePropertiesValues? AcceptForTest()
-    {
-        Accept();
-        return _result;
     }
 
     public static TablePropertiesValues? Prompt(

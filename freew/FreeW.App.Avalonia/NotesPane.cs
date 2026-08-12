@@ -10,7 +10,7 @@ using FreeW.App.Presentation.Panes;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class NotesPane : Border
+internal sealed partial class NotesPane : Border
 {
     private readonly ListBox _list;
     private readonly TextBlock _selectedLabel;
@@ -86,9 +86,6 @@ internal sealed class NotesPane : Border
         Child = layout;
     }
 
-    internal int ItemCountForTest => _list.ItemCount;
-    internal DocumentView SubEditorForTest => _subEditor;
-
     public void Toggle()
     {
         IsVisible = !IsVisible;
@@ -107,10 +104,6 @@ internal sealed class NotesPane : Border
         if (IsVisible)
             Render(_session.Refresh());
     }
-
-    internal void SelectForTest(bool footnote, int id) => ShowAndSelect(footnote, id);
-    internal void ApplyForTest() => ApplySelected();
-    internal void DeleteForTest() => DeleteSelected();
 
     private void OnSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {

@@ -8,7 +8,7 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class DateTimeDialog : FreeWDialogWindow
+internal sealed partial class DateTimeDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
     private readonly DateTimeDialogSession _session;
@@ -65,13 +65,6 @@ internal sealed class DateTimeDialog : FreeWDialogWindow
 
     public static Task<DateTimeDialogResult?> ShowAsync(Window owner, DateTime moment, CultureInfo culture) =>
         new DateTimeDialog(moment, culture).ShowDialog<DateTimeDialogResult?>(owner);
-
-    internal DateTimeDialogResult BuildResultForTest(int selectedIndex, bool updateAutomatically)
-    {
-        _session.UpdateSelection(Math.Clamp(selectedIndex, 0, _session.Formats.Count - 1));
-        _session.UpdateAutomatically(updateAutomatically);
-        return _session.PlanAcceptance()!;
-    }
 
     private void Accept()
     {

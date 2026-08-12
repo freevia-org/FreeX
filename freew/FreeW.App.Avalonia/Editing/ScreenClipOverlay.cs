@@ -8,7 +8,7 @@ using FreeW.App.Presentation.Dialogs;
 namespace FreeW.App.Avalonia.Editing;
 
 /// <summary>Fullscreen cross-platform drag selector for Insert &gt; Screen Clipping.</summary>
-internal sealed class ScreenClipOverlay : Window
+internal sealed partial class ScreenClipOverlay : Window
 {
     private readonly Canvas _canvas;
     private readonly Rectangle _selection;
@@ -56,8 +56,6 @@ internal sealed class ScreenClipOverlay : Window
         Opened += (_, _) => Focus();
     }
 
-    internal ScreenPixelRect? ResultForTest => _result;
-
     public Task<ScreenPixelRect?> ShowSelectionAsync()
     {
         if (_completion is not null)
@@ -69,29 +67,6 @@ internal sealed class ScreenClipOverlay : Window
         Activate();
         return _completion.Task;
     }
-
-    internal void BeginSelectionForTest(Point point)
-    {
-        _origin = point;
-        _dragging = true;
-        UpdateSelectionVisual(point);
-    }
-
-    internal ScreenPixelRect? CompleteSelectionForTest(Point point, double renderScale)
-    {
-        _dragging = false;
-        _result = ScreenClipPlanner.BuildPhysicalSelection(
-            _origin.X,
-            _origin.Y,
-            point.X,
-            point.Y,
-            _virtualBounds.X,
-            _virtualBounds.Y,
-            renderScale);
-        return _result;
-    }
-
-    internal void CancelForTest() => _result = null;
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs args)
     {

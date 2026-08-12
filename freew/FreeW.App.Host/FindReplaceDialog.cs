@@ -21,7 +21,7 @@ namespace FreeW.App.Host;
 /// pure <see cref="TextSearch"/> helper. Includes a Go To section that jumps to a heading (via
 /// <see cref="DocumentOutline"/>) or to the document start/end. Opened with Ctrl+F / Ctrl+H.
 /// </summary>
-internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private static readonly FindReplaceDialogSurfaceSpec Surface = FindReplaceDialogPlanner.Surface;
     private readonly DocumentView _editor;
@@ -115,18 +115,6 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var state = _session.ActivateFor(openMode);
         DialogFocus.FocusAndSelect(state.OpenMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
     }
-
-    internal FindReplaceDialogOpenMode OpenModeForTest => _session.State.OpenMode;
-
-    internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
-        _findBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Find :
-        _replaceBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Replace : null;
-
-    internal void SetFindTextForTest(string text) => _findBox.Text = text;
-    internal void SetReplaceTextForTest(string text) => _replaceBox.Text = text;
-    internal void ReplaceForTest() => Execute(FindReplaceDialogActionKind.Replace);
-    internal void ReplaceAllForTest() => Execute(FindReplaceDialogActionKind.ReplaceAll);
-    internal string StatusForTest => _status.Text;
 
     // Track which text field was focused last so Special inserts into the right box.
     private TextBox _lastFocusedBox = null!;

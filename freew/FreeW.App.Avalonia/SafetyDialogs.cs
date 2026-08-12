@@ -9,7 +9,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class RestrictEditingDialog : FreeWDialogWindow
+internal sealed partial class RestrictEditingDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
@@ -185,8 +185,6 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
         Result = outcome.Settings;
         Close();
     }
-
-    internal Task StopProtectionForTestAsync() => StopProtectionAsync();
 
     private int SelectedModeIndex()
     {

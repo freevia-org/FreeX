@@ -28,7 +28,7 @@ namespace FreeW.App.Host;
 /// by the calling command (UI side) so the pure model helper stays deterministic.
 /// </para>
 /// </summary>
-internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly string _originalPath;
     private readonly TextBox _authorBox;
@@ -244,30 +244,6 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         Close();
     }
-
-    // -----------------------------------------------------------------------
-    // Test seam
-    // -----------------------------------------------------------------------
-
-    /// <summary>
-    /// Test seam: create the dialog already seeded with <paramref name="originalPath"/>,
-    /// <paramref name="defaultAuthor"/>, and <paramref name="revisedTitle"/> without showing a
-    /// file picker, so STA tests can exercise the control wiring without a modal loop.
-    /// </summary>
-    internal static CompareDocumentsDialog CreateForTest(string originalPath, string defaultAuthor, string revisedTitle = "") =>
-        new(owner: null, originalPath, defaultAuthor, revisedTitle);
-
-    /// <summary>
-    /// Test seam: validate the current author value and return the shared result, without
-    /// closing the window (mirrors the pattern used in <see cref="PageSetupDialog.AcceptForTest"/>).
-    /// </summary>
-    internal CompareDocumentsDialogResult? AcceptForTest()
-    {
-        TryAccept(showWarnings: false);
-        return _result;
-    }
-
-    internal Expander MoreExpanderForTest => _moreExpander;
 
     // -----------------------------------------------------------------------
     // Entry point

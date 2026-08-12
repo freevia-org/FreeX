@@ -24,7 +24,7 @@ namespace FreeW.App.Avalonia;
 /// Accept/reject and bulk actions delegate portable targeting and transitions to
 /// <see cref="ReviewingPaneSession"/>; the renderer only invalidates and projects native controls.
 /// </summary>
-public sealed class ReviewingPane : SidePaneBase
+public sealed partial class ReviewingPane : SidePaneBase
 {
     private static readonly ReviewingPanePresentationDescriptor Presentation =
         ReviewingPanePresentationPlanner.For(ReviewingPanePresentationProfile.DetailedAvalonia);
@@ -219,35 +219,7 @@ public sealed class ReviewingPane : SidePaneBase
         return applied;
     }
 
-    // ── Test-support ──────────────────────────────────────────────────────────
-
-    /// <summary>Number of revision rows currently shown in the list (for headless testing).</summary>
-    internal int RevisionItemCount => _session.State.Entries.Count;
-    internal int SelectedRevisionIndexForTest => _session.State.SelectedIndex;
     internal RevisionEntry? SelectedRevision => _session.State.SelectedRevision;
-    internal RevisionEntry? SelectedRevisionForTest => SelectedRevision;
-    internal ReviewRevisionSortOrder SortOrderForTest => _session.State.SortOrder;
-
-    internal void SetSortOrderForTest(ReviewRevisionSortOrder order)
-    {
-        var index = order switch
-        {
-            ReviewRevisionSortOrder.Sequence => 0,
-            ReviewRevisionSortOrder.Author => 1,
-            ReviewRevisionSortOrder.Kind => 2,
-            ReviewRevisionSortOrder.Date => 3,
-            _ => 0,
-        };
-        _sortCombo.SelectedIndex = index;
-    }
-
-    /// <summary>
-    /// Enumerates the tracked-change entries for <paramref name="doc"/> via the model tier — the same
-    /// list the pane would show. Exposed for headless tests only.
-    /// </summary>
-    internal static IReadOnlyList<RevisionEntry> EnumerateRevisions(TextDocument doc) =>
-        ReviewingPaneSession.Enumerate(doc);
-
     // ── Row item ──────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -17,7 +17,7 @@ namespace FreeW.App.Host.Editing;
 /// <see cref="OutlineViewController"/>. Nothing here mutates the model directly, so toggling back to Print
 /// Layout restores the normal editing surface untouched.
 /// </summary>
-internal sealed class OutlineView : Border
+internal sealed partial class OutlineView : Border
 {
     private static readonly OutlineRowMarkers RowMarkers = new("▢ ", "⊞ ", "    ");
 
@@ -250,38 +250,6 @@ internal sealed class OutlineView : Border
             }
         }
     }
-
-    // --- Test seams (FreeW.App.Host.Tests has InternalsVisibleTo) -------------------------------------
-
-    /// <summary>The block indices currently shown in the outline (document order). For tests.</summary>
-    internal IReadOnlyList<OutlineRow> VisibleRows => _controller.VisibleRows;
-
-    /// <summary>Select the row mapping to <paramref name="blockIndex"/> (test seam for command targeting).</summary>
-    internal void SelectBlockIndex(int blockIndex) => SelectBlock(blockIndex);
-
-    /// <summary>Choose a "Show Level" (1..9 or <see cref="OutlineViewModel.ShowAllLevels"/>) and refresh. For tests.</summary>
-    internal void SetShowLevel(int level) => _controller.SetShowLevel(level);
-
-    /// <summary>Toggle "Show First Line Only" and refresh. For tests.</summary>
-    internal void SetFirstLineOnly(bool firstLineOnly) => _controller.SetFirstLineOnly(firstLineOnly);
-
-    /// <summary>
-    /// Apply an outline level (-1 = Body Text, 0 = Title, 1..MaxHeadingLevel = Heading) to the
-    /// currently selected row. For tests.
-    /// </summary>
-    internal void SetOutlineLevel(int level) => _controller.SetOutlineLevel(level);
-
-    internal void ExecuteForTests(OutlineCommand command) => _controller.Execute(command);
-
-    internal int? SelectedBlockIndex => _controller.SelectedBlockIndex;
-
-    internal string? RowDisplayTextForTests(int blockIndex) =>
-        _list.Items.OfType<OutlineRowItem>()
-            .FirstOrDefault(item => item.Row.BlockIndex == blockIndex)
-            ?.ToString();
-
-    /// <summary>The level currently shown in the Outline Level combo (-1 = Body Text / 0 = Title / 1–N = HeadingN). For tests.</summary>
-    internal int CurrentOutlineLevel => _controller.CurrentOutlineLevel;
 
     // One outline row: indents the text by its outline level, prefixes a heading marker (collapsed
     // headings get a "+"), and remembers the source row so a command can map back to the model block index.

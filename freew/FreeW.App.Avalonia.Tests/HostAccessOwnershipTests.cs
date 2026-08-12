@@ -1,5 +1,5 @@
 using System.IO;
-using System.Reflection;
+using FreeW.TestSupport;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -8,31 +8,53 @@ public sealed class HostAccessOwnershipTests
     [Fact]
     public void TestVariant_OwnsMovedAccess_WhileShippingSourcesDoNot()
     {
-        MemberNames(typeof(MainWindow)).Should().Contain("RibbonKeyTipsVisibleForTest");
-        MemberNames(typeof(Editing.DocumentView)).Should().Contain("CaretRectForTest");
+        var assembly = typeof(MainWindow).Assembly;
+        AssertSupportMember(assembly, "FreeW.App.Avalonia.MainWindow", "RibbonKeyTipsVisibleForTest");
+        AssertSupportMember(assembly, "FreeW.App.Avalonia.Editing.DocumentView", "CaretRectForTest");
+        AssertSupportMember(assembly, "FreeW.App.Avalonia.Editing.DocumentView", "HandleRectsForSelection");
+        AssertSupportMember(assembly, "FreeW.App.Avalonia.AutosaveAdapter", "SnapshotNowForTests");
+        AssertSupportMember(assembly, "FreeW.App.Avalonia.PasswordPromptDialog", "CreateForTest");
+        AssertSupportMember(assembly, "FreeW.App.Avalonia.NavigationPane", "HeadingItemCount");
+        AssertSupportMember(assembly, "FreeW.App.Avalonia.Editing.OutlineView", "VisibleRows");
 
-        var root = FindRepositoryRoot();
-        File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "MainWindow.cs"))
-            .Should().NotContain("RibbonKeyTipsVisibleForTest");
-        File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"))
-            .Should().NotContain("internal Rect? CaretRectForTest");
+        var root = HostAccessOwnershipAssertions.FindRepositoryRoot();
+        var projectDirectory = Path.Combine(root, "freew", "FreeW.App.Avalonia");
+        HostAccessOwnershipAssertions.ShippingSourceHookViolations(projectDirectory).Should().BeEmpty();
         File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj"))
             .Should().Contain("Condition=\"'$(FreeWHostTestSupport)' == 'true'\"");
     }
 
-    private static string[] MemberNames(Type type) =>
-        type.GetMembers(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)
-            .Select(member => member.Name)
-            .ToArray();
-
-    private static string FindRepositoryRoot()
+    [Fact]
+    public void NormalShippingAssembly_ExcludesMovedAccess()
     {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
-                return directory.FullName;
-        }
+        var root = HostAccessOwnershipAssertions.FindRepositoryRoot();
+        var assemblyPath = Path.Combine(
+            root,
+            "freew",
+            "FreeW.App.Avalonia",
+            "bin",
+            HostAccessOwnershipAssertions.CurrentConfiguration(),
+            "net10.0",
+            "FreeW.dll");
+        File.Exists(assemblyPath).Should().BeTrue($"the normal shipping variant must be built at {assemblyPath}");
 
-        throw new DirectoryNotFoundException("Repository root was not found.");
+        var names = HostAccessOwnershipAssertions.AssemblyMemberNames(assemblyPath);
+        names.Should().NotContain(name => name.Contains("ForTest", StringComparison.Ordinal));
+        foreach (var movedMember in new[]
+        {
+            "FreeW.App.Avalonia.Editing.DocumentView.HandleRectsForSelection",
+            "FreeW.App.Avalonia.Editing.DocumentView.BeginFloatDrag",
+            "FreeW.App.Avalonia.Editing.DocumentView.CaretRectForTest",
+            "FreeW.App.Avalonia.NavigationPane.HeadingItemCount",
+            "FreeW.App.Avalonia.Editing.OutlineView.VisibleRows"
+        })
+            names.Should().NotContain(movedMember);
+    }
+
+    private static void AssertSupportMember(System.Reflection.Assembly assembly, string typeName, string memberName)
+    {
+        var type = assembly.GetType(typeName);
+        type.Should().NotBeNull();
+        HostAccessOwnershipAssertions.MemberNames(type!).Should().Contain(memberName);
     }
 }

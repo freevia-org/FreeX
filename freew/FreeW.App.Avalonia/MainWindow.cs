@@ -129,8 +129,6 @@ public sealed partial class MainWindow : Window
     private TextBlock? _sideToSidePairStatusText;
     private double _sideToSidePairScrollStrideDip;
     private double _sideToSidePlannedHorizontalOffsetDip;
-    private bool _sideToSideUsesLiveEditor;
-    private bool _multiplePagesUsesLiveEditor;
     private double _zoomScale = 1.0;
     private bool _updatingZoomSlider;
     private readonly FreeWEditorInteractionSession _editorInteraction = new();
@@ -431,16 +429,6 @@ public sealed partial class MainWindow : Window
 
     public bool HasToolbar { get; private set; }
 
-    /// <summary>
-    /// Exposes the navigation pane for tests that need to inspect its state headlessly.
-    /// </summary>
-    internal NavigationPane NavPane => _navPane;
-
-    /// <summary>
-    /// Exposes the reviewing pane for tests that need to inspect its state headlessly.
-    /// </summary>
-    internal ReviewingPane ReviewingPane => _reviewingPane;
-
     internal bool StepRevision(int direction)
     {
         if (!_reviewingPane.IsVisible)
@@ -463,35 +451,6 @@ public sealed partial class MainWindow : Window
         if (_reviewingPane.SelectedRevision is { } entry)
             _reviewingPane.RejectEntry(entry);
     }
-
-    internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
-    /// <summary>
-    /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
-    /// </summary>
-    internal RevealFormattingPane RevealPane => _revealPane;
-    internal FreeWViewDepthMode ViewDepthMode => _viewSession.CurrentDepth.Mode;
-    internal bool IsSplitPreviewActive => _viewSession.CurrentDepth.IsSplitActive;
-    internal bool IsMultiplePagesPreviewActive => _viewSession.CurrentDepth.IsMultiplePagesActive;
-    internal bool IsSideToSidePreviewActive => _viewSession.CurrentDepth.IsSideToSideActive;
-    internal string? ViewDepthLimitation => _viewSession.CurrentDepth.Limitation;
-    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests =>
-        _viewSession.PagePairNavigation;
-    internal bool HasSideToSidePagePairNavigationForTests =>
-        _sideToSidePreviewScrollViewer is not null &&
-        _sideToSidePreviousPairButton is not null &&
-        _sideToSideNextPairButton is not null &&
-        _sideToSidePairStatusText is not null;
-    internal Vector SideToSidePreviewOffsetForTests => new(_sideToSidePlannedHorizontalOffsetDip, 0);
-    internal Control? WorkspaceContentForTests => _workspace.Child as Control;
-    internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
-    internal bool IsSideToSideEditorEditableForTests => _sideToSideUsesLiveEditor;
-    internal bool IsMultiplePagesEditorEditableForTests => _multiplePagesUsesLiveEditor;
-    internal bool IsOutlineModeActiveForTests => _outlineMode;
-    internal bool IsPagedEditModeActiveForTests => _pagedEditMode;
-    internal void TogglePagedEditViewForTests() => TogglePagedEditView();
-    internal bool IsWorkspaceShowingOutline => ReferenceEquals(_workspace.Child, _outlineView);
-    internal OutlineView OutlineViewForTests => _outlineView;
-    internal void ToggleOutlineViewForTests() => ToggleOutlineView();
 
     /// <summary>
     /// Show or hide the navigation pane and refresh its heading list when making it visible.
@@ -1413,12 +1372,6 @@ public sealed partial class MainWindow : Window
     internal void ToggleSideToSide() =>
         ApplyViewDepthTransition(_viewSession.Execute(FreeWViewDepthCommand.ToggleSideToSide));
 
-    internal void NavigateSideToSideNextPairForTests() =>
-        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
-
-    internal void NavigateSideToSidePreviousPairForTests() =>
-        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair);
-
     private void ApplyViewDepthTransition(FreeWViewDepthTransition transition, bool updateStatus = true)
     {
         if (_outlineMode)
@@ -1521,14 +1474,12 @@ public sealed partial class MainWindow : Window
             return;
 
         _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
-        _multiplePagesUsesLiveEditor = plan.IsMultiplePagesActive;
         if (plan.IsMultiplePagesActive)
         {
             _editor.Focus();
             return;
         }
 
-        _sideToSideUsesLiveEditor = true;
         _viewSession.StartPagePairNavigation(totalPages: Math.Max(1, _editor.PageCount));
         var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_editor.Document.Page);
         var (viewportWidth, viewportHeight) = GetWorkspaceViewportSize(compact: false);
@@ -1719,8 +1670,6 @@ public sealed partial class MainWindow : Window
         _sideToSidePairStatusText = null;
         _sideToSidePairScrollStrideDip = 0;
         _sideToSidePlannedHorizontalOffsetDip = 0;
-        _sideToSideUsesLiveEditor = false;
-        _multiplePagesUsesLiveEditor = false;
     }
 
     private (double Width, double Height) GetWorkspaceViewportSize(bool compact)
@@ -2836,25 +2785,6 @@ public sealed partial class MainWindow : Window
             ? Color.FromRgb(color.R, color.G, color.B)
             : Colors.Black;
 
-    internal bool IsReadModeActiveForTests => _editorInteraction.IsReadModeActive;
-    internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
-    internal string? ReadModeBackgroundForTests => _editor.ViewBackgroundColorHex;
-    internal bool IsRibbonVisibleForTests => _ribbonHost?.IsVisible == true;
-    internal bool IsTitleBarVisibleForTests => _titleBar.IsVisible;
-    internal bool IsNavigationPaneVisibleForTests => _navPane.IsVisible;
-    internal bool IsRevealPaneVisibleForTests => _revealPane.IsVisible;
-    internal bool IsReviewingPaneVisibleForTests => _reviewingPane.IsVisible;
-    internal int RibbonStateRefreshCountForTests => _ribbonStateRefreshCount;
-    internal void SetReadModePaneVisibilityForTests(bool navigation, bool reveal, bool reviewing)
-    {
-        _navPane.IsVisible = navigation;
-        _revealPane.IsVisible = reveal;
-        _reviewingPane.IsVisible = reviewing;
-    }
-    internal void ToggleReadModeForTests() => ToggleReadMode();
-    internal void ApplyReadModeColumnWidthForTests(string token) => ApplyReadModeColumnWidth(token);
-    internal void ApplyReadModePageColorForTests(string token) => ApplyReadModePageColor(token);
-
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
         if (TryHandleRibbonKeyTips(e))
@@ -3010,8 +2940,6 @@ public sealed partial class MainWindow : Window
     }
 
     private void NewDocument() => _ = NewDocumentAsync();
-
-    internal Task<bool> NewDocumentAsyncForTests() => NewDocumentAsync();
 
     private Task<bool> NewDocumentAsync() =>
         _fileWorkflow.NewAsync(
@@ -3243,8 +3171,6 @@ public sealed partial class MainWindow : Window
         return ApplyFileFeedback(FreeWDocumentFileFeedbackPlanner.PlanOpen(execution, path));
     }
 
-    internal Task<bool> ImportPdfTextAsyncForTests() => ImportPdfTextAsync();
-
     private Task<bool> ImportPdfTextAsync() =>
         _fileWorkflow.OpenAsync(
             FreeWDocumentFileFeedbackPlanner.ImportPdfAction,
@@ -3270,8 +3196,6 @@ public sealed partial class MainWindow : Window
 
     private Task<bool> SaveAsync() =>
         _fileWorkflow.SaveAsync(SaveToCurrentPathAsync, SaveAsAsync);
-
-    internal Task<bool> SaveForTests() => SaveAsync();
 
     private Task<bool> SaveToCurrentPathAsync(string path) =>
         SaveToCurrentPathCoreAsync(path);
@@ -3444,8 +3368,6 @@ public sealed partial class MainWindow : Window
         return file is null ? (true, null) : (false, file.LocalPath);
     }
 
-    internal Task ExportXpsForTests() => ExportXpsAsync();
-
     private async Task RefreshPrinterDiscoveryAsync()
     {
         _latestPrinterDiscovery = await _portablePrintWorkflow.DiscoverAsync();
@@ -3571,8 +3493,6 @@ public sealed partial class MainWindow : Window
             _editor.Focus();
         }
     }
-
-    internal Task InsertScreenClipForTestAsync() => InsertScreenClipAsync();
 
     internal static void ApplyScreenClipCapture(DocumentView editor, ScreenClipCapture capture)
     {

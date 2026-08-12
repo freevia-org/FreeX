@@ -8,7 +8,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
+internal sealed partial class TableOfAuthoritiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome =
         AvaloniaCompactDialogChrome.WindowsStyle with
@@ -106,12 +106,6 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 
     public static Task<ToaOptions?> ShowAsync(Window owner, ToaOptions? options = null) =>
         new TableOfAuthoritiesDialog(options ?? ToaOptions.Default).ShowDialog<ToaOptions?>(owner);
-
-    internal ToaOptions? BuildResultForTest()
-    {
-        SynchronizeSession();
-        return _session.PlanAcceptance().Options;
-    }
 
     private void Accept()
     {

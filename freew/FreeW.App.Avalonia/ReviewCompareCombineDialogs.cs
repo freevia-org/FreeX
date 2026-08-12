@@ -11,7 +11,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class CompareDocumentsDialog : FreeWDialogWindow
+internal sealed partial class CompareDocumentsDialog : FreeWDialogWindow
 {
     private readonly string _originalPath;
     private readonly CompareDocumentsDialogPlan _plan;
@@ -151,22 +151,6 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         panel.Children.Add(_showOriginal);
         panel.Children.Add(_showRevised);
         return panel;
-    }
-
-    internal static CompareDocumentsDialog CreateForTest(
-        string originalPath,
-        CompareDocumentsPromptState state) =>
-        new(originalPath, state);
-
-    internal TextBox AuthorBoxForTest => _authorBox;
-    internal TextBlock ValidationForTest => _validation;
-    internal Expander MoreExpanderForTest => _moreExpander;
-
-    internal CompareDocumentsDialogResult? AcceptForTest(string? author)
-    {
-        _authorBox.Text = author;
-        TryAccept(close: false);
-        return Result;
     }
 
     private void Accept() => TryAccept(close: true);

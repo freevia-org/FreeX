@@ -12,7 +12,7 @@ namespace FreeW.App.Host;
 /// Exposes the document-level numbering properties stored in <c>w:footnotePr</c> /
 /// <c>w:endnotePr</c> in word/settings.xml: number format, start-at value and restart mode.
 /// </summary>
-internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly FootnoteEndnoteOptionsDialogSession _session;
     private readonly ComboBox _footnoteFormatBox;
@@ -183,13 +183,6 @@ internal sealed class FootnoteEndnoteOptionsDialog : Free.Shared.Ribbon.Wpf.Dial
 
     // The visual harness uses this non-modal seam to exercise the same planner and focus policy as an
     // attempted OK click without opening a second warning window during a static capture.
-    internal void ValidateForTest()
-    {
-        SynchronizeSession();
-        var acceptance = _session.PlanAcceptance();
-        FocusFailure(acceptance.Validation?.Field);
-    }
-
     private void SynchronizeSession()
     {
         Synchronize(FootnoteEndnoteNoteKind.Footnote, _footnoteFormatBox, _footnoteStartBox, _footnoteRestartBox);

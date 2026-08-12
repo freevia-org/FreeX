@@ -30,7 +30,7 @@ namespace FreeW.App.Host;
 /// Measurements are shown in points, matching FreeW's other page-setup dialogs (Columns, Hyphenation Options).
 /// </para>
 /// </summary>
-internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPageSetupDialogControlSource
+internal sealed partial class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPageSetupDialogControlSource
 {
     // Margins tab.
     private readonly TextBox _top;
@@ -346,26 +346,6 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow, IPa
     string? IPageSetupDialogControlSource.HeaderDistanceText => _headerDistance.Text;
     string? IPageSetupDialogControlSource.FooterDistanceText => _footerDistance.Text;
     int IPageSetupDialogControlSource.VerticalAlignmentIndex => _vAlign.SelectedIndex;
-
-    /// <summary>
-    /// Test seam: builds a non-modal dialog instance seeded from <paramref name="page"/> so unit tests can
-    /// exercise the control wiring (seeding, the paper-preset / orientation mapping) without a modal loop.
-    /// </summary>
-    internal static PageSetupDialog CreateForTest(
-        PageSettings page,
-        PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins) =>
-        new(owner: null, page, SectionBreakKind.NextPage, initialTab);
-
-    /// <summary>
-    /// Test seam: validates the current control values and returns the <see cref="PageSetupDialogResult"/> they describe
-    /// (or null when validation fails), without closing the window — the same mapping <see cref="Accept"/>
-    /// performs.
-    /// </summary>
-    internal PageSetupDialogResult? AcceptForTest()
-    {
-        Accept();
-        return _result;
-    }
 
     /// <summary>
     /// Show the Page Setup dialog seeded with the active section's <paramref name="page"/> settings (and its

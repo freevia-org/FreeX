@@ -11,7 +11,7 @@ namespace FreeW.App.Host;
 /// <summary>
 /// WPF scheduling and prompt adapter for the renderer-neutral <see cref="FreeWAutosaveSession"/>.
 /// </summary>
-internal sealed class AutosaveCoordinator
+internal sealed partial class AutosaveCoordinator
 {
     private readonly FileCommands _file;
     private readonly DispatcherTimer _timer;
@@ -40,10 +40,6 @@ internal sealed class AutosaveCoordinator
         _timer = new DispatcherTimer { Interval = FreeWAutosaveSession.DefaultInterval };
         _timer.Tick += (_, _) => _session.Snapshot();
     }
-
-    internal string SnapshotIdForTests => _session.SnapshotId;
-    internal void SnapshotNowForTests() => _session.Snapshot();
-    internal void SimulateCrashForTests() => _session.Dispose();
 
     public void Start() => _timer.Start();
 

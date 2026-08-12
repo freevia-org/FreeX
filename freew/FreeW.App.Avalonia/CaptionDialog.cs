@@ -7,7 +7,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class CaptionDialog : FreeWDialogWindow
+internal sealed partial class CaptionDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
 
@@ -65,13 +65,10 @@ internal sealed class CaptionDialog : FreeWDialogWindow
     public static Task<CaptionDialogResult?> ShowAsync(Window owner, CaptionLabel defaultLabel) =>
         new CaptionDialog(defaultLabel).ShowDialog<CaptionDialogResult?>(owner);
 
-    internal CaptionDialogResult BuildResultForTest(int selectedIndex, string? text)
+    private CaptionDialogResult BuildResult(int selectedIndex, string? text)
         => CaptionDialogPlanner.BuildResult(selectedIndex, text);
 
-    internal CaptionLabel SelectedLabelForTest =>
-        _plan.Choices[Math.Clamp(_label.SelectedIndex, 0, _plan.Choices.Count - 1)].Value;
-
-    private void Accept() => Close(BuildResultForTest(_label.SelectedIndex, _text.Text));
+    private void Accept() => Close(BuildResult(_label.SelectedIndex, _text.Text));
 
     private static Button Button(string text, bool isDefault = false, bool isCancel = false, Action? click = null)
     {

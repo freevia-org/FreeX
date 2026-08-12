@@ -10,12 +10,12 @@ using FreeW.Core.Model;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Avalonia counterpart of WPF's Create New Theme Colors dialog.</summary>
-public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
+public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
 {
-    internal const double WpfWidthForTests = 440;
-    internal const double WpfLabelColumnWidthForTests = 190;
-    internal const double WpfColorRowHeightForTests = 29.4;
-    internal const double WpfButtonWidthForTests = 72;
+    private const double DialogWidth = 440;
+    private const double LabelColumnWidth = 190;
+    private const double ColorRowHeight = 29.4;
+    private const double ActionButtonWidth = 72;
 
     private readonly DocumentTheme _current;
     private readonly TextBox[] _colorBoxes;
@@ -35,7 +35,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
         _nameBox = MakeTextBox(state.NameText, 200);
 
         Title = CustomizeThemeColorsDialogPlanner.Title;
-        Width = WpfWidthForTests;
+        Width = DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -57,7 +57,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
                 index,
                 CustomizeThemeColorsDialogPlanner.Slots[index].Label,
                 _colorBoxes[index],
-                WpfColorRowHeightForTests,
+                ColorRowHeight,
                 new Thickness(0, 0, 8, 0));
         content.Children.Add(grid);
         content.Children.Add(new Border
@@ -72,7 +72,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
             0,
             CustomizeThemeColorsDialogPlanner.NameLabel,
             _nameBox,
-            WpfColorRowHeightForTests,
+            ColorRowHeight,
             new Thickness(0, 0, 8, 0));
         content.Children.Add(nameGrid);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(0, 8, 0, 0));
@@ -81,8 +81,6 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
         content.Children.Add(CreateActionRow());
         Content = content;
     }
-
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
 
     private bool Accept(bool closeOnSuccess)
     {
@@ -108,11 +106,11 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
     private StackPanel CreateActionRow()
     {
         var ok = new Button { Content = "OK", IsDefault = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, WpfButtonWidthForTests, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, ActionButtonWidth, isDefault: true);
         ok.Click += (_, _) => Accept(closeOnSuccess: true);
 
         var cancel = new Button { Content = "Cancel", IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, WpfButtonWidthForTests);
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, ActionButtonWidth);
         cancel.Click += (_, _) => Close();
 
         return AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
@@ -121,7 +119,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
     private static Grid CreateGrid()
     {
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(WpfLabelColumnWidthForTests) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LabelColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         return grid;
     }
@@ -135,7 +133,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
 }
 
 /// <summary>Avalonia counterpart of WPF's Create New Theme Fonts dialog.</summary>
-public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
+public sealed partial class CustomizeThemeFontsDialog : FreeWDialogWindow
 {
     private readonly CustomizeThemeFontsDialogSession _session;
     private readonly ComboBox _heading;
@@ -197,8 +195,6 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         Content = content;
     }
 
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
-
     private bool Accept(bool closeOnSuccess)
     {
         var acceptance = _session.PlanAcceptance(
@@ -239,7 +235,7 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
 }
 
 /// <summary>Avalonia page-color picker matching WPF's palette, No Color, and More Colors flow.</summary>
-public sealed class PageColorDialog : FreeWDialogWindow
+public sealed partial class PageColorDialog : FreeWDialogWindow
 {
     private readonly ComboBox _palette;
     private readonly TextBox _custom;
@@ -279,14 +275,6 @@ public sealed class PageColorDialog : FreeWDialogWindow
         Content = content;
     }
 
-    internal bool AcceptForTests() => TryAccept();
-
-    internal void SelectCustomColorForTests(string value)
-    {
-        _palette.SelectedIndex = -1;
-        _custom.Text = value;
-    }
-
     private void AcceptAndClose()
     {
         if (TryAccept())
@@ -314,7 +302,7 @@ public sealed class PageColorDialog : FreeWDialogWindow
 }
 
 /// <summary>Small modal selector for the same Effects catalog exposed by WPF's Design gallery.</summary>
-public sealed class ThemeEffectsDialog : FreeWDialogWindow
+public sealed partial class ThemeEffectsDialog : FreeWDialogWindow
 {
     private readonly ComboBox _effects;
     public DocumentEffectSet? Result { get; private set; }
@@ -354,15 +342,10 @@ public sealed class ThemeEffectsDialog : FreeWDialogWindow
         Content = content;
     }
 
-    internal bool AcceptForTests()
-    {
-        Result = DocumentEffectSet.Catalog[Math.Clamp(_effects.SelectedIndex, 0, DocumentEffectSet.Catalog.Count - 1)];
-        return true;
-    }
 }
 
 /// <summary>Small modal selector for WPF's Design Style Sets gallery.</summary>
-public sealed class StyleSetDialog : FreeWDialogWindow
+public sealed partial class StyleSetDialog : FreeWDialogWindow
 {
     private readonly ComboBox _styleSets;
     public DocumentStyleSet? Result { get; private set; }
@@ -402,11 +385,6 @@ public sealed class StyleSetDialog : FreeWDialogWindow
         Content = content;
     }
 
-    internal bool AcceptForTests()
-    {
-        Result = DocumentStyleSet.Catalog[Math.Clamp(_styleSets.SelectedIndex, 0, DocumentStyleSet.Catalog.Count - 1)];
-        return true;
-    }
 }
 
 /// <summary>Lifecycle-only confirmation window for a future shell callback, matching the WPF default action wording.</summary>

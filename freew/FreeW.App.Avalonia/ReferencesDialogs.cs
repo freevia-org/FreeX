@@ -331,7 +331,7 @@ internal sealed class CitationSourcePickerDialog : FreeWDialogWindow
     }
 }
 
-internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
+internal sealed partial class MarkIndexEntryDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
@@ -477,57 +477,6 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
         };
     }
 
-    internal void SetForTests(
-        string? mainEntry,
-        string? subentry,
-        bool useCrossReference,
-        string? crossReference,
-        bool boldPageNumber = false,
-        bool italicPageNumber = false,
-        string? identifier = null)
-    {
-        _mainEntry.Text = mainEntry;
-        _subentry.Text = subentry;
-        _identifier.Text = identifier;
-        _currentPage.IsChecked = !useCrossReference;
-        _pageRange.IsChecked = false;
-        _crossReferenceOption.IsChecked = useCrossReference;
-        _crossReference.Text = crossReference;
-        _boldPageNumber.IsChecked = boldPageNumber;
-        _italicPageNumber.IsChecked = italicPageNumber;
-        UpdateCrossReferenceState();
-    }
-
-    internal void SetForTests(
-        string? mainEntry,
-        string? subentry,
-        IndexEntryReferenceKind referenceKind,
-        string? bookmarkName,
-        string? crossReference,
-        bool boldPageNumber = false,
-        bool italicPageNumber = false,
-        string? identifier = null)
-    {
-        _mainEntry.Text = mainEntry;
-        _subentry.Text = subentry;
-        _identifier.Text = identifier;
-        _currentPage.IsChecked = referenceKind == IndexEntryReferenceKind.CurrentPage;
-        _pageRange.IsChecked = referenceKind == IndexEntryReferenceKind.PageRange;
-        _crossReferenceOption.IsChecked = referenceKind == IndexEntryReferenceKind.CrossReference;
-        _bookmark.SelectedItem = bookmarkName;
-        _crossReference.Text = crossReference;
-        _boldPageNumber.IsChecked = boldPageNumber;
-        _italicPageNumber.IsChecked = italicPageNumber;
-        UpdateCrossReferenceState();
-    }
-
-    internal bool AcceptForTests() => Accept(markAll: false, closeOnSuccess: false);
-    internal bool AcceptAllForTests() => Accept(markAll: true, closeOnSuccess: false);
-    internal bool CrossReferenceEnabledForTests => _crossReference.IsEnabled;
-    internal bool BookmarkSelectorEnabledForTests => _bookmark.IsEnabled;
-    internal bool PageNumberFormattingEnabledForTests => _boldPageNumber.IsEnabled && _italicPageNumber.IsEnabled;
-    internal bool MarkAllEnabledForTests => _markAll.IsEnabled;
-
     private IndexEntryReferenceKind ReferenceKind =>
         _pageRange.IsChecked == true
             ? IndexEntryReferenceKind.PageRange
@@ -596,7 +545,7 @@ internal sealed class MarkIndexEntryDialog : FreeWDialogWindow
     }
 }
 
-internal sealed class MarkCitationDialog : FreeWDialogWindow
+internal sealed partial class MarkCitationDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
@@ -673,15 +622,6 @@ internal sealed class MarkCitationDialog : FreeWDialogWindow
             _longCitationBox.SelectAll();
         };
     }
-
-    internal void SetForTests(CitationCategory category, string? longCitation, string? shortCitation)
-    {
-        _categoryBox.SelectedIndex = _session.CategoryIndex(category);
-        _longCitationBox.Text = longCitation;
-        _shortCitationBox.Text = shortCitation;
-    }
-
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
 
     private MarkCitationDialogState CurrentState()
     {

@@ -13,7 +13,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class TableFormulaDialog : FreeWDialogWindow
+internal sealed partial class TableFormulaDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle;
@@ -89,25 +89,6 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
         Opened += (_, _) => FocusFormula();
     }
 
-    internal TextBox FormulaBoxForTest => _formula;
-    internal ComboBox FormatBoxForTest => _format;
-    internal ComboBox FunctionBoxForTest => _function;
-    internal TextBlock ValidationForTest => _validation;
-
-    internal TableFormulaField? AcceptForTest(string? formula, string? format)
-    {
-        _formula.Text = formula;
-        _format.Text = format;
-        TryAccept(close: false);
-        return Result;
-    }
-
-    internal void PasteFunctionForTest(string functionName)
-    {
-        _function.SelectedItem = functionName;
-        PasteSelectedFunction();
-    }
-
     private void Accept() => TryAccept(close: true);
 
     private void TryAccept(bool close)
@@ -181,7 +162,7 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
     }
 }
 
-internal sealed class TablePropertiesDialog : FreeWDialogWindow
+internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
@@ -371,13 +352,7 @@ internal sealed class TablePropertiesDialog : FreeWDialogWindow
         };
     }
 
-    internal TabControl TabsForTest => _tabs;
-    internal TextBlock ValidationForTest => _validation;
-    internal Control InitialFocusTargetForTest => ResolveFocusTarget(_session.InitialFocusPlan);
     internal IReadOnlyList<string> FocusTraceForValidation => _focusTrace;
-
-    internal TablePropertiesValues? AcceptForTest() => TryAccept(close: false);
-
     private Control BuildTableTab()
     {
         var grid = TwoColumnGrid(4, 137);

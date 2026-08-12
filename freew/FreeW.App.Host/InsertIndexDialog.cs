@@ -6,7 +6,7 @@ using FreeW.App.Presentation.Ribbon;
 namespace FreeW.App.Host;
 
 /// <summary>Thin WPF host for Word's References &gt; Insert Index dialog.</summary>
-internal sealed class InsertIndexDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class InsertIndexDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly TextBox _identifier;
     private readonly string _actionLabel;
@@ -65,22 +65,6 @@ internal sealed class InsertIndexDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private void Accept() =>
         Accept(closeOnSuccess: true);
-
-    internal static InsertIndexDialog CreateForTest(string? identifier = null) =>
-        new(null, InsertIndexDialogPlanner.BuildInitialState(identifier), isUpdate: false);
-
-    internal static InsertIndexDialog CreateForUpdateTest(string? identifier = null) =>
-        new(null, InsertIndexDialogPlanner.BuildInitialState(identifier), isUpdate: true);
-
-    internal void SetIdentifierForTest(string? identifier) =>
-        _identifier.Text = identifier;
-
-    internal void AcceptForTest() =>
-        Accept(closeOnSuccess: false);
-
-    internal InsertIndexDialogResult? ResultForTest => _result;
-
-    internal string ActionLabelForTest => _actionLabel;
 
     public static InsertIndexDialogResult? Prompt(Window? owner, InsertIndexDialogState initialState)
     {

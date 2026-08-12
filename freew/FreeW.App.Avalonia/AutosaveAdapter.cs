@@ -20,7 +20,7 @@ namespace FreeW.App.Avalonia;
 /// surface any snapshot from a previous crashed session.
 /// </para>
 /// </summary>
-internal sealed class AutosaveAdapter : IDisposable
+internal sealed partial class AutosaveAdapter : IDisposable
 {
     private readonly DocumentView _editor;
     private readonly FileCommandWorkflow _workflow;
@@ -51,10 +51,6 @@ internal sealed class AutosaveAdapter : IDisposable
         _session = sessionFactory?.Invoke(ports) ?? new FreeWAutosaveSession(ports);
         _recoverInNewWindowAsync = recoverInNewWindowAsync;
     }
-
-    internal string SnapshotIdForTests => _session.SnapshotId;
-    internal void SnapshotNowForTests() => _session.Snapshot();
-    internal void SimulateCrashForTests() => _session.Dispose();
 
     /// <summary>
     /// Start the periodic autosave loop. Safe to call from any thread.
@@ -154,7 +150,7 @@ internal sealed class AutosaveAdapter : IDisposable
 /// <summary>
 /// Minimal Yes / No prompt for the autosave recovery offer.
 /// </summary>
-internal sealed class RecoveryPromptDialog : FreeWDialogWindow
+internal sealed partial class RecoveryPromptDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
@@ -187,10 +183,15 @@ internal sealed class RecoveryPromptDialog : FreeWDialogWindow
     }
 
     /// <summary>Show the prompt and return true if the user chose to recover.</summary>
-    public static Func<string, bool>? TestResponder { get; set; }
-
-    public static Task<bool> ShowAsync(Window owner, string message) =>
-        TestResponder is { } responder
-            ? Task.FromResult(responder(message))
+    public static Task<bool> ShowAsync(Window owner, string message)
+    {
+        var handled = false;
+        var response = false;
+        ResolveResponseOverride(message, ref handled, ref response);
+        return handled
+            ? Task.FromResult(response)
             : new RecoveryPromptDialog(message).ShowDialog<bool>(owner);
+    }
+
+    static partial void ResolveResponseOverride(string message, ref bool handled, ref bool response);
 }

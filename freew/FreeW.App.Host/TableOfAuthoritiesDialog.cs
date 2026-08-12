@@ -16,7 +16,7 @@ namespace FreeW.App.Host;
 /// </list>
 /// Returns the chosen <see cref="ToaOptions"/>, or null when cancelled.
 /// </summary>
-internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly TableOfAuthoritiesDialogSession _session;
     private readonly ComboBox _categoryCombo;
@@ -134,42 +134,6 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
             ? _leaderCombo
             : _categoryCombo;
         target.Focus();
-    }
-
-    // -----------------------------------------------------------------------
-    // Test seam
-    // -----------------------------------------------------------------------
-
-    /// <summary>
-    /// Test seam: construct the dialog without showing it so STA tests can exercise the control wiring.
-    /// Seed values default to: All categories, passim=false, keep-formatting=false, Dots leader.
-    /// </summary>
-    internal static TableOfAuthoritiesDialog CreateForTest(
-        bool passim = false,
-        bool keepFormatting = false,
-        CitationCategory? categoryFilter = null,
-        ToaTabLeader leader = ToaTabLeader.Dots)
-    {
-        var dlg = new TableOfAuthoritiesDialog(
-            owner: null,
-            options: new ToaOptions
-            {
-                UsePassim = passim,
-                KeepOriginalFormatting = keepFormatting,
-                CategoryFilter = categoryFilter,
-                TabLeader = leader
-            });
-
-        return dlg;
-    }
-
-    /// <summary>
-    /// Test seam: run Accept logic and return the produced <see cref="ToaOptions"/> without closing the window.
-    /// </summary>
-    internal ToaOptions? AcceptForTest()
-    {
-        Accept();
-        return _result;
     }
 
     // -----------------------------------------------------------------------

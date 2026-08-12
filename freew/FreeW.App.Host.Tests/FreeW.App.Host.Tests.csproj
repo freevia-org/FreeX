@@ -33,6 +33,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\HostAccessOwnershipAssertions.cs"
+             Link="TestSupport\HostAccessOwnershipAssertions.cs" />
     <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
     <ProjectReference Include="..\FreeW.App.Host\FreeW.App.Host.csproj"
                       AdditionalProperties="FreeWHostTestSupport=true" />

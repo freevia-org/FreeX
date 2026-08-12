@@ -332,8 +332,6 @@ public sealed partial class DocumentView : RichTextBox
 
     internal IPlatformClipboard PlatformClipboard => _platformClipboard;
 
-    internal DocumentViewDepthLayoutPlan ViewDepthLayout => _viewDepthLayout;
-
     internal void ApplyViewDepthLayout(DocumentViewDepthLayoutPlan layout)
     {
         ArgumentNullException.ThrowIfNull(layout);
@@ -795,31 +793,6 @@ public sealed partial class DocumentView : RichTextBox
         if ((modifiers & ModifierKeys.Alt) != 0)
             result |= DocumentEditorInputModifiers.Alt;
         return result;
-    }
-
-    /// <summary>
-    /// Test seam: simulate typing a single character at the caret through the same AutoCorrect/AutoFormat
-    /// path <see cref="OnPreviewTextInput"/> uses. When a rule fires the correction is applied and the raw
-    /// character is suppressed (returns true); otherwise the character is inserted literally (returns false).
-    /// Lets the as-you-type rules be driven deterministically from STA tests without synthesising WPF input
-    /// events. Honours <see cref="AutoCorrectEnabled"/> and <see cref="AutoFormatOptions"/> just like real typing.
-    /// </summary>
-    internal bool SimulateTypeCharacter(char c)
-    {
-        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyTextEdit))
-            return false;
-
-        if (AutoCorrectEnabled && Selection.IsEmpty && TryAutoCorrect(c))
-            return true;
-        InsertText(c.ToString());
-        return false;
-    }
-
-    /// <summary>Test seam: type a whole string one character at a time through <see cref="SimulateTypeCharacter"/>.</summary>
-    internal void SimulateTypeText(string text)
-    {
-        foreach (var c in text)
-            SimulateTypeCharacter(c);
     }
 
     // Read the text before the caret (within the current paragraph), evaluate the AutoCorrect rules for
@@ -2332,17 +2305,6 @@ public sealed partial class DocumentView : RichTextBox
 
         _shapeEditPointsTarget = new ShapeEditPointsTarget(blockIndex, runIndex, shape);
         SyncShapeEditPointsAdorner();
-    }
-
-    internal int ActiveShapeEditPointHandleCount => _shapeEditPointsAdorner?.HandleCount ?? 0;
-
-    internal bool MoveActiveShapeEditPoint(int segmentIndex, long x, long y)
-    {
-        if (_shapeEditPointsTarget is not { } target || !IsCurrentShapeEditPointsTarget(target))
-            return false;
-
-        MoveShapeEditPoint(target, segmentIndex, x, y);
-        return true;
     }
 
     private void MoveShapeEditPoint(ShapeEditPointsTarget target, int segmentIndex, long x, long y)
@@ -5604,12 +5566,6 @@ public sealed partial class DocumentView : RichTextBox
         SyncPageBorderAdorner();
     }
 
-    // Test seam (FreeW.App.Host.Tests has InternalsVisibleTo). Returns the cached pagination result
-    // from the live page-break adorner, or null when the adorner is not active (non-Print-Layout mode)
-    // or has not yet computed a result. Tests can force a computation by calling PaginationEngine.Compute
-    // directly; this seam is for verifying that the adorner's cache matches the engine's output.
-    internal DocumentPagination? GetPageBreakAdornerPagination() => _pageBreakAdorner?._pagination;
-
     private void SyncShapeEditPointsAdorner()
     {
         if (_shapeEditPointsTarget is not { } target || !IsCurrentShapeEditPointsTarget(target))
@@ -7356,67 +7312,6 @@ public sealed partial class DocumentView : RichTextBox
         RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, this));
     }
 
-    /// <summary>Move the selected WPF group child in group-local points through the shared command.</summary>
-    internal bool MoveSelectedFloatingGroupChild(double dxPt, double dyPt)
-    {
-        if (_selectedFloatingGroupChild is not { } selected)
-            return false;
-
-        CommitToModel();
-        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.RootGroup);
-        if (blockIndex < 0)
-            return false;
-
-        var result = ObjectEdits.MoveGroupChildBy(
-            ObjectTarget(blockIndex, runIndex, selected.ChildPath),
-            dxPt,
-            dyPt);
-        if (!result.Applied)
-            return false;
-        SyncFloatingObjectsCanvas();
-        return true;
-    }
-
-    /// <summary>Resize the selected WPF group child, optionally moving its local top-left anchor.</summary>
-    internal bool ResizeSelectedFloatingGroupChild(
-        double widthPt,
-        double heightPt,
-        double dxPt = 0,
-        double dyPt = 0)
-    {
-        if (_selectedFloatingGroupChild is not { } selected || widthPt <= 0 || heightPt <= 0)
-            return false;
-
-        CommitToModel();
-        var (blockIndex, runIndex) = FindFloatingObjectLocation(selected.RootGroup);
-        if (blockIndex < 0)
-            return false;
-
-        var result = ObjectEdits.ResizeGroupChild(
-            ObjectTarget(blockIndex, runIndex, selected.ChildPath),
-            widthPt,
-            heightPt,
-            dxPt,
-            dyPt);
-        if (!result.Applied)
-            return false;
-        SyncFloatingObjectsCanvas();
-        return true;
-    }
-
-    /// <summary>Returns the current multi-select set as a read-only snapshot.</summary>
-    internal IReadOnlyList<object> SelectedFloatingObjects => _selectedFloatingObjects.AsReadOnly();
-
-    /// <summary>Returns the selected child within a group, when child editing is active.</summary>
-    internal (FreeW.Core.Model.DrawingGroup Group, int ChildIndex)? SelectedFloatingGroupChild =>
-        _selectedFloatingGroupChild is { } selected
-            ? (selected.RootGroup, selected.ChildIndex)
-            : null;
-
-    /// <summary>Returns the complete root-relative path for the selected group child.</summary>
-    internal IReadOnlyList<int>? SelectedFloatingGroupChildPath =>
-        _selectedFloatingGroupChild?.ChildPath;
-
     /// <summary>Returns true when two or more floating objects are currently multi-selected.</summary>
     internal bool HasMultipleFloatingObjectsSelected => _selectedFloatingObjects.Count >= 2;
 
@@ -7802,24 +7697,6 @@ public sealed partial class DocumentView : RichTextBox
     };
 
     /// <summary>
-    /// Computes the accumulated outline marker text ("1.", "1.1.", "1.1.1.", …) for a run of multilevel
-    /// list paragraphs, mirroring exactly what FreeW writes to <c>numbering.xml</c>: each level n shows the
-    /// dotted run of all ancestor counters, <c>%1.%2.…%(n+1).</c> (see <c>DocxWriter.BuildNumbering</c>).
-    /// One marker is returned per input level, in order.
-    /// <para>
-    /// Counter rules match Word's <c>w:multiLevelType="multilevel"</c>: entering a level increments that
-    /// level's counter and resets every deeper level to its start; an ancestor level that has not yet been
-    /// numbered in this run is shown at its start value (1) so a list that begins at, or jumps to, a deeper
-    /// level still renders a sensible dotted prefix rather than zeros.
-    /// </para>
-    /// Pure (no WPF), so it is unit-testable. Levels are clamped to the modelled multilevel depth.
-    /// </summary>
-    internal static IReadOnlyList<string> MultiLevelMarkerSequence(
-        IEnumerable<int> levels,
-        IReadOnlyList<ListNumberFormat>? numberFormats = null) =>
-        MultiLevelListMarkerFormatter.MarkerSequence(levels, numberFormats);
-
-    /// <summary>
     /// Prepends the computed accumulated outline marker (e.g. <c>1.1.1.</c>) to a multilevel-list
     /// paragraph as a leading non-editable run, plus a tab so the body text aligns past the marker
     /// (mirroring Word's hanging-indent layout). The run is tagged with <see cref="MultiLevelMarker"/>
@@ -7978,37 +7855,6 @@ public sealed partial class DocumentView : RichTextBox
         ModelFormatRevision? FormatRevision);
 
     private sealed record TabFollowingSegmentMetrics(double WidthDip, double? DecimalAlignmentOffsetDip);
-
-    internal static IReadOnlyList<(double StopPositionDip, double SegmentStartDip, double AdvanceDip, TabStopAlignment Alignment, TabLeader Leader, bool IsExplicit)> GetRenderedTabStopPlans(WpfParagraph paragraph)
-    {
-        var plans = new List<(double, double, double, TabStopAlignment, TabLeader, bool)>();
-        CollectRenderedTabStopPlans(paragraph.Inlines, plans);
-        return plans;
-    }
-
-    private static void CollectRenderedTabStopPlans(
-        InlineCollection inlines,
-        ICollection<(double StopPositionDip, double SegmentStartDip, double AdvanceDip, TabStopAlignment Alignment, TabLeader Leader, bool IsExplicit)> plans)
-    {
-        foreach (var inline in inlines)
-        {
-            switch (inline)
-            {
-                case InlineUIContainer { Child: FrameworkElement { Tag: RenderedTabStopSpan marker } }:
-                    plans.Add((
-                        marker.Plan.StopPositionDip,
-                        marker.Plan.SegmentStartDip,
-                        marker.Plan.AdvanceDip,
-                        marker.Plan.Alignment,
-                        marker.Plan.Leader,
-                        marker.Plan.IsExplicit));
-                    break;
-                case Span span:
-                    CollectRenderedTabStopPlans(span.Inlines, plans);
-                    break;
-            }
-        }
-    }
 
     /// <summary>
     /// Reads the blocks of an arbitrary <paramref name="flowDoc"/> — which must have been produced
@@ -14412,40 +14258,6 @@ public sealed partial class DocumentView : RichTextBox
         return false;
     }
 
-    internal void MoveCaretToBlockForTest(int modelBlockIndex, int offset) =>
-        PlaceCaretAtModelTextOffset(modelBlockIndex, offset);
-
-    internal void SetSelectionRangeForTest(int anchorBlock, int anchorOffset, int caretBlock, int caretOffset)
-    {
-        var anchor = TextPointerAtModelTextOffset(anchorBlock, anchorOffset);
-        var caret = TextPointerAtModelTextOffset(caretBlock, caretOffset);
-        if (anchor is not null && caret is not null)
-            Selection.Select(anchor, caret);
-    }
-
-    internal DocumentTextRange? BodyTextRangeForTest() =>
-        TryGetCurrentBodyTextRange(out var range) ? range : null;
-
-    internal bool ApplyFormatPainterToSelectionForTest() => TryApplyFormatPainter();
-
-    internal void BackspaceForTest()
-    {
-        if (!TryApplyBodyBackspace())
-            EditingCommands.Backspace.Execute(null, this);
-    }
-
-    internal void DeleteForwardForTest()
-    {
-        if (!TryApplyBodyDeleteForward())
-            EditingCommands.Delete.Execute(null, this);
-    }
-
-    internal void InsertParagraphBreakForTest()
-    {
-        if (!TryApplyBodyParagraphBreak())
-            EditingCommands.EnterParagraphBreak.Execute(null, this);
-    }
-
     /// <summary>
     /// Paste the clipboard's text as unformatted text at the caret ("Paste Text Only"). The clipboard
     /// text is normalized (line endings canonicalized, control chars stripped — see
@@ -17505,7 +17317,7 @@ public sealed partial class DocumentView : RichTextBox
         // Cached result from PaginationEngine. Null means "needs recompute" (content has changed since
         // the last successful computation). Invalidated on TextChanged so we don't re-paginate every
         // OnRender (ComputePageCount is a full layout pass — expensive on large docs).
-        // Internal so DocumentView.GetPageBreakAdornerPagination() can expose it as a test seam
+        // Cached so pagination overlays can reuse the latest computed layout.
         // (outer class cannot access a nested class's private fields in C#).
         internal DocumentPagination? _pagination;
 
@@ -17608,19 +17420,6 @@ public sealed partial class DocumentView : RichTextBox
                 // WPF layout not yet settled — skip; will retry on next LayoutUpdated.
                 return null;
             }
-        }
-
-        /// <summary>
-        /// Returns the page-break Y positions (in the adorner's coordinate space, i.e. relative to
-        /// <paramref name="topY"/>) for the current pagination. Used by tests to verify accuracy without
-        /// triggering a full render. Returns null when the layout is unavailable.
-        /// </summary>
-        internal IReadOnlyList<double>? GetBreakYsForTest(double topY)
-        {
-            _pagination ??= TryComputePagination();
-            if (_pagination is null)
-                return null;
-            return _pagination.PageBreakYsDip.Select(y => topY + y).ToArray();
         }
 
         // The top Y (in the editor's content coordinates) of the first laid-out content line, or null when

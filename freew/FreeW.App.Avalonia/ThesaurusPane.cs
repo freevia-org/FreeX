@@ -9,7 +9,7 @@ using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class ThesaurusPane : Border
+internal sealed partial class ThesaurusPane : Border
 {
     private readonly DocumentView _editor;
     private readonly Func<string, Task<bool>>? _copyText;
@@ -58,11 +58,6 @@ internal sealed class ThesaurusPane : Border
         Child = layout;
     }
 
-    internal string HeadingForTest => _heading.Text ?? string.Empty;
-    internal int SenseCountForTest => _senses.Children.OfType<StackPanel>().Count();
-    internal IReadOnlyList<(bool InsertEnabled, bool CopyEnabled)> ActionStatesForTest =>
-        _actionButtons.Select(buttons => (buttons.Insert.IsEnabled, buttons.Copy.IsEnabled)).ToArray();
-
     public void Toggle()
     {
         ApplyTransition(_session.Toggle(_editor.CurrentProofingWord));
@@ -92,32 +87,6 @@ internal sealed class ThesaurusPane : Border
                 panel.Children.Add(BuildAction(action));
             _senses.Children.Add(panel);
         }
-    }
-
-    internal bool ReplaceForTest(string synonym)
-    {
-        var action = FindAction(synonym);
-        var availability = action is null
-            ? null
-            : _session.PlanAction(
-                action,
-                _editor.CanReplaceCurrentProofingWord(action.DisplayText),
-                CanCopy);
-        return availability?.ReplaceIntent is { } intent && Replace(intent);
-    }
-
-    internal Task<bool> CopyForTestAsync(string synonym)
-    {
-        var action = FindAction(synonym);
-        var availability = action is null
-            ? null
-            : _session.PlanAction(
-                action,
-                _editor.CanReplaceCurrentProofingWord(action.DisplayText),
-                CanCopy);
-        return availability?.CopyIntent is { } intent
-            ? CopyAsync(intent)
-            : Task.FromResult(false);
     }
 
     private Control BuildAction(ThesaurusActionRow action)

@@ -13,7 +13,7 @@ namespace FreeW.App.Avalonia.Editing;
 /// operations. The control is a presentation surface; entering and leaving it never changes the document
 /// just because the view changed.
 /// </summary>
-internal sealed class OutlineView : Border
+internal sealed partial class OutlineView : Border
 {
     private static readonly OutlineRowMarkers RowMarkers = new("[-] ", "[+] ", "    ");
 
@@ -242,28 +242,6 @@ internal sealed class OutlineView : Border
             }
         }
     }
-
-    // Test seams mirror the WPF outline surface and keep assertions on actual rows/actions.
-    internal IReadOnlyList<OutlineRow> VisibleRows => _controller.VisibleRows;
-
-    internal int? SelectedBlockIndex => _controller.SelectedBlockIndex;
-
-    internal string? RowDisplayTextForTests(int blockIndex) =>
-        _list.Items.OfType<OutlineRowItem>()
-            .FirstOrDefault(item => item.Row.BlockIndex == blockIndex)
-            ?.ToString();
-
-    internal void SelectBlockIndex(int blockIndex) => SelectBlock(blockIndex);
-
-    internal void SetShowLevel(int level) => _controller.SetShowLevel(level);
-
-    internal void SetFirstLineOnly(bool firstLineOnly) => _controller.SetFirstLineOnly(firstLineOnly);
-
-    internal void SetOutlineLevel(int level) => _controller.SetOutlineLevel(level);
-
-    internal void ExecuteForTests(OutlineCommand command) => _controller.Execute(command);
-
-    internal int CurrentOutlineLevel => _controller.CurrentOutlineLevel;
 
     private sealed class OutlineRowItem(OutlineProjectedRow projectedRow)
     {

@@ -16,7 +16,7 @@ using FreeW.App.Presentation.Dialogs;
 namespace FreeW.App.Avalonia;
 
 /// <summary>Compact modal glyph picker matching FreeW's WPF Symbol dialog.</summary>
-internal sealed class SymbolPickerDialog : FreeWDialogWindow
+internal sealed partial class SymbolPickerDialog : FreeWDialogWindow
 {
     private static readonly IBrush GlyphBackground = new ImmutableSolidColorBrush(Color.FromRgb(221, 221, 221));
     private static readonly IBrush GlyphBorder = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
@@ -100,14 +100,6 @@ internal sealed class SymbolPickerDialog : FreeWDialogWindow
         {
             ApplyGlyphButtonChrome(grid);
         };
-    }
-
-    internal IReadOnlyList<Button> GlyphButtonsForTest => _glyphButtons;
-
-    internal string? SelectGlyphForTest(string glyph)
-    {
-        SelectGlyph(glyph, close: false);
-        return Result;
     }
 
     private void SelectGlyph(string glyph, bool close)

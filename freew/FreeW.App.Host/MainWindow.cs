@@ -2388,24 +2388,6 @@ public sealed partial class MainWindow : Window
     // view mode (Print Layout / Web Layout / Draft) restores the live editor via ExitPaginatedView.
     // The two modes are mutually exclusive with each other and with any live-editor overlay mode.
 
-    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests =>
-        _viewSession.PagePairNavigation;
-    internal bool HasSideToSideEditablePageSurfaceForTests =>
-        _viewSession.CurrentDepth.IsSideToSideActive && _editablePaginatedPanel is not null;
-    internal bool HasMultiplePagesEditablePageSurfaceForTests =>
-        _viewSession.CurrentDepth.IsMultiplePagesActive && _editablePaginatedPanel is not null;
-    internal PaginatedEditorPanel? EditablePaginatedPanelForTests => _editablePaginatedPanel;
-    internal bool HasSideToSidePagePairNavigationForTests =>
-        _sideToSidePreviousPairButton is not null &&
-        _sideToSideNextPairButton is not null &&
-        _sideToSidePairStatusText is not null;
-
-    internal void NavigateSideToSideNextPairForTests() =>
-        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
-
-    internal void NavigateSideToSidePreviousPairForTests() =>
-        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair);
-
     /// <summary>
     /// Enters (or exits) the Multiple Pages paginated overlay. Commits the editor to the model first so
     /// the viewer reflects the latest content, then swaps the workspace child from the workspaceGrid to

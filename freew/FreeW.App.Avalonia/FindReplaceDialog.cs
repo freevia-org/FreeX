@@ -30,7 +30,7 @@ namespace FreeW.App.Avalonia;
 /// The inline find bar in MainWindow continues to work; the dialog is opened via a separate
 /// <c>freew.find-replace-dialog</c> ribbon command (Home → Editing group) or Ctrl+H.
 /// </summary>
-public sealed class FindReplaceDialog : FreeWDialogWindow
+public sealed partial class FindReplaceDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
     private static readonly FindReplaceDialogSurfaceSpec Surface = FindReplaceDialogPlanner.Surface;
@@ -197,12 +197,6 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.FocusAndSelect(
             state.OpenMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
     }
-
-    internal FindReplaceDialogOpenMode OpenModeForTest => _session.State.OpenMode;
-
-    internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
-        _findBox.IsFocused ? FindReplaceDialogOpenMode.Find :
-        _replaceBox.IsFocused ? FindReplaceDialogOpenMode.Replace : null;
 
     private Button BuildSpecialButton()
     {

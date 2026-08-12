@@ -10,7 +10,7 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class CharacterFormattingPickerDialog : FreeWDialogWindow
+internal sealed partial class CharacterFormattingPickerDialog : FreeWDialogWindow
 {
     private enum PickerKind { Border, Shading }
 
@@ -18,13 +18,6 @@ internal sealed class CharacterFormattingPickerDialog : FreeWDialogWindow
     private readonly WrapPanel _palette;
     private readonly TextBlock? _prompt;
     private readonly Button _clear;
-
-    internal IReadOnlyList<Button> PaletteButtonsForTest =>
-        _palette.Children.OfType<Button>().ToArray();
-
-    internal TextBlock? PromptForTest => _prompt;
-
-    internal Button ClearButtonForTest => _clear;
 
     private CharacterFormattingPickerDialog(PickerKind kind)
     {
@@ -144,9 +137,4 @@ internal sealed class CharacterFormattingPickerDialog : FreeWDialogWindow
         editor.Focus();
     }
 
-    internal static CharacterFormattingPickerDialog ForTestBorder() =>
-        new(PickerKind.Border);
-
-    internal static CharacterFormattingPickerDialog ForTestShading() =>
-        new(PickerKind.Shading);
 }

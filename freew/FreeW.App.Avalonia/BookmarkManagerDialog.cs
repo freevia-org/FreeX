@@ -13,7 +13,7 @@ using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class BookmarkManagerDialog : FreeWDialogWindow
+internal sealed partial class BookmarkManagerDialog : FreeWDialogWindow
 {
     private static readonly BookmarkManagerSurfaceSpec Surface = BookmarkManagerDialogPlanner.Surface;
     private readonly DocumentView _editor;
@@ -91,13 +91,6 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
 
     public static Task ShowAsync(Window owner, DocumentView editor) =>
         new BookmarkManagerDialog(editor).ShowDialog(owner);
-
-    internal int ItemCountForTest => _list.ItemCount;
-    internal void SelectForTest(int index) => _list.SelectedIndex = index;
-    internal void DeleteForTest() => Delete();
-    internal void GoToForTest() => GoTo();
-
-    internal string StatusTextForTest => _status.Text ?? string.Empty;
 
     private TextBlock Heading()
     {

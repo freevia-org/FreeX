@@ -1,9 +1,29 @@
 using System.Windows;
+using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Host;
 
 public sealed partial class MainWindow
 {
+    internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests =>
+        _viewSession.PagePairNavigation;
+    internal bool HasSideToSideEditablePageSurfaceForTests =>
+        _viewSession.CurrentDepth.IsSideToSideActive && _editablePaginatedPanel is not null;
+    internal bool HasMultiplePagesEditablePageSurfaceForTests =>
+        _viewSession.CurrentDepth.IsMultiplePagesActive && _editablePaginatedPanel is not null;
+    internal PaginatedEditorPanel? EditablePaginatedPanelForTests => _editablePaginatedPanel;
+    internal bool HasSideToSidePagePairNavigationForTests =>
+        _sideToSidePreviousPairButton is not null &&
+        _sideToSideNextPairButton is not null &&
+        _sideToSidePairStatusText is not null;
+
+    internal void NavigateSideToSideNextPairForTests() =>
+        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.NextPair);
+
+    internal void NavigateSideToSidePreviousPairForTests() =>
+        NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand.PreviousPair);
+
     internal bool IsReadModeActiveForTests => _editorInteraction.IsReadModeActive;
     internal double ReadModeMaxWidthForTests => _editor.MaxWidth;
     internal string ReadModeColumnWidthForTests => _editorInteraction.ReadModeColumnWidth;

@@ -11,7 +11,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
+internal sealed partial class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = AvaloniaCompactDialogChrome.WindowsStyle;
     // Avalonia's Linux text rasterizer places the same 12px dialog glyphs two pixels higher than
@@ -107,12 +107,6 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
         new FootnoteEndnoteOptionsDialog(footnote, endnote)
             .ShowDialog<FootnoteEndnoteOptionsDialogResult?>(owner);
 
-    internal FootnoteEndnoteOptionsDialogResult? BuildResultForTest()
-    {
-        SynchronizeSession();
-        return _session.PlanAcceptance().Result;
-    }
-
     private void Accept()
     {
         SynchronizeSession();
@@ -126,10 +120,6 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
         var target = acceptance.Validation?.Field == FootnoteEndnoteOptionsDialogField.EndnoteStartAt ? _endnoteStart : _footnoteStart;
         AvaloniaCompactDialogChrome.FocusAndSelect(target);
     }
-
-    // The visual harness uses the same non-modal validation path as an attempted OK click without
-    // replacing the captured dialog with a second warning window.
-    internal void ValidateForTest() => Accept();
 
     private void SynchronizeSession()
     {

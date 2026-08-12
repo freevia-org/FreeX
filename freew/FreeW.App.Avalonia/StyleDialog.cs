@@ -12,7 +12,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class StyleDialog : FreeWDialogWindow
+internal sealed partial class StyleDialog : FreeWDialogWindow
 {
     private static readonly StyleDialogSurfaceSpec Surface = StyleDialogPlanner.Surface;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
@@ -47,10 +47,6 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private readonly ComboBox _color = new() { MinWidth = Surface.Field(StyleDialogFieldKind.TextColor).MinWidth, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly ComboBox _alignment = new() { MinWidth = Surface.Field(StyleDialogFieldKind.Alignment).MinWidth, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly StyleDialogSession _session;
-
-    internal static double ControlHeightForTests => DialogChromeStyle.ControlHeight;
-    internal static double ButtonHeightForTests => DialogChromeStyle.ButtonHeight;
-    internal static double CheckBoxHeightForTests => StyleDialogMetrics.CheckBoxHeight;
 
     private StyleDialog(StyleDialogSession session)
     {

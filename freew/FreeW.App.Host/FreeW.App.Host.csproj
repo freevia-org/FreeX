@@ -21,6 +21,12 @@
              Link="MainWindow.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\DocumentView.TestAccess.cs"
              Link="Editing\DocumentView.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\AutosaveCoordinator.TestAccess.cs"
+             Link="AutosaveCoordinator.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\Dialogs.TestAccess.cs"
+             Link="Dialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\OutlineView.TestAccess.cs"
+             Link="Editing\OutlineView.TestAccess.cs" />
   </ItemGroup>
 
   <ItemDefinitionGroup Condition="'$(FreeWHostTestSupport)' == 'true'">

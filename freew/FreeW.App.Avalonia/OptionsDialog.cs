@@ -19,7 +19,7 @@ namespace FreeW.App.Avalonia;
 /// Compact Avalonia editor for the FreeW options that the cross-platform shell consumes today.
 /// Parsing, normalization, and commit planning stay in <see cref="OptionsDialogSession"/>.
 /// </summary>
-internal sealed class OptionsDialog : FreeWDialogWindow
+internal sealed partial class OptionsDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
@@ -44,13 +44,6 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     private readonly TextBlock _status = new();
 
     public FreeWOptions? Result { get; private set; }
-
-    internal TextBox RecentFilesCapForTest => _recentFilesCap;
-
-    internal IReadOnlyList<(TextBox Replace, TextBox With)> ReplacementEditorsForTest =>
-        _replacementEditors.Select(row => (row.Replace, row.With)).ToArray();
-
-    internal void AcceptForTest() => Accept();
 
     public OptionsDialog(FreeWOptions options)
     {

@@ -24,7 +24,7 @@ namespace FreeW.App.Host;
 /// side) so the pure model helper stays deterministic.
 /// </para>
 /// </summary>
-internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly string _originalPath;
     private readonly string _reviewerBPath;
@@ -153,32 +153,6 @@ internal sealed class CombineDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             return;
         }
         Close();
-    }
-
-    // -----------------------------------------------------------------------
-    // Test seam
-    // -----------------------------------------------------------------------
-
-    /// <summary>
-    /// Test seam: create the dialog already seeded with all path and author defaults without showing file
-    /// pickers, so STA tests can exercise the control wiring without a modal loop.
-    /// </summary>
-    internal static CombineDocumentsDialog CreateForTest(
-        string originalPath,
-        string reviewerBPath,
-        string defaultAuthorA,
-        string defaultAuthorB,
-        string reviewerATitle = "") =>
-        new(owner: null, originalPath, reviewerBPath, defaultAuthorA, defaultAuthorB, reviewerATitle);
-
-    /// <summary>
-    /// Test seam: validate the current author values and return the shared result, without
-    /// closing the window (mirrors <see cref="CompareDocumentsDialog.AcceptForTest"/>).
-    /// </summary>
-    internal CombineDocumentsDialogResult? AcceptForTest()
-    {
-        TryAccept(showWarnings: false);
-        return _result;
     }
 
     // -----------------------------------------------------------------------

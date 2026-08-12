@@ -9,6 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\HostAccessOwnershipAssertions.cs"
+             Link="TestSupport\HostAccessOwnershipAssertions.cs" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme\Free.Shared.Theme.csproj" />
     <PackageReference Include="Avalonia.Headless" />

@@ -22,7 +22,7 @@ namespace FreeW.App.Avalonia;
 /// <see cref="DocumentView.DocumentChanged"/> to call <see cref="Refresh"/>. Toggle
 /// <see cref="IsVisible"/> via the View ribbon; it defaults to hidden.
 /// </summary>
-public sealed class NavigationPane : SidePaneBase
+public sealed partial class NavigationPane : SidePaneBase
 {
     private const double IndentPerLevel = 12.0;
 
@@ -234,18 +234,6 @@ public sealed class NavigationPane : SidePaneBase
         var target = Math.Max(0, y - 40);
         scroller.Offset = new Vector(scroller.Offset.X, target);
     }
-
-    // ── Test-support properties ───────────────────────────────────────────────
-
-    /// <summary>Number of heading items currently shown in the list (for headless testing).</summary>
-    internal int HeadingItemCount => _headingList.Items.Count;
-
-    /// <summary>
-    /// Counts how many entries in <paramref name="doc"/>'s outline match <paramref name="term"/>
-    /// through the shared navigation-pane projection. Exposed for headless tests only.
-    /// </summary>
-    internal int CountHeadingsMatching(string term, TextDocument doc) =>
-        NavigationPaneSession.ProjectHeadings(doc, term).Count;
 
     // ── Item type ─────────────────────────────────────────────────────────────
 

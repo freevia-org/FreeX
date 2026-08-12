@@ -9,7 +9,7 @@ namespace FreeW.App.Host;
 /// <summary>
 /// Thin WPF host for Word's References > Mark Citation dialog.
 /// </summary>
-internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly MarkCitationDialogSession _session;
     private readonly ComboBox _categoryCombo;
@@ -117,24 +117,6 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     private void Accept() => Accept(closeOnSuccess: true);
-
-    internal static MarkCitationDialog CreateForTest(
-        string longCitation = "",
-        CitationCategory category = CitationCategory.Cases,
-        string shortCitation = "") =>
-        new(null, new MarkCitationDialogState(category, longCitation, shortCitation));
-
-    internal void SetForTest(CitationCategory category, string? longCitation, string? shortCitation)
-    {
-        _categoryCombo.SelectedIndex = _session.CategoryIndex(category);
-        _longForm.Text = longCitation;
-        _shortForm.Text = shortCitation;
-    }
-
-    internal bool AcceptForTest() =>
-        Accept(closeOnSuccess: false);
-
-    internal MarkCitationDialogResult? ResultForTest => _result;
 
     public static MarkCitationDialogResult? Prompt(Window? owner, MarkCitationDialogState initialState)
     {

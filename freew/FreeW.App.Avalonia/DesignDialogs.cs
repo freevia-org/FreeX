@@ -111,7 +111,7 @@ public sealed class PageBordersDialog : FreeWDialogWindow
 /// AV-DESIGN: Custom Watermark dialog (Design &gt; Page Background &gt; Watermark &gt; Custom Watermark).
 /// Supports text and picture watermarks through the shared <see cref="WatermarkOptionsDialogPlanner"/>.
 /// </summary>
-public sealed class WatermarkDialog : FreeWDialogWindow
+public sealed partial class WatermarkDialog : FreeWDialogWindow
 {
     private static readonly FilePickerFileType WatermarkImageFileType =
         AvaloniaFilePickerTypeAdapter.CreateFileType(
@@ -294,27 +294,6 @@ public sealed class WatermarkDialog : FreeWDialogWindow
         Content = outer;
         SyncModePanels();
     }
-
-    internal void SelectPictureWatermarkForTests(
-        byte[] imageBytes,
-        string fileName,
-        string scaleText,
-        bool isHorizontal,
-        bool isWashout)
-    {
-        ArgumentNullException.ThrowIfNull(imageBytes);
-        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
-
-        _pictureMode.IsChecked = true;
-        LoadPictureImage(fileName, imageBytes);
-        _scaleBox.Text = scaleText;
-        _pictureHorizontal.IsChecked = isHorizontal;
-        _pictureDiagonal.IsChecked = !isHorizontal;
-        _washout.IsChecked = isWashout;
-        SyncModePanels();
-    }
-
-    internal bool AcceptForTests() => Accept(closeOnSuccess: false);
 
     private StackPanel BuildTextPanel()
     {

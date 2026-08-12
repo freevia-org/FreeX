@@ -5,7 +5,7 @@ using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed class InsertIndexDialog : FreeWDialogWindow
+internal sealed partial class InsertIndexDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle Chrome =
         AvaloniaCompactDialogChrome.WindowsStyle;
@@ -71,17 +71,6 @@ internal sealed class InsertIndexDialog : FreeWDialogWindow
 
     internal static Task<InsertIndexDialogResult?> ShowUpdateAsync(Window owner, string? identifier = null) =>
         new InsertIndexDialog(isUpdate: true, identifier).ShowDialog<InsertIndexDialogResult?>(owner);
-
-    internal static InsertIndexDialog CreateUpdateForTests(string? identifier = null) =>
-        new(isUpdate: true, identifier);
-
-    internal string ActionLabelForTests => _actionLabel;
-
-    internal InsertIndexDialogResult BuildResultForTests(string? identifier)
-    {
-        _identifier.Text = identifier;
-        return BuildResult();
-    }
 
     private InsertIndexDialogResult BuildResult() =>
         InsertIndexDialogPlanner.BuildResult(new InsertIndexDialogState(_identifier.Text ?? string.Empty));

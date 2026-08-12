@@ -15,7 +15,7 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-public sealed class TabsDialog : FreeWDialogWindow
+public sealed partial class TabsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
@@ -211,14 +211,9 @@ public sealed class TabsDialog : FreeWDialogWindow
         return button;
     }
 
-    internal TextBox PositionBoxForTest => _position;
-    internal TextBox DefaultTabStopBoxForTest => _defaultTab;
-    internal ListBox StopsForTest => _stops;
-    internal ComboBox AlignmentBoxForTest => _alignment;
-    internal ComboBox LeaderBoxForTest => _leader;
 }
 
-public sealed class BordersAndShadingDialog : FreeWDialogWindow
+public sealed partial class BordersAndShadingDialog : FreeWDialogWindow
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
@@ -369,12 +364,6 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
             e.Handled = true;
         };
     }
-
-    internal TabControl TabsForTest => _tabs;
-    internal TextBox ParagraphWidthForTest => _paragraphWidth;
-    internal ComboBox PageSettingForTest => _pageSetting;
-    internal ComboBox ShadingColorForTest => _shadingColor;
-    internal TextBlock StatusForTest => _status;
 
     private Control BuildBordersTab()
     {
