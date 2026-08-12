@@ -2246,6 +2246,187 @@ public class DocxRoundTripTests
         paragraphs[1].Formatting.ListStartOverride.Should().Be(5);
     }
 
+    /// <summary>Reads the body paragraphs' w:numPr/w:numId values, in document order (non-list paragraphs
+    /// contribute nothing), so a restarted run's numbering INSTANCE can be asserted.</summary>
+    private static List<int> WrittenNumIds(TextDocument document) => NumIdsOf(WriteDocumentXml(document));
+
+    /// <summary>The same, for a non-body story part (e.g. word/header1.xml).</summary>
+    private static List<int> PartNumIds(TextDocument document, string partName)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        using var entry = zip.GetEntry(partName)!.Open();
+        return NumIdsOf(XDocument.Load(entry));
+    }
+
+    private static List<int> NumIdsOf(XDocument part)
+    {
+        var w = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        return part
+            .Descendants(w + "numId")
+            .Where(id => id.Parent?.Name == w + "numPr")
+            .Select(id => int.Parse(id.Attribute(w + "val")!.Value))
+            .ToList();
+    }
+
+    private static Paragraph ListParagraph(string text, ListKind kind, int? startOverride = null, int level = 0) =>
+        new(text)
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                ListKind = kind,
+                ListLevel = level,
+                ListStartOverride = startOverride
+            }
+        };
+
+    [Theory]
+    [InlineData(ListKind.Number)]
+    [InlineData(ListKind.MultiLevel)]
+    public void RestartedList_ContinuationParagraphs_StayOnTheRestartNumId(ListKind kind)
+    {
+        // Only the FIRST paragraph of a restarted run carries ListStartOverride; the rest continue it. Every
+        // paragraph of that run must therefore land on the SAME dedicated override w:numId — falling back to
+        // the shared base numId would re-join them to the earlier list and renumber them in Word.
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("one", kind));
+        doc.Blocks.Add(ListParagraph("two", kind));
+        doc.Blocks.Add(ListParagraph("restart-anchor", kind, startOverride: 5));
+        doc.Blocks.Add(ListParagraph("continuation", kind));
+
+        var numIds = WrittenNumIds(doc);
+
+        numIds.Should().HaveCount(4);
+        numIds[1].Should().Be(numIds[0]);
+        numIds[2].Should().NotBe(numIds[0]);
+        numIds[3].Should().Be(numIds[2]);
+    }
+
+    [Fact]
+    public void RestartedList_ContinuationParagraph_RoundTripsAsContinuation()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("one", ListKind.Number));
+        doc.Blocks.Add(ListParagraph("restart-anchor", ListKind.Number, startOverride: 5));
+        doc.Blocks.Add(ListParagraph("continuation", ListKind.Number));
+
+        var paragraphs = RoundTrip(doc).Paragraphs.ToList();
+
+        paragraphs.Should().HaveCount(3);
+        paragraphs.Select(p => p.Formatting.ListKind).Should().AllBeEquivalentTo(ListKind.Number);
+        paragraphs[0].Formatting.ListStartOverride.Should().BeNull();
+        // The restart stays on its anchor alone: the continuation reads back as "continue", not as a second
+        // restart at 5 (which would render 5, 5 instead of 5, 6).
+        paragraphs[1].Formatting.ListStartOverride.Should().Be(5);
+        paragraphs[2].Formatting.ListStartOverride.Should().BeNull();
+    }
+
+    [Fact]
+    public void RestartedList_ImportedThenReExported_KeepsTheSameNumIdGrouping()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("one", ListKind.Number));
+        doc.Blocks.Add(ListParagraph("two", ListKind.Number));
+        doc.Blocks.Add(ListParagraph("restart-anchor", ListKind.Number, startOverride: 5));
+        doc.Blocks.Add(ListParagraph("continuation", ListKind.Number));
+
+        // Re-exporting an imported document must reproduce the same grouping, not collapse the restarted run
+        // back onto the base list (the round trip is idempotent).
+        var reExported = WrittenNumIds(RoundTrip(doc));
+
+        reExported.Should().Equal(WrittenNumIds(doc));
+    }
+
+    [Fact]
+    public void RestartedList_InterruptedByBodyText_ContinuesOnTheRestartNumId()
+    {
+        // An intervening non-list paragraph does not restart numbering (the render layer continues across it),
+        // so the list paragraph after it stays on the active restart instance.
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("restart-anchor", ListKind.Number, startOverride: 7));
+        doc.Blocks.Add(new Paragraph("interrupting body text"));
+        doc.Blocks.Add(ListParagraph("continuation", ListKind.Number));
+
+        var numIds = WrittenNumIds(doc);
+
+        numIds.Should().HaveCount(2);
+        numIds[1].Should().Be(numIds[0]);
+    }
+
+    [Fact]
+    public void SecondRestart_StartsANewNumId_AndItsContinuationFollowsIt()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("restart at five", ListKind.Number, startOverride: 5));
+        doc.Blocks.Add(ListParagraph("continuation of five", ListKind.Number));
+        doc.Blocks.Add(ListParagraph("restart at nine", ListKind.Number, startOverride: 9));
+        doc.Blocks.Add(ListParagraph("continuation of nine", ListKind.Number));
+
+        var numIds = WrittenNumIds(doc);
+
+        numIds[1].Should().Be(numIds[0]);
+        numIds[2].Should().NotBe(numIds[0]);
+        numIds[3].Should().Be(numIds[2]);
+    }
+
+    [Fact]
+    public void TwoRunsRestartingAtTheSameNumber_AreSeparateListInstances()
+    {
+        // Both runs restart at 5, so they must be DIFFERENT numbering instances: sharing one w:numId would
+        // make the second run continue the first (5, 6, 7, 8) instead of restarting (5, 6, 5, 6).
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("first restart", ListKind.Number, startOverride: 5));
+        doc.Blocks.Add(ListParagraph("first continuation", ListKind.Number));
+        doc.Blocks.Add(ListParagraph("second restart", ListKind.Number, startOverride: 5));
+        doc.Blocks.Add(ListParagraph("second continuation", ListKind.Number));
+
+        var numIds = WrittenNumIds(doc);
+
+        numIds[1].Should().Be(numIds[0]);
+        numIds[2].Should().NotBe(numIds[0]);
+        numIds[3].Should().Be(numIds[2]);
+
+        // …and the model round-trips with both restarts intact.
+        var paragraphs = RoundTrip(doc).Paragraphs.ToList();
+        paragraphs.Select(p => p.Formatting.ListStartOverride).Should().Equal(5, null, 5, null);
+    }
+
+    [Fact]
+    public void RestartedNumberList_DoesNotCaptureABulletRunOrABareBulletList()
+    {
+        // Bullets have no restart overrides: they must keep the shared bullet numId even while a Number
+        // restart is active, and must not disturb the Number run that resumes after them.
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("restart-anchor", ListKind.Number, startOverride: 4));
+        doc.Blocks.Add(ListParagraph("bullet", ListKind.Bullet));
+        doc.Blocks.Add(ListParagraph("continuation", ListKind.Number));
+
+        var numIds = WrittenNumIds(doc);
+
+        numIds[1].Should().NotBe(numIds[0]);
+        numIds[2].Should().Be(numIds[0]);
+    }
+
+    [Fact]
+    public void RestartedList_DoesNotLeakIntoTheHeaderStory()
+    {
+        // Stories are numbered independently: the header's own list starts on the base numId, it does not
+        // inherit the restart instance the body left active.
+        var doc = new TextDocument();
+        doc.Blocks.Add(ListParagraph("body restart", ListKind.Number, startOverride: 6));
+        doc.FinalSectionHeadersFooters.Header = new HeaderFooter();
+        doc.FinalSectionHeadersFooters.Header.Paragraphs.Add(ListParagraph("header item", ListKind.Number));
+
+        var bodyNumIds = WrittenNumIds(doc);
+        var headerNumIds = PartNumIds(doc, "word/header1.xml");
+
+        bodyNumIds.Should().ContainSingle();
+        headerNumIds.Should().ContainSingle();
+        headerNumIds[0].Should().NotBe(bodyNumIds[0]);
+    }
+
     [Fact]
     public void TableCellList_StartOverride_RoundTrips()
     {

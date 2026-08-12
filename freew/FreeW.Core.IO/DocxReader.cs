@@ -7085,6 +7085,7 @@ public static class DocxReader
     {
         private readonly IReadOnlyDictionary<(int NumId, int Level), int> _explicitOverrides;
         private readonly IReadOnlyDictionary<(int NumId, int Level), int> _defaultStarts;
+        private readonly HashSet<(int NumId, int Level)> _consumedOverrides = [];
         private int? _lastNumberNumId;
         private int? _lastMultiLevelNumId;
 
@@ -7104,13 +7105,15 @@ public static class DocxReader
         /// pollute a round-tripped document with a needless dedicated restart <c>w:num</c>, see
         /// <c>PreservedNumberingRoundTripTests.FreeWAuthoredLists_RoundTripUnchanged_WithNoPreservedNumbering</c>
         /// and <c>DocxRoundTripTests.NumberedList_StartOverride_RoundTripsAndEmitsLvlOverride</c>). Mutates the
-        /// tracked "last numId" as a side effect — callers must invoke this exactly once per paragraph, in
-        /// reading order. Bullets (and any other kind) pass through unaffected: there is no counter to restart.
+        /// tracked "last numId" AND consumes an explicit override as side effects — callers must invoke this
+        /// exactly once per paragraph, in reading order. Bullets (and any other kind) pass through
+        /// unaffected: there is no counter to restart.
         /// </summary>
         public int? Resolve(ListKind kind, int numId, int level)
         {
-            if (_explicitOverrides.TryGetValue((numId, level), out var explicitStart))
-                return explicitStart;
+            var explicitStart = _explicitOverrides.TryGetValue((numId, level), out var declared)
+                ? declared
+                : (int?)null;
 
             int? previousNumId;
             switch (kind)
@@ -7124,8 +7127,17 @@ public static class DocxReader
                     _lastMultiLevelNumId = numId;
                     break;
                 default:
-                    return null;
+                    return explicitStart;  // no counter to track for bullets; pass the override through
             }
+
+            // An explicit startOverride restarts its numbering INSTANCE once, at the run's first paragraph.
+            // The paragraphs after it continue that run and must read back as "continue" (null) — the model
+            // convention the render layer and the writer's RestartNumbering both rely on — so the override is
+            // consumed on first use. Handing it to every paragraph on the numId would restart the counter on
+            // each one (5, 5, 5 instead of 5, 6, 7) now that a restarted run's continuations correctly share
+            // their anchor's numId.
+            if (explicitStart is { } start && _consumedOverrides.Add((numId, level)))
+                return start;
 
             if (previousNumId is null || previousNumId == numId)
                 return null; // no prior instance to conflict with, or continuing the same one — don't restart
