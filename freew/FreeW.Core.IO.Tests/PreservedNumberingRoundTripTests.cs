@@ -631,4 +631,103 @@ public class PreservedNumberingRoundTripTests
             p => p.Formatting.ListKind == ListKind.MultiLevel,
             because: "an abstractNum with multiLevelType=multilevel must be MultiLevel even when level 0 is a bullet");
     }
+
+    /// <summary>
+    /// An imported document whose second, independently-numbered list has MORE THAN ONE paragraph must
+    /// re-export with that whole list on one numbering instance of its own. The reader turns the numId change
+    /// into a restart on the second list's FIRST paragraph only (its continuations read as "continue"), and
+    /// the writer must keep those continuations on the restart's numId instead of dropping them back onto the
+    /// base list — otherwise list 2 reopens in Word numbered 1, 4, 5 instead of 1, 2, 3.
+    /// </summary>
+    [Fact]
+    public void ImportedIndependentSecondList_ReExports_WithItsWholeRunOnOneNumId()
+    {
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            void Add(string path, string content)
+            {
+                var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
+                using var s = entry.Open();
+                var bytes = Encoding.UTF8.GetBytes(content);
+                s.Write(bytes, 0, bytes.Length);
+            }
+
+            Add("[Content_Types].xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+                  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+                  <Default Extension="xml" ContentType="application/xml"/>
+                  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+                  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+                </Types>
+                """);
+
+            Add("_rels/.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+                </Relationships>
+                """);
+
+            Add("word/_rels/document.xml.rels",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+                </Relationships>
+                """);
+
+            // Two lists, two numIds against the SAME decimal abstract (what Word writes for "new list"),
+            // the second one three paragraphs long.
+            Add("word/document.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:body>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>list 1 item 1</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>list 1 item 2</w:t></w:r></w:p>
+                    <w:p><w:r><w:t>separating body text</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:t>list 2 item 1</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:t>list 2 item 2</w:t></w:r></w:p>
+                    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:t>list 2 item 3</w:t></w:r></w:p>
+                    <w:sectPr/>
+                  </w:body>
+                </w:document>
+                """);
+
+            Add("word/numbering.xml",
+                """
+                <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                  <w:abstractNum w:abstractNumId="0">
+                    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>
+                  </w:abstractNum>
+                  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
+                  <w:num w:numId="2"><w:abstractNumId w:val="0"/></w:num>
+                </w:numbering>
+                """);
+        }
+
+        var imported = ReadDoc(stream.ToArray());
+        var importedParagraphs = imported.Blocks.OfType<Paragraph>().ToList();
+
+        // The reader marks the start of the second instance and nothing else.
+        importedParagraphs.Select(p => p.Formatting.ListStartOverride)
+            .Should().Equal(null, null, null, 1, null, null);
+
+        var reExported = EntryXml(WriteBytes(imported), "word/document.xml");
+        var numIds = reExported.Descendants(W + "numId")
+            .Where(id => id.Parent?.Name == W + "numPr")
+            .Select(id => int.Parse(id.Attribute(W + "val")!.Value))
+            .ToList();
+
+        numIds.Should().HaveCount(5);
+        numIds[1].Should().Be(numIds[0]);
+        numIds[2].Should().NotBe(numIds[0], "the second list is an independent numbering instance");
+        numIds[3].Should().Be(numIds[2]);
+        numIds[4].Should().Be(numIds[2]);
+    }
 }

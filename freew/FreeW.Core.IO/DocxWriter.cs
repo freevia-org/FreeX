@@ -1458,9 +1458,12 @@ public static class DocxWriter
         IReadOnlyDictionary<string, string> subDocuments,
         IReadOnlyList<HeaderFooterPart> headerFooterParts,
         PreservedNumberingPlan? preservedNumbering,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides,
+        RestartNumbering restartOverrides,
         IReadOnlyList<PreservedPart> preservedParts)
     {
+        // Each story numbers independently: start this one with no active restart-group numId.
+        restartOverrides.BeginStory();
+
         // Group header/footer parts by their owning section: the final/body-level section (Section == null)
         // feeds the body-level w:sectPr; each non-final section feeds its paragraph-level w:sectPr.
         var finalSectionParts = headerFooterParts.Where(p => p.Section is null).ToList();
@@ -1766,8 +1769,11 @@ public static class DocxWriter
         XName rootName,
         HeaderFooterPart part,
         PreservedNumberingPlan? preservedNumbering,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
+        RestartNumbering restartOverrides)
     {
+        // Each story numbers independently: start this one with no active restart-group numId.
+        restartOverrides.BeginStory();
+
         var root = new XElement(rootName,
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
@@ -2002,8 +2008,11 @@ public static class DocxWriter
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
+        RestartNumbering restartOverrides)
     {
+        // Each story numbers independently: start this one with no active restart-group numId.
+        restartOverrides.BeginStory();
+
         var footnotes = new XElement(W + "footnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
@@ -2061,8 +2070,11 @@ public static class DocxWriter
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
+        RestartNumbering restartOverrides)
     {
+        // Each story numbers independently: start this one with no active restart-group numId.
+        restartOverrides.BeginStory();
+
         var endnotes = new XElement(W + "endnotes",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
@@ -2115,7 +2127,7 @@ public static class DocxWriter
         string referenceElementName,
         bool includeReferenceMark,
         PreservedNumberingPlan? preservedNumbering,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
+        RestartNumbering restartOverrides)
     {
         var paragraphs = content.Count == 0
             ? new List<XElement> { new XElement(W + "p") }
@@ -2244,8 +2256,11 @@ public static class DocxWriter
         IReadOnlyList<PartLocalPreservedDrawingPart> preservedDrawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides)
+        RestartNumbering restartOverrides)
     {
+        // Each story numbers independently: start this one with no active restart-group numId.
+        restartOverrides.BeginStory();
+
         var comments = new XElement(W + "comments",
             new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName));
@@ -2382,7 +2397,7 @@ public static class DocxWriter
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>> partsBySection,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null) => block switch
+        RestartNumbering? restartOverrides = null) => block switch
     {
         Table table => BuildTable(table, drawings, hyperlinks, preservedNumbering, restartOverrides),
         AltChunkBlock altChunk when drawings.PreservedDrawingRelIds is { } preservedRelIds
@@ -2400,7 +2415,7 @@ public static class DocxWriter
     private const string HeaderFill = "D9E2F3";
     private const string BandedFill = "F2F2F2";
 
-    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks, PreservedNumberingPlan? preservedNumbering = null, IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+    private static XElement BuildTable(Table table, RunDrawings drawings, IReadOnlyDictionary<string, string> hyperlinks, PreservedNumberingPlan? preservedNumbering = null, RestartNumbering? restartOverrides = null)
     {
         var tbl = new XElement(W + "tbl", BuildTableProperties(table));
 
@@ -3127,7 +3142,7 @@ public static class DocxWriter
         IReadOnlyDictionary<string, string> hyperlinks,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+        RestartNumbering? restartOverrides = null)
     {
         var p = new XElement(W + "p");
         var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering, restartOverrides, drawings.Ids);
@@ -3517,7 +3532,7 @@ public static class DocxWriter
         Paragraph paragraph,
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null,
+        RestartNumbering? restartOverrides = null,
         IdAllocator? ids = null)
     {
         var pPr = new XElement(W + "pPr");
@@ -3563,14 +3578,13 @@ public static class DocxWriter
                 _ => BulletNumId
             };
             var level = Math.Clamp(f.ListLevel, 0, ListLevelCount - 1);
-            // When the paragraph carries a list restart override (ListStartOverride != null), look up the
-            // dedicated override w:num emitted by BuildNumbering; fall back to the base numId when the map
-            // does not contain this combination (e.g. bullets where override is ignored).
-            var numId = baseNumId;
-            if (f.ListStartOverride.HasValue
-                && restartOverrides is not null
-                && restartOverrides.TryGetValue((f.ListKind, level, f.ListStartOverride.Value), out var overrideId))
-                numId = overrideId;
+            // A paragraph carrying a restart override (ListStartOverride != null) claims the dedicated
+            // override w:num emitted by BuildNumbering AND becomes the active list instance for its kind, so
+            // the following continuation paragraphs of the same restarted run (which carry a null override)
+            // stay on that same numId instead of falling back to the shared base one. Bullets and
+            // not-yet-restarted runs use the base numId.
+            var numId = restartOverrides?.ResolveNumId(paragraph, f.ListKind, level, f.ListStartOverride, baseNumId)
+                ?? baseNumId;
             pPr.Add(new XElement(W + "numPr",
                 new XElement(W + "ilvl", new XAttribute(W + "val", level)),
                 new XElement(W + "numId", new XAttribute(W + "val", numId))));
@@ -3863,7 +3877,7 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+        RestartNumbering? restartOverrides = null)
     {
         var field = run.ComplexField!;
         var metadata = field.SimpleField!;
@@ -3894,7 +3908,7 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+        RestartNumbering? restartOverrides = null)
     {
         if (run.SubDocument?.Target is { Length: > 0 } subDocumentTarget
             && drawings.SubDocuments?.TryGetValue(subDocumentTarget, out var subDocumentRelationshipId) == true)
@@ -4071,7 +4085,7 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+        RestartNumbering? restartOverrides = null)
     {
         var r = new XElement(W + "r");
         var rPr = BuildRunProperties(run.Formatting);
@@ -4869,7 +4883,7 @@ public static class DocxWriter
         IdAllocator ids,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+        RestartNumbering? restartOverrides = null)
     {
         var cx = PointsToEmu(shape.WidthPt);
         var cy = PointsToEmu(shape.HeightPt);
@@ -5655,7 +5669,7 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering = null,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
+        RestartNumbering? restartOverrides = null)
     {
         var ids = drawings.Ids;
         var cx = PointsToEmu(group.WidthPt);
@@ -5757,7 +5771,7 @@ public static class DocxWriter
         RunDrawings drawings,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides)
+        RestartNumbering? restartOverrides)
     {
         // Nested groups share the normal group child payload pipeline; only their group transform is local
         // to the parent rather than being a document anchor.
@@ -5811,7 +5825,7 @@ public static class DocxWriter
         IdAllocator ids,
         IReadOnlyDictionary<string, string> hyperlinks,
         PreservedNumberingPlan? preservedNumbering,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides)
+        RestartNumbering? restartOverrides)
     {
         var drawing = BuildShapeDrawing(shape, ids, hyperlinks, preservedNumbering, restartOverrides);
         return BuildDrawingGroupRichWspChild(drawing, xfrm, childName);
@@ -8479,16 +8493,92 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds the restart-override map: for every paragraph that carries a non-null
-    /// <see cref="ParagraphFormatting.ListStartOverride"/> on a Number or MultiLevel list, assigns a
-    /// unique <c>w:numId</c> (above the preserved block) so <c>BuildNumbering</c> can emit the matching
-    /// <c>w:num</c> with <c>w:lvlOverride/w:startOverride</c>, and <c>BuildParagraphProperties</c> can
-    /// reference it. Returns an empty dictionary (never null) so callers always have a valid lookup.
+    /// Per-write numbering-restart state: the allocated restart-override <c>w:numId</c>s plus the numId
+    /// currently ACTIVE for each numbered list kind as the write pass walks paragraphs in document order.
     /// </summary>
-    private static IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> BuildRestartOverrides(
+    /// <remarks>
+    /// Only the FIRST paragraph of a restarted run carries a non-null
+    /// <see cref="ParagraphFormatting.ListStartOverride"/>; every following paragraph of that run has a null
+    /// override meaning "continue" (see ApplyListStartOverrides in the hosts, and the render layer's
+    /// numberListCounter/MultiLevelListMarkerState which continue rather than restart). Those continuation
+    /// paragraphs must therefore stay on the SAME dedicated w:numId the restart anchor established — falling
+    /// back to the shared base numId would re-join them to the earlier list and renumber them on reopen.
+    /// A w:numId identifies a list INSTANCE, not a level, so the active id is tracked per <see cref="ListKind"/>
+    /// and spans levels; an intervening non-list paragraph does not clear it (numbering continues across
+    /// interrupting body text, exactly as the render layer does). <see cref="BeginStory"/> resets the active
+    /// ids at each story boundary (body, header/footer, footnotes, endnotes, comments) because those stories
+    /// are numbered independently.
+    /// Each restart ANCHOR gets its own w:numId (allocated per anchor paragraph, not per distinct
+    /// (kind, level, startAt) value) so two runs that restart at the same number stay separate list
+    /// instances — sharing one id would make the second run continue the first instead of restarting.
+    /// </remarks>
+    private sealed class RestartNumbering(IReadOnlyDictionary<Paragraph, RestartGroup> anchors)
+    {
+        private readonly Dictionary<ListKind, int> _activeNumIds = [];
+
+        /// <summary>
+        /// First allocated group per (kind, level, startAt) value. Only used for a restart paragraph the
+        /// identity lookup misses — a writer-made COPY of an authored paragraph, e.g. the bolded clone a
+        /// table header row is written through — where an equivalent group is a better answer than the
+        /// shared base numId.
+        /// </summary>
+        private readonly Dictionary<(ListKind Kind, int Level, int StartAt), int> _byValue =
+            anchors.Values
+                .GroupBy(g => (g.Kind, g.Level, g.StartAt))
+                .ToDictionary(g => g.Key, g => g.First().NumId);
+
+        /// <summary>The allocated restart groups, one per anchor paragraph, for BuildNumbering to emit.</summary>
+        public IEnumerable<RestartGroup> Groups => anchors.Values;
+
+        /// <summary>Clears the active ids; called once per story so stories never inherit each other's runs.</summary>
+        public void BeginStory() => _activeNumIds.Clear();
+
+        /// <summary>
+        /// Resolves the w:numId for a list paragraph: a restart anchor claims (and becomes) its dedicated
+        /// override id, a continuation paragraph reuses the id its anchor established, and anything else
+        /// (bullets, or a kind with no restart yet) uses <paramref name="baseNumId"/>.
+        /// </summary>
+        public int ResolveNumId(Paragraph paragraph, ListKind kind, int level, int? startOverride, int baseNumId)
+        {
+            if (kind is not (ListKind.Number or ListKind.MultiLevel))
+                return baseNumId;
+            // A restart anchor (a paragraph BuildRestartOverrides allocated an id for): switch the active
+            // instance to its dedicated override w:num, which the rest of its run then follows.
+            if (anchors.TryGetValue(paragraph, out var group))
+            {
+                _activeNumIds[kind] = group.NumId;
+                return group.NumId;
+            }
+            if (startOverride is { } startAt)
+            {
+                var resolved = _byValue.TryGetValue((kind, level, startAt), out var equivalent)
+                    ? equivalent
+                    : baseNumId;
+                _activeNumIds[kind] = resolved;
+                return resolved;
+            }
+            return _activeNumIds.TryGetValue(kind, out var active) ? active : baseNumId;
+        }
+    }
+
+    /// <summary>One allocated restart-override w:num: its id and the list group whose counter it resets.</summary>
+    private readonly record struct RestartGroup(int NumId, ListKind Kind, int Level, int StartAt);
+
+    /// <summary>
+    /// Builds the restart-override state: every paragraph that carries a non-null
+    /// <see cref="ParagraphFormatting.ListStartOverride"/> on a Number or MultiLevel list is a restart
+    /// ANCHOR and gets its own <c>w:numId</c> (above the preserved block), so <c>BuildNumbering</c> can emit
+    /// the matching <c>w:num</c> with <c>w:lvlOverride/w:startOverride</c> and <c>BuildParagraphProperties</c>
+    /// can point the anchor — and the continuation paragraphs after it — at that one list instance.
+    /// Keyed by paragraph identity (Paragraph has reference equality), so two runs restarting at the SAME
+    /// number get distinct instances and the second really restarts instead of continuing the first, and so
+    /// the allocation order never has to match the order the parts are written in.
+    /// Returns an empty state (never null) so callers always have a valid lookup.
+    /// </summary>
+    private static RestartNumbering BuildRestartOverrides(
         TextDocument document, PreservedNumberingPlan? preserved)
     {
-        var result = new Dictionary<(ListKind, int, int), int>();
+        var anchors = new Dictionary<Paragraph, RestartGroup>();
         // Override numIds must be clear of FreeW's fixed 1/2/3 AND the preserved range (4..4+preserved.Nums.Count-1).
         var nextOverrideNumId = PreservedNumIdStart + (preserved?.Nums.Count ?? 0);
         foreach (var paragraph in EnumerateStoryParagraphs(document))
@@ -8496,14 +8586,15 @@ public static class DocxWriter
             var f = paragraph.Formatting;
             if (f.ListKind is not (ListKind.Number or ListKind.MultiLevel))
                 continue;
-            if (!f.ListStartOverride.HasValue)
+            if (f.ListStartOverride is not { } startAt)
                 continue;
             var level = Math.Clamp(f.ListLevel, 0, ListLevelCount - 1);
-            var key = (f.ListKind, level, f.ListStartOverride.Value);
-            if (!result.ContainsKey(key))
-                result[key] = nextOverrideNumId++;
+            // A paragraph reached twice by the enumeration (header content is flattened into both a layout
+            // table and the part's paragraph list) is one anchor, allocated once.
+            if (!anchors.ContainsKey(paragraph))
+                anchors[paragraph] = new RestartGroup(nextOverrideNumId++, f.ListKind, level, startAt);
         }
-        return result;
+        return new RestartNumbering(anchors);
     }
 
     /// <summary>
@@ -8525,7 +8616,7 @@ public static class DocxWriter
         bool includeFreeWNumbering,
         PreservedNumberingPlan? preserved,
         IReadOnlyList<ListNumberFormat> multiLevelNumberFormats,
-        IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null,
+        RestartNumbering? restartOverrides = null,
         bool linkMultiLevelHeadingStyles = false)
     {
         XElement Lvl(int level, string numFmt, string lvlText, string? paragraphStyleId = null) =>
@@ -8608,7 +8699,7 @@ public static class DocxWriter
         // only time a paragraph can carry ListStartOverride. Bullets are excluded by BuildRestartOverrides.
         if (restartOverrides is not null && includeFreeWNumbering)
         {
-            foreach (var ((kind, level, startAt), overrideNumId) in restartOverrides)
+            foreach (var (overrideNumId, kind, level, startAt) in restartOverrides.Groups)
             {
                 var abstractNumId = kind switch
                 {
