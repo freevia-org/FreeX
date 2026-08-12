@@ -46,7 +46,11 @@ public sealed class LinuxReleaseWorkflowTests
 
         workflow.Should().Contain("dotnet publish src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj");
         workflow.Should().Contain("--packaging-smoke");
+        workflow.Should().Contain("\"$validation_published/FreeX.Validation.Avalonia\" --packaging-smoke");
         workflow.Should().Contain("xvfb-run -a");
+        workflow.Should().Contain("bash tools/Run-PackagedProductLaunchProbe.sh");
+        workflow.Should().Contain("--executable \"$published/FreeX\"");
+        workflow.Should().Contain("packaged_product_launch_status=passed");
         workflow.Should().Contain("package-linux-app.sh");
         workflow.Should().Contain("sha256sum -c");
         workflow.Should().Contain("Test-LinuxPublicPreviewPromotion.ps1");

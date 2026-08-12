@@ -204,18 +204,24 @@ public sealed class MacOsBundleMetadataTests
         workflow.Should().Contain("ditto -x -k $zip_name .");
         workflow.Should().Contain("Ad-hoc signed or non-notarized previews may require Control-click or right-click > Open for trusted internal testing.");
         workflow.Should().Contain("codesign --verify --deep --strict \"$unzip_root/FreeX.app\"");
-        workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke | tee \"$smoke_log\"");
+        workflow.Should().Contain("\"$validation_host\" --packaging-smoke | tee \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"macOS Preview Workbook\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"drawing_object_previews=3\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"roundtrip_drawing_object_previews=3\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"format_cells_style_roundtrip=true\" \"$smoke_log\"");
-        workflow.Should().Contain("\"$unzip_root/FreeX.app/Contents/MacOS/FreeX\" --packaging-smoke \"$smoke_file\" | tee -a \"$smoke_log\"");
+        workflow.Should().Contain("\"$validation_host\" --packaging-smoke \"$smoke_file\" | tee -a \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"Packaging smoke opened\" \"$smoke_log\"");
         workflow.Should().Contain("grep -q \"edited, saved, and reopened\" \"$smoke_log\"");
         workflow.Should().Contain("format_cells_style_roundtrip_count=\"$(grep -c \"format_cells_style_roundtrip=true\" \"$smoke_log\")\"");
         workflow.Should().Contain("test \"$format_cells_style_roundtrip_count\" -ge 2");
         workflow.Should().Contain("echo \"format_cells_style_roundtrip=true\"");
         workflow.Should().Contain("echo \"format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count\"");
+        workflow.Should().Contain("bash tools/Run-PackagedProductLaunchProbe.sh");
+        workflow.Should().Contain("--executable \"$unzip_root/FreeX.app/Contents/MacOS/FreeX\"");
+        workflow.Should().Contain("grep -Fqx \"packaged_product_launch_status=passed\" \"$packaged_product_launch_report\"");
+        workflow.Should().Contain("grep -Fqx \"packaged_product_executable=$unzip_root/FreeX.app/Contents/MacOS/FreeX\" \"$packaged_product_launch_report\"");
+        workflow.IndexOf("bash tools/Run-PackagedProductLaunchProbe.sh", StringComparison.Ordinal)
+            .Should().BeLessThan(workflow.IndexOf("echo \"smoke_status=passed\"", StringComparison.Ordinal));
         workflow.Should().Contain("lsregister -f \"$unzip_root/FreeX.app\"");
         workflow.Should().Contain("run_launchservices_with_validation \"$launch_smoke_report\" \"$launch_smoke_file\"");
         workflow.Should().Contain("open -W -n -b io.github.tony-xmelon.freex \"$launch_smoke_file\"");

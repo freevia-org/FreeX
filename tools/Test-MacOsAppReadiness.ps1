@@ -719,6 +719,12 @@ function Test-MacOsWorkflow {
         'echo "format_cells_style_roundtrip=true"',
         'echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"',
         "edited, saved, and reopened",
+        "bash tools/Run-PackagedProductLaunchProbe.sh",
+        '--executable "$unzip_root/FreeX.app/Contents/MacOS/FreeX"',
+        '--readiness-root "$packaged_product_probe_home"',
+        'grep -Fqx "packaged_product_launch_status=passed" "$packaged_product_launch_report"',
+        'grep -Fqx "packaged_product_executable=$unzip_root/FreeX.app/Contents/MacOS/FreeX" "$packaged_product_launch_report"',
+        'cat "$packaged_product_launch_report" >> "$evidence_path"',
         "lsregister -f",
         "dotnet publish tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj",
         'validation_host="$validation_published/FreeX.Validation.Avalonia"',
@@ -1058,6 +1064,7 @@ function Test-MacOsWorkflow {
     $boundedLaunchSmokeCount = ([regex]::Matches($workflow, 'run_bounded_launchservices_smoke "')).Count
     Assert-True -Condition ($boundedLaunchSmokeCount -eq 3) -Message "macOS workflow must route all three hosted LaunchServices launch smoke paths through run_bounded_launchservices_smoke."
     Assert-TextBefore -Text $workflow -First "run_bounded_launchservices_smoke() {" -Second 'run_bounded_launchservices_smoke "bundle_id" "$launch_smoke_report"' -Message "macOS workflow must define the bounded LaunchServices smoke helper before the bundle-id launch smoke."
+    Assert-TextBefore -Text $workflow -First 'bash tools/Run-PackagedProductLaunchProbe.sh' -Second 'echo "smoke_status=passed" >> "$evidence_path"' -Message "macOS workflow must exercise the executable inside the extracted app bundle before recording smoke_status=passed."
 
     Assert-TextBefore -Text $workflow -First "Capture runner toolchain evidence" -Second "Test portable PDF macOS route" -Message "macOS workflow must capture hosted runner evidence before running the focused portable PDF/service tests."
     Assert-TextBefore -Text $workflow -First "Test portable PDF macOS route" -Second "dotnet build $projectPath --configuration Release" -Message "macOS workflow must run the focused portable PDF/service tests before building the Avalonia app project."

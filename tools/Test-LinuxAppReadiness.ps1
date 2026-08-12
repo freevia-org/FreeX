@@ -120,6 +120,16 @@ Assert-FileContains -Path $smokeSource -Needles @(
     'public const string NeutralDiagnosticsDirectoryArgument = "--launch-smoke-diagnostics-dir";'
 )
 
+$packagedProductLaunchProbe = Get-RepoFile @("tools", "Run-PackagedProductLaunchProbe.sh")
+Assert-FileContains -Path $packagedProductLaunchProbe -Needles @(
+    '"$executable" "${app_arguments[@]}" >"$log_path" 2>&1 &',
+    'grep -R -F -q "$readiness_marker" "$readiness_root"',
+    'process_is_active "$probe_pid"',
+    'kill "$probe_pid"',
+    'packaged_product_launch_status=passed',
+    'packaged_product_executable=$executable'
+)
+
 # Linux workflow markers.
 $workflow = Get-RepoFile @(".github", "workflows", "linux-app.yml")
 Assert-FileContains -Path $workflow -Needles @(
@@ -134,6 +144,10 @@ Assert-FileContains -Path $workflow -Needles @(
     "-p:UseAppHost=true",
     "--packaging-smoke",
     '"$validation_published/FreeX.Validation.Avalonia" --packaging-smoke',
+    "bash tools/Run-PackagedProductLaunchProbe.sh",
+    '--executable "$published/FreeX"',
+    'grep -Fqx "packaged_product_launch_status=passed" "$packaged_product_launch_report"',
+    'grep -Fqx "packaged_product_executable=$published/FreeX" "$packaged_product_launch_report"',
     "xvfb-run -a",
     "--launch-smoke",
     "desktop-file-validate",
@@ -148,10 +162,21 @@ Assert-FileContains -Path $workflow -Needles @(
 # The macOS-only signing/notarization machinery must not leak into the Linux lane.
 if (Test-Path -LiteralPath $workflow) {
     $workflowContent = Get-Content -LiteralPath $workflow -Raw
+    $productProbeIndex = $workflowContent.IndexOf('bash tools/Run-PackagedProductLaunchProbe.sh', [System.StringComparison]::Ordinal)
+    $launchPassedIndex = $workflowContent.IndexOf('echo "launch_smoke_status=passed"', [System.StringComparison]::Ordinal)
+    Assert-True ($productProbeIndex -ge 0 -and $productProbeIndex -lt $launchPassedIndex) "Linux workflow must exercise the published product apphost before recording launch_smoke_status=passed."
     foreach ($forbidden in @("codesign", "notarytool", "MACOS_CODESIGN", "lsregister", "spctl")) {
         Assert-True (-not $workflowContent.Contains($forbidden)) "Linux workflow must not contain macOS-only token: $forbidden"
     }
 }
+
+$releaseWorkflow = Get-RepoFile @(".github", "workflows", "linux-release.yml")
+Assert-FileContains -Path $releaseWorkflow -Needles @(
+    '"$validation_published/FreeX.Validation.Avalonia" --packaging-smoke',
+    "bash tools/Run-PackagedProductLaunchProbe.sh",
+    '--executable "$published/FreeX"',
+    'packaged_product_launch_status=passed'
+)
 
 # Readiness validator present.
 $readinessTool = Get-RepoFile @("tools", "Test-LinuxPublicPreviewReadiness.ps1")

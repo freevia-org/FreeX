@@ -174,13 +174,20 @@ public sealed class LinuxPackagingMetadataTests
 
         // Headless hard gate plus GUI launch smoke under a virtual display.
         workflow.Should().Contain("--packaging-smoke");
+        workflow.Should().Contain("\"$validation_published/FreeX.Validation.Avalonia\" --packaging-smoke");
         workflow.Should().Contain("xvfb-run -a");
         workflow.Should().Contain("--launch-smoke");
+        workflow.Should().Contain("bash tools/Run-PackagedProductLaunchProbe.sh");
+        workflow.Should().Contain("--executable \"$published/FreeX\"");
+        workflow.Should().Contain("grep -Fqx \"packaged_product_launch_status=passed\" \"$packaged_product_launch_report\"");
+        workflow.Should().Contain("grep -Fqx \"packaged_product_executable=$published/FreeX\" \"$packaged_product_launch_report\"");
         workflow.Should().Contain("desktop-file-validate");
         workflow.Should().Contain("package-linux-app.sh");
         workflow.Should().Contain("sha256sum -c");
         workflow.Should().Contain("packaging_smoke_status=passed");
         workflow.Should().Contain("launch_smoke_status=passed");
+        workflow.IndexOf("bash tools/Run-PackagedProductLaunchProbe.sh", StringComparison.Ordinal)
+            .Should().BeLessThan(workflow.IndexOf("launch_smoke_status=passed", StringComparison.Ordinal));
 
         // Aggregate readiness lane.
         workflow.Should().Contain("linux-preview-readiness");

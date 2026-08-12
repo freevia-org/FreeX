@@ -114,6 +114,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_cell_styles_menu_item=true");
         script.Should().Contain("native_cell_styles_preset_count=33");
         script.Should().Contain("launchservices_smoke_timeout_seconds=60");
+        script.Should().Contain("Run-PackagedProductLaunchProbe.sh");
+        script.Should().Contain("--executable \"$unzip_root/FreeX.app/Contents/MacOS/FreeX\"");
+        script.Should().Contain("macOS workflow must exercise the executable inside the extracted app bundle before recording smoke_status=passed.");
         script.Should().Contain("launchservices_cleanup_timeout_seconds=10");
         script.Should().Contain("run_bounded_launchservices_smoke \"bundle_id\" \"$launch_smoke_report\"");
         script.Should().Contain("run_bounded_launchservices_smoke \"open_with\" \"$open_with_report\"");

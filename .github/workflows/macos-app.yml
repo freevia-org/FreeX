@@ -124,6 +124,9 @@ jobs:
           evidence_path="$artifact_root/freex-$runtime-macos-evidence.txt"
           smoke_log="$artifact_root/freex-$runtime-macos-packaging-smoke.log"
           launch_smoke_report="$artifact_root/freex-$runtime-macos-launch-smoke.txt"
+          packaged_product_launch_report="$RUNNER_TEMP/freex-$runtime-packaged-product-launch.txt"
+          packaged_product_launch_log="$RUNNER_TEMP/freex-$runtime-packaged-product-launch.log"
+          packaged_product_probe_home="$RUNNER_TEMP/freex-$runtime-packaged-product-home"
           open_with_report="$artifact_root/freex-$runtime-macos-open-with-launch-smoke.txt"
           default_open_report="$artifact_root/freex-$runtime-macos-default-open-launch-smoke.txt"
           app_diagnostics_dir="$artifact_root/freex-$runtime-macos-app-diagnostics"
@@ -468,6 +471,20 @@ jobs:
               echo "format_cells_style_roundtrip=true"
               echo "format_cells_style_roundtrip_count=$format_cells_style_roundtrip_count"
             } >> "$evidence_path"
+
+            # Bounded probe against the executable inside the extracted app bundle. The
+            # validation host continues to own the fixture-heavy packaging and UI checks.
+            rm -rf "$packaged_product_probe_home"
+            HOME="$packaged_product_probe_home" \
+              bash tools/Run-PackagedProductLaunchProbe.sh \
+                --executable "$unzip_root/FreeX.app/Contents/MacOS/FreeX" \
+                --readiness-root "$packaged_product_probe_home" \
+                --report "$packaged_product_launch_report" \
+                --log "$packaged_product_launch_log" \
+                -- "$smoke_file"
+            grep -Fqx "packaged_product_launch_status=passed" "$packaged_product_launch_report"
+            grep -Fqx "packaged_product_executable=$unzip_root/FreeX.app/Contents/MacOS/FreeX" "$packaged_product_launch_report"
+            cat "$packaged_product_launch_report" >> "$evidence_path"
             echo "smoke_status=passed" >> "$evidence_path"
 
             launchservices_smoke_timeout_seconds=60
