@@ -30,6 +30,7 @@
     <Project Path="freew/FreeW.App.Host/FreeW.App.Host.csproj" />
     <Project Path="freew/FreeW.App.Host.Tests/FreeW.App.Host.Tests.csproj" />
     <Project Path="freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj" />
+    <Project Path="freew/TestSupport/Validation.Avalonia/FreeW.Validation.Avalonia.csproj" />
     <Project Path="freew/FreeW.App.Avalonia.Tests/FreeW.App.Avalonia.Tests.csproj" />
     <Project Path="freew/tests/FreeW.VisualEvidence.TestSupport/FreeW.VisualEvidence.TestSupport.csproj" />
     <Project Path="freew/tools/FreeW.FidelityRender/FreeW.FidelityRender.csproj" />

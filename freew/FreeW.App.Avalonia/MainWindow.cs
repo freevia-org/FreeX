@@ -12,7 +12,6 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using System.Globalization;
-using System.Text.Json;
 using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.AppServices.Windows;
@@ -393,7 +392,6 @@ public sealed partial class MainWindow : Window
             if (!suppressStartupRecoveryOffer)
                 await _autosave.OfferRecoveryAsync(this);
             await RefreshPrinterDiscoveryAsync();
-            await RunTablePropertiesX11ValidationSeedAsync();
         };
 
         // Dirty-gate on close: cancel the synchronous event and let the shared async
@@ -3570,53 +3568,7 @@ public sealed partial class MainWindow : Window
     {
         var dialog = new TablePropertiesDialog(context);
         await dialog.ShowDialog(this);
-        WriteTablePropertiesX11ValidationResult(context, dialog);
         return dialog.Result;
-    }
-
-    private async Task RunTablePropertiesX11ValidationSeedAsync()
-    {
-        if (!string.Equals(Environment.GetEnvironmentVariable("FREEW_TABLE_PROPERTIES_X11_SEED"), "1", StringComparison.Ordinal))
-            return;
-
-        _editor.InsertTable(2, 2);
-        var tableBlock = -1;
-        for (var index = 0; index < _editor.Document.Blocks.Count; index++)
-        {
-            if (_editor.Document.Blocks[index] is Table table
-                && table.Rows.Count == 2
-                && table.Rows.All(row => row.Cells.Count == 2))
-                tableBlock = index;
-        }
-
-        if (tableBlock < 0)
-            throw new InvalidOperationException("Table Properties X11 validation seed did not create a table.");
-
-        _editor.PlaceCaretInCell(tableBlock, 0, 0, 0, 0);
-        var context = _editor.CaretTableContext()
-            ?? throw new InvalidOperationException("Table Properties X11 validation seed did not select cell A1.");
-        ApplyTablePropertiesResult(_editor, await ShowTablePropertiesDialogAsync(context));
-    }
-
-    private static void WriteTablePropertiesX11ValidationResult(
-        ModelTableContext context,
-        TablePropertiesDialog dialog)
-    {
-        var path = Environment.GetEnvironmentVariable("FREEW_TABLE_PROPERTIES_X11_RESULT");
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
-        var result = new
-        {
-            schema = "freew.table-properties.x11-result.v1",
-            status = dialog.Result is null ? "cancelled" : "applied",
-            tableRows = context.Table.Rows.Count,
-            tableColumns = context.Table.Rows.Count == 0 ? 0 : context.Table.Rows[0].Cells.Count,
-            values = dialog.Result,
-            focusTrace = dialog.FocusTraceForValidation,
-        };
-        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        File.WriteAllText(path, JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
     }
 
     internal static void ApplyTablePropertiesResult(DocumentView editor, TablePropertiesValues? values)

@@ -13,6 +13,7 @@ public sealed class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
     internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
+    internal static Action<MainWindow>? ExternalStartupCoordinator { get; set; }
     internal static Theme ActiveTheme { get; private set; } = FreeWApplicationStartup.Theme.DefaultTheme;
 
     public override void OnFrameworkInitializationCompleted()
@@ -40,6 +41,11 @@ public sealed class App : Application
                 args => new MainWindow(args, loadedOptions, optionsStore),
                 mainWindow =>
                 {
+                    if (ExternalStartupCoordinator is { } externalStartupCoordinator)
+                    {
+                        externalStartupCoordinator(mainWindow);
+                        return;
+                    }
                     if (LaunchSmokeOptions is { } options)
                         LaunchSmokeCoordinator.Start(mainWindow, options);
                 }));

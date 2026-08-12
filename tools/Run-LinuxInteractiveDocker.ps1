@@ -105,6 +105,12 @@ if ($HostMode -eq "Validation") {
             Executable = "FreeX.ParityCapture.Avalonia"
             WindowTitle = "FreeX"
         }
+    } elseif ($App -eq "FreeW") {
+        $definition = @{
+            Project = "freew/TestSupport/Validation.Avalonia/FreeW.Validation.Avalonia.csproj"
+            Executable = "FreeW.Validation.Avalonia"
+            WindowTitle = "FreeW"
+        }
     } elseif ($App -eq "FreeP") {
         $definition = @{
             Project = "freep/TestSupport/Validation.Avalonia/FreeP.Validation.Avalonia.csproj"

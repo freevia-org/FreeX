@@ -23,6 +23,23 @@ internal static class Program
                 PrepareLaunch,
                 startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
 
+    internal static int RunToolHost(
+        IReadOnlyList<string> startupArguments,
+        Action<MainWindow.ValidationAccessAdapter> coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(startupArguments);
+        ArgumentNullException.ThrowIfNull(coordinator);
+        App.StartupArguments = startupArguments.ToArray();
+        App.LaunchSmokeOptions = null;
+        App.ExternalStartupCoordinator = window => coordinator(window.CreateValidationAccessAdapter());
+        return SisterAvaloniaProgramRunner.Run(
+            [],
+            new SisterAvaloniaProgramSpec(
+                FreeWApplicationStartup.ProductIdentity,
+                arguments => SisterAvaloniaLaunchPreparation.Continue(arguments),
+                arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments)));
+    }
+
     private static SisterAvaloniaLaunchPreparation PrepareLaunch(string[] args)
     {
         // Headless engine smoke (no display): exercise the model + DOCX round-trip and exit.
@@ -41,6 +58,7 @@ internal static class Program
 
         App.StartupArguments = startupArguments;
         App.LaunchSmokeOptions = launchSmoke;
+        App.ExternalStartupCoordinator = null;
         return SisterAvaloniaLaunchPreparation.Continue(startupArguments);
     }
 
