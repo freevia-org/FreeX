@@ -14,7 +14,7 @@ namespace FreeP.App.Host;
 public sealed class PresenterViewWindow : Window
 {
     private readonly Presentation _presentation;
-    private readonly SlideShowPresenterViewSession _session;
+    private readonly SlideShowPresenterViewHostCoordinator _coordinator;
     private readonly DispatcherTimer _refreshTimer;
     private readonly SlideCanvas _currentPreview;
     private readonly SlideCanvas _nextPreview;
@@ -34,16 +34,14 @@ public sealed class PresenterViewWindow : Window
     private readonly TextBox _slideNumberBox;
     private readonly Button _goToSlideButton;
     private readonly ComboBox _pointerModeCombo;
-    private bool _notesDirty;
-    private bool _refreshing;
 
     public PresenterViewWindow(
         Presentation presentation,
         SlideShowPresenterViewOperations operations)
     {
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
-        _session = new SlideShowPresenterViewSession(operations);
-        var surface = _session.Surface;
+        _coordinator = new SlideShowPresenterViewHostCoordinator(operations);
+        var surface = _coordinator.Surface;
 
         Title = surface.Title;
         AutomationProperties.SetName(this, surface.Schema.AccessibleName);
@@ -102,7 +100,7 @@ public sealed class PresenterViewWindow : Window
         _goToSlideButton = MakeActionButton(
             surface.Action(SlideShowPresenterViewAction.GoToSlide),
             () => ExecuteAction(SlideShowPresenterViewAction.GoToSlide));
-        _goToSlideButton.IsEnabled = _session.CanGoToSlide;
+        _goToSlideButton.IsEnabled = _coordinator.CanGoToSlide;
         _recordTimingsButton = MakeActionButton(
             surface.Action(SlideShowPresenterViewAction.RecordTimings),
             () => ExecuteAction(SlideShowPresenterViewAction.RecordTimings));
@@ -145,19 +143,18 @@ public sealed class PresenterViewWindow : Window
         var clearInkButton = MakeActionButton(
             surface.Action(SlideShowPresenterViewAction.ClearInk),
             () => ExecuteAction(SlideShowPresenterViewAction.ClearInk));
-        normalButton.IsEnabled = _session.CanSetScreenMode;
-        blackButton.IsEnabled = _session.CanSetScreenMode;
-        whiteButton.IsEnabled = _session.CanSetScreenMode;
-        clearInkButton.IsEnabled = _session.CanClearInk;
+        normalButton.IsEnabled = _coordinator.CanSetScreenMode;
+        blackButton.IsEnabled = _coordinator.CanSetScreenMode;
+        whiteButton.IsEnabled = _coordinator.CanSetScreenMode;
+        clearInkButton.IsEnabled = _coordinator.CanClearInk;
         _pointerModeCombo = MakePointerModePicker(mode =>
         {
-            if (!_refreshing && mode is not null)
+            if (mode is not null)
             {
-                _session.SelectPointerMode(mode.Value);
-                RefreshFromState();
+                _coordinator.SelectPointerMode(mode.Value, RefreshFromState);
             }
         });
-        _pointerModeCombo.IsEnabled = _session.CanSelectPointerMode;
+        _pointerModeCombo.IsEnabled = _coordinator.CanSelectPointerMode;
         ApplySemantic(_pointerModeCombo, surface.Field(SlideShowPresenterViewField.PointerMode));
         controls.Children.Add(normalButton);
         controls.Children.Add(blackButton);
@@ -204,7 +201,7 @@ public sealed class PresenterViewWindow : Window
         notesHeading.Margin = new Thickness(0, 0, 0, 6);
         _notesText = new TextBox
         {
-            IsReadOnly = !_session.CanSetNotes,
+            IsReadOnly = !_coordinator.CanSetNotes,
             TextWrapping = TextWrapping.Wrap,
             AcceptsReturn = true,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -216,8 +213,7 @@ public sealed class PresenterViewWindow : Window
         ApplySemantic(_notesText, surface.Field(SlideShowPresenterViewField.SpeakerNotes));
         _notesText.TextChanged += (_, _) =>
         {
-            if (!_refreshing && _session.CanSetNotes)
-                _notesDirty = true;
+            _coordinator.NotifyNotesTextChanged();
         };
         _notesText.LostKeyboardFocus += (_, _) => CommitNotes();
         Grid.SetRow(_notesText, 1);
@@ -238,7 +234,7 @@ public sealed class PresenterViewWindow : Window
 
         _refreshTimer = new DispatcherTimer(DispatcherPriority.Background)
         {
-            Interval = SlideShowPresenterViewSession.RefreshInterval,
+            Interval = SlideShowPresenterViewHostCoordinator.RefreshInterval,
         };
         _refreshTimer.Tick += (_, _) => RefreshFromState();
         Loaded += (_, _) =>
@@ -255,46 +251,40 @@ public sealed class PresenterViewWindow : Window
 
     public void RefreshFromState()
     {
-        var refresh = _session.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(
+        _coordinator.Refresh(new SlideShowPresenterViewHostRefreshInput(
             _notesText.IsKeyboardFocusWithin,
-            _notesDirty,
             _notesText.Text,
-            _slideNumberBox.IsKeyboardFocusWithin));
-        _notesDirty &= !refresh.NotesCommitted;
+            _slideNumberBox.IsKeyboardFocusWithin), ApplyRefreshPlan);
+    }
+
+    private void ApplyRefreshPlan(SlideShowPresenterViewRefreshPlan refresh)
+    {
         var plan = refresh.ViewPlan;
-        _refreshing = true;
-        try
-        {
-            _statusText.Text = plan.StatusText;
-            _elapsedText.Text = _session.Surface.FormatElapsed(plan.ElapsedText);
-            _currentLabel.Text = plan.CurrentSlideLabel;
-            _nextLabel.Text = plan.NextSlideLabel;
-            if (refresh.ShouldUpdateNotesText)
-                _notesText.Text = plan.NotesText;
-            if (refresh.ShouldUpdateSlideNumber && plan.CurrentSlideNumber is int currentSlideNumber)
-                _slideNumberBox.Text = currentSlideNumber.ToString(CultureInfo.InvariantCulture);
-            _backButton.IsEnabled = plan.CanGoBack;
-            _advanceButton.IsEnabled = plan.CanAdvance;
-            _recordTimingsButton.Content = plan.RecordTimingsButtonText;
-            _recordTimingsButton.IsEnabled = plan.CanSetTimingIntent;
-            _rehearseTimingsButton.Content = plan.RehearseTimingsButtonText;
-            _rehearseTimingsButton.IsEnabled = plan.CanSetTimingIntent;
-            _narrationButton.Content = plan.NarrationButtonText;
-            _narrationButton.IsEnabled = plan.CanSetMediaIntent;
-            _narrationAndMediaButton.Content = plan.NarrationAndMediaButtonText;
-            _narrationAndMediaButton.IsEnabled = plan.CanSetMediaIntent;
-            _recordingStatusText.Text = plan.RecordingStatusText;
-            _applyRecordingButton.IsEnabled = plan.CanApplyRecording;
-            _pointerModeCombo.SelectedItem = plan.PointerMode;
-            _currentPreview.Slide = plan.CurrentSlide;
-            _nextPreview.Slide = plan.NextSlide;
-            _currentPreview.Refresh();
-            _nextPreview.Refresh();
-        }
-        finally
-        {
-            _refreshing = false;
-        }
+        _statusText.Text = plan.StatusText;
+        _elapsedText.Text = _coordinator.Surface.FormatElapsed(plan.ElapsedText);
+        _currentLabel.Text = plan.CurrentSlideLabel;
+        _nextLabel.Text = plan.NextSlideLabel;
+        if (refresh.ShouldUpdateNotesText)
+            _notesText.Text = plan.NotesText;
+        if (refresh.ShouldUpdateSlideNumber && plan.CurrentSlideNumber is int currentSlideNumber)
+            _slideNumberBox.Text = currentSlideNumber.ToString(CultureInfo.InvariantCulture);
+        _backButton.IsEnabled = plan.CanGoBack;
+        _advanceButton.IsEnabled = plan.CanAdvance;
+        _recordTimingsButton.Content = plan.RecordTimingsButtonText;
+        _recordTimingsButton.IsEnabled = plan.CanSetTimingIntent;
+        _rehearseTimingsButton.Content = plan.RehearseTimingsButtonText;
+        _rehearseTimingsButton.IsEnabled = plan.CanSetTimingIntent;
+        _narrationButton.Content = plan.NarrationButtonText;
+        _narrationButton.IsEnabled = plan.CanSetMediaIntent;
+        _narrationAndMediaButton.Content = plan.NarrationAndMediaButtonText;
+        _narrationAndMediaButton.IsEnabled = plan.CanSetMediaIntent;
+        _recordingStatusText.Text = plan.RecordingStatusText;
+        _applyRecordingButton.IsEnabled = plan.CanApplyRecording;
+        _pointerModeCombo.SelectedItem = plan.PointerMode;
+        _currentPreview.Slide = plan.CurrentSlide;
+        _nextPreview.Slide = plan.NextSlide;
+        _currentPreview.Refresh();
+        _nextPreview.Refresh();
     }
 
     private SlideCanvas MakePreview() => new()
@@ -307,20 +297,15 @@ public sealed class PresenterViewWindow : Window
 
     private void ExecuteAction(SlideShowPresenterViewAction action)
     {
-        var result = _session.Dispatch(new SlideShowPresenterViewDispatchRequest(
+        _coordinator.ExecuteAction(
             action,
-            _slideNumberBox.Text,
-            _notesDirty,
-            _notesText.Text));
-        _notesDirty &= !result.NotesCommitted;
-        if (result.ShouldRefresh)
-            RefreshFromState();
+            new SlideShowPresenterViewHostActionInput(
+                _slideNumberBox.Text,
+                _notesText.Text),
+            RefreshFromState);
     }
 
-    private void CommitNotes()
-    {
-        _notesDirty &= !_session.CommitNotes(_notesDirty, _notesText.Text);
-    }
+    private void CommitNotes() => _coordinator.CommitNotes(_notesText.Text);
 
     private static Border BuildPreviewPanel(
         PresentationDialogFieldPlan<SlideShowPresenterViewField> field,

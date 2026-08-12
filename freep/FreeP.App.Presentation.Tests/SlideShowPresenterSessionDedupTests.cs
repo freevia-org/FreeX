@@ -474,18 +474,21 @@ public sealed class SlideShowPresenterSessionDedupTests
 
         foreach (var source in presenterFiles)
         {
-            source.Should().Contain("SlideShowPresenterViewSession");
+            source.Should().Contain("SlideShowPresenterViewHostCoordinator");
             source.Should().Contain("SlideShowPresenterViewOperations operations");
-            source.Should().Contain("new SlideShowPresenterViewSession(operations)");
+            source.Should().Contain("new SlideShowPresenterViewHostCoordinator(operations)");
             source.Should().NotContain("Func<SlideShowPresenterState> stateProvider");
-            source.Should().Contain("_session.BuildRefreshPlan(new SlideShowPresenterViewRefreshRequest(");
-            source.Should().Contain("_session.Surface");
-            source.Should().Contain("_session.Dispatch(new SlideShowPresenterViewDispatchRequest(");
-            source.Should().Contain("_session.Surface.FormatElapsed(");
+            source.Should().Contain("_coordinator.Refresh(new SlideShowPresenterViewHostRefreshInput(");
+            source.Should().Contain("_coordinator.Surface");
+            source.Should().Contain("_coordinator.ExecuteAction(");
+            source.Should().Contain("_coordinator.Surface.FormatElapsed(");
+            source.Should().Contain("_coordinator.NotifyNotesTextChanged()");
+            source.Should().Contain("_coordinator.CommitNotes(");
+            source.Should().Contain("_coordinator.SelectPointerMode(");
             source.Should().Contain("AutomationProperties.SetName(");
             source.Should().Contain("AutomationProperties.SetAutomationId(");
             source.Should().Contain("DispatcherTimer");
-            source.Should().Contain("Interval = SlideShowPresenterViewSession.RefreshInterval");
+            source.Should().Contain("Interval = SlideShowPresenterViewHostCoordinator.RefreshInterval");
             source.Should().Contain("SlideCanvas");
             source.Should().Contain("if (refresh.ShouldUpdateNotesText)");
             source.Should().Contain("if (refresh.ShouldUpdateSlideNumber");
@@ -500,15 +503,11 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().NotContain("BuildRecordingSummary");
             source.Should().NotContain("TotalArtifactCount");
             source.Should().NotContain("private readonly Func<SlideShowPresenterState> _stateProvider");
-            source.Should().NotContain("_session.GoBack(");
-            source.Should().NotContain("_session.GoNext(");
-            source.Should().NotContain("_session.GoToSlide(");
-            source.Should().NotContain("_session.ToggleTimingIntent(");
-            source.Should().NotContain("_session.ToggleMediaIntent(");
-            source.Should().NotContain("_session.SetScreenMode(");
-            source.Should().NotContain("_session.ClearInk(");
-            source.Should().NotContain("_session.ApplyRecordingReview(");
-            source.Should().NotContain("_session.BuildViewPlan()");
+            source.Should().NotContain("SlideShowPresenterViewSession");
+            source.Should().NotContain("SlideShowPresenterViewDispatchRequest");
+            source.Should().NotContain("SlideShowPresenterViewRefreshRequest");
+            source.Should().NotContain("_notesDirty");
+            source.Should().NotContain("_refreshing");
             foreach (var sharedLiteral in new[]
             {
                 "\"Presenter View\"",
