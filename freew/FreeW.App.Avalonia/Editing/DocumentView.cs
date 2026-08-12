@@ -1154,6 +1154,16 @@ public sealed class DocumentView : Control
 
     internal string AutomationSelectionStatus()
     {
+        if (SelectedCellRange is { } cellRange)
+        {
+            return AccessibleDocumentSnapshotPlanner.BuildTableSelectionStatus(
+                _doc,
+                cellRange.TableBlock,
+                cellRange.MinRow,
+                cellRange.MinCol,
+                cellRange.MaxRow,
+                cellRange.MaxCol);
+        }
         if (_shapeCaret is not null)
             return AutomationSnapshot().Status;
         if (_selectedFloatingObjects.Count > 1)
@@ -3166,6 +3176,7 @@ public sealed class DocumentView : Control
         _cellAnchor = null;
         _selectionAnchor = null;
         InvalidateVisual();
+        CaretMoved?.Invoke();
     }
 
     /// <summary>
@@ -18784,6 +18795,7 @@ public sealed class DocumentView : Control
             e.Handled = true;
             return;
         }
+        var previousCellBlockSelection = SelectedCellRange;
         if (!TryHitTest(point, out var pos))
             return;
 
@@ -18824,6 +18836,8 @@ public sealed class DocumentView : Control
 
         _caret = pos;
         InvalidateVisual();
+        if (previousCellBlockSelection != SelectedCellRange)
+            CaretMoved?.Invoke();
     }
 
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)

@@ -139,4 +139,56 @@ public sealed class AccessibleDocumentSnapshotPlannerTests
         snapshot.Status.Should().StartWith("Shape text: Results callout; Caret 19 of 22;");
         snapshot.Status.Should().Contain("selected 12 characters: eta\nGamma de");
     }
+
+    [Fact]
+    public void BuildTableSelectionStatus_reports_table_ordinal_grid_range_and_dimensions()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Introduction"));
+        document.Blocks.Add(Table.Create(1, 1));
+        document.Blocks.Add(Table.Create(3, 4));
+
+        var rangeStatus = AccessibleDocumentSnapshotPlanner.BuildTableSelectionStatus(
+            document,
+            tableBlockIndex: 2,
+            startRow: 2,
+            startColumn: 3,
+            endRow: 0,
+            endColumn: 1);
+        var cellStatus = AccessibleDocumentSnapshotPlanner.BuildTableSelectionStatus(
+            document,
+            tableBlockIndex: 1,
+            startRow: 0,
+            startColumn: 0,
+            endRow: 0,
+            endColumn: 0);
+
+        rangeStatus.Should().Be(
+            "Table 2; selected cell range from row 1, column 2 through row 3, column 4; 3 rows by 3 columns");
+        cellStatus.Should().Be("Table 1; selected cell at row 1, column 1");
+    }
+
+    [Fact]
+    public void Avalonia_renderer_routes_table_selection_status_and_changes_through_accessibility_events()
+    {
+        var source = File.ReadAllText(RepoFile(
+                "freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+
+        source.Should().Contain("AccessibleDocumentSnapshotPlanner.BuildTableSelectionStatus(");
+        source.Should().Contain("var previousCellBlockSelection = SelectedCellRange;");
+        source.Should().Contain("if (previousCellBlockSelection != SelectedCellRange)\n            CaretMoved?.Invoke();");
+        source.Should().Contain("_selectionAnchor = null;\n        InvalidateVisual();\n        CaretMoved?.Invoke();");
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+        if (directory is null)
+            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
+    }
 }

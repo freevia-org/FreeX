@@ -160,6 +160,52 @@ public static class AccessibleDocumentSnapshotPlanner
         return snapshot with { Status = $"{storyLabel}; {snapshot.Status}" };
     }
 
+    /// <summary>
+    /// Describes a rectangular table-grid selection for accessibility clients. Coordinates are renderer-neutral
+    /// zero-based grid positions (so horizontally merged cells use their grid column, not physical cell index).
+    /// </summary>
+    public static string BuildTableSelectionStatus(
+        TextDocument document,
+        int tableBlockIndex,
+        int startRow,
+        int startColumn,
+        int endRow,
+        int endColumn)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var table = tableBlockIndex >= 0 && tableBlockIndex < document.Blocks.Count
+            ? document.Blocks[tableBlockIndex] as Table
+            : null;
+        if (table is not null)
+        {
+            var lastRow = Math.Max(0, table.Rows.Count - 1);
+            var lastColumn = Math.Max(0, table.Rows.Count == 0
+                ? 0
+                : table.Rows.Max(row => row.Cells.Sum(cell => Math.Max(1, cell.GridSpan))) - 1);
+            startRow = Math.Clamp(startRow, 0, lastRow);
+            endRow = Math.Clamp(endRow, 0, lastRow);
+            startColumn = Math.Clamp(startColumn, 0, lastColumn);
+            endColumn = Math.Clamp(endColumn, 0, lastColumn);
+        }
+
+        var minRow = Math.Max(0, Math.Min(startRow, endRow));
+        var maxRow = Math.Max(minRow, Math.Max(startRow, endRow));
+        var minColumn = Math.Max(0, Math.Min(startColumn, endColumn));
+        var maxColumn = Math.Max(minColumn, Math.Max(startColumn, endColumn));
+        var tableOrdinal = table is null
+            ? 0
+            : document.Blocks.Take(tableBlockIndex + 1).Count(block => block is Table);
+        var tableLabel = tableOrdinal > 0 ? $"Table {tableOrdinal}" : "Table";
+
+        if (minRow == maxRow && minColumn == maxColumn)
+            return $"{tableLabel}; selected cell at row {minRow + 1}, column {minColumn + 1}";
+
+        return $"{tableLabel}; selected cell range from row {minRow + 1}, column {minColumn + 1} "
+            + $"through row {maxRow + 1}, column {maxColumn + 1}; "
+            + $"{maxRow - minRow + 1} rows by {maxColumn - minColumn + 1} columns";
+    }
+
     public static AccessibleDocumentSnapshot Build(
         TextDocument document,
         AccessibleDocumentLocation caret,
