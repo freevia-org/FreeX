@@ -1,5 +1,3 @@
-using System.Linq;
-
 namespace FreeW.Ribbon.Definitions;
 
 /// <summary>
@@ -10,10 +8,9 @@ public static class FreeWRibbon
     public static RibbonDefinition Build(FreeWRibbonCapabilities? capabilities = null)
     {
         capabilities ??= FreeWRibbonCapabilities.Wpf;
-        if (capabilities.UseAvaloniaBackedSurface)
-            return FreeWAvaloniaRibbonDefinition.Build(capabilities);
 
         var definition = new RibbonDefinitionBuilder()
+            .AddFileTab(capabilities)
             .AddHomeTab(capabilities)
             .AddInsertTab(capabilities)
             .AddReferencesTab(capabilities)
@@ -32,36 +29,20 @@ public static class FreeWRibbon
             .AddHeaderFooterDesignTab(capabilities)
             .Build();
 
-        return definition with { Tabs = OrderVisibleTabs(definition.Tabs) };
+        return definition with { Tabs = OrderTabs(definition.Tabs, capabilities.TabOrder) };
     }
 
-    private static IReadOnlyList<RibbonTab> OrderVisibleTabs(IReadOnlyList<RibbonTab> tabs)
+    private static IReadOnlyList<RibbonTab> OrderTabs(
+        IReadOnlyList<RibbonTab> tabs,
+        IReadOnlyList<string> tabOrder)
     {
-        string[] wordOrder =
-        [
-            "home",
-            "insert",
-            "design",
-            "layout",
-            "references",
-            "mailings",
-            "review",
-            "view",
-            "help",
-            "developer"
-        ];
-
-        var visibleOrder = wordOrder
+        var order = tabOrder
             .Select((id, index) => new { id, index })
             .ToDictionary(item => item.id, item => item.index, StringComparer.Ordinal);
 
-        var visible = tabs
-            .Where(tab => !tab.IsContextual)
-            .OrderBy(tab => visibleOrder.TryGetValue(tab.Id, out var index) ? index : int.MaxValue)
-            .ThenBy(tab => visibleOrder.ContainsKey(tab.Id) ? 0 : 1)
+        return tabs
+            .OrderBy(tab => order.TryGetValue(tab.Id, out var index) ? index : int.MaxValue)
+            .ThenBy(tab => tab.Id, StringComparer.Ordinal)
             .ToArray();
-        var contextual = tabs.Where(tab => tab.IsContextual).ToArray();
-
-        return visible.Concat(contextual).ToArray();
     }
 }

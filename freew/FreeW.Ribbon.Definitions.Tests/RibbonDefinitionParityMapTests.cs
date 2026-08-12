@@ -93,10 +93,12 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
                 "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs")
             + ReadRepositoryFile(
                 "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Contextual.cs");
-        var wpf = ReadRepositoryFile(
+        var factory = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
-        var avalonia = ReadRepositoryFile(
-            "freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var capabilities = ReadRepositoryFile(
+            "freew", "FreeW.Ribbon.Definitions", "FreeWRibbonCapabilities.cs");
+        var topology = ReadRepositoryFile(
+            "freew", "FreeW.Ribbon.Definitions", "FreeWRibbonTabTopology.cs");
 
         foreach (var tabId in new[]
                  {
@@ -105,13 +107,11 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
                  })
         {
             canonical.Should().Contain($".Tab(\"{tabId}\"");
-            wpf.Should().NotContain($".Tab(\"{tabId}\"");
-            avalonia.Should().NotContain($".Tab(\"{tabId}\"");
+            factory.Should().NotContain($".Tab(\"{tabId}\"");
         }
 
         canonical.Should().Contain("builder.ContextualTab(\"header-footer-design\"");
-        wpf.Should().NotContain(".ContextualTab(\"header-footer-design\"");
-        avalonia.Should().NotContain(".ContextualTab(\"header-footer-design\"");
+        factory.Should().NotContain(".ContextualTab(\"header-footer-design\"");
 
         foreach (var tabId in new[]
                  {
@@ -120,12 +120,12 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
                  })
         {
             canonical.Should().Contain($".ContextualTab(\"{tabId}\"");
-            wpf.Should().NotContain($".ContextualTab(\"{tabId}\"");
-            avalonia.Should().NotContain($".ContextualTab(\"{tabId}\"");
+            factory.Should().NotContain($".ContextualTab(\"{tabId}\"");
         }
 
         foreach (var method in new[]
                  {
+                     "AddFileTab(capabilities)",
                      "AddHomeTab(capabilities)",
                      "AddInsertTab(capabilities)",
                      "AddReferencesTab(capabilities)",
@@ -144,9 +144,44 @@ public sealed class FreeWRibbonCanonicalOwnershipTests
                      "AddTableContextualTabs(capabilities)",
                  })
         {
-            wpf.Should().Contain(method);
-            avalonia.Should().Contain(method);
+            factory.Should().Contain(method);
         }
+
+        canonical.Should().NotContain("AddWpf");
+        canonical.Should().NotContain("AddAvalonia");
+        canonical.Should().NotContain("UseAvaloniaBackedSurface");
+        topology.Should().Contain("portableOverride");
+        capabilities.Should().Contain("OmittedSections");
+        capabilities.Should().Contain("HomeFormatting");
+        capabilities.Should().Contain("DrawingInsert");
+        capabilities.Should().Contain("SmartArtSize");
+        File.Exists(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+                "freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs"))
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void Capability_profiles_apply_only_named_subtractive_sections()
+    {
+        var wpf = FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf);
+        var avalonia = FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
+
+        wpf.FindTab("file").Should().BeNull();
+        avalonia.FindTab("file").Should().NotBeNull();
+
+        wpf.FindTab("home")!.FindGroup("formatting").Should().NotBeNull();
+        avalonia.FindTab("home")!.FindGroup("formatting").Should().BeNull();
+
+        var wpfDrawing = wpf.FindTab("drawing-format")!;
+        var avaloniaDrawing = avalonia.FindTab("drawing-format")!;
+        foreach (var groupId in new[] { "drawing-insert", "drawing-text", "drawing-wordart" })
+        {
+            wpfDrawing.FindGroup(groupId).Should().NotBeNull();
+            avaloniaDrawing.FindGroup(groupId).Should().BeNull();
+        }
+
+        wpf.FindTab("smartart-design")!.FindGroup("smartart-size").Should().BeNull();
+        avalonia.FindTab("smartart-design")!.FindGroup("smartart-size").Should().NotBeNull();
     }
 
     private static string Hash(string value) =>

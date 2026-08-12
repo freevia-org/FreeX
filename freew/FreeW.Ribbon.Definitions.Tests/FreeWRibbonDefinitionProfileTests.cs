@@ -925,7 +925,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
     public void Home_clipboard_profile_sources_use_resource_descriptors()
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
-        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var canonicalSource = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
 
@@ -999,7 +999,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
     public void Home_font_core_profile_sources_use_resource_descriptors()
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
-        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var canonicalSource = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
 
@@ -1059,7 +1059,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
     public void Home_font_effect_profile_sources_use_resource_descriptors()
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
-        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var canonicalSource = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
 
@@ -1156,7 +1156,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
         var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
         var paletteSource = ReadRepositoryFile(
             "freew", "FreeW.App.Presentation", "Ribbon", "FreeWRibbonPaletteCatalog.cs");
-        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var canonicalSource = ReadRepositoryFile(
             "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
 
@@ -1231,7 +1231,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
     public void List_symbol_page_color_profile_sources_use_resource_descriptors()
     {
         var wpfSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
-        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs");
+        var avaloniaSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs");
         var canonicalSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.cs")
             + ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs");
         var dataSource = ReadRepositoryFile("freew", "FreeW.Ribbon.Definitions", "FreeWRibbonDefinitionData.cs");
@@ -1502,7 +1502,8 @@ public sealed class FreeWRibbonDefinitionProfileTests
         var pageBackground = RequiredGroup(FreeWRibbon.Build(capabilities), "design", "page-background");
         var watermark = RequiredControl(pageBackground, "freew.watermark");
         var pageColor = RequiredControl(pageBackground, "freew.page-color");
-        var pageBorders = RequiredControl(pageBackground, capabilities.UseAvaloniaBackedSurface ? "freew.page-borders" : "freew.page-border");
+        var pageBorders = RequiredControl(pageBackground,
+            capabilities.UsesPortableControlPresentation ? "freew.page-borders" : "freew.page-border");
 
         return new PageBackgroundRibbonSurface(
             pageBackground.Header,
