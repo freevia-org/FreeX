@@ -41,6 +41,8 @@
   <ItemGroup>
     <Compile Include="..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
     <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="..\SharedTestInfrastructure\Ribbon\RibbonDefinitionValidator.cs"
+             Link="TestSupport\RibbonDefinitionValidator.cs" />
   </ItemGroup>
 
   <ItemGroup>

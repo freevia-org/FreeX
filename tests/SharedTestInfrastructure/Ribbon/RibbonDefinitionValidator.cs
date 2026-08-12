@@ -1,8 +1,7 @@
 namespace Free.Shared.Ribbon;
 
 /// <summary>
-/// Structural validation of a <see cref="RibbonDefinition"/>, independent of its origin
-/// (typed builder or deserialized JSON). Returns diagnostics; never throws.
+/// Structural validation used by ribbon definition tests, independent of definition origin.
 /// </summary>
 public static class RibbonDefinitionValidator
 {
@@ -27,10 +26,6 @@ public static class RibbonDefinitionValidator
                         $"Group '{group.Id}' must support the Full variant."));
             }
 
-            // Control keytips are resolved per-TAB at runtime (a control can be reached
-            // directly after the tab keytip without first entering its group), so
-            // duplicates must be detected across every group's controls in the tab, not
-            // scoped to a single group.
             foreach (var dup in Duplicates(tab.Groups
                          .SelectMany(g => g.Controls)
                          .Where(c => c is not RibbonSeparator)

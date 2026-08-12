@@ -30,6 +30,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\SharedTestInfrastructure\Ribbon\RibbonDefinitionValidator.cs"
+             Link="TestSupport\RibbonDefinitionValidator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
              Link="Resources\FreeX.ico"
              CopyToOutputDirectory="PreserveNewest" />
