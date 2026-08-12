@@ -1627,6 +1627,7 @@ function Test-SourceWiring {
                 "private async Task<bool> TryPasteClipboardImageAsync()",
                 "await _platformClipboard.ReadImageAsync()",
                 "read.Value is not { PngBytes.Length: > 0 } image",
+                "var pngBytes = image.PngBytes;",
                 "_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)",
                 "internal async Task<bool> TryPasteExternalClipboardImageAsync()",
                 "return await TryPasteClipboardImageAsync();",
