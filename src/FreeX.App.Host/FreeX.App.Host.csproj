@@ -15,7 +15,6 @@
     <!-- Single source of the pseudo-localization Expand() rules (also used by the portable catalog). -->
     <ProjectReference Include="..\FreeX.App.Localization\FreeX.App.Localization.csproj" />
     <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
-    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
     <ProjectReference Include="..\FreeX.App.UI\FreeX.App.UI.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />

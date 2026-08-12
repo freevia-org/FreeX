@@ -38,7 +38,7 @@ public sealed class RendererValidationPresentationOwnershipSourceGuardTests
         {
             Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.Backstage.cs"),
             Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Backstage.cs"),
-            Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"),
+            Read(repoRoot, "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"),
         };
 
         sources.Should().OnlyContain(source => source.Contains(".Resolve(", StringComparison.Ordinal));

@@ -510,8 +510,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     [Fact]
     public void ParityCapture_UsesSameResolutionAndDoesNotMislabelBackstageDialogs()
     {
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
-        var hostCaptureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var hostCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
         var runnerSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCompare", "CaptureRunner.cs"));
 
         runnerSource.Should().Contain("-screen 0 1120x720x24");
@@ -569,7 +569,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     [Fact]
     public void ParityCapture_PivotControlPickerUsesSharedDialogSizeContract()
     {
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         captureSource.Should().Contain("using FreeX.App.Presentation.SlicerTimeline;");
         captureSource.Should().Contain("Width = PivotSlicerTimelineDialogContract.Width");
@@ -1189,7 +1189,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var statusBarSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.StatusBar.cs"));
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         mainSource.Should().Contain("var statusZoomPlan = StatusBarZoomSliderPlanner.Build(_session.ZoomPercent);");
         mainSource.Should().Contain("_statusZoomSlider.Minimum = statusZoomPlan.MinimumSliderValue;");

@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
-    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" />
+    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Avalonia\FreeX.ParityCapture.Avalonia.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" Aliases="ProductionAvalonia" />
     <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
     <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />

@@ -60,7 +60,7 @@ public sealed class DataTableDialogParitySourceTests
         dataTableMethod.Should().NotContain("DockPanel.SetDock(buttonRow, Dock.Bottom)");
         dataTableMethod.Should().NotContain("CreateDataTableField(\"Row input cell\"");
 
-        var parityCapture = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var parityCapture = ReadSource("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
         parityCapture.Should().Contain("ShowDataTableInputDialogAsync()");
         dataTableMethod.Should().Contain("ApplyDataTableInputChrome(rowInputBox)");
         dataTableMethod.Should().Contain("ApplyDataTableInputChrome(columnInputBox)");

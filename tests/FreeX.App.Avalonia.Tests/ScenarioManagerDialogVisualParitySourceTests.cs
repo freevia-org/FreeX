@@ -54,7 +54,7 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
     [Fact]
     public void ParityCapture_FinalizerDrainDoesNotBlockTheAvaloniaUiThread()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var methodStart = source.IndexOf(
             "private static Task ReleaseCompletedDialogCaptureResourcesAsync()",
             StringComparison.Ordinal);

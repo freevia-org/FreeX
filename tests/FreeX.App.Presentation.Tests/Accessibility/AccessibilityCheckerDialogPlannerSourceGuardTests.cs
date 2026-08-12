@@ -33,7 +33,7 @@ public sealed class AccessibilityCheckerDialogPlannerSourceGuardTests
         var hostDialogSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
         var hostReviewSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.ReviewCommands.cs"));
         var avaloniaSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.AccessibilityChecker.cs"));
-        var captureSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ParityCapture.cs"));
+        var captureSource = File.ReadAllText(Path.Combine(repoRoot, "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
 
         hostDialogSource.Should().Contain("AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get)");
         hostDialogSource.Should().Contain("AccessibilityCheckerDialogPlanner.CreateSelection(");

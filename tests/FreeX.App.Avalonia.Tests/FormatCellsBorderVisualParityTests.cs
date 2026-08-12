@@ -53,7 +53,7 @@ public sealed class FormatCellsBorderVisualParityTests
     public void ParityCapture_RejectsStaleX11BoundsInsteadOfPaddingToRequestedSize()
     {
         var captureSource = File.ReadAllText(
-            RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+            RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         captureSource.Should().Contain(
             "dialog.MinHeight,");
         captureSource.Should().NotContain("ResolveParityDialogCaptureDimension");

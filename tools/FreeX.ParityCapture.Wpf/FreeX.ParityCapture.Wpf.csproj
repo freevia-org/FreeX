@@ -1,0 +1,105 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>FreeX.ParityCapture.Wpf</AssemblyName>
+    <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeX.ico</ApplicationIcon>
+    <ApplicationManifest>..\..\src\FreeX.App.Host\app.manifest</ApplicationManifest>
+    <DefineConstants>$(DefineConstants);FREEX_PARITY_CAPTURE</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultPageItems>false</EnableDefaultPageItems>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <Nullable>enable</Nullable>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>FreeX.App.Host</RootNamespace>
+    <StartupObject>FreeX.App.Host.Program</StartupObject>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseReachFramework>true</UseReachFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\FreeX.App.Host\**\*.cs"
+             Exclude="..\..\src\FreeX.App.Host\bin\**;..\..\src\FreeX.App.Host\obj\**"
+             LinkBase="Renderer" />
+    <Compile Include="Capture\**\*.cs" />
+    <Page Include="..\..\src\FreeX.App.Host\**\*.xaml"
+          Link="%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Wpf\Free.Shared.Ribbon.Wpf.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Localization\FreeX.App.Localization.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="..\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.UI\FreeX.App.UI.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Wpf\Free.Shared.Pdf.Wpf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="PDFsharp-WPF" />
+    <PackageReference Include="Sentry" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="SharpVectors.Wpf" />
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico" Link="Resources\FreeX.ico" />
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
+             Link="Resources\FreeX.ico"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Remove="System.Drawing" />
+    <Using Remove="System.Windows.Forms" />
+    <Using Include="Free.Shared.Ribbon" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonMetadata" Alias="RibbonMetadata" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonMetadataRole" Alias="RibbonMetadataRole" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonCommandContentLayout" Alias="RibbonCommandContentLayout" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonTooltip" Alias="RibbonTooltip" />
+    <Using Include="FreeX.Ribbon.Definitions" />
+    <Using Include="FreeX.App.Services.Ribbon" />
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
+    <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
+    <Using Include="Free.Shared.Drawing" />
+    <Using Include="Free.Shared.Opc" />
+    <Using Include="Free.Shared.Commands" />
+    <Using Include="Free.Shared.AppServices" />
+    <Using Include="Free.Shared.Shell" />
+    <Using Include="FreeX.App.Services" />
+    <Using Include="FreeX.App.Presentation" />
+    <Using Include="FreeX.App.Presentation.Shell" />
+    <Using Include="FreeX.App.Presentation.FormulaBar" />
+    <Using Include="FreeX.App.Presentation.Charts" />
+    <Using Include="FreeX.App.Presentation.Charts.Editing" />
+    <Using Include="FreeX.App.Presentation.PageLayout" />
+    <Using Include="FreeX.App.Presentation.DrawingInteraction" />
+    <Using Include="FreeX.App.Presentation.TextToColumns" />
+    <Using Include="FreeX.App.Presentation.NamedRanges" />
+    <Using Include="FreeX.App.Presentation.Protection" />
+    <Using Include="FreeX.App.Presentation.PivotUI" />
+    <Using Include="FreeX.App.Presentation.TableUI" />
+  </ItemGroup>
+</Project>

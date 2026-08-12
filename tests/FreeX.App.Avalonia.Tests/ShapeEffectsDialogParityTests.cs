@@ -9,7 +9,7 @@ public sealed class ShapeEffectsDialogParityTests
     [Fact]
     public void Parity_fixture_seeds_the_Wpf_Shadow_state_through_the_shared_command()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("new SetDrawingShapeEffectCommand(");
         source.Should().Contain("DrawingShapeEffectPreset.Shadow));");

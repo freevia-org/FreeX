@@ -95,7 +95,7 @@ public sealed class PivotFieldFilterSourceTests
     [Fact]
     public void ParityPivotFixture_UsesWpfPartialSelectionAndMemberOrder()
     {
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var filterSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs"));
         var itemReaderSource = File.ReadAllText(RepoFile(
             "src",

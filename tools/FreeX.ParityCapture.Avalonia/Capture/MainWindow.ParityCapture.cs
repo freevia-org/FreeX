@@ -67,16 +67,8 @@ public sealed partial class MainWindow
     private const int ParityCaptureWindowWidth = 1120;
     private const int ParityCaptureWindowHeight = 720;
     private const int ParityCaptureTitleBarHeight = 30;
-    internal const int NameBoxDropdownParityCaptureWidth = 208;
-    internal const int NameBoxDropdownParityCaptureHeight = 136;
     private const int ParityCaptureDialogWaitMilliseconds = 8000;
     private const int ParityCaptureDialogPollMilliseconds = 50;
-    private const int ForecastSheetParityDialogWidth = 320;
-    private const int ForecastSheetParityDialogHeight = 150;
-    private const int SubtotalParityDialogWidth = 380;
-    private const int SubtotalParityDialogHeight = 390;
-    private const int TextToColumnsParityDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth;
-    private const int TextToColumnsParityDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight;
     private static readonly FontFamily ParityNarrowUiFontFamily =
         new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
     private static readonly IBrush ParityBackstageSidebarBrush = Brush(0x10, 0x25, 0x3A);
@@ -873,7 +865,21 @@ public sealed partial class MainWindow
         SeedPrintPreviewParityReport();
         return ShowPrintPreviewDialogAsync(
             PrintPreviewSurfacePlanner.ParityPrinterName,
-            PrintPreviewParityFixture.Pages);
+            PrintPreviewParityFixture.Pages
+                .Select(page => new PrintPreviewCapturePage(
+                    page.Title,
+                    page.Subtitle,
+                    page.PageNumber,
+                    page.TextRuns
+                        .Select(run => new PrintPreviewCaptureTextRun(
+                            run.Text,
+                            run.Left,
+                            run.Top,
+                            run.FontSize,
+                            run.Bold,
+                            run.Color))
+                        .ToArray()))
+                .ToArray());
     }
 
     private WorkbookFileDialogSurfacePlan CreateOpenWorkbookDialogSurfacePlan() =>
@@ -1122,27 +1128,6 @@ public sealed partial class MainWindow
         dialog.Opened += (_, _) => activeSheetButton.Focus();
         await dialog.ShowDialog(this);
     }
-
-    private static TextBlock CreateExportOptionsSectionLabel(string resourceKey, double topMargin = 0) =>
-        new()
-        {
-            Text = StripDisplayMnemonic(UiText.Get(resourceKey)),
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, topMargin, 0, 4),
-        };
-
-    private static StackPanel CreateExportOptionsLabeledControl(string resourceKey, Control control, double leftIndent = 0) =>
-        new()
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(leftIndent, 2, 0, 0),
-            Spacing = 6,
-            Children =
-            {
-                new Label { Content = StripDisplayMnemonic(UiText.Get(resourceKey)), Target = control, VerticalAlignment = AvaloniaVerticalAlignment.Center },
-                control,
-            },
-        };
 
     private Task ShowTextToColumnsParityDialogAsync()
     {
@@ -1513,8 +1498,30 @@ public sealed partial class MainWindow
         return ShowWithParitySelectionAsync(
             fixture.SelectedRange.Start,
             fixture.SelectedRange.End,
-            async () => { await ShowSubtotalInputDialogAsync(fixture); });
+            async ()
+                => await ShowSubtotalInputDialogAsync(new SubtotalDialogCaptureState(
+                    fixture.SelectedRange,
+                    fixture.Columns,
+                    fixture.GroupColumnOffset,
+                    fixture.SubtotalColumnOffsets,
+                    fixture.FunctionText,
+                    fixture.ReplaceCurrentSubtotals,
+                    fixture.PageBreakBetweenGroups,
+                    fixture.SummaryBelowData)));
     }
+
+    private void PrepareConsolidateParityCaptureState()
+    {
+        var sourceRange = ConsolidateParityFixture.CreateSourceRange(_session.ActiveSheet.Id);
+        _session.SelectRange(sourceRange);
+        RefreshShell("Ready");
+    }
+
+    private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingParityIssues(SheetId sheetId) =>
+        ErrorCheckingParityFixture.CreateIssues(sheetId);
+
+    private Task ShowErrorCheckingParityDialogAsync() =>
+        ShowErrorCheckingDialogAsync(CreateErrorCheckingParityIssues(_session.ActiveSheet.Id));
 
     private Task ShowSparklineParityDialogAsync() =>
         ShowInsertSparklineDialogAsync(

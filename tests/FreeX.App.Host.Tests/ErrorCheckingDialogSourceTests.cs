@@ -56,7 +56,7 @@ public sealed class ErrorCheckingDialogSourceTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
         var avaloniaSource = WorkspaceFileLocator.ReadAllText(
-            "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
         var avaloniaDialogSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs");
 

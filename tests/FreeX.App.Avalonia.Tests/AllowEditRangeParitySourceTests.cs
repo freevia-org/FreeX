@@ -7,7 +7,7 @@ public sealed class AllowEditRangeParitySourceTests
     [Fact]
     public void ParityFixture_MatchesWpfSeedAndDefaultRange()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("new CellAddress(sheetId, 1, 1)");
         source.Should().Contain("new CellAddress(sheetId, 5, 5)");

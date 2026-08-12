@@ -20,11 +20,12 @@ public sealed class App : Application
 
     internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }
 
+#if FREEX_PARITY_CAPTURE
     internal static ParityCaptureOptions? ParityCaptureOptions { get; set; }
-
     internal static GridCaptureOptions? GridCaptureOptions { get; set; }
 
     internal static InteractionValidationOptions? InteractionValidationOptions { get; set; }
+#endif
 
     internal static LocalAppDiagnostics? Diagnostics { get; set; }
 
@@ -100,7 +101,15 @@ public sealed class App : Application
             // PlanStartupFileOpens). Skipped for the special capture/validation launch modes, whose
             // StartupArguments carry option flags rather than real file paths (mirrors the MainWindow
             // ctor's own guard for those modes).
-            if (ParityCaptureOptions is null && GridCaptureOptions is null && InteractionValidationOptions is null)
+#if FREEX_PARITY_CAPTURE
+            var isSpecialStartupMode =
+                GridCaptureOptions is not null ||
+                InteractionValidationOptions is not null ||
+                ParityCaptureOptions is not null;
+#else
+            const bool isSpecialStartupMode = false;
+#endif
+            if (!isSpecialStartupMode)
             {
                 var additionalStartupFilePaths =
                     new StartupWorkbookLoader().ResolveAdditionalOpenableFilePaths(StartupArguments);
@@ -146,6 +155,7 @@ public sealed class App : Application
             if (LaunchSmokeOptions is { } launchSmokeOptions)
                 MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
 
+#if FREEX_PARITY_CAPTURE
             if (ParityCaptureOptions is { } parityCaptureOptions)
                 ParityCaptureCoordinator.Start(mainWindow, parityCaptureOptions, Diagnostics);
 
@@ -154,6 +164,7 @@ public sealed class App : Application
 
             if (InteractionValidationOptions is { } interactionValidationOptions)
                 InteractionValidationCoordinator.Start(mainWindow, interactionValidationOptions, Diagnostics);
+#endif
         }
 
         base.OnFrameworkInitializationCompleted();

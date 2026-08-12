@@ -34,9 +34,6 @@ public sealed partial class MainWindow
         await ShowErrorCheckingDialogAsync(issues);
     }
 
-    private Task ShowErrorCheckingParityDialogAsync() =>
-        ShowErrorCheckingDialogAsync(CreateErrorCheckingParityIssues(_session.ActiveSheet.Id));
-
     private Task ShowErrorCheckingDialogAsync(IReadOnlyList<FormulaErrorIssue> sourceIssues)
     {
         var issues = sourceIssues.ToList();
@@ -445,6 +442,4 @@ public sealed partial class MainWindow
         return button;
     }
 
-    private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingParityIssues(SheetId sheetId) =>
-        ErrorCheckingParityFixture.CreateIssues(sheetId);
 }

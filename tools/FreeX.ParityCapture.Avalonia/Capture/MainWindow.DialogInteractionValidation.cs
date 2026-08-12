@@ -534,9 +534,6 @@ public sealed partial class MainWindow
             "dialog.WorkbookStatistics" or "dialog.GoalSeekStatus";
     }
 
-    private static bool IsFocusInside(Window dialog, IInputElement? element) =>
-        element is Visual visual && ReferenceEquals(TopLevel.GetTopLevel(visual), dialog);
-
     private static string DescribeInputElement(IInputElement? element)
     {
         if (element is null)

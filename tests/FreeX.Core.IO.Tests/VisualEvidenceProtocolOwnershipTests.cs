@@ -12,9 +12,9 @@ public sealed class VisualEvidenceProtocolOwnershipTests
         var freeP = TestWorkspaceFiles.ReadRepoText(
             "tools", "FreeP.RenderCompare", "VisualEvidenceCaptureOrchestration.cs");
         var freeXWpf = TestWorkspaceFiles.ReadRepoText(
-            "src", "FreeX.App.Host", "ParityCapture.cs");
+            "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs");
         var freeXAvalonia = TestWorkspaceFiles.ReadRepoText(
-            "src", "FreeX.App.Avalonia", "ParityCapture.cs");
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "ParityCapture.cs");
         var freeXParityCore = TestWorkspaceFiles.ReadRepoText(
             "tools", "FreeX.ParityCompare.Core", "ParityComparison.cs");
         var freeW = TestWorkspaceFiles.ReadRepoText(

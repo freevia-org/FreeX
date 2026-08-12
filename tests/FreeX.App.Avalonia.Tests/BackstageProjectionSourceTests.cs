@@ -131,8 +131,8 @@ public sealed class BackstageProjectionSourceTests
     [Fact]
     public void ParityCaptureBackstagePanes_UseSharedProjectionPlanner()
     {
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
-        var hostCaptureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var hostCaptureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
         var projectionPlannerSource = File.ReadAllText(RepoFile(
             "src",
             "FreeX.App.Presentation",

@@ -60,7 +60,7 @@ public sealed partial class MainWindow
 
     private async Task ShowPrintPreviewDialogAsync(
         string? fixturePrinterName = null,
-        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
+        IReadOnlyList<PrintPreviewCapturePage>? parityPages = null)
     {
         await WaitForPendingDirtyWorkbookGateAsync();
 
@@ -152,7 +152,7 @@ public sealed partial class MainWindow
     private async Task ShowPrintPreviewWindowCoreAsync(
         AvaloniaPrintPreviewPaginationContext context,
         string? fixturePrinterName = null,
-        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
+        IReadOnlyList<PrintPreviewCapturePage>? parityPages = null)
     {
         var printerName = fixturePrinterName ?? PrintPreviewDefaultPrinterName;
         var pageCount = parityPages?.Count ?? context.PageCount;
@@ -1166,7 +1166,7 @@ public sealed partial class MainWindow
     private static Control BuildPreviewDocumentViewerSurface(
         AvaloniaPrintPreviewPaginationContext context,
         int pageIndex,
-        IReadOnlyList<PrintPreviewParityPage>? parityPages = null)
+        IReadOnlyList<PrintPreviewCapturePage>? parityPages = null)
     {
         var surface = new Border
         {
@@ -1186,12 +1186,12 @@ public sealed partial class MainWindow
         };
     }
 
-    private static Control BuildPreviewParityPageView(PrintPreviewParityPage page)
+    private static Control BuildPreviewParityPageView(PrintPreviewCapturePage page)
     {
         var canvas = new Canvas
         {
-            Width = PrintPreviewParityFixture.PageWidth,
-            Height = PrintPreviewParityFixture.PageHeight,
+            Width = PrintPreviewCapturePage.Width,
+            Height = PrintPreviewCapturePage.Height,
             Background = Brushes.White,
             ClipToBounds = true,
         };
@@ -1230,8 +1230,8 @@ public sealed partial class MainWindow
 
         return new Border
         {
-            Width = PrintPreviewParityFixture.PageWidth,
-            Height = PrintPreviewParityFixture.PageHeight,
+            Width = PrintPreviewCapturePage.Width,
+            Height = PrintPreviewCapturePage.Height,
             Background = Brushes.White,
             BoxShadow = new BoxShadows(new BoxShadow
             {

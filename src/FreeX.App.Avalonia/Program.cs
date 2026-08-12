@@ -31,6 +31,7 @@ internal static class Program
 
         // Additive headless surface-capture mode (--parity-capture <outDir>). Parsed out of the
         // launch-smoke-filtered arguments so it composes with the existing modes without disturbing them.
+#if FREEX_PARITY_CAPTURE
         if (!ParityCaptureOptions.TryParse(
                 startupArguments,
                 out var parityCaptureOptions,
@@ -40,7 +41,6 @@ internal static class Program
             Console.Error.WriteLine(parityCaptureError);
             return 1;
         }
-
         // Additive headless grid-range capture mode (--parity-grid <xlsx> <range> <outDir>).
         if (!GridCaptureOptions.TryParse(
                 startupArguments,
@@ -61,6 +61,7 @@ internal static class Program
             Console.Error.WriteLine(interactionValidationError);
             return 1;
         }
+#endif
 
         var diagnostics = LocalAppDiagnostics.Create(
             AppHelpInfo.GetVersionText(typeof(Program).Assembly),
@@ -83,9 +84,11 @@ internal static class Program
 
                 App.StartupArguments = startupArguments;
                 App.LaunchSmokeOptions = launchSmokeOptions;
+#if FREEX_PARITY_CAPTURE
                 App.ParityCaptureOptions = parityCaptureOptions;
                 App.GridCaptureOptions = gridCaptureOptions;
                 App.InteractionValidationOptions = interactionValidationOptions;
+#endif
                 App.Diagnostics = diagnostics;
             },
             AfterRun = _ => diagnostics.RecordEvent("app_exit", new Dictionary<string, string?>

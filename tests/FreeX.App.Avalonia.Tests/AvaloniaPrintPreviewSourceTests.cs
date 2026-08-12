@@ -84,7 +84,7 @@ public sealed class AvaloniaPrintPreviewSourceTests
     [Fact]
     public void ParityCapture_UsesTheSharedPrintPreviewFixtureInsteadOfLiveWorksheetPagination()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("PrintPreviewParityFixture.Pages");
         source.Should().Contain("ShowPrintPreviewDialogAsync(");

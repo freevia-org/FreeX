@@ -5,8 +5,8 @@ namespace FreeX.ParityCompare;
 /// <summary>
 /// Orchestrates the two shells' <c>--parity-capture &lt;dir&gt;</c> runs.
 ///
-/// Windows: build + run the WPF host exe natively.
-/// Linux:   publish the Avalonia app self-contained linux-x64 and run it inside an
+/// Windows: build + run the WPF capture host natively.
+/// Linux:   publish the Avalonia capture host self-contained linux-x64 and run it inside an
 ///          Ubuntu 24.04 Docker container under Xvfb (reusing the approach in
 ///          <c>tools/Run-LinuxAppInDocker.ps1</c>), copying the PNGs + manifest back.
 ///
@@ -18,21 +18,21 @@ public static class CaptureRunner
     private static void Log(string m) => Console.WriteLine($"[capture] {m}");
 
     /// <summary>
-    /// Windows capture: build the WPF host (Release) then run
-    /// <c>FreeX.App.Host.exe --parity-capture &lt;winDir&gt;</c>.
+    /// Windows capture: build the WPF capture host (Release) then run
+    /// <c>FreeX.ParityCapture.Wpf.exe --parity-capture &lt;winDir&gt;</c>.
     /// </summary>
     public static void CaptureWindows(string repoRoot, string winDir)
     {
         Directory.CreateDirectory(winDir);
-        var hostProj = Path.Combine(repoRoot, "src", "FreeX.App.Host", "FreeX.App.Host.csproj");
+        var hostProj = Path.Combine(repoRoot, "tools", "FreeX.ParityCapture.Wpf", "FreeX.ParityCapture.Wpf.csproj");
         if (!File.Exists(hostProj))
-            throw new FileNotFoundException($"WPF host project not found: {hostProj}");
+            throw new FileNotFoundException($"WPF capture host project not found: {hostProj}");
 
-        Log("Building WPF host (Release)...");
+        Log("Building WPF capture host (Release)...");
         Run("dotnet", new[] { "build", hostProj, "-c", "Release" }, repoRoot);
 
         var exe = FindHostExe(repoRoot);
-        Log($"Running WPF host capture -> {winDir}");
+        Log($"Running WPF capture host -> {winDir}");
         Run(exe, new[] { "--parity-capture", winDir }, repoRoot);
 
         EnsureManifest(winDir, "windows");
@@ -40,22 +40,22 @@ public static class CaptureRunner
 
     private static string FindHostExe(string repoRoot)
     {
-        var binDir = Path.Combine(repoRoot, "src", "FreeX.App.Host", "bin", "Release");
+        var binDir = Path.Combine(repoRoot, "tools", "FreeX.ParityCapture.Wpf", "bin", "Release");
         if (Directory.Exists(binDir))
         {
-            var exe = Directory.EnumerateFiles(binDir, "FreeX.App.Host.exe", SearchOption.AllDirectories)
+            var exe = Directory.EnumerateFiles(binDir, "FreeX.ParityCapture.Wpf.exe", SearchOption.AllDirectories)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
                 .FirstOrDefault();
             if (exe != null) return exe;
         }
         throw new FileNotFoundException(
-            $"FreeX.App.Host.exe not found under {binDir}. Build the host first.");
+            $"FreeX.ParityCapture.Wpf.exe not found under {binDir}. Build the capture host first.");
     }
 
     /// <summary>
     /// Linux capture: publish Avalonia linux-x64 self-contained, then run under Docker+Xvfb.
     /// Mirrors tools/Run-LinuxAppInDocker.ps1 (Ubuntu 24.04, apt deps, LIBGL_ALWAYS_SOFTWARE,
-    /// mounted /work dir). The container runs <c>./FreeX --parity-capture /work/out</c> under
+    /// mounted /work dir). The container runs <c>./FreeX.ParityCapture.Avalonia --parity-capture /work/out</c> under
     /// xvfb-run and the PNGs + manifest land back in <paramref name="linDir"/> via the mount.
     /// </summary>
     public static void CaptureLinux(string repoRoot, string linDir, string image = "ubuntu:24.04")
@@ -65,9 +65,9 @@ public static class CaptureRunner
         var outDir = Path.Combine(linDir, "out");
         Directory.CreateDirectory(outDir);
 
-        var avaloniaProj = Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj");
+        var avaloniaProj = Path.Combine(repoRoot, "tools", "FreeX.ParityCapture.Avalonia", "FreeX.ParityCapture.Avalonia.csproj");
         if (!File.Exists(avaloniaProj))
-            throw new FileNotFoundException($"Avalonia project not found: {avaloniaProj}");
+            throw new FileNotFoundException($"Avalonia capture host project not found: {avaloniaProj}");
 
         Log("Publishing Avalonia linux-x64 self-contained...");
         Run("dotnet", new[]
@@ -77,8 +77,8 @@ public static class CaptureRunner
             "-p:PublishSingleFile=false", "-o", publishDir,
         }, repoRoot);
 
-        if (!File.Exists(Path.Combine(publishDir, "FreeX")))
-            throw new FileNotFoundException($"Published apphost not found at {publishDir}/FreeX.");
+        if (!File.Exists(Path.Combine(publishDir, "FreeX.ParityCapture.Avalonia")))
+            throw new FileNotFoundException($"Published apphost not found at {publishDir}/FreeX.ParityCapture.Avalonia.");
 
         var runScript = BuildContainerScript().Replace("\r\n", "\n");
         var scriptPath = Path.Combine(linDir, "run.sh");
@@ -113,9 +113,9 @@ public static class CaptureRunner
         "  libgl1 libegl1 libicu74 libssl3 zlib1g xvfb fonts-dejavu fonts-noto-cjk procps >/dev/null",
         "cp -a /work/_publish-linux-x64 /opt/freex",
         "cd /opt/freex",
-        "chmod +x FreeX",
+        "chmod +x FreeX.ParityCapture.Avalonia",
         "echo '=== parity-capture (Avalonia, Xvfb) ==='",
-        "xvfb-run -a --server-args=\"-screen 0 1120x720x24\" ./FreeX --parity-capture /work/out || echo \"parity-capture exit=$?\"",
+        "xvfb-run -a --server-args=\"-screen 0 1120x720x24\" ./FreeX.ParityCapture.Avalonia --parity-capture /work/out || echo \"parity-capture exit=$?\"",
         "echo '=== captured files ==='",
         "ls -la /work/out || echo '(no out dir)'",
     });

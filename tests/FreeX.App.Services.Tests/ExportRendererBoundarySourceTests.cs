@@ -9,9 +9,9 @@ public sealed class ExportRendererBoundarySourceTests
     {
         var avaloniaMain = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaOptions = Read("src", "FreeX.App.Avalonia", "MainWindow.ExportOptions.cs");
-        var avaloniaCapture = Read("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var avaloniaCapture = Read("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
         var wpfExport = Read("src", "FreeX.App.Host", "MainWindow.PrintExport.cs");
-        var wpfCapture = Read("src", "FreeX.App.Host", "ParityCapture.cs");
+        var wpfCapture = Read("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs");
 
         avaloniaMain.Should().Contain("WorkbookExportInteractionPlanner.CreateRequestPlan(");
         avaloniaMain.Should().Contain("WorkbookExportInteractionPlanner.CreateResultPlan(");

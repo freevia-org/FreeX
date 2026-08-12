@@ -53,7 +53,7 @@ public sealed class SheetTabsOverflowParityFixtureTests
     public void WpfParityCapture_PreparesValidFixturesWithoutInvokingUserCommands()
     {
         var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
-        var capture = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "ParityCapture.cs"));
+        var capture = File.ReadAllText(Path.Combine(repoRoot, "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
         var backstage = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.Backstage.cs"));
         var startup = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.Startup.cs"));
         var adoptionIndex = capture.IndexOf(

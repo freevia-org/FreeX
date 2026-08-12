@@ -65,7 +65,7 @@ public sealed class PivotOptionsParitySourceTests
     [Fact]
     public void PivotOptionsParityFixture_SeedsDisplayStyleOptionsLikeWpf()
     {
-        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var source = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("StyleName = PivotStyleGalleryPlanner.DefaultStyleName,");
         source.Should().Contain("ShowRowStripes = true,");

@@ -30,9 +30,11 @@ public partial class MainWindow
         RefreshSheetTabs();
         UpdateTitleBar();
         RegisterWithWindowRegistry();
+#if FREEX_PARITY_CAPTURE
         TryStartScreenshotTour();
         TryStartSheetTabVisualTour();
         TryStartSheetTabWorkflowsTour();
         TryStartAccentBarVisualTour();
+#endif
     }
 }

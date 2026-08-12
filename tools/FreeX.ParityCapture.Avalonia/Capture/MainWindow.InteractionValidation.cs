@@ -693,4 +693,24 @@ public sealed partial class MainWindow
         }
     }
 
+    internal IReadOnlyList<InteractionValidationResult> BuildObservedDialogRangeInteractionResults()
+    {
+        var results = new List<InteractionValidationResult>(DialogRangePickerRegistrations.Length);
+        foreach (var registration in DialogRangePickerRegistrations)
+        {
+            if (!_dialogRangeInteractionEvidence.TryGetValue(registration.TargetId, out var evidence))
+                continue;
+
+            results.Add(new InteractionValidationResult(
+                Id: registration.TargetId,
+                Category: "range-selection",
+                Status: evidence.Passed ? "passed" : "failed",
+                EvidenceLevel: "production-picker-apply-cancel",
+                Evidence: evidence.Evidence,
+                Note: "Production dialog picker was clicked; worksheet pointing was applied with Enter and cancelled with Escape."));
+        }
+
+        return results;
+    }
+
 }

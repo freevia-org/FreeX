@@ -1354,6 +1354,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             _session = sharedSession;
         }
+#if FREEX_PARITY_CAPTURE
         else if (App.ParityCaptureOptions is not null ||
                  App.GridCaptureOptions is not null ||
                  App.InteractionValidationOptions is not null)
@@ -1364,6 +1365,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 InitialViewportWidth,
                 includeObjects: true);
         }
+#endif
         else
         {
             // Interactive app startup defers command-line files until crash recovery has completed;
@@ -1395,6 +1397,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
 
+#if FREEX_PARITY_CAPTURE
         if (startupArguments.Any(argument => string.Equals(
                 argument,
                 InteractionValidationOptions.NameBoxDropdownPhysicalFixtureArgument,
@@ -1425,6 +1428,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             InitializeNameBoxDropdownPhysicalEvidence();
         }
+#endif
         ConfigureNativeMenu();
         if (source is not null)
             RecordStartupRecentWorkbook(source);
@@ -7663,7 +7667,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
         RevertNameBoxAfterCellSelectionDragEnd();
+#if FREEX_PARITY_CAPTURE
         RecordNameBoxDropdownPhysicalEvidence(item: null, stage: "neutral-cell-selected");
+#endif
 
         // In Draw Border mode the drag-release triggers the border apply (mirrors WPF MouseUp behaviour).
         if (_borderDrawModeActive)
@@ -19250,7 +19256,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         RefreshShell($"Selected {FormatDrawingObjectKind(objectKind)}: {item.Name}");
+#if FREEX_PARITY_CAPTURE
         RecordNameBoxDropdownPhysicalEvidence(item, "object-selected");
+#endif
         return true;
     }
 
@@ -21446,7 +21454,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private async Task<SubtotalDialogPlanResult?> ShowSubtotalInputDialogAsync(
-        SubtotalParityFixtureState? parityFixture = null)
+        SubtotalDialogCaptureState? parityFixture = null)
     {
         SubtotalDialogPlanResult? result = null;
         var range = parityFixture?.SelectedRange ?? _session.SelectedRange;

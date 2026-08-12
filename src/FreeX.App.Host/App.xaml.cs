@@ -115,6 +115,7 @@ public partial class App : Application
         // Headless cross-platform visual-parity capture: render each app surface to a PNG and exit,
         // without launching the interactive app. Additive and isolated — only engaged by the
         // --parity-capture <outDir> switch (used by the WPF<->Avalonia visual-parity runner).
+#if FREEX_PARITY_CAPTURE
         if (ParityCapture.TryGetOutputDirectory(startupArgs) is { } parityOutDir)
         {
             try
@@ -132,6 +133,7 @@ public partial class App : Application
             Shutdown();
             return;
         }
+#endif
 
         var crashAnalytics = Services.GetRequiredService<ICrashAnalytics>();
         var crashAnalyticsOptions = Services.GetRequiredService<AppCrashAnalyticsOptions>();

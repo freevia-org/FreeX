@@ -387,17 +387,6 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Seeds the production selection used by the deterministic parity capture. The dialog itself remains
-    /// selection-derived, so this helper is deliberately called only by the capture opener.
-    /// </summary>
-    private void PrepareConsolidateParityCaptureState()
-    {
-        var sourceRange = ConsolidateParityFixture.CreateSourceRange(_session.ActiveSheet.Id);
-        _session.SelectRange(sourceRange);
-        RefreshShell("Ready");
-    }
-
-    /// <summary>
     /// Parses a Consolidate source/destination reference (a cell, an <c>A1:B5</c> range, a sheet-qualified
     /// <c>Sheet!A1:B5</c> range, or a defined name) into a <see cref="GridRange"/>, resolving sheet names
     /// against the workbook and defaulting to the active sheet.

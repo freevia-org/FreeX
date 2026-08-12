@@ -66,12 +66,12 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         var wpfExportSource = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.PrintExport.cs");
         var wpfImportSource = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.DataCommands.cs");
         var wpfExportOptionsSource = Read(repoRoot, "src", "FreeX.App.Host", "ExportOptionsDialog.cs");
-        var wpfParitySource = Read(repoRoot, "src", "FreeX.App.Host", "ParityCapture.cs");
+        var wpfParitySource = Read(repoRoot, "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs");
         var avaloniaMainSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaExportOptionsSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ExportOptions.cs");
         var avaloniaPrintSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Print.cs");
         var avaloniaImportSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.GetData.cs");
-        var avaloniaParitySource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var avaloniaParitySource = Read(repoRoot, "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
 
         wpfBackstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildOpenDialogPlan(_fileAdapters)");
         wpfBackstageSource.Should().Contain("WorkbookFilePickerPlanner.BuildSaveDialogPlan(");
@@ -135,7 +135,7 @@ public sealed class NativeWorkflowPolicyBoundaryGuardTests
         var wpfExportSource = Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.PrintExport.cs");
         var avaloniaMainSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs");
         var avaloniaPrintSource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Print.cs");
-        var avaloniaParitySource = Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var avaloniaParitySource = Read(repoRoot, "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
 
         wpfBackstageSource.Should().NotContain("\"Open Workbook\"");
         wpfBackstageSource.Should().NotContain("\"Save Workbook\"");

@@ -8,11 +8,11 @@ public sealed class AvaloniaShellSourceTests
     public void AddWatchParityCapture_UsesSharedFixtureAndStripsAvaloniaLabelMnemonic()
     {
         var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find(
-            "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var avaloniaDialogSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuDialogs.cs"));
         var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find(
-            "src", "FreeX.App.Host", "ParityCapture.cs"));
+            "tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
 
         avaloniaCaptureSource.Should().Contain(
             "ShowAddWatchDialogAsync(AddWatchDialogPlanner.ParitySelectedRangeText)");
@@ -2466,7 +2466,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeGoalSeekThroughSharedParserSessionAndStatusDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var parserSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "GoalSeekRequestParser.cs"));
         var statusPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Dialogs", "GoalSeekStatusDialogPlanner.cs"));
@@ -2550,7 +2550,7 @@ public sealed class AvaloniaShellSourceTests
     [Fact]
     public void MainWindow_RegistersExistingShellDialogsForParityCapture()
     {
-        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var hyperlinkSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var drawingFormatSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
         var pictureShapeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
@@ -2799,8 +2799,8 @@ public sealed class AvaloniaShellSourceTests
     [Fact]
     public void WpfParityCapture_RegistersSameDialogSurfaceIdsAsAvalonia()
     {
-        var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
-        var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
+        var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
         var autoFilterFixtureSource = File.ReadAllText(RepositoryFileLocator.Find(
             "tools", "FreeX.ParityCapture.Support", "Presentation", "Filtering", "AutoFilterParityFixturePlanner.cs"));
         var accessibilityCheckerFixtureSource = File.ReadAllText(RepositoryFileLocator.Find(
@@ -2941,7 +2941,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeDataTableThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "DataTablePlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
@@ -3020,7 +3020,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeForecastSheetThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -3103,7 +3103,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeScenarioManagerThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ScenarioManagerPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
@@ -3298,7 +3298,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeRemoveDuplicatesThroughSharedPlannerSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "RemoveDuplicatesPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
@@ -3385,7 +3385,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeSubtotalThroughSharedWorkbookSessionAndCompactDialog()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
@@ -4636,7 +4636,7 @@ public sealed class AvaloniaShellSourceTests
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var fillEditorSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "FormatCellsFillEditor.cs"));
-        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FormatCellsCompactPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));

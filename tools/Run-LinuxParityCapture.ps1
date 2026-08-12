@@ -3,7 +3,7 @@
   Run one bounded current-source Avalonia parity capture in an owned Docker container.
 
 .DESCRIPTION
-  Publishes FreeX for linux-x64 unless -SkipPublish is supplied, then runs the app as
+  Publishes the Avalonia parity capture host for linux-x64 unless -SkipPublish is supplied, then runs it as
   the foreground child of xvfb-run. The supplied or generated exact container name is
   used for cleanup so the command can stop and remove only this invocation's container.
   The command fails unless the requested manifest row is captured and its PNG is a
@@ -24,7 +24,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repoRoot "src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj"
+$project = Join-Path $repoRoot "tools/FreeX.ParityCapture.Avalonia/FreeX.ParityCapture.Avalonia.csproj"
 $resolvedOutputDir = [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
 $resolvedPublishDir = if ([string]::IsNullOrWhiteSpace($PublishDir)) {
     Join-Path $env:TEMP "FreeX-wave125-parity-publish"
@@ -63,7 +63,7 @@ if (-not $SkipPublish) {
     if ($LASTEXITCODE -ne 0) { throw "Avalonia Linux publish failed." }
 }
 
-$publishedExecutable = Join-Path $resolvedPublishDir "FreeX"
+$publishedExecutable = Join-Path $resolvedPublishDir "FreeX.ParityCapture.Avalonia"
 if (-not (Test-Path -LiteralPath $publishedExecutable -PathType Leaf)) {
     throw "Published executable was not found: $publishedExecutable"
 }
@@ -81,7 +81,7 @@ rm -f /work/manifest.json /work/__TARGET_PNG__ /work/run-result.txt
 set +e
 timeout --signal=TERM --kill-after=5s __TIMEOUT__s xvfb-run -a \
   --server-args="-screen 0 1280x720x24 -dpi 96" \
-  /opt/freex/FreeX --parity-capture /work \
+  /opt/freex/FreeX.ParityCapture.Avalonia --parity-capture /work \
     --parity-capture-surface '__SURFACE__' > /work/logs/app.log 2>&1
 app_exit=$?
 set -e

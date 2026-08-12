@@ -37,7 +37,7 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
     [Fact]
     public void AvaloniaParityCapture_KeepsPhysicalFixtureSeparate()
     {
-        var capture = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var capture = WorkspaceFileLocator.ReadAllText("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
         var avaloniaSource = WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Avalonia", "MainWindow.cs");
 
         capture.Should().Contain("SeedNameBoxDropdownParityFixture");
@@ -54,9 +54,9 @@ public sealed class NameBoxDropdownParityCaptureSourceTests
     public void AvaloniaParityCapture_RejectsSyntheticPopupEvidenceAndRequiresNativeX11()
     {
         var capture = WorkspaceFileLocator.ReadAllText(
-            "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs");
         var parityManifest = WorkspaceFileLocator.ReadAllText(
-            "src", "FreeX.App.Avalonia", "ParityCapture.cs");
+            "tools", "FreeX.ParityCapture.Avalonia", "Capture", "ParityCapture.cs");
         var probe = WorkspaceFileLocator.ReadAllText(
             "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh");
 

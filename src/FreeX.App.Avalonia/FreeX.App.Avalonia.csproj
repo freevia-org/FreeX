@@ -3,7 +3,6 @@
     <ProjectReference Include="..\FreeX.App.Localization\FreeX.App.Localization.csproj" />
     <ProjectReference Include="..\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeX.App.Services\FreeX.App.Services.csproj" />
-    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
     <ProjectReference Include="..\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
     <ProjectReference Include="..\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\FreeX.Core.IO\FreeX.Core.IO.csproj" />

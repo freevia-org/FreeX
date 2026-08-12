@@ -9,7 +9,7 @@ public sealed class ShapeGradientParitySourceTests
     public void ParityCapture_UsesSharedFixtureAndWpfMeasuredLayoutMetrics()
     {
         var paritySource = File.ReadAllText(Path.Combine(
-            RepoRoot(), "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+            RepoRoot(), "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         var dialogSource = File.ReadAllText(Path.Combine(
             RepoRoot(), "src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
 

@@ -135,17 +135,17 @@ function Resolve-FreeXExecutablePath($requestedExePath) {
             return [System.IO.Path]::GetFullPath($resolvedRequestedExePath)
         }
 
-        throw "FreeX executable was not found at $resolvedRequestedExePath. Pass -ExePath with an existing FreeX.App.Host.exe or build the host before running tools\screenshot_ribbon.ps1."
+        throw "FreeX capture executable was not found at $resolvedRequestedExePath. Pass -ExePath with an existing FreeX.ParityCapture.Wpf.exe or build the capture host before running tools\screenshot_ribbon.ps1."
     }
 
-    $releaseExe = Join-Path $repoRoot "src\FreeX.App.Host\bin\Release\net10.0-windows10.0.19041.0\FreeX.App.Host.exe"
+    $releaseExe = Join-Path $repoRoot "tools\FreeX.ParityCapture.Wpf\bin\Release\net10.0-windows10.0.19041.0\FreeX.ParityCapture.Wpf.exe"
     if (Test-Path -LiteralPath $releaseExe -PathType Leaf) {
         return $releaseExe
     }
 
-    $binRoot = Join-Path $repoRoot "src\FreeX.App.Host\bin"
+    $binRoot = Join-Path $repoRoot "tools\FreeX.ParityCapture.Wpf\bin"
     if (Test-Path -LiteralPath $binRoot -PathType Container) {
-        $discoveredExe = Get-ChildItem -LiteralPath $binRoot -Recurse -Filter "FreeX.App.Host.exe" -File |
+        $discoveredExe = Get-ChildItem -LiteralPath $binRoot -Recurse -Filter "FreeX.ParityCapture.Wpf.exe" -File |
             Sort-Object LastWriteTimeUtc -Descending |
             Select-Object -First 1
         if ($null -ne $discoveredExe) {
@@ -153,7 +153,7 @@ function Resolve-FreeXExecutablePath($requestedExePath) {
         }
     }
 
-    throw "FreeX executable was not found. Pass -ExePath with an existing FreeX.App.Host.exe or build the Release host before running tools\screenshot_ribbon.ps1."
+    throw "FreeX capture executable was not found. Pass -ExePath with an existing FreeX.ParityCapture.Wpf.exe or build the Release capture host before running tools\screenshot_ribbon.ps1."
 }
 
 # Get screen DPI to calculate physical pixels for a 300px logical capture

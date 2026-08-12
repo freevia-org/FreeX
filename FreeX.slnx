@@ -100,6 +100,8 @@
     <Project Path="tools/FreeX.ParityCompare/FreeX.ParityCompare.csproj" />
     <Project Path="tools/FreeX.ParityCompare.Core/FreeX.ParityCompare.Core.csproj" />
     <Project Path="tools/FreeX.ParityCapture.Support/FreeX.ParityCapture.Support.csproj" />
+    <Project Path="tools/FreeX.ParityCapture.Avalonia/FreeX.ParityCapture.Avalonia.csproj" />
+    <Project Path="tools/FreeX.ParityCapture.Wpf/FreeX.ParityCapture.Wpf.csproj" />
     <Project Path="tools/FreeX.ForegroundCapture/FreeX.ForegroundCapture.csproj" />
     <Project Path="tools/FreeW.RenderCompare/FreeW.RenderCompare.csproj" />
     <Project Path="tools/Free.ToolsShared/Free.ToolsShared.csproj" />

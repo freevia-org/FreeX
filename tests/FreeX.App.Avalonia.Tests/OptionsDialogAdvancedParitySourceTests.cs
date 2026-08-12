@@ -38,7 +38,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     public void ViewOptions_UsesWpfHeaderRhythmAndCaptureFixture()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
-        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var wpf = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Wpf", "Capture", "ParityCapture.cs"));
         var fixture = File.ReadAllText(RepoFile(
             "tools", "FreeX.ParityCapture.Support", "Services", "OptionsDialogParityFixture.cs"));
 

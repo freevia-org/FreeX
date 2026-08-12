@@ -121,7 +121,7 @@ public sealed class DialogVisualParitySourceTests
     public void SortOptionsDialog_UsesSharedLocalizationAndReferenceCaptureState()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("SortOptionsDialogCatalog.Create(UiText.Get)");
         source.Should().Contain("Title = presentation.Title");
@@ -172,7 +172,7 @@ public sealed class DialogVisualParitySourceTests
     public void InsertHyperlinkParityCapture_UsesFixtureWithoutChangingProductionPrefill()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("var prefill = _session.GetSelectedRangeHyperlinkDialogPrefill();");
         captureSource.Should().Contain("HyperlinkDialogParityFixture.Seed(_session.ActiveSheet, address);");
@@ -183,7 +183,7 @@ public sealed class DialogVisualParitySourceTests
     public void SubtotalDialog_UsesSharedFixtureStateAndLocalizedAccessKeyControls()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var captureSource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
 
         source.Should().Contain("parityFixture?.SummaryBelowData ?? _session.ActiveSheet.OutlineSummaryBelow ?? true");
         source.Should().Contain("CreateSubtotalAccessText(label)");

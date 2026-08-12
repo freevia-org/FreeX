@@ -40,7 +40,7 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
     [Fact]
     public void RemainingDataDialogs_UseWpfLogicalCaptureSizes()
     {
-        var paritySource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var paritySource = File.ReadAllText(RepoFile("tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.ParityCapture.cs"));
         paritySource.Should().Contain("private const int ForecastSheetParityDialogWidth = 320;");
         paritySource.Should().Contain("private const int ForecastSheetParityDialogHeight = 150;");
         paritySource.Should().Contain("private const int SubtotalParityDialogWidth = 380;");

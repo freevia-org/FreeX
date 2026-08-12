@@ -1,0 +1,78 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>FreeX.ParityCapture.Avalonia</AssemblyName>
+    <ApplicationTitle>FreeX Parity Capture</ApplicationTitle>
+    <DefineConstants>$(DefineConstants);FREEX_PARITY_CAPTURE</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>FreeX.App.Avalonia</RootNamespace>
+    <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\FreeX.App.Avalonia\**\*.cs"
+             Exclude="..\..\src\FreeX.App.Avalonia\bin\**;..\..\src\FreeX.App.Avalonia\obj\**;..\..\src\FreeX.App.Avalonia\MacOs\**\*.cs"
+             LinkBase="Renderer" />
+    <Compile Include="Capture\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.Tests" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch2" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch3" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch4" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch5" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch6" />
+    <InternalsVisibleTo Include="FreeX.App.Avalonia.CaptureTests.Batch7" />
+    <InternalsVisibleTo Include="FreeX.ParityCapture.Avalonia.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FreeX.App.Localization\FreeX.App.Localization.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Presentation\FreeX.App.Presentation.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="..\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon\Free.Shared.Ribbon.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell\Free.Shared.Shell.csproj" />
+    <ProjectReference Include="..\..\src\FreeX.Ribbon.Definitions\FreeX.Ribbon.Definitions.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Ribbon.Avalonia\Free.Shared.Ribbon.Avalonia.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj" />
+    <ProjectReference Include="..\..\shared\Free.Shared.Theme.Avalonia\Free.Shared.Theme.Avalonia.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
+             Link="Resources\FreeX.ico"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Free.Shared.Drawing" />
+    <Using Include="Free.Shared.Opc" />
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
+    <Using Include="Free.Shared.AppServices" />
+    <Using Include="Free.Shared.AppServices.Printing" />
+    <Using Include="FreeX.App.Presentation.FormulaBar" />
+  </ItemGroup>
+</Project>
