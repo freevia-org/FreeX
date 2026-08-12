@@ -13,6 +13,23 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class FreePChromeBrushTokenTests
 {
+    [Theory]
+    [InlineData("FreePAccentBrush", 0xB7, 0x47, 0x2A)]
+    [InlineData("FreePAccentDarkBrush", 0x8F, 0x37, 0x21)]
+    [InlineData("FreePSheetSurfaceBrush", 0xF3, 0xF3, 0xF3)]
+    [InlineData("FreePWhiteBrush", 0xFF, 0xFF, 0xFF)]
+    public void BuildResources_RegistersRendererConsumedBrushes(
+        string key,
+        byte red,
+        byte green,
+        byte blue)
+    {
+        var dict = WpfThemeApplier.BuildResources(BrandThemes.FreeP, "FreeP");
+
+        var brush = dict[key].Should().BeOfType<SolidColorBrush>().Subject;
+        brush.Color.Should().Be(Color.FromRgb(red, green, blue));
+    }
+
     /// <summary>
     /// Applying the default <see cref="BrandThemes.FreeP"/> theme with prefix "FreeP" produces
     /// <c>FreePTitleBarBrush</c> = #B7472A, byte-identical to the previous hardcoded literal.

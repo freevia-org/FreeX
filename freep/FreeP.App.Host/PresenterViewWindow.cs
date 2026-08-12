@@ -51,8 +51,8 @@ public sealed class PresenterViewWindow : Window
         MinWidth = 860;
         MinHeight = 560;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(30, 34, 42));
-        Foreground = Brushes.White;
+        Background = FreePBrushes.PresenterSurface;
+        Foreground = FreePBrushes.White;
 
         var root = new Grid { Margin = new Thickness(18) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -114,7 +114,7 @@ public sealed class PresenterViewWindow : Window
             surface.Action(SlideShowPresenterViewAction.NarrationAndMedia),
             () => ExecuteAction(SlideShowPresenterViewAction.NarrationAndMedia));
         _recordingStatusText = MakeText(13, FontWeights.Normal);
-        _recordingStatusText.Foreground = new SolidColorBrush(Color.FromRgb(170, 178, 194));
+        _recordingStatusText.Foreground = FreePBrushes.PresenterMutedText;
         _recordingStatusText.Margin = new Thickness(0, 6, 0, 0);
         ApplySemantic(
             _recordingStatusText,
@@ -205,9 +205,9 @@ public sealed class PresenterViewWindow : Window
             TextWrapping = TextWrapping.Wrap,
             AcceptsReturn = true,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Background = new SolidColorBrush(Color.FromRgb(45, 50, 61)),
-            Foreground = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(80, 87, 102)),
+            Background = FreePBrushes.PresenterPanelSurface,
+            Foreground = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PresenterBorder,
             Padding = new Thickness(10),
         };
         ApplySemantic(_notesText, surface.Field(SlideShowPresenterViewField.SpeakerNotes));
@@ -325,7 +325,7 @@ public sealed class PresenterViewWindow : Window
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         var title = MakeText(13, FontWeights.Normal);
         title.Text = field.Label;
-        title.Foreground = new SolidColorBrush(Color.FromRgb(170, 178, 194));
+        title.Foreground = FreePBrushes.PresenterMutedText;
         panel.Children.Add(title);
         Grid.SetRow(label, 1);
         label.Margin = new Thickness(0, 3, 0, 0);
@@ -334,8 +334,8 @@ public sealed class PresenterViewWindow : Window
         panel.Children.Add(preview);
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(38, 43, 53)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(80, 87, 102)),
+            Background = FreePBrushes.PresenterSecondarySurface,
+            BorderBrush = FreePBrushes.PresenterBorder,
             BorderThickness = new Thickness(1),
             Padding = new Thickness(10),
             Child = panel,
@@ -346,7 +346,7 @@ public sealed class PresenterViewWindow : Window
     {
         FontSize = size,
         FontWeight = weight,
-        Foreground = Brushes.White,
+        Foreground = FreePBrushes.White,
         VerticalAlignment = VerticalAlignment.Center,
     };
 

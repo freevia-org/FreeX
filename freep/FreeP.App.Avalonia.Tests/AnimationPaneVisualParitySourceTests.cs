@@ -26,11 +26,11 @@ public sealed class AnimationPaneVisualParitySourceTests
 
         foreach (var token in new[]
         {
-            "Color.FromRgb(0x22, 0x22, 0x22)",
-            "Color.FromRgb(0x66, 0x66, 0x66)",
-            "Color.FromRgb(0xFF, 0xE0, 0xD6)",
-            "Color.FromRgb(0xFA, 0xFA, 0xFA)",
-            "Color.FromRgb(0xDD, 0xDD, 0xDD)",
+            "FreePBrushes.AnimationText",
+            "FreePBrushes.PaneMutedText",
+            "FreePBrushes.AnimationSelectedSurface",
+            "FreePBrushes.PaneSurface",
+            "FreePBrushes.GridBorder",
             "Width",
             "Height",
             "Margin",
@@ -48,8 +48,8 @@ public sealed class AnimationPaneVisualParitySourceTests
         avalonia.Should().Contain("Margin = new Thickness(1)");
 
         avalonia.Should().Contain("MaxWidth = 70");
-        avalonia.Should().Contain("Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0))");
-        avalonia.Should().Contain("BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0))");
+        avalonia.Should().Contain("Background = FreePBrushes.CardBorder");
+        avalonia.Should().Contain("BorderBrush = FreePBrushes.PaneBorder");
         avalonia.Should().Contain("VerticalAlignment = VerticalAlignment.Center");
     }
 

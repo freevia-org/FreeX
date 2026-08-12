@@ -66,7 +66,7 @@ internal sealed class CustomShowDialog : Window
         MinWidth = 560;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = FreePBrushes.SheetSurface;
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
         ApplyListChrome(_showList);
@@ -91,7 +91,7 @@ internal sealed class CustomShowDialog : Window
         _customShowSlideList.AddHandler(DragDrop.DropEvent, OnCustomShowSlideListDrop);
         PointerCaptureLost += OnCustomShowSlidePointerCaptureLost;
 
-        _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+        _validationText.Foreground = FreePBrushes.Accent;
         _validationText.TextWrapping = TextWrapping.Wrap;
         _validationText.Margin = new Thickness(0, 4, 0, 8);
         PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));
@@ -519,7 +519,7 @@ internal sealed class CustomShowDialog : Window
     private static void ApplyListChrome(ListBox listBox)
     {
         AvaloniaCompactDialogChrome.ApplyListBox(listBox, DialogChromeStyle);
-        listBox.Background = Brushes.White;
+        listBox.Background = FreePBrushes.White;
         listBox.BorderBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0));
         listBox.BorderThickness = new Thickness(1);
     }

@@ -59,7 +59,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         MinWidth = 560;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = FreePBrushes.SheetSurface;
 
         _showList.Margin = new Thickness(0, 0, 10, 0);
         PresentationDialogControlAdapter.ApplySemantic(_showList, Surface.Field(SlideShowCustomShowDialogField.CustomShows));
@@ -79,7 +79,7 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _customShowSlideList.DragOver += OnCustomShowSlideListDragOver;
         _customShowSlideList.Drop += OnCustomShowSlideListDrop;
 
-        _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+        _validationText.Foreground = FreePBrushes.Accent;
         _validationText.TextWrapping = TextWrapping.Wrap;
         _validationText.Margin = new Thickness(0, 4, 0, 8);
         PresentationDialogControlAdapter.ApplySemantic(_validationText, Surface.Field(SlideShowCustomShowDialogField.Validation));

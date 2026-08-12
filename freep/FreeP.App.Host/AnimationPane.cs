@@ -38,15 +38,15 @@ public sealed class AnimationPane : Border
 {
     // ── Colors (mirrors the FreeP orange theme) ───────────────────────────────────
 
-    private static readonly Brush BackBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)));
-    private static readonly Brush HeaderBg     = Freeze(new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)));
+    private static Brush BackBrush => FreePBrushes.DisabledSurface;
+    private static Brush HeaderBg => FreePBrushes.Accent;
     private static readonly Brush HeaderFg     = Freeze(new SolidColorBrush(Colors.White));
-    private static readonly Brush RowNormal    = Freeze(new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)));
-    private static readonly Brush RowSelected  = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xE0, 0xD6)));
-    private static readonly Brush RowBorder    = Freeze(new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)));
-    private static readonly Brush TextBrush    = Freeze(new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)));
-    private static readonly Brush MutedBrush   = Freeze(new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)));
-    private static readonly Brush ButtonBg     = Freeze(new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)));
+    private static Brush RowNormal => FreePBrushes.PaneSurface;
+    private static Brush RowSelected => FreePBrushes.AnimationSelectedSurface;
+    private static Brush RowBorder => FreePBrushes.GridBorder;
+    private static Brush TextBrush => FreePBrushes.AnimationText;
+    private static Brush MutedBrush => FreePBrushes.PaneMutedText;
+    private static Brush ButtonBg => FreePBrushes.CardBorder;
 
     // ── Fields ────────────────────────────────────────────────────────────────────
 
@@ -228,7 +228,7 @@ public sealed class AnimationPane : Border
                 IsEnabled       = control.IsEnabled,
                 Padding         = new Thickness(6, 2, 6, 2),
                 Margin          = new Thickness(0, 4, 6, 4),
-                Background      = Freeze(new SolidColorBrush(Color.FromRgb(0x8F, 0x37, 0x21))),
+                Background      = FreePBrushes.AccentDark,
                 Foreground      = Freeze(new SolidColorBrush(Colors.White)),
                 BorderThickness = new Thickness(0),
                 FontSize        = 12,
@@ -539,7 +539,7 @@ public sealed class AnimationPane : Border
             Height              = 18,
             Padding             = new Thickness(0),
             Margin              = new Thickness(1),
-            Foreground          = Freeze(new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20))),
+            Foreground          = FreePBrushes.AnimationDanger,
             Background          = ButtonBg,
             BorderThickness     = new Thickness(1),
             IsEnabled           = controls.Remove.IsEnabled,

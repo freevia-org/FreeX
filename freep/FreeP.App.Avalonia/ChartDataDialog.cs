@@ -51,7 +51,7 @@ internal sealed class ChartDataDialog : Window
         MinHeight = _plan.MinimumHeight;
         CanResize = _plan.IsResizable;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = FreePBrushes.SheetSurface;
         _tableGrid.MinWidth = 616;
         _tableGrid.HorizontalAlignment = HorizontalAlignment.Stretch;
 
@@ -153,7 +153,7 @@ internal sealed class ChartDataDialog : Window
             Margin = new Thickness(4, 2, 4, 4),
             BorderBrush = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77)),
             BorderThickness = new Thickness(1),
-            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3)),
+            Background = FreePBrushes.SheetSurface,
             Child = scroller,
         };
 
@@ -169,7 +169,7 @@ internal sealed class ChartDataDialog : Window
                 MakeDialogButton(_plan.CancelAction, isDefault: false, () => Close(false)),
             },
         };
-        _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+        _validationText.Foreground = FreePBrushes.Accent;
         _validationText.Margin = new Thickness(12, 2, 12, 2);
         _validationText.TextWrapping = TextWrapping.Wrap;
         SetAutomation(_tableGrid, _plan.Table.AccessibleName, _plan.Table.AutomationId);

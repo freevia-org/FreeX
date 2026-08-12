@@ -732,7 +732,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         Height = 760;
         MinWidth = 800;
         MinHeight = 500;
-        Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background = FreePBrushes.SheetSurface;
         ApplyWindowIcon();
         _options = options ?? new FreePOptions();
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
@@ -801,9 +801,9 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             MaxHeight       = 120,
             Padding         = new Thickness(8, 4),
             FontSize        = 12,
-            Background      = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xF0)),
+            Background      = FreePBrushes.NotesHintSurface,
             BorderThickness = new Thickness(0, 1, 0, 0),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderBrush     = FreePBrushes.PaneBorder,
         };
         _notesBox.TextChanged += OnNotesTextChanged;
         _notesBox.KeyDown += OnNotesKeyDown;
@@ -918,7 +918,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         var statusBar = SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(
             Background: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.StatusSurfaceBrush,
-                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
+                FreePBrushes.Accent),
             LeftContent: _statusText)).Root;
         var frame = SisterAppClientFrameBuilder.Build(SisterAppClientFrameSpec.ForWorkArea(
             chrome: ribbon,
@@ -934,7 +934,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Body: clientRoot,
             TitleBarBackground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(
                 ThemeResources.TitleBarBrush,
-                new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))),
+                FreePBrushes.Accent),
             TitleBarForeground: AvaloniaThemeResourceResolver.ResolveOr<IBrush>(ThemeResources.WhiteBrush, Brushes.White),
             TitleBarHeight: FreePShellVisualMetrics.TitleBarHeight));
         _titleBar = windowFrame.TitleBar;
@@ -1249,7 +1249,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
 
         _canvasHost = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6)),
+            Background = FreePBrushes.PlaceholderSurface,
             ClipToBounds = true,
             Child      = canvasStack,
         };
@@ -1259,8 +1259,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         };
         _layoutPickerHost = new Border
         {
-            Background      = Brushes.White,
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background      = FreePBrushes.White,
+            BorderBrush     = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             MaxHeight       = 220,
             IsVisible       = false,
@@ -1279,8 +1279,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         };
         _tablePickerHost = new Border
         {
-            Background      = Brushes.White,
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background      = FreePBrushes.White,
+            BorderBrush     = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             IsVisible       = false,
             Child           = new StackPanel
@@ -1294,7 +1294,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                         Margin = new Thickness(10, 8, 10, 2),
                         FontSize = 11,
                         FontWeight = FontWeight.SemiBold,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                        Foreground = FreePBrushes.PaneText,
                     },
                     _tablePickerPanel,
                 },
@@ -1307,8 +1307,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         };
         _reviewCommentsPaneHost = new Border
         {
-            Background      = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xE8)),
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            Background      = FreePBrushes.NotesSurface,
+            BorderBrush     = FreePBrushes.DisabledBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
             MaxHeight       = 100,
             IsVisible       = false,
@@ -1467,7 +1467,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading),
             FontSize = 26,
             FontWeight = FontWeight.Light,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground = FreePBrushes.PaneHeadingText,
             Margin = new Thickness(0, 0, 0, 18),
         };
         _printOptionsPaneMessage = new TextBlock
@@ -1509,7 +1509,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Width = 1010,
             IsVisible = false,
-            Background = Brushes.White,
+            Background = FreePBrushes.White,
             BorderThickness = new Thickness(0),
             Child = new ScrollViewer
             {
@@ -1532,7 +1532,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         _altTextPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _altTextTitleLabel = BuildAltTextPaneLabel();
@@ -1598,8 +1598,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Width = 292,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
         };
@@ -1636,7 +1636,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         _mediaCaptionPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _mediaCaptionTrackBox = new ComboBox
@@ -1771,8 +1771,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         return new Border
         {
             Width = 320,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.DisabledBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             IsVisible = false,
             Child = new StackPanel
@@ -1878,7 +1878,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         _smartArtTextPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _smartArtTextPaneRowsPanel = new StackPanel
@@ -1965,8 +1965,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Width = 320,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = new DockPanel
             {
@@ -2020,7 +2020,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _accessibilityCheckerRowsPanel = new StackPanel
@@ -2050,8 +2050,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Width = 320,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = new DockPanel
             {
@@ -2080,7 +2080,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         _proofingPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _proofingPaneRowsPanel = new StackPanel
@@ -2103,8 +2103,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Width = 320,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = new DockPanel
             {
@@ -2134,7 +2134,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             Margin = new Thickness(12, 0, 12, 8),
         };
         _readingOrderMoveEarlierButton = new Button
@@ -2206,8 +2206,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Width = PresentationReadingOrderPaneVisualMetrics.PaneWidth,
             IsVisible = false,
-            Background = Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.White,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
         };
@@ -2220,14 +2220,14 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text = _animationPaneSession.ControlSchema.Heading,
             FontSize = 12,
             FontWeight = FontWeight.SemiBold,
-            Foreground = Brushes.White,
+            Foreground = FreePBrushes.White,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
         };
         _animationPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             IsVisible = false,
         };
         _animationPanePreviewButton = new Button
@@ -2252,7 +2252,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
 
         var header = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Background = FreePBrushes.Accent,
             Padding = new Thickness(0, 4, 4, 4),
             Child = new DockPanel
             {
@@ -2280,8 +2280,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Width = 240,
             IsVisible = false,
-            Background = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.DisabledSurface,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
         };
@@ -2559,8 +2559,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         return new Border
         {
             Height          = FreePShellVisualMetrics.RibbonHeight,
-            Background      = Brushes.White,
-            BorderBrush     = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            Background      = FreePBrushes.White,
+            BorderBrush     = FreePBrushes.GridBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Child           = _ribbonControl,
         };
@@ -2839,11 +2839,11 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 Padding = new Thickness(6, 4),
                 MinWidth = 74,
                 BorderBrush = choice.IsDefault
-                    ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                    : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                    ? FreePBrushes.Accent
+                    : FreePBrushes.DisabledBorder,
                 Background = choice.IsDefault
-                    ? new SolidColorBrush(Color.FromRgb(0xFE, 0xF2, 0xEC))
-                    : Brushes.White,
+                    ? FreePBrushes.SelectedSwatchSurface
+                    : FreePBrushes.White,
             };
             AutomationProperties.SetAutomationId(button, choice.AutomationId);
             button.Click += (_, _) =>
@@ -2878,7 +2878,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 Margin = new Thickness(10, 8, 10, 2),
                 FontSize = 11,
                 FontWeight = FontWeight.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                Foreground = FreePBrushes.PaneText,
             });
 
             var groupPanel = new WrapPanel
@@ -4047,7 +4047,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text = text,
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground = FreePBrushes.PaneHeadingText,
             Margin = new Thickness(0, 16, 0, 6),
         });
     }
@@ -4159,7 +4159,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text = value,
             FontSize = 12,
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground = FreePBrushes.PaneHeadingText,
         };
         Grid.SetColumn(content, 1);
         row.Children.Add(name);
@@ -4362,7 +4362,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             _reviewCommentsPanePanel.Children.Add(new TextBlock
             {
                 Text       = plan.EmptyStateMessage,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin     = new Thickness(12, 0, 12, 10),
             });
         }
@@ -4409,7 +4409,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text              = plan.HeaderSummaryText,
             FontSize          = PresentationCommentPaneVisualMetrics.SummaryFontSize,
             FontWeight        = FontWeight.SemiBold,
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Foreground        = FreePBrushes.PaneText,
             VerticalAlignment = VerticalAlignment.Center,
             Margin            = new Thickness(0, 0, 0, 6),
         });
@@ -4425,7 +4425,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 {
                     Text       = plan.FilterOptionsSummaryText,
                     FontSize   = PresentationCommentPaneVisualMetrics.FilterFontSize,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    Foreground = FreePBrushes.PaneMutedText,
                     Margin     = new Thickness(0, 0, 0, 6),
                 },
             },
@@ -4592,7 +4592,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         };
         header.Children.Add(new Border
         {
-            Background   = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Background   = FreePBrushes.Accent,
             CornerRadius = new CornerRadius(3),
             Padding      = new Thickness(4, 1, 4, 1),
             Margin       = new Thickness(0, 0, 6, 0),
@@ -4600,7 +4600,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             {
                 Text       = comment.InitialsBadgeText,
                 FontSize   = PresentationCommentPaneVisualMetrics.StatusFontSize,
-                Foreground = Brushes.White,
+                Foreground = FreePBrushes.White,
             },
         });
         header.Children.Add(new TextBlock
@@ -4608,14 +4608,14 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text              = comment.AuthorDisplayName,
             FontSize          = PresentationCommentPaneVisualMetrics.AuthorFontSize,
             FontWeight        = FontWeight.SemiBold,
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
+            Foreground        = FreePBrushes.PaneHeadingText,
             VerticalAlignment = VerticalAlignment.Center,
         });
         header.Children.Add(new TextBlock
         {
             Text              = comment.ThreadStatusLabel,
             FontSize          = PresentationCommentPaneVisualMetrics.StatusFontSize,
-            Foreground        = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Foreground        = FreePBrushes.PaneMutedText,
             Margin            = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
         });
@@ -4630,7 +4630,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text         = comment.TextPreview,
             FontSize     = PresentationCommentPaneVisualMetrics.BodyFontSize,
             TextWrapping = TextWrapping.Wrap,
-            Foreground   = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Foreground   = FreePBrushes.PaneText,
             Margin       = new Thickness(16, 2, 6, 6),
         });
         if (comment.ShouldShowMentionDetail)
@@ -4687,7 +4687,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 TextWrapping = TextWrapping.Wrap,
                 FontSize     = PresentationCommentPaneVisualMetrics.ReplyFontSize,
                 Margin       = new Thickness(26, 0, 6, 4),
-                Foreground   = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                Foreground   = FreePBrushes.PaneSecondaryText,
             });
             if (reply.ShouldShowMentionDetail)
                 AddMentionDetail(card, reply.MentionDetailSummary, new Thickness(26, 0, 6, 4));
@@ -4736,8 +4736,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
 
         var border = new Border
         {
-            Background      = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xF4, 0xEC, 0xE8) : Color.FromRgb(0xFA, 0xFA, 0xFA)),
-            BorderBrush     = new SolidColorBrush(comment.IsSelected ? Color.FromRgb(0xB7, 0x47, 0x2A) : Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            Background      = comment.IsSelected ? FreePBrushes.SelectedCommentSurface : FreePBrushes.PaneSurface,
+            BorderBrush     = comment.IsSelected ? FreePBrushes.Accent : FreePBrushes.CardBorder,
             BorderThickness = new Thickness(comment.IsSelected ? 2 : 1),
             CornerRadius    = new CornerRadius(4),
             Margin          = new Thickness(0, 0, 0, PresentationCommentPaneVisualMetrics.CardBottomMargin),
@@ -4763,7 +4763,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text = mentionDetailSummary,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Foreground = FreePBrushes.PaneMutedText,
             Margin = margin,
         });
     }
@@ -5007,7 +5007,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             {
                 Text = viewPlan.EmptyMessage,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(10, 12, 10, 12),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -5048,8 +5048,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 IsEnabled = control.IsEnabled,
                 Padding = new Thickness(6, 2),
                 Margin = new Thickness(0, 4, 6, 4),
-                Background = new SolidColorBrush(Color.FromRgb(0x8F, 0x37, 0x21)),
-                Foreground = Brushes.White,
+                Background = FreePBrushes.AccentDark,
+                Foreground = FreePBrushes.White,
                 BorderThickness = new Thickness(0),
                 FontSize = 12,
                 Tag = control.CommandId,
@@ -5302,7 +5302,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             controls.Remove.IsEnabled,
             controls.Remove.ToolTip,
             () => RemoveAnimationPaneItem(item.Index));
-        removeButton.Foreground = new SolidColorBrush(Color.FromRgb(0xC0, 0x20, 0x20));
+        removeButton.Foreground = FreePBrushes.AnimationDanger;
         var paragraphBuildButton = BuildAnimationPaneActionButton(
             "¶",
             controls.ParagraphBuild.IsEnabled,
@@ -5357,7 +5357,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Text = item.OrderText,
             FontSize = 11,
             FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)),
+            Foreground = FreePBrushes.AnimationText,
             Width = 20,
             TextAlignment = TextAlignment.Center,
             Margin = new Thickness(4, 0),
@@ -5367,7 +5367,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Text = item.ShapeName,
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)),
+            Foreground = FreePBrushes.AnimationText,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth = 80,
             VerticalAlignment = VerticalAlignment.Center,
@@ -5376,7 +5376,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             Text = item.EffectText,
             FontSize = 10,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Foreground = FreePBrushes.PaneMutedText,
             TextTrimming = TextTrimming.CharacterEllipsis,
             MaxWidth = 70,
             Margin = new Thickness(4, 0),
@@ -5406,9 +5406,9 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         var border = new Border
         {
             Background = item.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xE0, 0xD6))
-                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+                ? FreePBrushes.AnimationSelectedSurface
+                : FreePBrushes.PaneSurface,
+            BorderBrush = FreePBrushes.GridBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(4),
             Child = innerGrid,
@@ -5453,8 +5453,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Height = 18,
             Padding = new Thickness(0),
             Margin = new Thickness(1),
-            Background = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Background = FreePBrushes.CardBorder,
+            BorderBrush = FreePBrushes.PaneBorder,
             BorderThickness = new Thickness(1),
             IsEnabled = isEnabled,
             VerticalAlignment = VerticalAlignment.Center,
@@ -5615,7 +5615,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             _accessibilityCheckerRowsPanel.Children.Add(new TextBlock
             {
                 Text = plan.EmptyStateMessage,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -5638,7 +5638,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             MinWidth = 96,
             Padding = new Thickness(8, 0),
             CornerRadius = new CornerRadius(0),
-            Background = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0)),
+            Background = FreePBrushes.DisabledSurface,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xAD, 0xAD, 0xAD)),
             BorderThickness = new Thickness(1),
             HorizontalContentAlignment = HorizontalAlignment.Center,
@@ -5667,7 +5667,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                     Text = row.DisplayMetadata,
                     FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                     FontSize = 12,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    Foreground = FreePBrushes.PaneSecondaryText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
@@ -5675,7 +5675,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                     Text = row.Detail,
                     FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                     FontSize = 12,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    Foreground = FreePBrushes.PaneText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 action,
@@ -5689,7 +5689,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 Text = PresentationPaneTextResources.ProofingSelectedIssue,
                 FontFamily = AvaloniaCompactDialogChrome.WindowsUiFontFamily,
                 FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Foreground = FreePBrushes.Accent,
                 FontWeight = FontWeight.SemiBold,
                 Margin = new Thickness(0, 2, 0, 0),
             });
@@ -5698,11 +5698,11 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         var border = new Border
         {
             Background = row.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
-                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+                ? FreePBrushes.SelectedCardSurface
+                : FreePBrushes.PaneSurface,
             BorderBrush = row.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                ? FreePBrushes.Accent
+                : FreePBrushes.CardBorder,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(10),
@@ -5741,13 +5741,13 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         _accessibilityCheckerReviewDetailsPanel.Children.Add(new TextBlock
         {
             Text = display.Summary,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            Foreground = FreePBrushes.PaneText,
             TextWrapping = TextWrapping.Wrap,
         });
         _accessibilityCheckerReviewDetailsPanel.Children.Add(new TextBlock
         {
             Text = display.Guidance,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Foreground = FreePBrushes.PaneSecondaryText,
             TextWrapping = TextWrapping.Wrap,
         });
 
@@ -5762,8 +5762,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
     {
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE2, 0xE2)),
+            Background = FreePBrushes.SubtlePaneSurface,
+            BorderBrush = FreePBrushes.SubtlePaneBorder,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8),
@@ -5787,7 +5787,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                     new TextBlock
                     {
                         Text = detail.Detail,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                        Foreground = FreePBrushes.PaneSecondaryText,
                         TextWrapping = TextWrapping.Wrap,
                     },
                 }
@@ -5939,8 +5939,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Margin = new Thickness(12 + (item.Level * 18), 0, 12, 6),
             Padding = new Thickness(6, 3),
             BorderBrush = selected
-                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+                ? FreePBrushes.Accent
+                : FreePBrushes.DisabledBorder,
             BorderThickness = new Thickness(selected ? 2 : 1),
         };
         ToolTip.SetTip(box, item.RoleDisplayText);
@@ -6460,7 +6460,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             _readingOrderPaneItemsPanel.Children.Add(new TextBlock
             {
                 Text = PresentationReviewWorkflowPlanner.EmptyReadingOrderMessage,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -6530,21 +6530,21 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 {
                     Text = item.Metadata,
                     FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    Foreground = FreePBrushes.PaneSecondaryText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = item.AccessibilitySummary,
                     FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+                    Foreground = FreePBrushes.PaneText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = item.AltTextDisplayText,
                     FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                    Foreground = FreePBrushes.PaneMutedText,
                     TextWrapping = TextWrapping.Wrap,
                 },
             }
@@ -6556,7 +6556,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             {
                 Text = item.SelectedLabel,
                 FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+                Foreground = FreePBrushes.Accent,
                 FontWeight = FontWeight.SemiBold,
                 Margin = new Thickness(0, PresentationReadingOrderPaneVisualMetrics.SelectedItemTopInset, 0, 0),
             });
@@ -6566,11 +6566,11 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Background = item.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xFF, 0xF6, 0xF2))
-                : new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+                ? FreePBrushes.SelectedCardSurface
+                : FreePBrushes.PaneSurface,
             BorderBrush = item.IsSelected
-                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
-                : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+                ? FreePBrushes.Accent
+                : FreePBrushes.CardBorder,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(PresentationReadingOrderPaneVisualMetrics.CardCornerRadius),
             Padding = new Thickness(PresentationReadingOrderPaneVisualMetrics.CardPadding),
@@ -6663,7 +6663,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             _proofingPaneRowsPanel.Children.Add(new TextBlock
             {
                 Text = plan.Message,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+                Foreground = FreePBrushes.PaneMutedText,
                 Margin = new Thickness(12, 0, 12, 10),
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -6771,7 +6771,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
                 new TextBlock
                 {
                     Text = row.ReplacementDisplayText,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+                    Foreground = FreePBrushes.PaneSecondaryText,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
@@ -6785,8 +6785,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
 
         var border = new Border
         {
-            Background = row.IsSelected ? new SolidColorBrush(Color.FromRgb(0xE8, 0xF1, 0xFF)) : Brushes.Transparent,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
+            Background = row.IsSelected ? FreePBrushes.SelectedRowSurface : Brushes.Transparent,
+            BorderBrush = FreePBrushes.GridBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(12, 8, 12, 8),
             Child = panel,
@@ -7497,8 +7497,8 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             Padding                    = new Thickness(0, 6),
             HorizontalAlignment        = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Center,
-            Background                 = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
-            Foreground                 = Brushes.White,
+            Background                 = FreePBrushes.Accent,
+            Foreground                 = FreePBrushes.White,
             BorderThickness            = new Thickness(0),
             CornerRadius               = new CornerRadius(3),
             FontSize                   = 12,

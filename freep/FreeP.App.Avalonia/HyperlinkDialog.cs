@@ -16,7 +16,7 @@ internal sealed class HyperlinkDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 26 };
-    private static readonly IBrush WpfDefaultButtonBorderBrush = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+    private static IBrush WpfDefaultButtonBorderBrush => FreePBrushes.Accent;
     private static readonly IBrush WpfCancelButtonBackgroundBrush = new SolidColorBrush(Color.FromRgb(0xF1, 0xF1, 0xF1));
 
     private readonly HyperlinkDialogSession _session;
@@ -97,7 +97,7 @@ internal sealed class HyperlinkDialog : Window
         PresentationDialogControlAdapter.ApplySemantic(_tooltipBox, _surface.Field(HyperlinkDialogField.Tooltip));
         _validationText = new TextBlock
         {
-            Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
+            Foreground = FreePBrushes.Accent,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 2, 0, 8),
         };
@@ -253,10 +253,10 @@ internal sealed class HyperlinkDialog : Window
             DialogChromeStyle,
             minWidth: 75,
             isDefault: action.IsDefault);
-        button.Background = action.IsDefault ? Brushes.White : WpfCancelButtonBackgroundBrush;
+        button.Background = action.IsDefault ? FreePBrushes.White : WpfCancelButtonBackgroundBrush;
         button.BorderBrush = action.IsDefault
             ? WpfDefaultButtonBorderBrush
-            : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
+            : FreePBrushes.DisabledBorder;
         button.Click += (_, _) => onClick();
         return button;
     }
@@ -295,13 +295,13 @@ internal sealed class HyperlinkDialog : Window
         var buttons = row.Children.OfType<Button>().ToArray();
         if (buttons.Length > 0)
         {
-            buttons[0].Background = Brushes.White;
+            buttons[0].Background = FreePBrushes.White;
             buttons[0].BorderBrush = WpfDefaultButtonBorderBrush;
         }
         if (buttons.Length > 1)
         {
             buttons[1].Background = WpfCancelButtonBackgroundBrush;
-            buttons[1].BorderBrush = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
+            buttons[1].BorderBrush = FreePBrushes.DisabledBorder;
         }
 
         var disabledComboBackground = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));

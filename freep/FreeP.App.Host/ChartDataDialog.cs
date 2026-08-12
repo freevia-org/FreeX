@@ -64,7 +64,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         MinHeight      = plan.MinimumHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode     = plan.IsResizable ? ResizeMode.CanResize : ResizeMode.NoResize;
-        Background     = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
+        Background     = FreePBrushes.SheetSurface;
 
         // ── Toolbar ───────────────────────────────────────────────────────────────
         _chartTypeCombo = new ComboBox
@@ -113,7 +113,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Margin                    = new Thickness(4, 2, 4, 4),
         };
         SetAutomation(_grid, plan.Table.AccessibleName, plan.Table.AutomationId);
-        _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
+        _validationText.Foreground = FreePBrushes.Accent;
         _validationText.Margin = new Thickness(8, 2, 8, 2);
         _validationText.TextWrapping = TextWrapping.Wrap;
         SetAutomation(_validationText, plan.Table.ValidationAccessibleName, plan.Table.ValidationAutomationId);
