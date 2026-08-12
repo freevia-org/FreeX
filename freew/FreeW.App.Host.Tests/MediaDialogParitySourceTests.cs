@@ -26,7 +26,7 @@ public sealed class MediaDialogParitySourceTests
     [InlineData("MediaDialogParity.cs", "SmartArtDialogPlanner.TryBuildResult(")]
     [InlineData("MediaDialogParity.cs", "SmartArtDialogPlanner.NodeTextLabel")]
     [InlineData("MediaDialogParity.cs", "SmartArtDialogPlanner.VisualMetrics")]
-    [InlineData("IconPickerDialog.cs", "IconPickerDialogPlanner.Filter(")]
+    [InlineData("IconPickerDialog.cs", "_session.ApplyFilter(")]
     public void AvaloniaMediaDialogsUseSharedPresentationPolicies(string fileName, string call)
     {
         ReadAvaloniaSource(fileName).Should().Contain(call);

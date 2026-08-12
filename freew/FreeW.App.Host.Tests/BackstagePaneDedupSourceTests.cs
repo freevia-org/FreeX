@@ -88,7 +88,7 @@ public sealed class BackstagePaneDedupSourceTests
         }
         else
         {
-            source.Should().Contain("backstage.FrameCommand(_actions.New)");
+            source.Should().Contain("backstage.FrameCommand(_endpoints.New)");
             source.Should().Contain("_backstage.HideThen");
             source.Should().NotContain("BuildHomePane = BuildHomePane");
             source.Should().NotContain("UseNewPane = true");
