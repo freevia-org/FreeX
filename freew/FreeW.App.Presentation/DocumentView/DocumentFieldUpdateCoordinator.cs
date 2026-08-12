@@ -4,6 +4,13 @@ using FreeW.Core.Model;
 namespace FreeW.App.Presentation.DocumentView;
 
 /// <summary>
+/// Identifies a projected complex field and the result text that must remain when the field is unlinked.
+/// </summary>
+public readonly record struct DocumentComplexFieldUnlinkTarget(
+    ComplexField Field,
+    string DisplayedResult);
+
+/// <summary>
 /// Toolkit-neutral F9 field mutation pass. Renderers supply page mapping and repaint the result; this
 /// coordinator owns story traversal, lock handling, cross-reference resolution and live-value fallback.
 /// </summary>
@@ -192,6 +199,79 @@ public static class DocumentFieldUpdateCoordinator
         IReadOnlyCollection<ComplexField> selectedFields,
         bool isLocked)
         => MutateSelectedFields(document, selectedFields, field => field.WithLock(isLocked));
+
+    /// <summary>
+    /// Replaces selected model-native fields with their existing cached results.
+    /// </summary>
+    public static int Unlink(IReadOnlyCollection<Run> selectedRuns)
+    {
+        ArgumentNullException.ThrowIfNull(selectedRuns);
+        var selected = new HashSet<Run>(selectedRuns, ReferenceEqualityComparer.Instance);
+        var unlinked = 0;
+        foreach (var run in selected)
+        {
+            if (run.ComplexField is null)
+                continue;
+            run.ComplexField = null;
+            unlinked++;
+        }
+
+        return unlinked;
+    }
+
+    /// <summary>
+    /// Replaces fields selected through a projected renderer with the displayed results captured before
+    /// that renderer committed its view back to the model.
+    /// </summary>
+    public static int Unlink(
+        TextDocument document,
+        IReadOnlyCollection<DocumentComplexFieldUnlinkTarget> selectedFields)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(selectedFields);
+        var results = new Dictionary<ComplexField, string>(ReferenceEqualityComparer.Instance);
+        foreach (var selected in selectedFields)
+            results[selected.Field] = selected.DisplayedResult;
+
+        var unlinked = 0;
+        foreach (var storyParagraph in DocumentFieldStories.Enumerate(document))
+        {
+            foreach (var run in storyParagraph.Paragraph.Runs)
+            {
+                if (run.ComplexField is not { } field
+                    || !results.TryGetValue(field, out var displayedResult))
+                {
+                    continue;
+                }
+
+                run.Text = displayedResult;
+                run.ComplexField = null;
+                unlinked++;
+            }
+        }
+
+        return unlinked;
+    }
+
+    /// <summary>
+    /// Toggles all document-story fields to a single code-visibility state. Codes are shown unless a
+    /// strict majority is already showing them, matching Word's document-wide Alt+F9 behavior.
+    /// </summary>
+    public static int ToggleAllCodes(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var fields = DocumentFieldStories.Enumerate(document)
+            .SelectMany(story => story.Paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToList();
+        if (fields.Count == 0)
+            return 0;
+
+        var show = fields.Count(run => run.ComplexField!.ShowCode) * 2 <= fields.Count;
+        foreach (var run in fields)
+            run.ComplexField = run.ComplexField! with { ShowCode = show };
+        return fields.Count;
+    }
 
     private static int UpdateComplexFieldsCore(
         TextDocument targetDocument,

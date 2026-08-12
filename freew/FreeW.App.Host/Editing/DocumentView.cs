@@ -13211,22 +13211,12 @@ public sealed class DocumentView : RichTextBox
             markers = [marker];
         }
 
-        var cachedResults = new Dictionary<ComplexField, string>(ReferenceEqualityComparer.Instance);
-        foreach (var marker in markers)
-            cachedResults[marker.Field] = marker.Cached;
+        var targets = markers
+            .Select(marker => new DocumentComplexFieldUnlinkTarget(marker.Field, marker.Cached))
+            .ToList();
         CommitToModel();
-        foreach (var story in DocumentFieldStories.Enumerate(_model))
-        {
-            foreach (var modelRun in story.Paragraph.Runs)
-            {
-                if (modelRun.ComplexField is not { } field
-                    || !cachedResults.TryGetValue(field, out var resultText))
-                    continue;
-
-                modelRun.Text = resultText;
-                modelRun.ComplexField = null;
-            }
-        }
+        if (DocumentFieldUpdateCoordinator.Unlink(_model, targets) == 0)
+            return;
         Render();
     }
 
@@ -13275,16 +13265,8 @@ public sealed class DocumentView : RichTextBox
     public void ToggleFieldCodes()
     {
         CommitToModel();
-        var fields = DocumentFieldStories.Enumerate(_model)
-            .SelectMany(story => story.Paragraph.Runs)
-            .Where(r => r.ComplexField is not null)
-            .ToList();
-        if (fields.Count == 0)
+        if (DocumentFieldUpdateCoordinator.ToggleAllCodes(_model) == 0)
             return;
-        // Show codes unless they are already (mostly) shown, in which case hide them again.
-        var show = fields.Count(r => r.ComplexField!.ShowCode) * 2 <= fields.Count;
-        foreach (var r in fields)
-            r.ComplexField = r.ComplexField! with { ShowCode = show };
         Render();
     }
 

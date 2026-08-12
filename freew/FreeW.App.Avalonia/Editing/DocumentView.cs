@@ -23557,8 +23557,7 @@ public sealed class DocumentView : Control
         if (fields.Count == 0)
             return;
 
-        foreach (var fieldRun in fields)
-            fieldRun.ComplexField = null;
+        DocumentFieldUpdateCoordinator.Unlink(fields);
         InvalidateLayoutAndVisual();
         Focus();
     }
@@ -23652,17 +23651,8 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ToggleFieldCodes()
     {
-        var fields = DocumentFieldStories.Enumerate(_doc)
-            .SelectMany(story => story.Paragraph.Runs)
-            .Where(r => r.ComplexField is not null)
-            .ToList();
-        if (fields.Count == 0)
+        if (DocumentFieldUpdateCoordinator.ToggleAllCodes(_doc) == 0)
             return;
-
-        var show = fields.Count(r => r.ComplexField!.ShowCode) * 2 <= fields.Count;
-        foreach (var run in fields)
-            run.ComplexField = run.ComplexField! with { ShowCode = show };
-
         InvalidateLayoutAndVisual();
         Focus();
     }
