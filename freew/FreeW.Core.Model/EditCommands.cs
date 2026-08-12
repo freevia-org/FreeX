@@ -2320,7 +2320,7 @@ internal static class TrackedFormattingRevisionFactory
 public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocumentCommand
 {
     private Source[]? _previous;
-    private readonly Source[] _replacement = sources.ToArray();
+    private readonly Source[] _replacement = sources.Select(source => source.Clone()).ToArray();
 
     public string Label => "Manage Sources";
 
@@ -2328,9 +2328,9 @@ public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocu
 
     public void Apply(IDocumentCommandContext context)
     {
-        _previous = context.Document.Sources.ToArray();
+        _previous = context.Document.Sources.Select(source => source.Clone()).ToArray();
         context.Document.Sources.Clear();
-        context.Document.Sources.AddRange(_replacement);
+        context.Document.Sources.AddRange(_replacement.Select(source => source.Clone()));
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -2338,7 +2338,7 @@ public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocu
         if (_previous is null)
             return;
         context.Document.Sources.Clear();
-        context.Document.Sources.AddRange(_previous);
+        context.Document.Sources.AddRange(_previous.Select(source => source.Clone()));
     }
 }
 
@@ -2774,42 +2774,20 @@ public sealed class InsertShapeTextParagraphBreakCommand(
         var source = paragraphs[paragraphIndex];
         var fullOffset = source.Runs.Take(runIndex).Sum(run => run.Text.Length)
             + Math.Clamp(runOffset, 0, source.Runs[runIndex].Text.Length);
-        var prefix = CloneParagraphWithTextRange(source, 0, fullOffset);
-        var suffix = CloneParagraphWithTextRange(source, fullOffset, source.PlainText.Length);
+        var prefix = DocumentModelCloner.CloneParagraphTextRange(
+            source,
+            0,
+            fullOffset,
+            RevisionClonePolicy.Preserve);
+        var suffix = DocumentModelCloner.CloneParagraphTextRange(
+            source,
+            fullOffset,
+            source.PlainText.Length,
+            RevisionClonePolicy.Preserve);
         var result = paragraphs.ToList();
         result.RemoveAt(paragraphIndex);
         result.InsertRange(paragraphIndex, [prefix, suffix]);
         return result;
-    }
-
-    private static Paragraph CloneParagraphWithTextRange(Paragraph source, int start, int end)
-    {
-        var clone = (Paragraph)DocumentMerge.CloneBlock(source);
-        clone.Runs.Clear();
-
-        var position = 0;
-        foreach (var run in source.Runs)
-        {
-            var runStart = position;
-            var runEnd = position + run.Text.Length;
-            position = runEnd;
-            var overlapStart = Math.Max(start, runStart);
-            var overlapEnd = Math.Min(end, runEnd);
-            if (overlapEnd > overlapStart)
-            {
-                clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
-                    run,
-                    run.Text[(overlapStart - runStart)..(overlapEnd - runStart)]));
-            }
-        }
-
-        if (clone.Runs.Count == 0)
-        {
-            var formatting = source.Runs.FirstOrDefault()?.Formatting ?? RunFormatting.Default;
-            clone.Runs.Add(new Run(string.Empty, formatting));
-        }
-
-        return clone;
     }
 }
 
