@@ -75,7 +75,7 @@ public sealed partial class MainWindow
     internal void RefreshCanvas() => owner.RefreshCanvas();
     internal void HideCommentsPane() => owner.HideReviewCommentsPane();
     internal void ShowCommentsPane() => owner.ShowReviewCommentsPane();
-    internal void SelectFirstComment() => owner.SetSelectedReviewCommentIndexForTests(0);
+    internal void SelectFirstComment() => owner._reviewWorkflowSession.SetSelectedReviewCommentIndex(0);
     internal void ShowAccessibilityPane() => owner.ShowAccessibilityCheckerPane();
     internal void SelectFirstAccessibilityIssue()
     {

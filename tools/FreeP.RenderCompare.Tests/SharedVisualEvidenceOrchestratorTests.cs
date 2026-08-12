@@ -28,9 +28,9 @@ public sealed class SharedVisualEvidenceOrchestratorTests
             TimeSpan.FromSeconds(45),
             "capture process tree");
 
-        plan.Arguments.Should().Contain(""--output"")
-            .And.Contain($""{Path.Combine(Path.GetTempPath(), "capture output")}"")
-            .And.Contain(""--scenario" "review.comments"");
+        plan.Arguments.Should().Contain(@"""--output""")
+            .And.Contain($@"""{Path.Combine(Path.GetTempPath(), "capture output")}""")
+            .And.Contain(@"""--scenario"" ""review.comments""");
         plan.TimeoutMilliseconds.Should().Be(45_000);
 
         var invalid = () => VisualEvidenceProcessPlan.Create(

@@ -72,17 +72,17 @@
              Link="MainWindow.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\BackstageView.TestAccess.cs"
              Link="Backstage\BackstageView.TestAccess.cs" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
     <Compile Include="..\TestSupport\HostAccess.Avalonia\BasicDialogs.TestAccess.cs"
              Link="BasicDialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Avalonia\ChartOptionsDialogs.TestAccess.cs"
-             Link="ChartOptionsDialogs.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\EditingDialogs.TestAccess.cs"
              Link="EditingDialogs.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\PaneAndCustomShow.TestAccess.cs"
              Link="PaneAndCustomShow.TestAccess.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\ChartOptionsDialogs.TestAccess.cs"
+             Link="ChartOptionsDialogs.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.ShellTestAccess.cs"
              Link="MainWindow.ShellTestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.CommandsTestAccess.cs"

@@ -70,9 +70,9 @@ public sealed class VisualEvidenceOrchestrationSourceTests
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.ParseRequest(");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(");
-            source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.WriteManifest(");
             source.Should().Contain("VisualEvidenceCaptureOrchestrator.RunScenariosAsync(");
             source.Should().Contain("VisualEvidenceCaptureOrchestrator.FinalizeHostRun(");
+            source.Should().NotContain("FreePVisualEvidenceCaptureOrchestration.WriteManifest(");
             source.Should().NotContain("Array.FindIndex(");
             source.Should().NotContain("private static readonly JsonSerializerOptions");
             source.Should().NotContain("private static string Sha256(");
@@ -128,6 +128,7 @@ public sealed class VisualEvidenceOrchestrationSourceTests
             .And.Contain("public sealed record VisualEvidenceProcessPlan(")
             .And.Contain("public static async Task<VisualEvidenceScenarioRun")
             .And.Contain("public static int FinalizeHostRun")
+            .And.Contain("VisualEvidenceManifestIO.Write(")
             .And.NotContain("FreeP")
             .And.NotContain("FreeX");
         freeP.Should().Contain("using Free.ToolsShared;")

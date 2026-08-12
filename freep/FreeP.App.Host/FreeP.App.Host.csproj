@@ -29,17 +29,17 @@
              Link="MainWindow.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\BackstageView.TestAccess.cs"
              Link="Backstage\BackstageView.TestAccess.cs" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
     <Compile Include="..\TestSupport\HostAccess.Wpf\BasicDialogs.TestAccess.cs"
              Link="BasicDialogs.TestAccess.cs" />
-    <Compile Include="..\TestSupport\HostAccess.Wpf\ChartOptionsDialogs.TestAccess.cs"
-             Link="ChartOptionsDialogs.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\EditingDialogs.TestAccess.cs"
              Link="EditingDialogs.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\PaneAndCustomShow.TestAccess.cs"
              Link="PaneAndCustomShow.TestAccess.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\ChartOptionsDialogs.TestAccess.cs"
+             Link="ChartOptionsDialogs.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.ExtendedTestAccess.cs"
              Link="MainWindow.ExtendedTestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.AccessibilityTestAccess.cs"
