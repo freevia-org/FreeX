@@ -34,10 +34,6 @@ public sealed partial class MainWindow
     private Panel? _avaloniaQuickAccessTitleBarHost;
     private Border? _avaloniaQuickAccessBelowRibbonHost;
 
-    internal StackPanel AvaloniaQuickAccessToolbarForTest => _avaloniaQuickAccessToolbar;
-    internal Panel? AvaloniaQuickAccessTitleBarHostForTest => _avaloniaQuickAccessTitleBarHost;
-    internal Border? AvaloniaQuickAccessBelowRibbonHostForTest => _avaloniaQuickAccessBelowRibbonHost;
-
     private Border CreateAvaloniaQuickAccessBelowRibbonHost()
     {
         var host = new Border
@@ -290,15 +286,6 @@ public sealed partial class MainWindow
         RebuildAvaloniaQuickAccessToolbar();
     }
 
-    internal void SetAvaloniaQuickAccessPlacementForTest(bool belowRibbon)
-    {
-        if (_avaloniaQuickAccessOptions is null)
-            return;
-
-        _avaloniaQuickAccessOptions.QuickAccessToolbarBelowRibbon = belowRibbon;
-        RebuildAvaloniaQuickAccessToolbar();
-    }
-
     private QuickAccessToolbarHistoryMenuState CreateAvaloniaQuickAccessHistoryState(string commandId)
     {
         var isRedo = string.Equals(commandId, QuickAccessToolbarCommandIds.Redo, StringComparison.OrdinalIgnoreCase);
@@ -385,18 +372,6 @@ public sealed partial class MainWindow
         foreach (var (button, badge) in _avaloniaQuickAccessKeyTipBadges)
             badge.IsVisible = _ribbonKeyTipsVisible && button.IsEffectivelyEnabled;
     }
-
-    internal string? AvaloniaQuickAccessKeyTipForTest(string commandId) =>
-        _avaloniaQuickAccessKeyTipButtons
-            .FirstOrDefault(entry => string.Equals(entry.Value.Tag as string, commandId, StringComparison.OrdinalIgnoreCase))
-            .Key;
-
-    internal bool AvaloniaQuickAccessKeyTipVisibleForTest(string commandId) =>
-        _avaloniaQuickAccessKeyTipButtons
-            .FirstOrDefault(entry => string.Equals(entry.Value.Tag as string, commandId, StringComparison.OrdinalIgnoreCase))
-            .Value is { } button &&
-        _avaloniaQuickAccessKeyTipBadges.TryGetValue(button, out var badge) &&
-        badge.IsVisible;
 
     private static bool IsAvaloniaQuickAccessHistoryCommand(string commandId) =>
         string.Equals(commandId, QuickAccessToolbarCommandIds.Undo, StringComparison.OrdinalIgnoreCase) ||

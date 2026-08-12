@@ -31,26 +31,6 @@ public sealed partial class MainWindow
     private static readonly PlatformClipboardFormat CsvWindowsClipboardFormat =
         new("Csv", PlatformClipboardDataKind.Text);
 
-    internal static string? BuildHtmlClipboardFragmentForTest(
-        ViewportModel viewport, Sheet? sheet, GridRange range, WorkbookTheme theme) =>
-        ClipboardHtmlSerializer.Serialize(viewport, sheet, range, theme)?.Fragment;
-
-    internal static string WrapAsCfHtmlForTest(string fragment) =>
-        ClipboardHtmlSerializer.WrapAsCfHtml(fragment);
-
-    internal static DataFormat<string> CsvPlatformFormatForTest => CsvPlatformFormat;
-
-    internal static DataFormat<string> CsvWindowsPlatformFormatForTest => CsvWindowsPlatformFormat;
-
-    internal static void AddClipboardTextAndHtmlForTest(
-        DataTransfer transfer,
-        string text,
-        ViewportModel viewport,
-        Sheet? sheet,
-        GridRange range,
-        WorkbookTheme theme) =>
-        AddClipboardTextAndHtml(transfer, text, viewport, sheet, range, theme);
-
     private static void AddClipboardTextAndHtml(
         DataTransfer transfer,
         string text,

@@ -142,10 +142,6 @@ public sealed partial class MainWindow
         return elapsed <= TimeSpan.FromMilliseconds(500);
     }
 
-    /// <summary>Test seam for the real WPF-parity double-click precedence route.</summary>
-    internal bool TryShowPivotTableDetailsFromDoubleClickForTest() =>
-        TryShowPivotTableDetailsFromDoubleClick();
-
     // ── Analyze ▸ Show ▸ +/- Buttons ─────────────────────────────────────────────
 
     /// <summary>

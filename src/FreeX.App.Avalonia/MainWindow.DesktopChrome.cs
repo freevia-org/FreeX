@@ -12,13 +12,6 @@ public sealed partial class MainWindow
     private Control? _ribbonControl;
     private IRibbonCommandRegistry? _ribbonCommandRegistry;
     private bool _ribbonKeyTipsVisible;
-    internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
-    internal bool HasWindowIconForTest => Icon is not null;
-    internal IRibbonCommandRegistry? RibbonCommandRegistryForTest => _ribbonCommandRegistry;
-    internal Control? RibbonControlForTest => _ribbonControl;
-    internal Thickness CellAddressPaddingForTest => _cellAddressText.Padding;
-
-    internal void ShowBackstageOverlayForTest() => ShowBackstageOverlay();
 
     private void ApplyWindowIcon() =>
         AvaloniaWindowIconLoader.TryApply(this, "FreeX.ico");

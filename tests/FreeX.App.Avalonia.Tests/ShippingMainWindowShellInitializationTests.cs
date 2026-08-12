@@ -25,7 +25,6 @@ public sealed class ShippingMainWindowShellInitializationTests
             window.MinWidth.Should().Be(820);
             window.MinHeight.Should().Be(520);
 
-            window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
         }, CancellationToken.None);
     }

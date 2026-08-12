@@ -14,14 +14,6 @@ public sealed partial class MainWindow
 {
     private readonly FreeXRibbonKeyTipInputSession _ribbonKeyTipSession = new();
 
-    internal FreeXRibbonLegacyKeyTipSequence LegacyKeyTipSequenceForTest =>
-        _ribbonKeyTipSession.LegacySequence;
-    internal string RibbonKeyTipInputForTest => _ribbonKeyTipSession.Input;
-    internal string QuickAccessKeyTipInputForTest =>
-        _ribbonKeyTipSession.Scope == FreeXRibbonKeyTipInputScope.QuickAccess
-            ? _ribbonKeyTipSession.Input
-            : "";
-
     internal static IReadOnlySet<string> InteractiveValidationLegacyDataFilterInteractionIds { get; } =
         new HashSet<string>(StringComparer.Ordinal)
         {

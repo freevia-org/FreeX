@@ -47,21 +47,11 @@ public sealed partial class MainWindow
         }
     }
 
-    private Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>?
-        _workbookSaveAsPickerOverride;
-
-    internal Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>?
-        WorkbookSaveAsPickerOverrideForTest
-    {
-        get => _workbookSaveAsPickerOverride;
-        set => _workbookSaveAsPickerOverride = value;
-    }
-
     private static bool ResolveWorkbookSaveAsPickerAvailability(
         bool nativePickerAvailable,
         bool deterministicPickerAvailable) =>
         nativePickerAvailable || deterministicPickerAvailable;
 
-    internal WorkbookSaveAsPickerSelection CreateTransientWorkbookSaveAsSelection(string path) =>
-        WorkbookSaveAsPickerSelection.FromLocalPath(path, () => _recentFiles.Remove(path));
+    partial void ResolveWorkbookSaveAsPicker(
+        ref Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>? picker);
 }

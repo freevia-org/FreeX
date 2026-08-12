@@ -23,7 +23,6 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Flyout? _autoFilterFlyout;
-    internal bool AutoFilterFlyoutOpenForTest => _autoFilterFlyout is not null;
 
     private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
 
@@ -675,11 +674,5 @@ public sealed partial class MainWindow
     // Recalculate explicitly so SUBTOTAL/AGGREGATE formulas that ignore hidden rows update in the
     // same interaction as the corresponding WPF host path.
     private void RecalculateAfterAutoFilterMutation() => _session.RecalculateWorkbook();
-
-    internal void RunAutoFilterForTest(
-        GridRange range,
-        uint columnOffset,
-        IReadOnlyList<string> allowedValues) =>
-        RunAutoFilter(range, columnOffset, allowedValues);
 
 }

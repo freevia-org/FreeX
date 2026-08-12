@@ -23,17 +23,6 @@ public sealed partial class MainWindow
         FreeXBackstageHomePanePlanner.Build();
     private AvaloniaBackstageFrame _backstageOverlay = null!;
 
-    internal bool IsBackstageOverlayVisibleForTest => _backstageOverlay.IsOpen;
-    internal FreeXBackstagePaneId ActiveBackstagePaneForTest =>
-        LiveBackstageFramePlan.Entries.FirstOrDefault(entry =>
-            string.Equals(entry.StableId, _backstageOverlay.CurrentEntryId, StringComparison.Ordinal))
-        ?.PaneFlow?.Pane ?? LiveBackstageFramePlan.Selection.DefaultPane;
-    internal Action<FreeXBackstageCommandId>? BackstageCommandActivationOverrideForTest { get; set; }
-    internal Button? BackstagePaneButtonForTest(FreeXBackstagePaneId pane) =>
-        _backstageOverlay.GetEntryButton(FreeXBackstageFramePlanner.GetPaneStableId(pane));
-    internal Button? BackstageCommandButtonForTest(FreeXBackstageCommandId command) =>
-        _backstageOverlay.GetEntryButton(FreeXBackstageFramePlanner.GetCommandStableId(command));
-
     private Control BuildBackstageOverlay()
     {
         var entries = LiveBackstageFramePlan.Entries.Select(MapLiveBackstageEntry).ToArray();
@@ -127,14 +116,19 @@ public sealed partial class MainWindow
     private Action BuildLiveBackstageCommandAction(FreeXBackstageCommandWorkflowPlan workflow) =>
         async () =>
         {
-            if (BackstageCommandActivationOverrideForTest is { } testOverride)
+            Action<FreeXBackstageCommandId>? activationOverride = null;
+            ResolveBackstageCommandActivationOverride(ref activationOverride);
+            if (activationOverride is not null)
             {
-                testOverride(workflow.Command);
+                activationOverride(workflow.Command);
                 return;
             }
 
             await ExecuteBackstageCommandWorkflowAsync(workflow.Command);
         };
+
+    partial void ResolveBackstageCommandActivationOverride(
+        ref Action<FreeXBackstageCommandId>? handler);
 
     private Control BuildLiveBackstagePane(FreeXBackstagePaneFlowPlan flow) =>
         flow.Pane switch

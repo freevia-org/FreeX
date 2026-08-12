@@ -294,21 +294,4 @@ public sealed partial class MainWindow
 
         _activeDataValidationDropdown = null;
     }
-
-    internal bool IsTextBoxInlineEditorActiveForTest => IsTextBoxInlineEditorActive;
-    internal TextBox? TextBoxInlineEditorForTest => _textBoxInlineEditor;
-
-    internal void BeginTextBoxInlineEditForTest(Guid textBoxId) => BeginTextBoxInlineEdit(textBoxId);
-
-    internal void RaiseTextBoxInlineEditorKeyDownForTest(KeyEventArgs args)
-    {
-        if (_textBoxInlineEditor is null)
-            throw new InvalidOperationException("No text box inline editor exists.");
-
-        TextBoxInlineEditor_KeyDown(_textBoxInlineEditor, args);
-    }
-
-    internal void InsertTextBoxAtActiveCellForTest() => InsertTextBoxAtActiveCell();
-
-    internal void RefreshShellForViewportPanForTest() => RefreshShellForViewportPan("Ready");
 }

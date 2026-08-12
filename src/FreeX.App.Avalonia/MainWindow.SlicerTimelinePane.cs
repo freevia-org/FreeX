@@ -37,11 +37,6 @@ public sealed partial class MainWindow
     private bool _slicerTimelinePaneDismissed;
     private int _slicerTimelinePaneBuildCount;
 
-    internal Border SlicerTimelinePaneHostForTest => _slicerTimelinePaneHost;
-    internal bool SlicerTimelinePaneVisibleForTest => _slicerTimelinePaneHost.IsVisible;
-    internal int SlicerTimelinePaneBuildCountForTest => _slicerTimelinePaneBuildCount;
-    internal void RefreshSlicerTimelinePaneForTest() => RefreshSlicerTimelinePane();
-
     private Control BuildSlicerTimelinePaneChrome()
     {
         _slicerTimelinePaneHost.Width = SlicerTimelinePaneWidth;

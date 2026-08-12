@@ -167,19 +167,6 @@ public sealed partial class MainWindow
         SelectSheet(sheetId);
     }
 
-    internal void RaiseSheetTabModifierClickForTest(SheetId sheetId, KeyModifiers modifiers)
-    {
-        BeginSheetTabPointer(sheetId, modifiers);
-        CompleteSheetTabClick(sheetId);
-    }
-
-    internal void RaiseSheetTabModifierReleaseThenKeyboardClickForTest(SheetId sheetId, KeyModifiers modifiers)
-    {
-        BeginSheetTabPointer(sheetId, modifiers);
-        CompleteSheetTabPointerRelease();
-        CompleteSheetTabClick(sheetId);
-    }
-
     private void CommitSheetTabDragDrop()
     {
         if (_sheetTabDragId is not { } draggedId || _sheetTabDragPendingToIndex is not { } toIndex)

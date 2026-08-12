@@ -1,5 +1,7 @@
 extern alias ProductionAvalonia;
 
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using FluentAssertions;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -42,6 +44,84 @@ public sealed class ParityCaptureAssemblyOwnershipTests
         assembly.GetReferencedAssemblies()
             .Select(reference => reference.Name)
             .Should().NotContain("FreeX.ParityCapture.Support");
+    }
+
+    [Fact]
+    public void ShippingAssembly_DoesNotExposeRendererTestAccessOrTestFriendships()
+    {
+        var assembly = typeof(ProductionAvalonia::FreeX.App.Avalonia.MainWindow).Assembly;
+        var mainWindow = typeof(ProductionAvalonia::FreeX.App.Avalonia.MainWindow);
+        const BindingFlags allMembers = BindingFlags.Public | BindingFlags.NonPublic |
+            BindingFlags.Instance | BindingFlags.Static;
+
+        mainWindow.GetMembers(allMembers)
+            .Select(member => member.Name)
+            .Should().NotContain(name =>
+                name.Contains("ForTest", StringComparison.Ordinal) ||
+                name.Contains("ForParityCapture", StringComparison.Ordinal) ||
+                name.Contains("OverrideForTest", StringComparison.Ordinal));
+
+        mainWindow.GetField("_sheetGridBuildCount", allMembers).Should().BeNull();
+        mainWindow.GetField("_sheetTabsBuildCount", allMembers).Should().BeNull();
+        mainWindow.GetField("ChromeSurfaceColor", allMembers).Should().BeNull();
+
+        assembly.GetCustomAttributes<InternalsVisibleToAttribute>()
+            .Select(attribute => attribute.AssemblyName)
+            .Should().NotContain(name =>
+                name.Contains("Tests", StringComparison.OrdinalIgnoreCase) ||
+                name.Contains("Capture", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void ParityRendererHost_OwnsExtractedRendererTestAccess()
+    {
+        var supportMainWindow = typeof(global::FreeX.App.Avalonia.MainWindow);
+        const BindingFlags allMembers = BindingFlags.Public | BindingFlags.NonPublic |
+            BindingFlags.Instance | BindingFlags.Static;
+        var memberNames = supportMainWindow.GetMembers(allMembers)
+            .Select(member => member.Name)
+            .ToHashSet(StringComparer.Ordinal);
+
+        memberNames.Should().Contain([
+            "RebuildSheetGridForTest",
+            "RaiseKeyDownForTest",
+            "ApplyQuickAnalysisConditionalFormatItemForTestAsync",
+            "BackstageCommandActivationOverrideForTest",
+            "PasteSpecialWorkflowOverrideForTest",
+            "WorkbookSaveAsPickerOverrideForTest",
+            "AllowCloseWithoutDirtyPromptForParityCapture",
+            "ChromeSurfaceColor",
+        ]);
+    }
+
+    [Fact]
+    public void ParityRendererProject_OwnsExtractedTestSupportSources()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var shippingDirectory = Path.Combine(root, "src", "FreeX.App.Avalonia");
+        var supportDirectory = Path.Combine(root, "tools", "FreeX.ParityCapture.Avalonia", "TestSupport");
+        var shippingProject = File.ReadAllText(Path.Combine(
+            shippingDirectory,
+            "FreeX.App.Avalonia.csproj"));
+        var parityProject = File.ReadAllText(Path.Combine(
+            root,
+            "tools",
+            "FreeX.ParityCapture.Avalonia",
+            "FreeX.ParityCapture.Avalonia.csproj"));
+
+        Directory.GetFiles(supportDirectory, "*.cs", SearchOption.TopDirectoryOnly)
+            .Should().HaveCountGreaterThan(20);
+        parityProject.Should().Contain("<Compile Include=\"TestSupport\\**\\*.cs\" />");
+        shippingProject.Should().NotContain("FreeX.App.Avalonia.Tests");
+        shippingProject.Should().NotContain("FreeX.App.Avalonia.CaptureTests");
+
+        Directory.GetFiles(shippingDirectory, "*.cs", SearchOption.TopDirectoryOnly)
+            .SelectMany(File.ReadLines)
+            .Should().NotContain(line =>
+                line.Contains("internal", StringComparison.Ordinal) &&
+                (line.Contains("ForTest", StringComparison.Ordinal) ||
+                 line.Contains("ForParityCapture", StringComparison.Ordinal) ||
+                 line.Contains("OverrideForTest", StringComparison.Ordinal)));
     }
 
     [Fact]

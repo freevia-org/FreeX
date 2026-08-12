@@ -41,15 +41,6 @@ public sealed partial class MainWindow
         R(Key.OemMinus, Ctrl, AvaloniaLocalShortcut.DeleteCells),
     ];
 
-    internal static bool TryResolveApplicationShortcutForTest(
-        Key key,
-        KeyModifiers modifiers,
-        out KeyboardCommandShortcut shortcut) =>
-        TryResolveApplicationShortcut(key, modifiers, out shortcut);
-
-    internal bool FormulaBarExpandedForTest => _formulaBarExpanded;
-    internal ExcelSelectionMode KeyboardSelectionModeForTest => _keyboardSelectionMode;
-
     private ExcelSelectionMode _keyboardSelectionMode;
 
     private static bool TryResolveApplicationShortcut(
@@ -322,13 +313,11 @@ public sealed partial class MainWindow
         return true;
     }
 
-    internal static Key GetEffectiveWorkbookShortcutKeyForTest(
-        Key key,
-        PhysicalKey physicalKey) =>
-        physicalKey == PhysicalKey.F12 ? Key.F12 : key;
-
     private static Key GetEffectiveWorkbookShortcutKey(KeyEventArgs args) =>
-        GetEffectiveWorkbookShortcutKeyForTest(args.Key, args.PhysicalKey);
+        NormalizeWorkbookShortcutKey(args.Key, args.PhysicalKey);
+
+    private static Key NormalizeWorkbookShortcutKey(Key key, PhysicalKey physicalKey) =>
+        physicalKey == PhysicalKey.F12 ? Key.F12 : key;
 
     private bool TryHandleFocusedEditorShortcut(KeyEventArgs args)
     {

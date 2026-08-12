@@ -107,10 +107,4 @@ public sealed partial class MainWindow
                    this,
                    routedCommand);
     }
-
-    internal bool RouteFormulaPointSelectionForTest(
-        GridRange range,
-        bool append = false,
-        bool extendSelection = false) =>
-        TryRouteFormulaPointModeSelection(range, append, extendSelection);
 }

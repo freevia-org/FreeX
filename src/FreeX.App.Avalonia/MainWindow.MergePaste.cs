@@ -271,7 +271,9 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task ShowPasteSpecialDialogAsync()
     {
-        if (PasteSpecialWorkflowOverrideForTest is { } workflowOverride)
+        Func<Task>? workflowOverride = null;
+        ResolvePasteSpecialWorkflowOverride(ref workflowOverride);
+        if (workflowOverride is not null)
         {
             await workflowOverride();
             return;
@@ -324,7 +326,7 @@ public sealed partial class MainWindow
         }
     }
 
-    internal Func<Task>? PasteSpecialWorkflowOverrideForTest { get; set; }
+    partial void ResolvePasteSpecialWorkflowOverride(ref Func<Task>? handler);
 
     /// <summary>
     /// Test-only hook (matching the established DialogInspection convention used by

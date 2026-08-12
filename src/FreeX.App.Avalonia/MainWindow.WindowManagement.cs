@@ -127,12 +127,6 @@ public sealed partial class MainWindow : Window
         WindowRegistry.RefreshWindowNumbering();
     }
 
-    internal MainWindow CreateSharedViewForTest() =>
-        new(
-            App.StartupArguments,
-            _session.CreateSiblingView(InitialViewportHeight, InitialViewportWidth),
-            _optionsRuntimeSession);
-
     // view.newWindow
     private void NewWindow()
     {

@@ -44,10 +44,6 @@ public sealed partial class MainWindow
     private string _pivotPaneSearchText = string.Empty;
     private int _pivotFieldPaneBuildCount;
 
-    internal int PivotFieldPaneBuildCountForTest => _pivotFieldPaneBuildCount;
-
-    internal bool PivotFieldPaneVisibleForTest => _pivotFieldPaneHost.IsVisible;
-
     // The field currently being dragged within the pane (pointer-capture gesture), or null when idle.
     private PivotPaneDragItem? _pivotPaneDragItem;
     private readonly List<PivotDropZone> _pivotDropZones = [];
