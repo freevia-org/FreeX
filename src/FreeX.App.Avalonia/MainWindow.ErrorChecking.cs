@@ -446,5 +446,5 @@ public sealed partial class MainWindow
     }
 
     private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingParityIssues(SheetId sheetId) =>
-        ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);
+        ErrorCheckingParityFixture.CreateIssues(sheetId);
 }

@@ -6,12 +6,6 @@ namespace FreeX.App.Presentation.TextToColumns;
 /// </summary>
 public static class TextToColumnsParityFixture
 {
-    public const int PreviewRowLimit = 3;
-    public const double WindowWidth = 560;
-    public const double WindowHeight = 560;
-    public const double MinimumWindowWidth = 520;
-    public const double MinimumWindowHeight = 500;
-
     public static IReadOnlyList<string> SampleRows { get; } = Array.AsReadOnly(
     [
         "North,Widget,120",

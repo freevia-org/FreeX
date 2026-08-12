@@ -60,12 +60,12 @@ public sealed class ErrorCheckingDialogSourceTests
         var avaloniaDialogSource = WorkspaceFileLocator.ReadAllText(
             "src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs");
 
-        source.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
+        source.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
         source.Should().Contain("targetSurfaceId, \"dialog.ErrorChecking\"");
         source.Should().Contain("private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingIssues(SheetId sheetId) =>");
-        source.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);");
+        source.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId);");
         avaloniaSource.Should().Contain("(\"dialog.ErrorChecking\", () => ShowErrorCheckingParityDialogAsync()),");
-        avaloniaDialogSource.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
+        avaloniaDialogSource.Should().Contain("ErrorCheckingParityFixture.CreateIssues(sheetId)");
         avaloniaDialogSource.Should().NotContain("CreateErrorCheckingIssues(sheetId)");
     }
 

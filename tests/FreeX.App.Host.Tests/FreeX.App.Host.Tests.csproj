@@ -45,6 +45,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" />
+    <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />

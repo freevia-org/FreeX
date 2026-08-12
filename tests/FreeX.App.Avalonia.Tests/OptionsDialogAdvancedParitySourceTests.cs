@@ -39,7 +39,8 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
         var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
-        var fixture = File.ReadAllText(RepoFile("src", "FreeX.App.Services", "OptionsDialogParityFixture.cs"));
+        var fixture = File.ReadAllText(RepoFile(
+            "tools", "FreeX.ParityCapture.Support", "Services", "OptionsDialogParityFixture.cs"));
 
         source.Should().Contain("OptionsDialogParityFixture.Create()");
         source.Should().Contain("OptionsSectionHeader(OptionsText(\"Options_WorkbookViewOptions\"), topMargin: 0, bottomMargin: 12)");

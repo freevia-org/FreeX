@@ -75,8 +75,8 @@ public sealed partial class MainWindow
     private const int ForecastSheetParityDialogHeight = 150;
     private const int SubtotalParityDialogWidth = 380;
     private const int SubtotalParityDialogHeight = 390;
-    private const int TextToColumnsParityDialogWidth = (int)TextToColumnsParityFixture.WindowWidth;
-    private const int TextToColumnsParityDialogHeight = (int)TextToColumnsParityFixture.WindowHeight;
+    private const int TextToColumnsParityDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth;
+    private const int TextToColumnsParityDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight;
     private static readonly FontFamily ParityNarrowUiFontFamily =
         new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
     private static readonly IBrush ParityBackstageSidebarBrush = Brush(0x10, 0x25, 0x3A);
@@ -1536,7 +1536,7 @@ public sealed partial class MainWindow
     }
 
     private Task ShowEvaluateFormulaParityDialogAsync() =>
-        ShowEvaluateFormulaDialogAsync(EvaluateFormulaDialogPlanner.CreateParitySummary(_session.ActiveSheet.Id));
+        ShowEvaluateFormulaDialogAsync(EvaluateFormulaParityFixture.CreateSummary(_session.ActiveSheet.Id));
 
     private Task ShowWatchWindowParityDialogAsync() =>
         ShowWithParitySelectionAsync(

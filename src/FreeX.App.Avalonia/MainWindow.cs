@@ -1358,7 +1358,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                  App.GridCaptureOptions is not null ||
                  App.InteractionValidationOptions is not null)
         {
-            _session = _sessionFactory.CreateParityDemo(InitialViewportHeight, InitialViewportWidth, includeObjects: true);
+            _session = ParityCaptureWorkbookSessionFactory.Create(
+                _sessionFactory,
+                InitialViewportHeight,
+                InitialViewportWidth,
+                includeObjects: true);
         }
         else
         {

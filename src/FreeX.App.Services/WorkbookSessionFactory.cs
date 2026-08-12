@@ -96,34 +96,6 @@ public sealed class WorkbookSessionFactory
             viewportService);
     }
 
-    /// <summary>
-    /// Creates a session over the fixed parity demo workbook (<see cref="ParityDemoWorkbookFactory"/>) so the
-    /// Avalonia <c>--parity-capture</c> grid surface renders the SAME content the WPF host adopts, instead of
-    /// the rich macOS-preview demo. Used only by the headless capture path.
-    /// </summary>
-    public WorkbookSession CreateParityDemo(
-        double viewportHeight,
-        double viewportWidth,
-        bool includeObjects = false,
-        IEnumerable<IFileAdapter>? adapters = null,
-        IViewportService? viewportService = null)
-    {
-        var workbook = ParityDemoWorkbookFactory.Create();
-        var source = new StartupWorkbookLoadResult(
-            workbook,
-            workbook.Name,
-            "Showing parity demo workbook.",
-            IsFallback: false);
-
-        return Create(
-            source,
-            viewportHeight,
-            viewportWidth,
-            includeObjects,
-            adapters,
-            viewportService);
-    }
-
     public WorkbookSession CreateOpened(
         WorkbookOpenTarget target,
         WorkbookOpenResult result,

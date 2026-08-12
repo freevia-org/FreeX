@@ -46,9 +46,9 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
         paritySource.Should().Contain("private const int SubtotalParityDialogWidth = 380;");
         paritySource.Should().Contain("private const int SubtotalParityDialogHeight = 390;");
         paritySource.Should().Contain(
-            "private const int TextToColumnsParityDialogWidth = (int)TextToColumnsParityFixture.WindowWidth;");
+            "private const int TextToColumnsParityDialogWidth = (int)TextToColumnsDialogMetrics.WindowWidth;");
         paritySource.Should().Contain(
-            "private const int TextToColumnsParityDialogHeight = (int)TextToColumnsParityFixture.WindowHeight;");
+            "private const int TextToColumnsParityDialogHeight = (int)TextToColumnsDialogMetrics.WindowHeight;");
 
         var mainWindowSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var forecastDialog = ExtractMethodSource(
@@ -78,8 +78,8 @@ public sealed class AvaloniaSheetDialogSizeSourceTests
             "private static IReadOnlyList<string> ReadTextToColumnsSources(Sheet sheet, GridRange range)");
         textToColumnsDialog.Should().Contain("Width = TextToColumnsParityDialogWidth,");
         textToColumnsDialog.Should().Contain("Height = TextToColumnsParityDialogHeight,");
-        textToColumnsDialog.Should().Contain("MinWidth = TextToColumnsParityFixture.MinimumWindowWidth,");
-        textToColumnsDialog.Should().Contain("MinHeight = TextToColumnsParityFixture.MinimumWindowHeight,");
+        textToColumnsDialog.Should().Contain("MinWidth = TextToColumnsDialogMetrics.MinimumWindowWidth,");
+        textToColumnsDialog.Should().Contain("MinHeight = TextToColumnsDialogMetrics.MinimumWindowHeight,");
     }
 
     [Fact]

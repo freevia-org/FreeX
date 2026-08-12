@@ -98,8 +98,8 @@ public sealed partial class MainWindow
             Title = UiText.Format("TableLoc_TtcWizardTitle", 1, 3),
             Width = TextToColumnsParityDialogWidth,
             Height = TextToColumnsParityDialogHeight,
-            MinWidth = TextToColumnsParityFixture.MinimumWindowWidth,
-            MinHeight = TextToColumnsParityFixture.MinimumWindowHeight,
+            MinWidth = TextToColumnsDialogMetrics.MinimumWindowWidth,
+            MinHeight = TextToColumnsDialogMetrics.MinimumWindowHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
@@ -281,7 +281,7 @@ public sealed partial class MainWindow
             var preview = TextToColumnsPlanner.Preview(
                 sources,
                 options,
-                TextToColumnsParityFixture.PreviewRowLimit);
+                TextToColumnsDialogMetrics.PreviewRowLimit);
             previewColumnCount = Math.Max(1, preview.ColumnCount);
             statusText.Text = UiText.Format("TableLoc_TtcSplittingStatus", sources.Count, previewColumnCount);
 

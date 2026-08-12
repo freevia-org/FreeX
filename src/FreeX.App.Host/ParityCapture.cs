@@ -561,12 +561,12 @@ internal static class ParityCapture
             else if (string.Equals(targetSurfaceId, "dialog.ErrorChecking", StringComparison.Ordinal))
             {
                 CaptureDialog(results, "dialog.ErrorChecking", outDir, () =>
-                    new ErrorCheckingDialog(ErrorCheckingDialogPlanner.CreateParityIssues(sheet.Id), _ => { }, _ => true, _ => { }));
+                    new ErrorCheckingDialog(ErrorCheckingParityFixture.CreateIssues(sheet.Id), _ => { }, _ => true, _ => { }));
             }
             else if (string.Equals(targetSurfaceId, "dialog.EvaluateFormula", StringComparison.Ordinal))
             {
                 CaptureDialog(results, "dialog.EvaluateFormula", outDir, () =>
-                    new EvaluateFormulaDialog(EvaluateFormulaDialogPlanner.CreateParitySummary(sheet.Id)));
+                    new EvaluateFormulaDialog(EvaluateFormulaParityFixture.CreateSummary(sheet.Id)));
             }
             else if (string.Equals(targetSurfaceId, "dialog.TextToColumns", StringComparison.Ordinal))
             {
@@ -694,7 +694,7 @@ internal static class ParityCapture
             new SymbolPickerDialog());
 
         CaptureDialog(results, "dialog.EvaluateFormula", outDir, () =>
-            new EvaluateFormulaDialog(EvaluateFormulaDialogPlanner.CreateParitySummary(sheet.Id)));
+            new EvaluateFormulaDialog(EvaluateFormulaParityFixture.CreateSummary(sheet.Id)));
 
         CaptureDialog(results, "dialog.ErrorChecking", outDir, () =>
             new ErrorCheckingDialog(CreateErrorCheckingIssues(sheet.Id), _ => { }, _ => true, _ => { }));
@@ -1056,7 +1056,7 @@ internal static class ParityCapture
         headers.Select((header, index) => new RemoveDuplicateColumnChoice((uint)index, header, true)).ToArray();
 
     private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingIssues(SheetId sheetId) =>
-        ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);
+        ErrorCheckingParityFixture.CreateIssues(sheetId);
 
     private static IReadOnlyList<WatchWindowEntry> CreateWatchEntries(SheetId sheetId) =>
     [
@@ -1212,7 +1212,7 @@ internal static class ParityCapture
             "dialog.EvaluateFormula" =>
                 (EvaluateFormulaDialogPlanner.Width, EvaluateFormulaDialogPlanner.Height),
             "dialog.TextToColumns" =>
-                (TextToColumnsParityFixture.WindowWidth, TextToColumnsParityFixture.WindowHeight),
+                (TextToColumnsDialogMetrics.WindowWidth, TextToColumnsDialogMetrics.WindowHeight),
             _ => (0, 0)
         };
 

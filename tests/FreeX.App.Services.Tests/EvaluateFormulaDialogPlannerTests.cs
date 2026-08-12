@@ -69,7 +69,7 @@ public sealed class EvaluateFormulaDialogPlannerTests
     {
         var sheetId = SheetId.New();
 
-        var summary = EvaluateFormulaDialogPlanner.CreateParitySummary(sheetId);
+        var summary = EvaluateFormulaParityFixture.CreateSummary(sheetId);
 
         summary.SheetId.Should().Be(sheetId);
         summary.SheetName.Should().Be("Sheet1");

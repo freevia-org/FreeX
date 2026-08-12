@@ -83,24 +83,4 @@ public static class ErrorCheckingDialogPlanner
     public static bool HasCalculationSteps(FormulaErrorIssue issue) =>
         !string.IsNullOrWhiteSpace(issue.FormulaText);
 
-    /// <summary>Returns the deterministic issue set shared by the WPF and Avalonia parity captures.</summary>
-    public static IReadOnlyList<FormulaErrorIssue> CreateParityIssues(SheetId sheetId) =>
-    [
-        new(
-            sheetId,
-            "Sheet1",
-            new CellAddress(sheetId, 6, 4),
-            "D6",
-            ErrorValue.DivByZero.Code,
-            "=D2/0",
-            "Formula divides by zero."),
-        new(
-            sheetId,
-            "Sheet1",
-            new CellAddress(sheetId, 7, 4),
-            "D7",
-            FormulaAuditingService.FormulaStoredAsTextErrorCode,
-            null,
-            "The formula in this cell is stored as text."),
-    ];
 }

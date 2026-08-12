@@ -582,7 +582,8 @@ public sealed partial class MainWindow
     }
 
     private static WorkbookSession CreateDisposableRibbonSession() =>
-        new WorkbookSessionFactory().CreateParityDemo(
+        ParityCaptureWorkbookSessionFactory.Create(
+            new WorkbookSessionFactory(),
             viewportHeight: 480,
             viewportWidth: 800,
             includeObjects: true);

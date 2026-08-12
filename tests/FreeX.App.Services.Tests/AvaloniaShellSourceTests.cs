@@ -2629,7 +2629,7 @@ public sealed class AvaloniaShellSourceTests
         hyperlinkSource.Should().Contain("new(UiText.Get(\"Hyperlink_LinkTypePlaceInThisDocument\"), HyperlinkTargetKind.PlaceInThisDocument)");
         parityCaptureSource.Should().Contain("private Task ShowEvaluateFormulaParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowEvaluateFormulaDialogAsync");
-        parityCaptureSource.Should().Contain("EvaluateFormulaDialogPlanner.CreateParitySummary(_session.ActiveSheet.Id)");
+        parityCaptureSource.Should().Contain("EvaluateFormulaParityFixture.CreateSummary(_session.ActiveSheet.Id)");
         evaluateFormulaSource.Should().Contain("EvaluateFormulaDialogPlanner.CreateSummary(_session.Workbook, _session.ActiveCell)");
         evaluateFormulaSource.Should().Contain("EvaluateFormulaDialogPlanner.CreateSession(summary)");
         evaluateFormulaSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"EvaluateFormulaDialog\")");
@@ -2802,9 +2802,9 @@ public sealed class AvaloniaShellSourceTests
         var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
         var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Host", "ParityCapture.cs"));
         var autoFilterFixtureSource = File.ReadAllText(RepositoryFileLocator.Find(
-            "src", "FreeX.App.Presentation", "Filtering", "AutoFilterParityFixturePlanner.cs"));
+            "tools", "FreeX.ParityCapture.Support", "Presentation", "Filtering", "AutoFilterParityFixturePlanner.cs"));
         var accessibilityCheckerFixtureSource = File.ReadAllText(RepositoryFileLocator.Find(
-            "src", "FreeX.App.Presentation", "Accessibility", "AccessibilityCheckerParityFixture.cs"));
+            "tools", "FreeX.ParityCapture.Support", "Presentation", "Accessibility", "AccessibilityCheckerParityFixture.cs"));
         var dialogIds = new[]
         {
             "dialog.FormatCells",

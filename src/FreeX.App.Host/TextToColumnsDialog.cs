@@ -13,10 +13,10 @@ public sealed record TextToColumnsRangeSelectionRequest(
 
 public sealed partial class TextToColumnsDialog : Window
 {
-    private const double DialogDefaultWidth = TextToColumnsParityFixture.WindowWidth;
-    private const double DialogDefaultHeight = TextToColumnsParityFixture.WindowHeight;
-    private const double DialogMinimumWidth = TextToColumnsParityFixture.MinimumWindowWidth;
-    private const double DialogMinimumHeight = TextToColumnsParityFixture.MinimumWindowHeight;
+    private const double DialogDefaultWidth = TextToColumnsDialogMetrics.WindowWidth;
+    private const double DialogDefaultHeight = TextToColumnsDialogMetrics.WindowHeight;
+    private const double DialogMinimumWidth = TextToColumnsDialogMetrics.MinimumWindowWidth;
+    private const double DialogMinimumHeight = TextToColumnsDialogMetrics.MinimumWindowHeight;
 
     private static readonly string[] DateColumnFormatLabels = ["MDY", "DMY", "YMD", "MYD", "DYM", "YDM"];
 

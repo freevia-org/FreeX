@@ -102,7 +102,7 @@ public sealed partial class TextToColumnsDialog
     {
         var rows = previewRows?
             .Where(row => !string.IsNullOrWhiteSpace(row))
-            .Take(TextToColumnsParityFixture.PreviewRowLimit)
+            .Take(TextToColumnsDialogMetrics.PreviewRowLimit)
             .ToList() ?? [];
 
         return rows.Count == 0

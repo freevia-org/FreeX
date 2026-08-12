@@ -21,7 +21,6 @@
     <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeX.Legal.PrivacyNotice.md" />
     <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeX.Legal.ThirdPartyNotices.md" />
     <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeX.Legal.ThirdPartyLicenses.md" />
-    <EmbeddedResource Include="..\..\docs\parity\parity-demo.csv" LogicalName="FreeX.Parity.DemoWorkbook.csv" />
   </ItemGroup>
 
   <ItemGroup>

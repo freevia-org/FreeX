@@ -49,24 +49,4 @@ public static class EvaluateFormulaDialogPlanner
     public static FormulaEvaluationSession CreateSession(FormulaEvaluationSummary summary) =>
         FormulaEvaluationSession.Start(summary);
 
-    /// <summary>
-    /// Returns the deterministic dialog state used by both parity capture hosts. Keeping the summary in
-    /// the portable planner prevents a WPF/Avalonia capture from silently drifting to different cells or
-    /// calculation steps while preserving the real FormulaEvaluationSession behavior in each shell.
-    /// </summary>
-    public static FormulaEvaluationSummary CreateParitySummary(SheetId sheetId)
-    {
-        var address = new CellAddress(sheetId, 6, 4);
-        return new FormulaEvaluationSummary(
-            sheetId,
-            "Sheet1",
-            address,
-            "=SUM(D2:D5)",
-            "469",
-            [
-                new FormulaEvaluationStep("SUM(D2:D5)", "469"),
-                new FormulaEvaluationStep("D2:D5", "{120;85;200;64}"),
-                new FormulaEvaluationStep("=SUM(D2:D5)", "469"),
-            ]);
-    }
 }
