@@ -3,6 +3,54 @@ namespace FreeP.RenderCompare.Tests;
 public sealed class VisualEvidenceOrchestrationSourceTests
 {
     [Fact]
+    public void Whole_window_hosts_share_portable_coordination_and_keep_native_realization()
+    {
+        var portable = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "freep", "TestSupport", "VisualEvidence", "WholeWindowVisualEvidenceHostCoordinator.cs");
+        var hosts = new[]
+        {
+            TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+                "freep", "TestSupport", "VisualEvidence.Wpf", "WpfWholeWindowVisualEvidenceCoordinator.cs"),
+            TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+                "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCoordinator.cs"),
+        };
+
+        portable.Should().Contain("public interface IWholeWindowVisualEvidenceProbe")
+            .And.Contain("private void Activate(WholeWindowVisualEvidenceActivation activation)")
+            .And.Contain("private bool PrepareViewState(")
+            .And.Contain("new WholeWindowVisualEvidenceSemanticState(")
+            .And.NotContain("using System.Windows")
+            .And.NotContain("using Avalonia");
+        hosts.Should().AllSatisfy(host =>
+        {
+            host.Should().Contain(": IWholeWindowVisualEvidenceProbe")
+                .And.Contain("_coordinator = new(this);")
+                .And.Contain("BoundsRelativeTo(")
+                .And.Contain("DescribeFocus(")
+                .And.NotContain("private void Activate(")
+                .And.NotContain("private bool PrepareViewState(")
+                .And.NotContain("new WholeWindowVisualEvidenceSemanticState(");
+        });
+    }
+
+    [Fact]
+    public void Whole_window_manifest_hashes_portable_and_native_test_support_sources()
+    {
+        var source = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "tools", "Generate-FreePWholeWindowVisualEvidenceManifest.ps1");
+
+        source.Should().Contain("freep\\TestSupport\\VisualEvidence\\WholeWindowVisualEvidenceHostCoordinator.cs")
+            .And.Contain("freep\\TestSupport\\VisualEvidence.Wpf\\WpfWholeWindowVisualEvidenceCapture.cs")
+            .And.Contain("freep\\TestSupport\\VisualEvidence.Wpf\\WpfWholeWindowVisualEvidenceCoordinator.cs")
+            .And.Contain("freep\\FreeP.App.Host\\MainWindow.VisualCaptureAdapter.cs")
+            .And.Contain("freep\\TestSupport\\VisualEvidence.Avalonia\\AvaloniaWholeWindowVisualEvidenceCapture.cs")
+            .And.Contain("freep\\TestSupport\\VisualEvidence.Avalonia\\AvaloniaWholeWindowVisualEvidenceCoordinator.cs")
+            .And.Contain("freep\\FreeP.App.Avalonia\\MainWindow.VisualCaptureAdapter.cs")
+            .And.NotContain("freep\\FreeP.App.Host\\MainWindow.WholeWindowVisualEvidence.cs")
+            .And.NotContain("freep\\FreeP.App.Avalonia\\MainWindow.WholeWindowVisualEvidence.cs");
+    }
+
+    [Fact]
     public void Wpf_and_Avalonia_capture_adapters_delegate_ui_free_orchestration()
     {
         var sources = new[]

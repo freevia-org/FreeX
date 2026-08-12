@@ -5,69 +5,106 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
+using FreeP.Core.Model;
 
 namespace FreeP.VisualEvidence.Avalonia;
 
-internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator(MainWindow.AvaloniaVisualCaptureAdapter access)
+internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator : IWholeWindowVisualEvidenceProbe
 {
-    private bool _viewStateActivated;
-    private WholeWindowVisualEvidencePreparationPlan? _preparation;
+    private readonly MainWindow.AvaloniaVisualCaptureAdapter _access;
+    private readonly WholeWindowVisualEvidenceHostCoordinator _coordinator;
+
+    internal AvaloniaWholeWindowVisualEvidenceCoordinator(MainWindow.AvaloniaVisualCaptureAdapter access)
+    {
+        _access = access;
+        _coordinator = new(this);
+    }
 
     internal IReadOnlyList<DialogPaneVisualEvidenceAssertion> Prepare(
         WholeWindowVisualEvidenceScenario scenario,
-        DialogPaneVisualEvidenceFixture fixture)
-    {
-        var plan = WholeWindowVisualEvidencePreparationSession.Prepare(scenario, fixture);
-        _preparation = plan;
-        if (plan.LoadFixturePresentation)
-            access.LoadPresentation(fixture.Presentation);
-        access.SelectSlide(plan.SlideIndex);
-        if (plan.SelectionShapeId == 0)
-            access.ClearSelection();
-        else
-            access.SelectShape(plan.SelectionShapeId);
+        DialogPaneVisualEvidenceFixture fixture) =>
+        _coordinator.Prepare(scenario, fixture);
 
-        access.HideCommentsPane();
-        access.SelectRibbonTab(plan.ActiveRibbonTabId);
-        _viewStateActivated = !plan.Activation.IsViewState;
-        switch (plan.Activation.Kind)
-        {
-            case WholeWindowVisualEvidenceActivationKind.FocusNotesPane:
-                access.FocusNotes();
-                break;
-            case WholeWindowVisualEvidenceActivationKind.BackstagePane:
-                access.ShowBackstagePane(plan.Activation.Id);
-                break;
-            default:
-                if (plan.Activation.IsAuxiliaryPane)
-                    ShowAuxiliaryPane(plan.Activation.Kind);
-                break;
-        }
-
-        access.RefreshWholeWindow();
-        Normalize(scenario);
-        var assertions = plan.CreateBaselineAssertions(new(
-            access.SlideCount,
-            access.CurrentSlideIndex,
-            access.SelectedShapeIds)).ToList();
-        assertions.AddRange(PrepareRichEditor(plan));
-        return assertions;
-    }
-
-    internal void Normalize(WholeWindowVisualEvidenceScenario scenario)
-    {
-        var activation = WholeWindowVisualEvidencePreparationSession.ResolveActivation(scenario);
-        if (activation.IsViewState)
-            _viewStateActivated = PrepareViewState(activation.Kind);
-        access.NormalizeShell();
-    }
+    internal void Normalize(WholeWindowVisualEvidenceScenario scenario) =>
+        _coordinator.Normalize(scenario);
 
     internal WholeWindowVisualEvidenceSemanticState CaptureSemantic(
         WholeWindowVisualEvidenceScenario scenario,
-        IReadOnlyList<DialogPaneVisualEvidenceAssertion> preparationAssertions)
+        IReadOnlyList<DialogPaneVisualEvidenceAssertion> preparationAssertions) =>
+        _coordinator.CaptureSemantic(scenario, preparationAssertions);
+
+    void IWholeWindowVisualEvidenceProbe.LoadPresentation(Presentation presentation) =>
+        _access.LoadPresentation(presentation);
+
+    void IWholeWindowVisualEvidenceProbe.SelectSlide(int slideIndex) => _access.SelectSlide(slideIndex);
+
+    void IWholeWindowVisualEvidenceProbe.SelectShape(uint shapeId) => _access.SelectShape(shapeId);
+
+    void IWholeWindowVisualEvidenceProbe.ClearSelection() => _access.ClearSelection();
+
+    void IWholeWindowVisualEvidenceProbe.HideCommentsPane() => _access.HideCommentsPane();
+
+    void IWholeWindowVisualEvidenceProbe.SelectRibbonTab(string tabId) => _access.SelectRibbonTab(tabId);
+
+    void IWholeWindowVisualEvidenceProbe.FocusNotes() => _access.FocusNotes();
+
+    void IWholeWindowVisualEvidenceProbe.ShowBackstagePane(string paneId) => _access.ShowBackstagePane(paneId);
+
+    void IWholeWindowVisualEvidenceProbe.ShowCommentsPane() => _access.ShowCommentsPane();
+
+    void IWholeWindowVisualEvidenceProbe.SelectFirstComment() => _access.SelectFirstComment();
+
+    void IWholeWindowVisualEvidenceProbe.ShowAccessibilityPane() => _access.ShowAccessibilityPane();
+
+    void IWholeWindowVisualEvidenceProbe.SelectFirstAccessibilityIssue() => _access.SelectFirstAccessibilityIssue();
+
+    void IWholeWindowVisualEvidenceProbe.ShowAltTextPane() => _access.ShowAltTextPane();
+
+    void IWholeWindowVisualEvidenceProbe.ShowReadingOrderPane() => _access.ShowReadingOrderPane();
+
+    void IWholeWindowVisualEvidenceProbe.ShowProofingPane() => _access.ShowProofingPane();
+
+    void IWholeWindowVisualEvidenceProbe.SelectFirstProofingIssue() => _access.SelectFirstProofingIssue();
+
+    void IWholeWindowVisualEvidenceProbe.ShowMediaCaptionPane() => _access.ShowMediaCaptionPane();
+
+    void IWholeWindowVisualEvidenceProbe.ShowSmartArtTextPane() => _access.ShowSmartArtTextPane();
+
+    void IWholeWindowVisualEvidenceProbe.EnsureAnimationPaneVisible() => _access.EnsureAnimationPaneVisible();
+
+    bool IWholeWindowVisualEvidenceProbe.SetViewShowState(bool showGridlines, bool showGuides) =>
+        _access.SetViewShowState(showGridlines, showGuides);
+
+    void IWholeWindowVisualEvidenceProbe.SetZoom(PresentationViewZoomState state) => _access.SetZoom(state);
+
+    void IWholeWindowVisualEvidenceProbe.RefreshWholeWindow() => _access.RefreshWholeWindow();
+
+    void IWholeWindowVisualEvidenceProbe.NormalizeShell() => _access.NormalizeShell();
+
+    WholeWindowVisualEvidenceBaselineState IWholeWindowVisualEvidenceProbe.CaptureBaselineState() => new(
+        _access.SlideCount,
+        _access.CurrentSlideIndex,
+        _access.SelectedShapeIds);
+
+    WholeWindowVisualEvidenceRichEditorPreparationState IWholeWindowVisualEvidenceProbe.PrepareRichEditor(
+        WholeWindowVisualEvidenceRichEditorPlan plan)
+    {
+        var state = _access.PrepareRichEditor(plan.ShapeId, plan.SelectionStart, plan.SelectionEnd);
+        return new(
+            state.IsActive,
+            state.ActiveShapeId,
+            state.SelectionSet,
+            state.SelectedText,
+            state.IsFocused,
+            state.RunCount,
+            "The production Avalonia rich-text input owns keyboard focus.");
+    }
+
+    WholeWindowVisualEvidenceProbeState IWholeWindowVisualEvidenceProbe.CaptureSemanticState(
+        WholeWindowVisualEvidenceScenario scenario)
     {
         var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
-        var tabs = access.RibbonTabs;
+        var tabs = _access.RibbonTabs;
         var activeTabId = (tabs?.SelectedItem as TabItem)?.Tag as string ?? string.Empty;
         var visibleTabs = tabs?.Items.OfType<TabItem>()
             .Where(item => item.IsVisible)
@@ -76,122 +113,46 @@ internal sealed class AvaloniaWholeWindowVisualEvidenceCoordinator(MainWindow.Av
             .ToArray() ?? [];
         var contextualIds = definition.ContextualTabs.Select(tab => tab.Id).ToHashSet(StringComparer.Ordinal);
         var visibleContextualTabs = visibleTabs.Where(contextualIds.Contains).ToArray();
-        var focus = DescribeFocus(access.Window.FocusManager?.GetFocusedElement());
-        var assertions = preparationAssertions.ToList();
-        var preparation = _preparation ??
-            throw new InvalidOperationException("Whole-window evidence must be prepared before semantic capture.");
-        assertions.AddRange(preparation.CreateActivationAssertions(new(
-            _viewStateActivated,
-            activeTabId,
-            visibleContextualTabs,
-            access.IsBackstageOpen && StringComparer.OrdinalIgnoreCase.Equals(access.BackstagePaneLabel, preparation.Activation.Id),
-            access.BackstagePaneLabel)));
-
-        var root = access.ClientRoot;
-        var semantic = new WholeWindowVisualEvidenceSemanticState(
-            scenario.Id,
+        var focus = DescribeFocus(_access.Window.FocusManager?.GetFocusedElement());
+        var root = _access.ClientRoot;
+        return new(
             "avalonia",
-            scenario.ActivationId,
-            access.CurrentSlideIndex,
-            access.CurrentSlideTitle,
-            access.SelectedShapeIds.ToArray(),
-            access.SelectedShapeKind,
+            _access.CurrentSlideIndex,
+            _access.CurrentSlideTitle,
+            _access.SelectedShapeIds,
+            _access.SelectedShapeKind,
             activeTabId,
             visibleTabs,
             visibleContextualTabs,
-            access.IsBackstageOpen,
-            access.BackstagePaneLabel ?? string.Empty,
+            _access.IsBackstageOpen,
+            _access.BackstagePaneLabel,
             focus.Role,
             focus.Label,
-            access.StatusText,
-            access.ShowGridlines,
-            access.ShowGuides,
-            access.ZoomMode,
-            access.ZoomPercent,
-            access.IsTitleBarVisible,
-            access.QuickAccessButtonCount,
-            access.HasIcon ? "shared-shell:FreeP" : "missing",
-            access.WindowTitle,
-            0,
-            false,
-            BoundsRelativeTo(root, access.TitleBar),
-            BoundsRelativeTo(root, access.RibbonRoot),
-            BoundsRelativeTo(root, access.SlidePaneRoot),
-            BoundsRelativeTo(root, access.CanvasRoot),
-            BoundsRelativeTo(root, access.NotesRoot),
-            BoundsRelativeTo(root, access.StatusRoot),
-            access.VisibleAuxiliaryPanes(),
-            assertions);
-        if (scenario.Kind != WholeWindowVisualEvidenceScenarioKind.RichEditorOverlay ||
-            !StringComparer.Ordinal.Equals(scenario.ActivationId, "selection"))
-            return semantic;
-
-        var richEditor = access.CaptureRichEditor();
-        return semantic with
-        {
-            RichEditor = new WholeWindowVisualEvidenceRichEditorState(
-                richEditor.IsActive,
-                DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionStart,
-                DialogPaneVisualEvidenceFixtureFactory.RichEditorSelectionEnd,
-                richEditor.SelectedText,
-                BoundsRelativeTo(root, richEditor.ActiveVisual)),
-        };
+            _access.StatusText,
+            _access.ShowGridlines,
+            _access.ShowGuides,
+            _access.ZoomMode,
+            _access.ZoomPercent,
+            _access.IsTitleBarVisible,
+            _access.QuickAccessButtonCount,
+            _access.HasIcon,
+            _access.WindowTitle,
+            BoundsRelativeTo(root, _access.TitleBar),
+            BoundsRelativeTo(root, _access.RibbonRoot),
+            BoundsRelativeTo(root, _access.SlidePaneRoot),
+            BoundsRelativeTo(root, _access.CanvasRoot),
+            BoundsRelativeTo(root, _access.NotesRoot),
+            BoundsRelativeTo(root, _access.StatusRoot),
+            _access.VisibleAuxiliaryPanes());
     }
 
-    private IReadOnlyList<DialogPaneVisualEvidenceAssertion> PrepareRichEditor(
-        WholeWindowVisualEvidencePreparationPlan plan)
+    WholeWindowVisualEvidenceRichEditorProbeState IWholeWindowVisualEvidenceProbe.CaptureRichEditorState()
     {
-        if (plan.RichEditor is not { } richEditor)
-            return [];
-        var state = access.PrepareRichEditor(richEditor.ShapeId, richEditor.SelectionStart, richEditor.SelectionEnd);
-        return plan.CreateRichEditorAssertions(new(
+        var state = _access.CaptureRichEditor();
+        return new(
             state.IsActive,
-            state.ActiveShapeId,
-            state.SelectionSet,
             state.SelectedText,
-            state.IsFocused,
-            state.RunCount,
-            "The production Avalonia rich-text input owns keyboard focus."));
-    }
-
-    private bool PrepareViewState(WholeWindowVisualEvidenceActivationKind activation) => activation switch
-    {
-        WholeWindowVisualEvidenceActivationKind.ViewGridlinesAndGuides => access.SetViewShowState(true, true),
-        WholeWindowVisualEvidenceActivationKind.ViewCleanCanvas => access.SetViewShowState(false, false),
-        WholeWindowVisualEvidenceActivationKind.ViewZoomFit => SetZoom(PresentationViewZoomState.FitToWindow),
-        WholeWindowVisualEvidenceActivationKind.ViewZoom200 =>
-            SetZoom(new PresentationViewZoomState(PresentationViewZoomMode.Percent, 200)),
-        _ => false,
-    };
-
-    private bool SetZoom(PresentationViewZoomState state)
-    {
-        access.SetZoom(state);
-        return true;
-    }
-
-    private void ShowAuxiliaryPane(WholeWindowVisualEvidenceActivationKind activation)
-    {
-        switch (activation)
-        {
-            case WholeWindowVisualEvidenceActivationKind.ReviewCommentsPane:
-                access.ShowCommentsPane();
-                access.SelectFirstComment();
-                break;
-            case WholeWindowVisualEvidenceActivationKind.AccessibilityCheckerPane:
-                access.ShowAccessibilityPane();
-                access.SelectFirstAccessibilityIssue();
-                break;
-            case WholeWindowVisualEvidenceActivationKind.AltTextPane: access.ShowAltTextPane(); break;
-            case WholeWindowVisualEvidenceActivationKind.ReadingOrderPane: access.ShowReadingOrderPane(); break;
-            case WholeWindowVisualEvidenceActivationKind.ProofingPane:
-                access.ShowProofingPane();
-                access.SelectFirstProofingIssue();
-                break;
-            case WholeWindowVisualEvidenceActivationKind.MediaCaptionPane: access.ShowMediaCaptionPane(); break;
-            case WholeWindowVisualEvidenceActivationKind.SmartArtTextPane: access.ShowSmartArtTextPane(); break;
-            case WholeWindowVisualEvidenceActivationKind.AnimationPane: access.EnsureAnimationPaneVisible(); break;
-        }
+            BoundsRelativeTo(_access.ClientRoot, state.ActiveVisual));
     }
 
     private static WholeWindowVisualEvidenceBounds BoundsRelativeTo(Visual root, Visual? element)

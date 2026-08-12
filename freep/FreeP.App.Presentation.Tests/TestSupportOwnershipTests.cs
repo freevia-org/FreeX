@@ -1,3 +1,5 @@
+using FreeP.VisualEvidence;
+
 namespace FreeP.App.Compositor.Tests;
 
 public sealed class TestSupportOwnershipTests
@@ -64,6 +66,10 @@ public sealed class TestSupportOwnershipTests
         ReferenceEquals(supportAssembly, typeof(DialogPaneVisualEvidenceFixtureFactory).Assembly)
             .Should().BeTrue();
         ReferenceEquals(supportAssembly, typeof(WholeWindowVisualEvidencePreparationSession).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(IWholeWindowVisualEvidenceProbe).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(WholeWindowVisualEvidenceHostCoordinator).Assembly)
             .Should().BeTrue();
         ReferenceEquals(supportAssembly, typeof(EditingSession).Assembly)
             .Should().BeFalse();
