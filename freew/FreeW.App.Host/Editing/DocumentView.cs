@@ -7960,7 +7960,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null);
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -8219,7 +8219,10 @@ public sealed class DocumentView : RichTextBox
             DropCap = tag?.DropCap,
             SpanningFieldStart = tag?.SpanningFieldStart,
             SpanningFieldOwner = tag?.SpanningFieldOwner,
-            EndsSpanningField = tag?.EndsSpanningField ?? false
+            EndsSpanningField = tag?.EndsSpanningField ?? false,
+            MarkRevision = tag?.MarkRevision ?? RevisionKind.None,
+            MarkRevisionAuthor = tag?.MarkRevisionAuthor,
+            MarkRevisionDateXml = tag?.MarkRevisionDateXml
         };
         if (tag?.BookmarkNames is { Count: > 0 } bookmarkNames)
             modelParagraph.BookmarkNames.AddRange(bookmarkNames);
@@ -8703,6 +8706,9 @@ public sealed class DocumentView : RichTextBox
                     row.HeightPt = authoredRow.HeightPt;
                     row.HeightRule = authoredRow.HeightRule;
                     row.AllowBreakAcrossPages = authoredRow.AllowBreakAcrossPages;
+                    row.RowRevision = authoredRow.RowRevision;
+                    row.RowRevisionAuthor = authoredRow.RowRevisionAuthor;
+                    row.RowRevisionDateXml = authoredRow.RowRevisionDateXml;
                 }
                 foreach (var wpfCell in wpfRow.Cells)
                 {
@@ -9105,7 +9111,10 @@ public sealed class DocumentView : RichTextBox
         bool IsRepeatedHeader,
         double? HeightPt,
         TableRowHeightRule HeightRule,
-        bool AllowBreakAcrossPages);
+        bool AllowBreakAcrossPages,
+        RevisionKind RowRevision = RevisionKind.None,
+        string? RowRevisionAuthor = null,
+        string? RowRevisionDateXml = null);
 
     private sealed record WpfFloatingTableFigureTag(int SourceBlockIndex);
 
@@ -9362,7 +9371,10 @@ public sealed class DocumentView : RichTextBox
                     isRepeatedHeader,
                     modelRow.HeightPt,
                     modelRow.HeightRule,
-                    modelRow.AllowBreakAcrossPages)
+                    modelRow.AllowBreakAcrossPages,
+                    modelRow.RowRevision,
+                    modelRow.RowRevisionAuthor,
+                    modelRow.RowRevisionDateXml)
             };
             // WPF System.Windows.Documents.TableRow is a TextElement (not FrameworkElement), so it has
             // no MinHeight / Height property. To enforce a minimum row height we inject a zero-width
@@ -10073,7 +10085,10 @@ public sealed class DocumentView : RichTextBox
             paraFmt.ListStartOverride,
             paragraph.SpanningFieldStart,
             paragraph.SpanningFieldOwner,
-            paragraph.EndsSpanningField);
+            paragraph.EndsSpanningField,
+            paragraph.MarkRevision,
+            paragraph.MarkRevisionAuthor,
+            paragraph.MarkRevisionDateXml);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell
@@ -16039,41 +16054,26 @@ public sealed class DocumentView : RichTextBox
         if (kind == RevisionKind.None)
             return;
 
-        Focus();
-
-        var startParagraph = Selection.Start.Paragraph ?? CaretPosition?.Paragraph;
-        if (startParagraph is null)
+        var hadSelection = !Selection.IsEmpty;
+        if (!TryGetCurrentBodyTextRange(out var selectionRange))
             return;
-        var sameParagraph = ReferenceEquals(Selection.Start.Paragraph, Selection.End.Paragraph);
-        var startOffset = OffsetInParagraph(startParagraph, Selection.Start);
-        var endOffset = sameParagraph ? OffsetInParagraph(startParagraph, Selection.End) : int.MaxValue;
-        if (Selection.IsEmpty || !sameParagraph)
+
+        var normalized = selectionRange.Normalize();
+        if (!hadSelection)
         {
-            startOffset = 0;
-            endOffset = int.MaxValue;
+            selectionRange = new DocumentTextRange(
+                new DocumentTextPosition(normalized.Start.BlockIndex, 0),
+                new DocumentTextPosition(normalized.Start.BlockIndex, int.MaxValue));
         }
 
-        var indexOf = new Dictionary<WpfParagraph, int>();
-        var modelIndex = 0;
-        foreach (var block in Document.Blocks)
-            NumberLeafBlocks(block, indexOf, ref modelIndex);
-        if (!indexOf.TryGetValue(startParagraph, out var paragraphIndex))
-            return;
-
+        Focus();
         CommitToModel();
-        // Map the visible paragraph ordinal to its real model index (collapsed-heading drift), as in
-        // InsertComment. Identity when nothing is collapsed.
-        paragraphIndex = ModelIndexFromVisible(paragraphIndex);
-        if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph modelParagraph)
-            return;
-
         _editingSession.Review.TryMarkRevisionRange(
-            paragraphIndex,
-            startOffset,
-            endOffset,
+            selectionRange,
             kind,
             author,
-            dateXml);
+            dateXml,
+            recordUndo: false);
     }
 
     /// <summary>

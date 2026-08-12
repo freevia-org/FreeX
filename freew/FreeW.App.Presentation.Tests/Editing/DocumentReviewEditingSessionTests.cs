@@ -236,6 +236,62 @@ public sealed class DocumentReviewEditingSessionTests
     }
 
     [Fact]
+    public void MarkRevisionRange_CanApplyAuthorityStateWithoutAddingUndoHistory()
+    {
+        var document = DocumentWith("Hello world");
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+        var changed = 0;
+        session.Changed += () => changed++;
+
+        session.Review.TryMarkRevisionRange(
+                0,
+                6,
+                11,
+                RevisionKind.Inserted,
+                "Ann Reviewer",
+                "2026-08-05T10:20:30Z",
+                recordUndo: false)
+            .Should().BeTrue();
+
+        var paragraph = (Paragraph)document.Blocks[0];
+        paragraph.Runs.Should().ContainSingle(run =>
+            run.Text == "world"
+            && run.Revision == RevisionKind.Inserted
+            && run.RevisionAuthor == "Ann Reviewer");
+        changed.Should().Be(1);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void MarkRevisionRange_CoversCrossParagraphTextAndBoundariesExactly()
+    {
+        var document = DocumentWith("First", "Second");
+        var session = DeterministicSession();
+        session.LoadDocument(document);
+
+        session.Review.TryMarkRevisionRange(
+                new DocumentTextRange(
+                    new DocumentTextPosition(0, 2),
+                    new DocumentTextPosition(1, 3)),
+                RevisionKind.Inserted,
+                "Ann Reviewer",
+                "2026-08-05T10:20:30Z",
+                recordUndo: false)
+            .Should().BeTrue();
+
+        var first = (Paragraph)document.Blocks[0];
+        var second = (Paragraph)document.Blocks[1];
+        first.Runs.Should().Contain(run => run.Text == "Fi" && run.Revision == RevisionKind.None);
+        first.Runs.Should().Contain(run => run.Text == "rst" && run.Revision == RevisionKind.Inserted);
+        first.MarkRevision.Should().Be(RevisionKind.Inserted);
+        second.Runs.Should().Contain(run => run.Text == "Sec" && run.Revision == RevisionKind.Inserted);
+        second.Runs.Should().Contain(run => run.Text == "ond" && run.Revision == RevisionKind.None);
+        second.MarkRevision.Should().Be(RevisionKind.None);
+        session.Commands.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
     public void SingleAndAllRevisionResolution_UsePortableUndoHistory()
     {
         var document = new TextDocument();

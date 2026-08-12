@@ -74,6 +74,18 @@ public sealed class DocumentBodyEditingCoordinator
         DocumentTextRange selection,
         DocumentBodyDeleteDirection direction,
         bool trackChanges,
+        out DocumentBodyEditorActionResult result) =>
+        TryApplyDeletion(
+            selection,
+            direction,
+            trackChanges,
+            mergeForwardBoundary: true,
+            out result);
+
+    public bool TryApplyDeletion(
+        DocumentTextRange selection,
+        DocumentBodyDeleteDirection direction,
+        bool trackChanges,
         bool mergeForwardBoundary,
         out DocumentBodyEditorActionResult result)
     {

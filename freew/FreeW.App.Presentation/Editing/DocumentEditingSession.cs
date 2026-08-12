@@ -954,8 +954,9 @@ public sealed class DocumentEditingSession
             out result);
 
     /// <summary>
-    /// Replaces a same-paragraph body selection as one tracked, undoable edit. Existing selected text is
-    /// retained as a deletion revision and the replacement is inserted at the normalized range start.
+    /// Replaces a body selection as one tracked, undoable edit. Existing selected text is retained as a
+    /// deletion revision and the replacement is inserted at the normalized range start. Paragraph marks
+    /// covered by a cross-paragraph selection are retained as deletion revisions until accepted.
     /// </summary>
     public bool TryReplaceTrackedBodyText(
         DocumentTextRange range,
@@ -989,8 +990,9 @@ public sealed class DocumentEditingSession
             out result);
 
     /// <summary>
-    /// Marks a same-paragraph body range as deleted. Forward Delete can advance past retained struck text;
-    /// Backspace and selection deletion collapse to the normalized range start.
+    /// Marks a body range as deleted. Forward Delete can advance past retained struck text; Backspace and
+    /// selection deletion collapse to the normalized range start. Cross-paragraph selections also mark each
+    /// covered paragraph boundary as deleted without physically merging the paragraphs.
     /// </summary>
     public bool TryDeleteTrackedBodyText(
         DocumentTextRange range,
@@ -998,6 +1000,19 @@ public sealed class DocumentEditingSession
         out DocumentTextEditResult result)
     {
         result = default;
+        var normalized = range.Normalize();
+        if (normalized.Start.BlockIndex != normalized.End.BlockIndex)
+        {
+            return TryResolveBodySpan(range, requireStructuralEdit: true, out var span)
+                && TryReplaceTrackedBodySpanCore(
+                    span,
+                    replacementText: null,
+                    formatting: null,
+                    inheritHyperlink: true,
+                    explicitHyperlink: null,
+                    out result);
+        }
+
         if (!TryResolveBodyRange(range, out var blockIndex, out var startOffset, out var endOffset)
             || startOffset == endOffset)
         {
@@ -1035,11 +1050,26 @@ public sealed class DocumentEditingSession
         out DocumentTextEditResult result)
     {
         result = default;
-        if (string.IsNullOrEmpty(text)
-            || !TryResolveBodyRange(range, out var blockIndex, out var startOffset, out var endOffset))
+        if (string.IsNullOrEmpty(text))
         {
             return false;
         }
+
+        var normalized = range.Normalize();
+        if (normalized.Start.BlockIndex != normalized.End.BlockIndex)
+        {
+            return TryResolveBodySpan(range, requireStructuralEdit: true, out var span)
+                && TryReplaceTrackedBodySpanCore(
+                    span,
+                    text,
+                    formatting,
+                    inheritHyperlink,
+                    explicitHyperlink,
+                    out result);
+        }
+
+        if (!TryResolveBodyRange(range, out var blockIndex, out var startOffset, out var endOffset))
+            return false;
 
         var author = ResolveRevisionAuthor();
         var dateXml = _revisionDateXml();
@@ -1081,6 +1111,120 @@ public sealed class DocumentEditingSession
 
         result = new DocumentTextEditResult(
             new DocumentTextPosition(blockIndex, caretOffset),
+            keptDeletedText);
+        return true;
+    }
+
+    private bool TryReplaceTrackedBodySpanCore(
+        DocumentTextRange span,
+        string? replacementText,
+        RunFormatting? formatting,
+        bool inheritHyperlink,
+        DocumentTextHyperlink? explicitHyperlink,
+        out DocumentTextEditResult result)
+    {
+        result = default;
+        if (span.Start.BlockIndex >= span.End.BlockIndex
+            || Document.Blocks[span.Start.BlockIndex] is not Paragraph startParagraph
+            || Document.Blocks[span.End.BlockIndex] is not Paragraph endParagraph)
+        {
+            return false;
+        }
+
+        var startOffset = Math.Clamp(span.Start.Offset, 0, startParagraph.PlainText.Length);
+        var endOffset = Math.Clamp(span.End.Offset, 0, endParagraph.PlainText.Length);
+        var author = ResolveRevisionAuthor();
+        var dateXml = _revisionDateXml();
+        var activeFormatting = formatting
+            ?? RevisionEditPlanner.FormattingAtOffset(startParagraph, startOffset);
+        var hyperlink = inheritHyperlink
+            ? RevisionEditPlanner.LinkAtOffset(startParagraph, startOffset)
+            : new RevisionEditPlanner.InsertOptions(
+                HyperlinkUrl: explicitHyperlink?.Url,
+                HyperlinkAnchor: explicitHyperlink?.Anchor,
+                HyperlinkTooltip: explicitHyperlink?.Tooltip);
+        var insertOptions = new RevisionEditPlanner.InsertOptions(
+            RevisionKind.Inserted,
+            author,
+            dateXml,
+            hyperlink.HyperlinkUrl,
+            hyperlink.HyperlinkAnchor,
+            hyperlink.HyperlinkTooltip);
+        var keptDeletedText = false;
+        var ownsUndoGroup = !_commands.IsUndoGroupOpen;
+        if (ownsUndoGroup)
+            _commands.BeginUndoGroup();
+
+        try
+        {
+            _commands.Execute(new ReplaceParagraphRunsCommand(span.Start.BlockIndex, paragraph =>
+            {
+                keptDeletedText |= RevisionEditPlanner.DeleteRangeAsRevision(
+                    paragraph,
+                    startOffset,
+                    paragraph.PlainText.Length,
+                    author,
+                    dateXml).KeptDeletedText;
+                if (!string.IsNullOrEmpty(replacementText))
+                {
+                    RevisionEditPlanner.InsertText(
+                        paragraph,
+                        startOffset,
+                        replacementText,
+                        activeFormatting,
+                        insertOptions);
+                }
+            }));
+
+            for (var blockIndex = span.Start.BlockIndex + 1; blockIndex < span.End.BlockIndex; blockIndex++)
+            {
+                _commands.Execute(new ReplaceParagraphRunsCommand(blockIndex, paragraph =>
+                {
+                    keptDeletedText |= RevisionEditPlanner.DeleteRangeAsRevision(
+                        paragraph,
+                        0,
+                        paragraph.PlainText.Length,
+                        author,
+                        dateXml).KeptDeletedText;
+                }));
+            }
+
+            _commands.Execute(new ReplaceParagraphRunsCommand(span.End.BlockIndex, paragraph =>
+            {
+                keptDeletedText |= RevisionEditPlanner.DeleteRangeAsRevision(
+                    paragraph,
+                    0,
+                    endOffset,
+                    author,
+                    dateXml).KeptDeletedText;
+            }));
+
+            for (var blockIndex = span.Start.BlockIndex; blockIndex < span.End.BlockIndex; blockIndex++)
+            {
+                _commands.Execute(new SetParagraphMarkRevisionCommand(
+                    blockIndex,
+                    RevisionKind.Deleted,
+                    author,
+                    dateXml));
+            }
+        }
+        catch
+        {
+            if (ownsUndoGroup)
+                _commands.RollbackUndoGroup();
+            throw;
+        }
+
+        if (ownsUndoGroup)
+        {
+            _commands.CommitUndoGroup(
+                string.IsNullOrEmpty(replacementText) ? "Delete Selection" : "Replace Selection");
+        }
+
+        result = new DocumentTextEditResult(
+            new DocumentTextPosition(
+                span.Start.BlockIndex,
+                startOffset + (replacementText?.Length ?? 0)),
             keptDeletedText);
         return true;
     }
@@ -1591,6 +1735,8 @@ public sealed class DocumentEditingSession
 
     internal void ExecuteCommands(IReadOnlyList<IDocumentCommand> commands, string undoLabel) =>
         ExecuteGroup(commands, undoLabel);
+
+    internal void NotifyChanged() => Changed?.Invoke();
 
     public string? RevisionDateXmlForEdit() => _revisionDateXml();
 

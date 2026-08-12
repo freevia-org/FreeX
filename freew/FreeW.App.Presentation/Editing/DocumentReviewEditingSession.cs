@@ -244,22 +244,111 @@ public sealed class DocumentReviewEditingSession
         int endOffset,
         RevisionKind kind,
         string author,
-        string? dateXml)
+        string? dateXml,
+        bool recordUndo = true) =>
+        TryMarkRevisionRange(
+            new DocumentTextRange(
+                new DocumentTextPosition(blockIndex, startOffset),
+                new DocumentTextPosition(blockIndex, endOffset)),
+            kind,
+            author,
+            dateXml,
+            recordUndo);
+
+    public bool TryMarkRevisionRange(
+        DocumentTextRange range,
+        RevisionKind kind,
+        string author,
+        string? dateXml,
+        bool recordUndo = true)
     {
+        var normalized = range.Normalize();
         if (kind == RevisionKind.None
-            || _editingSession.Document.Blocks.ElementAtOrDefault(blockIndex) is not Paragraph paragraph
-            || paragraph.PlainText.Length == 0)
+            || normalized.Start.BlockIndex < 0
+            || normalized.End.BlockIndex >= _editingSession.Document.Blocks.Count
+            || normalized.Start.BlockIndex > normalized.End.BlockIndex)
         {
             return false;
         }
 
-        _editingSession.Commands.Execute(new MarkRevisionRangeCommand(
-            blockIndex,
-            startOffset,
-            endOffset,
-            kind,
-            author,
-            dateXml));
+        var ranges = new List<(int BlockIndex, Paragraph Paragraph, int StartOffset, int EndOffset)>();
+        for (var blockIndex = normalized.Start.BlockIndex; blockIndex <= normalized.End.BlockIndex; blockIndex++)
+        {
+            if (_editingSession.Document.Blocks[blockIndex] is not Paragraph paragraph)
+                return false;
+
+            var startOffset = blockIndex == normalized.Start.BlockIndex
+                ? Math.Clamp(normalized.Start.Offset, 0, paragraph.PlainText.Length)
+                : 0;
+            var endOffset = blockIndex == normalized.End.BlockIndex
+                ? Math.Clamp(normalized.End.Offset, 0, paragraph.PlainText.Length)
+                : paragraph.PlainText.Length;
+            ranges.Add((blockIndex, paragraph, startOffset, endOffset));
+        }
+
+        var coversBoundary = normalized.Start.BlockIndex < normalized.End.BlockIndex;
+        if (!coversBoundary && ranges[0].StartOffset == ranges[0].EndOffset)
+            return false;
+
+        if (recordUndo)
+        {
+            var commands = new List<IDocumentCommand>();
+            foreach (var target in ranges)
+            {
+                if (target.StartOffset != target.EndOffset)
+                {
+                    commands.Add(new MarkRevisionRangeCommand(
+                        target.BlockIndex,
+                        target.StartOffset,
+                        target.EndOffset,
+                        kind,
+                        author,
+                        dateXml));
+                }
+
+                if (target.BlockIndex < normalized.End.BlockIndex)
+                {
+                    commands.Add(new SetParagraphMarkRevisionCommand(
+                        target.BlockIndex,
+                        kind,
+                        author,
+                        dateXml));
+                }
+            }
+
+            _editingSession.ExecuteCommands(
+                commands,
+                kind == RevisionKind.Deleted ? "Mark Deletion" : "Mark Insertion");
+        }
+        else
+        {
+            var changed = false;
+            foreach (var target in ranges)
+            {
+                if (target.StartOffset != target.EndOffset)
+                {
+                    changed |= RevisionEditPlanner.MarkRevisionRange(
+                        target.Paragraph,
+                        target.StartOffset,
+                        target.EndOffset,
+                        kind,
+                        author,
+                        dateXml);
+                }
+
+                if (target.BlockIndex < normalized.End.BlockIndex)
+                {
+                    target.Paragraph.MarkRevision = kind;
+                    target.Paragraph.MarkRevisionAuthor = author;
+                    target.Paragraph.MarkRevisionDateXml = dateXml;
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+                return false;
+            _editingSession.NotifyChanged();
+        }
         return true;
     }
 

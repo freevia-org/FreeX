@@ -250,11 +250,13 @@ public sealed class DocumentEditingSessionTests
     }
 
     [Fact]
-    public void TrackedBodyTextOperations_RejectCrossParagraphAndCollapsedDeleteTargets()
+    public void TrackedBodyTextOperations_HandleCrossParagraphReplacementAsOneUndoableEdit()
     {
         var document = DocumentWith("first", "second");
         var session = DeterministicTrackedSession();
         session.LoadDocument(document);
+        var changed = 0;
+        session.Changed += () => changed++;
 
         session.TryReplaceTrackedBodyText(
                 new DocumentTextRange(
@@ -262,8 +264,29 @@ public sealed class DocumentEditingSessionTests
                     new DocumentTextPosition(1, 2)),
                 "X",
                 formatting: null,
-                out _)
-            .Should().BeFalse();
+                out var result)
+            .Should().BeTrue();
+
+        result.Should().Be(new DocumentTextEditResult(
+            new DocumentTextPosition(0, 3),
+            KeptDeletedText: true));
+        var first = (Paragraph)document.Blocks[0];
+        var second = (Paragraph)document.Blocks[1];
+        first.PlainText.Should().Be("fiXrst");
+        first.Runs.Should().Contain(run => run.Text == "X" && run.Revision == RevisionKind.Inserted);
+        first.Runs.Should().Contain(run => run.Text == "rst" && run.Revision == RevisionKind.Deleted);
+        first.MarkRevision.Should().Be(RevisionKind.Deleted);
+        second.Runs.Should().Contain(run => run.Text == "se" && run.Revision == RevisionKind.Deleted);
+        changed.Should().Be(1);
+
+        session.Commands.Undo().Should().BeTrue();
+        document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
+            .Should().Equal("first", "second");
+        document.Blocks.Cast<Paragraph>().Should().OnlyContain(paragraph =>
+            paragraph.MarkRevision == RevisionKind.None
+            && paragraph.Runs.All(run => run.Revision == RevisionKind.None));
+        session.Commands.CanUndo.Should().BeFalse();
+
         session.TryDeleteTrackedBodyText(
                 new DocumentTextRange(
                     new DocumentTextPosition(0, 99),
@@ -274,7 +297,6 @@ public sealed class DocumentEditingSessionTests
 
         document.Blocks.Cast<Paragraph>().Select(paragraph => paragraph.PlainText)
             .Should().Equal("first", "second");
-        session.Commands.CanUndo.Should().BeFalse();
     }
 
     [Fact]

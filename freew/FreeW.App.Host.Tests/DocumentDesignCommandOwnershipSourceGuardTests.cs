@@ -10,11 +10,11 @@ public sealed class DocumentDesignCommandOwnershipSourceGuardTests
         var source = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
 
         source.Should().Contain("DocumentDesignEditingCoordinator DesignEdits");
-        source.Should().Contain("DesignEdits.UpdatePage(apply)");
+        source.Should().Contain("DesignEdits.UpdatePage(apply, CurrentPageSettingsSectionIndex())");
         source.Should().Contain("DesignEdits.ApplyDocumentProperties(values)");
         source.Should().Contain("DesignEdits.ApplyTheme(theme)");
-        source.Should().Contain("DesignEdits.SetPageColor(colorHex)");
-        source.Should().Contain("DesignEdits.SetWatermark(options)");
+        source.Should().Contain("DesignEdits.SetPageColor(colorHex, CurrentPageSettingsSectionIndex())");
+        source.Should().Contain("DesignEdits.SetWatermark(options, CurrentPageSettingsSectionIndex())");
         source.Should().Contain("DocumentObjectEditingCoordinator.PlanWordArtInsertion(wordArt)");
         source.Should().Contain("ObjectEdits.SetWordArtStyle(");
         source.Should().Contain("ObjectEdits.SetWordArtWarp(");

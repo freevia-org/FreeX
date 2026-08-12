@@ -748,6 +748,27 @@ public sealed class DocumentViewTrackEditTests
     }
 
     [StaFact]
+    public void RibbonTrackChanges_EnablingAcrossParagraphs_marks_text_and_boundary_exactly()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.SetSelectionRangeForTest(0, 2, 1, 3);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.track-changes"), out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+        view.CommitToModel();
+
+        var first = (Paragraph)view.Model.Blocks[0];
+        var second = (Paragraph)view.Model.Blocks[1];
+        first.Runs.Should().Contain(run => run.Text == "Fi" && run.Revision == RevisionKind.None);
+        first.Runs.Should().Contain(run => run.Text == "rst" && run.Revision == RevisionKind.Inserted);
+        first.MarkRevision.Should().Be(RevisionKind.Inserted);
+        second.Runs.Should().Contain(run => run.Text == "Sec" && run.Revision == RevisionKind.Inserted);
+        second.Runs.Should().Contain(run => run.Text == "ond" && run.Revision == RevisionKind.None);
+        second.MarkRevision.Should().Be(RevisionKind.None);
+    }
+
+    [StaFact]
     public void RibbonTrackChanges_empty_selection_does_not_invent_a_revision_and_undo_keeps_text()
     {
         var view = BuildView("Hello world");
