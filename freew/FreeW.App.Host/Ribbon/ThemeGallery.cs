@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.ContextMenus;
 using FreeW.Core.Model;
 
@@ -37,7 +38,7 @@ internal static class ThemeGallery
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var theme in DocumentTheme.Catalog)
             strip.Children.Add(BuildThemeSwatch(editor, theme));
-        return WithLabel("Themes", strip);
+        return WithLabel(FreeWUiTextCatalog.Themes, strip);
     }
 
     /// <summary>Build Word's Style Sets gallery: typography thumbnails that rewrite built-in styles.</summary>
@@ -46,7 +47,7 @@ internal static class ThemeGallery
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var styleSet in DocumentStyleSet.Catalog)
             strip.Children.Add(BuildStyleSetSwatch(editor, styleSet));
-        return WithLabel("Style Sets", strip);
+        return WithLabel(FreeWUiTextCatalog.StyleSets, strip);
     }
 
     /// <summary>Build Word's Colors gallery: each theme's palette rendered as a colour strip.</summary>
@@ -55,7 +56,7 @@ internal static class ThemeGallery
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var theme in DocumentTheme.Catalog)
             strip.Children.Add(BuildColourSwatch(editor, theme));
-        return WithLabel("Colors", strip);
+        return WithLabel(FreeWUiTextCatalog.Colors, strip);
     }
 
     /// <summary>Build Word's Fonts gallery: heading/body font-pair thumbnails.</summary>
@@ -64,7 +65,7 @@ internal static class ThemeGallery
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var fontSet in DocumentFontSet.Catalog)
             strip.Children.Add(BuildFontSwatch(editor, fontSet));
-        return WithLabel("Fonts", strip);
+        return WithLabel(FreeWUiTextCatalog.Fonts, strip);
     }
 
     /// <summary>Build Word's Paragraph Spacing gallery: line/spacing preset thumbnails.</summary>
@@ -73,7 +74,7 @@ internal static class ThemeGallery
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
             strip.Children.Add(BuildParagraphSpacingSwatch(editor, spacingSet));
-        return WithLabel("Paragraph Spacing", strip);
+        return WithLabel(FreeWUiTextCatalog.ParagraphSpacing, strip);
     }
 
     /// <summary>Build Word's Effects gallery: DrawingML format-scheme thumbnails.</summary>
@@ -82,7 +83,7 @@ internal static class ThemeGallery
         var strip = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var effectSet in DocumentEffectSet.Catalog)
             strip.Children.Add(BuildEffectSwatch(editor, effectSet));
-        return WithLabel("Effects", strip);
+        return WithLabel(FreeWUiTextCatalog.Effects, strip);
     }
 
     private static FrameworkElement BuildParagraphSpacingMenu(DocumentView editor)
@@ -96,9 +97,9 @@ internal static class ThemeGallery
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
             Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = "Paragraph Spacing"
+            ToolTip = FreeWUiTextCatalog.ParagraphSpacing
         };
-        AutomationProperties.SetName(button, "Paragraph Spacing");
+        AutomationProperties.SetName(button, FreeWUiTextCatalog.ParagraphSpacing);
 
         var stack = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center };
         var glyph = new StackPanel { Width = 34, HorizontalAlignment = HorizontalAlignment.Center };
@@ -110,7 +111,7 @@ internal static class ThemeGallery
         stack.Children.Add(glyph);
         stack.Children.Add(new TextBlock
         {
-            Text = "Paragraph\nSpacing",
+            Text = FreeWUiTextCatalog.ParagraphSpacingCompact,
             FontSize = 11,
             TextAlignment = System.Windows.TextAlignment.Center,
             LineHeight = 12,
@@ -177,9 +178,9 @@ internal static class ThemeGallery
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
             Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = "Effects"
+            ToolTip = FreeWUiTextCatalog.Effects
         };
-        AutomationProperties.SetName(button, "Effects");
+        AutomationProperties.SetName(button, FreeWUiTextCatalog.Effects);
 
         var stack = new StackPanel { Orientation = Orientation.Vertical, HorizontalAlignment = HorizontalAlignment.Center };
         var tile = new Border
@@ -209,7 +210,7 @@ internal static class ThemeGallery
         stack.Children.Add(tile);
         stack.Children.Add(new TextBlock
         {
-            Text = "Effects",
+            Text = FreeWUiTextCatalog.Effects,
             FontSize = 11,
             TextAlignment = System.Windows.TextAlignment.Center,
             Margin = new Thickness(0, 2, 0, 0)
@@ -334,7 +335,7 @@ internal static class ThemeGallery
         thumb.Children.Add(border);
         thumb.Children.Add(new TextBlock { Text = theme.Name, FontSize = 11, TextAlignment = System.Windows.TextAlignment.Center, Margin = new Thickness(0, 2, 0, 0) });
 
-        return WrapAsColourButton(editor, theme, thumb, theme.Name + " colors");
+        return WrapAsColourButton(editor, theme, thumb, FreeWUiTextCatalog.ThemeColorsAutomationName(theme.Name));
     }
 
     private static FrameworkElement BuildStyleSetSwatch(DocumentView editor, DocumentStyleSet styleSet)
@@ -373,7 +374,7 @@ internal static class ThemeGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
-        return WrapAsStyleSetButton(editor, styleSet, thumb, styleSet.Name + " style set");
+        return WrapAsStyleSetButton(editor, styleSet, thumb, FreeWUiTextCatalog.StyleSetAutomationName(styleSet.Name));
     }
 
     private static FrameworkElement BuildFontSwatch(DocumentView editor, DocumentFontSet fontSet)
@@ -393,7 +394,7 @@ internal static class ThemeGallery
         var sample = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         sample.Children.Add(new TextBlock
         {
-            Text = "Heading",
+            Text = FreeWUiTextCatalog.FontSampleHeading,
             FontFamily = new FontFamily(fontSet.HeadingFont),
             FontSize = 10.5,
             FontWeight = FontWeights.Bold,
@@ -402,7 +403,7 @@ internal static class ThemeGallery
         });
         sample.Children.Add(new TextBlock
         {
-            Text = "Body",
+            Text = FreeWUiTextCatalog.FontSampleBody,
             FontFamily = new FontFamily(fontSet.BodyFont),
             FontSize = 9,
             Foreground = Brushes.DimGray,
@@ -419,7 +420,7 @@ internal static class ThemeGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
-        return WrapAsFontSetButton(editor, fontSet, thumb, fontSet.Name + " fonts");
+        return WrapAsFontSetButton(editor, fontSet, thumb, FreeWUiTextCatalog.FontSetAutomationName(fontSet.Name));
     }
 
     private static FrameworkElement BuildParagraphSpacingSwatch(DocumentView editor, DocumentParagraphSpacingSet spacingSet)
@@ -456,7 +457,11 @@ internal static class ThemeGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
-        return WrapAsParagraphSpacingSetButton(editor, spacingSet, thumb, spacingSet.Name + " paragraph spacing");
+        return WrapAsParagraphSpacingSetButton(
+            editor,
+            spacingSet,
+            thumb,
+            FreeWUiTextCatalog.ParagraphSpacingAutomationName(spacingSet.Name));
     }
 
     private static FrameworkElement BuildEffectSwatch(DocumentView editor, DocumentEffectSet effectSet)
@@ -502,7 +507,7 @@ internal static class ThemeGallery
             Margin = new Thickness(0, 2, 0, 0)
         });
 
-        return WrapAsEffectSetButton(editor, effectSet, thumb, effectSet.Name + " effects");
+        return WrapAsEffectSetButton(editor, effectSet, thumb, FreeWUiTextCatalog.EffectSetAutomationName(effectSet.Name));
     }
 
     // Wrap a thumbnail in a borderless button that previews on hover, reverts on leave, commits on click.

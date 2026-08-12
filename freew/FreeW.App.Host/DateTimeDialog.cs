@@ -52,7 +52,7 @@ internal sealed class DateTimeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             Content = DateTimeDialogSession.UpdateAutomaticallyLabel,
             Margin = new Thickness(0, 8, 0, 0),
-            ToolTip = "Insert a live DATE or TIME field that updates when you press F9, instead of static text."
+            ToolTip = DateTimeDialogSession.UpdateAutomaticallyToolTip
         };
         panel.Children.Add(updateCheckBox);
 

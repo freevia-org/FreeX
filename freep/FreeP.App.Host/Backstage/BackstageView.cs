@@ -156,7 +156,7 @@ internal sealed class BackstageView : UserControl
         _customRangeApplyButton.Click += (_, _) =>
         {
             _printSession.ApplyCustomRange(_customRangeInput.Text);
-            _backstage.Show("Print");
+            _backstage.Show(surface.PrintHeading);
         };
         panel.Children.Add(_customRangeInput);
         panel.Children.Add(_customRangeApplyButton);

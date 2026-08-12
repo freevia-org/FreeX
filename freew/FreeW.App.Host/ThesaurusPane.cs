@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.AppServices;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Host;
@@ -49,7 +50,7 @@ internal sealed class ThesaurusPane
 
         _statusText = new TextBlock
         {
-            Text = "Position the cursor on a word and press Shift+F7.",
+            Text = ThesaurusPresentationPlanner.EmptyWordStatus,
             Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
             Margin = new Thickness(10, 2, 10, 8),
             TextWrapping = TextWrapping.Wrap
@@ -66,7 +67,7 @@ internal sealed class ThesaurusPane
 
         var header = new TextBlock
         {
-            Text = "Thesaurus",
+            Text = FreeWUiTextCatalog.ThesaurusHeading,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };

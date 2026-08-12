@@ -800,7 +800,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             AcceptsReturn   = true,
             TextWrapping    = TextWrapping.Wrap,
-            PlaceholderText = "Click to add notes",
+            PlaceholderText = PresentationPaneTextResources.NotesPlaceholder,
             MinHeight       = FreePShellVisualMetrics.NotesPaneHeight,
             MaxHeight       = 120,
             Padding         = new Thickness(8, 4),
@@ -1468,7 +1468,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
     {
         _printOptionsPaneHeading = new TextBlock
         {
-            Text = "Print",
+            Text = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading),
             FontSize = 26,
             FontWeight = FontWeight.Light,
             Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)),
@@ -1486,7 +1486,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         };
         _printOptionsPaneExecuteButton = new Button
         {
-            Content = "Print",
+            Content = PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading),
             HorizontalAlignment = HorizontalAlignment.Left,
             MinWidth = 88,
             Margin = new Thickness(0, 16, 0, 0),
@@ -1557,7 +1557,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         {
             MinWidth = 72,
             Padding = new Thickness(10, 4),
-            Content = "Close",
+            Content = PresentationPaneTextResources.CloseCommand,
         };
 
         _altTextTitleBox.TextChanged += (_, _) => RefreshVisibleAltTextPaneFromFields();
@@ -3646,7 +3646,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
     private void ShowPrintBackstage()
     {
         HidePrintOptionsPane();
-        ShowBackstage("Print");
+        ShowBackstage(PresentationShellTextCatalog.Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading));
     }
 
     private void HideBackstageAndRestoreFocus()

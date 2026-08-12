@@ -116,13 +116,13 @@ public sealed class DocumentNotesPaneSession
             .OrderBy(note => note.Id)
             .Select(note => new DocumentNoteProjection(
                 new DocumentNoteKey(IsFootnote: true, note.Id),
-                $"Footnote {note.Id}",
+                FreeWUiTextCatalog.FootnoteLabel(note.Id),
                 note.PlainText))
             .Concat(document.Endnotes.Values
                 .OrderBy(note => note.Id)
                 .Select(note => new DocumentNoteProjection(
                     new DocumentNoteKey(IsFootnote: false, note.Id),
-                    $"Endnote {note.Id}",
+                    FreeWUiTextCatalog.EndnoteLabel(note.Id),
                     note.PlainText)))
             .ToArray();
         var selectedIndex = requested is { } key

@@ -74,6 +74,8 @@ public sealed record AnimationPaneControlSchemaPlan(
 public static class PresentationPaneTextResources
 {
     public static string AccessibilityHeading => Loc.Get("Pane_Accessibility_Heading");
+    public static string CloseCommand => Loc.Get("Pane_Common_CloseCommand");
+    public static string NotesPlaceholder => Loc.Get("Pane_Notes_Placeholder");
     public static string AnimationPaneHeading => Loc.Get("Pane_Animation_Heading");
     public static string AnimationPaneEmptyMessage => Loc.Get("Pane_Animation_EmptyMessage");
     public static string AnimationPaneSelectRowMessage => Loc.Get("Pane_Animation_SelectRowMessage");

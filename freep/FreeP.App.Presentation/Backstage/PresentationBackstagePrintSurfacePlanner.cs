@@ -66,20 +66,20 @@ public static class PresentationBackstagePrintSurfacePlanner
         return new PresentationBackstagePrintSurface(
             plan.Heading,
             plan.Description,
-            SettingsHeading: "Settings",
+            SettingsHeading: Resolve(PresentationShellTextCatalog.PrintSurfaceSettingsHeading),
             BuildSettings(plan),
             BuildChoiceGroups(plan, selectedPreviewPageNumber),
-            CustomRangeHeading: "Custom range",
-            CustomRangeDescription: "Enter slide numbers and ranges, for example 2,4-6.",
-            CustomRangePlaceholder: "e.g. 2,4-6",
-            CustomRangeApplyLabel: "Apply range",
+            CustomRangeHeading: Resolve(PresentationShellTextCatalog.PrintSurfaceCustomRangeHeading),
+            CustomRangeDescription: Resolve(PresentationShellTextCatalog.PrintSurfaceCustomRangeDescription),
+            CustomRangePlaceholder: Resolve(PresentationShellTextCatalog.PrintSurfaceCustomRangePlaceholder),
+            CustomRangeApplyLabel: Resolve(PresentationShellTextCatalog.PrintSurfaceCustomRangeApplyLabel),
             CustomRangeApplyHelpText: PresentationShellTextCatalog.PrintCustomRangeApplyHelp,
             CustomRangeInputAutomationId: "FreePPrintCustomRangeInput",
             CustomRangeApplyAutomationId: "FreePPrintCustomRangeApply",
             CustomRangeText: plan.SelectedRange.Request?.CustomRangeText ?? string.Empty,
             StatusText: plan.DisabledReason ?? plan.NativePrintHandoff.Reason,
             NativePrint: plan.NativePrintHandoff.Surface,
-            PrintHeading: "Print",
+            PrintHeading: Resolve(PresentationShellTextCatalog.PrintSurfacePrintHeading),
             PrintActions: plan.LayoutChoices.Select(choice => BuildPrintAction(choice, plan)).ToArray());
     }
 
@@ -100,38 +100,44 @@ public static class PresentationBackstagePrintSurfacePlanner
 
     private static IReadOnlyList<BackstageFieldRow> BuildSettings(PresentationPrintBackstagePlan plan) =>
     [
-        new("Layout", plan.SelectedLayout.Layout.DisplayName),
-        new("Slides", plan.SlideRangeSummary),
-        new("Pages", plan.PageCount.ToString(CultureInfo.InvariantCulture)),
-        new("Preview", plan.PreviewPlan.PageCountText),
-        new("Hidden slides", plan.PrintHiddenSlides ? "Included" : "Not included"),
-        new("Options", plan.Options.DisplaySummary),
-        new("Native printer handoff", plan.NativePrintHandoff.StatusText),
+        new(Resolve(PresentationShellTextCatalog.PrintSurfaceLayoutField), plan.SelectedLayout.Layout.DisplayName),
+        new(Resolve(PresentationShellTextCatalog.PrintSurfaceSlidesField), plan.SlideRangeSummary),
+        new(Resolve(PresentationShellTextCatalog.PrintSurfacePagesField), plan.PageCount.ToString(CultureInfo.InvariantCulture)),
+        new(Resolve(PresentationShellTextCatalog.PrintSurfacePreviewField), plan.PreviewPlan.PageCountText),
+        new(Resolve(PresentationShellTextCatalog.PrintSurfaceHiddenSlidesField), plan.PrintHiddenSlides
+            ? Resolve(PresentationShellTextCatalog.PrintSurfaceIncludedValue)
+            : Resolve(PresentationShellTextCatalog.PrintSurfaceNotIncludedValue)),
+        new(Resolve(PresentationShellTextCatalog.PrintSurfaceOptionsField), plan.Options.DisplaySummary),
+        new(Resolve(PresentationShellTextCatalog.PrintSurfaceNativePrinterHandoffField), plan.NativePrintHandoff.StatusText),
     ];
 
     private static IReadOnlyList<PresentationBackstagePrintChoiceGroup> BuildChoiceGroups(
         PresentationPrintBackstagePlan plan,
         int? selectedPreviewPageNumber) =>
     [
-        new("output-options", PresentationBackstagePrintChoiceGroupKind.OutputOptions, "Output options",
+        new("output-options", PresentationBackstagePrintChoiceGroupKind.OutputOptions,
+            Resolve(PresentationShellTextCatalog.PrintSurfaceOutputOptionsGroup),
             plan.OutputOptionChoices.Select(choice => BuildChoiceRow(
-            $"{choice.Group}: {choice.DisplayName}",
+            Resolve(PresentationShellTextCatalog.PrintSurfaceGroupChoice(choice.Group, choice.DisplayName)),
             choice.Description,
             choice.IsSelected,
             choice.IsAvailable)).ToArray()),
-        new("preview", PresentationBackstagePrintChoiceGroupKind.Preview, "Preview",
+        new("preview", PresentationBackstagePrintChoiceGroupKind.Preview,
+            Resolve(PresentationShellTextCatalog.PrintSurfacePreviewGroup),
             plan.PreviewPlan.Pages.Select(page => BuildChoiceRow(
             page.ThumbnailLabel,
             page.Detail,
             page.PageNumber == (selectedPreviewPageNumber ?? 1),
             isAvailable: true)).ToArray()),
-        new("layouts", PresentationBackstagePrintChoiceGroupKind.Layouts, "Layouts",
+        new("layouts", PresentationBackstagePrintChoiceGroupKind.Layouts,
+            Resolve(PresentationShellTextCatalog.PrintSurfaceLayoutsGroup),
             plan.LayoutChoices.Select(choice => BuildChoiceRow(
             choice.Layout.DisplayName,
             choice.PackagePlan.LayoutSummary,
             choice.IsSelected,
             isAvailable: true)).ToArray()),
-        new("slide-range", PresentationBackstagePrintChoiceGroupKind.SlideRange, "Slide range",
+        new("slide-range", PresentationBackstagePrintChoiceGroupKind.SlideRange,
+            Resolve(PresentationShellTextCatalog.PrintSurfaceSlideRangeGroup),
             plan.RangeChoices.Select(choice => BuildChoiceRow(
             choice.DisplayName,
             choice.Description,
@@ -145,14 +151,17 @@ public static class PresentationBackstagePrintSurfacePlanner
         bool isSelected,
         bool isAvailable)
     {
-        var prefix = isSelected ? "Selected: " : string.Empty;
-        var availability = isAvailable ? string.Empty : " (unavailable)";
+        var displayLabel = isSelected
+            ? Resolve(PresentationShellTextCatalog.PrintSurfaceSelectedChoice(label))
+            : label;
+        if (!isAvailable)
+            displayLabel = Resolve(PresentationShellTextCatalog.PrintSurfaceUnavailableChoice(displayLabel));
         return new PresentationBackstagePrintChoiceRow(
             label,
             description,
             isSelected,
             isAvailable,
-            $"{prefix}{label}{availability}\n{description}");
+            $"{displayLabel}\n{description}");
     }
 
     private static PresentationBackstagePrintAction BuildPrintAction(
@@ -165,11 +174,14 @@ public static class PresentationBackstagePrintSurfacePlanner
              plan.NativePrintHandoff.CanSubmitToNativePrinter);
 
         return new PresentationBackstagePrintAction(
-            $"Print {choice.Layout.DisplayName}",
+            Resolve(PresentationShellTextCatalog.PrintSurfaceAction(choice.Layout.DisplayName)),
             "BackstagePrint_" + AutomationIdToken.KeepLettersAndDigits(choice.Layout.DisplayName),
             canPrint ? choice.PackagePlan.LayoutSummary : plan.NativePrintHandoff.Reason,
             canPrint,
             request);
     }
+
+    private static string Resolve(LocalizedTextDescriptor descriptor) =>
+        PresentationShellTextCatalog.Resolve(descriptor);
 
 }

@@ -36,9 +36,10 @@ public sealed class DateTimeDialogSession
             .ToArray();
     }
 
-    public const string Title = "Date and Time";
-    public const string FormatsLabel = "Available formats:";
-    public const string UpdateAutomaticallyLabel = "Update automatically";
+    public static string Title => FreeWUiTextCatalog.DateTimeTitle;
+    public static string FormatsLabel => FreeWUiTextCatalog.DateTimeFormatsLabel;
+    public static string UpdateAutomaticallyLabel => FreeWUiTextCatalog.DateTimeUpdateAutomatically;
+    public static string UpdateAutomaticallyToolTip => FreeWUiTextCatalog.DateTimeUpdateAutomaticallyToolTip;
 
     public IReadOnlyList<DateTimeDialogFormatChoice> Formats { get; }
 

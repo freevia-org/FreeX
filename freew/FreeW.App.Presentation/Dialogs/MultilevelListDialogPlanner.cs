@@ -47,8 +47,8 @@ public sealed record MultilevelListPreset(
 
 public static class MultilevelListDialogPlanner
 {
-    public const string Title = "Define New Multilevel List";
-    public const string PositiveStartAtMessage = "Start-at values must be positive integers or blank.";
+    public static string Title => FreeWUiTextCatalog.MultilevelListTitle;
+    public static string PositiveStartAtMessage => FreeWUiTextCatalog.MultilevelListPositiveStartAtMessage;
     public const int MaximumLevelCount = 9;
     public const int DialogWidth = 380;
     public const int OuterMargin = 14;
@@ -56,13 +56,15 @@ public static class MultilevelListDialogPlanner
     public const int StartAtMinWidth = 60;
     public const int NumberFormatMinWidth = 130;
     public const int ButtonWidth = 72;
-    public const string Description = "Configure multilevel list levels.";
-    public const string LevelsLabel = "Number of levels (1-9):";
-    public const string Level0StartAtLabel = "Level 1 start at:";
-    public const string Level1StartAtLabel = "Level 2 start at:";
-    public const string Level0NumberStyleLabel = "Level 1 number style:";
-    public const string Level1NumberStyleLabel = "Level 2 number style:";
-    public const string Level2NumberStyleLabel = "Level 3 number style:";
+    public static string Description => FreeWUiTextCatalog.MultilevelListDescription;
+    public static string LevelsLabel => FreeWUiTextCatalog.MultilevelListLevelsLabel;
+    public static string Level0StartAtLabel => FreeWUiTextCatalog.MultilevelListLevel1StartAtLabel;
+    public static string Level1StartAtLabel => FreeWUiTextCatalog.MultilevelListLevel2StartAtLabel;
+    public static string Level0NumberStyleLabel => FreeWUiTextCatalog.MultilevelListLevel1NumberStyleLabel;
+    public static string Level1NumberStyleLabel => FreeWUiTextCatalog.MultilevelListLevel2NumberStyleLabel;
+    public static string Level2NumberStyleLabel => FreeWUiTextCatalog.MultilevelListLevel3NumberStyleLabel;
+    public static string Level0StartAtToolTip => FreeWUiTextCatalog.MultilevelListLevel1StartAtToolTip;
+    public static string Level1StartAtToolTip => FreeWUiTextCatalog.MultilevelListLevel2StartAtToolTip;
 
     public static MultilevelListDefinition DefaultDefinition { get; } =
         new(

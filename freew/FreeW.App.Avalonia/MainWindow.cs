@@ -2617,8 +2617,8 @@ public sealed partial class MainWindow : Window
             IsSnapToTickEnabled = true,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        AutomationProperties.SetName(_zoomSlider, "Zoom");
-        ToolTip.SetTip(_zoomSlider, "Zoom");
+        AutomationProperties.SetName(_zoomSlider, FreeWUiTextCatalog.Zoom);
+        ToolTip.SetTip(_zoomSlider, FreeWUiTextCatalog.Zoom);
         _zoomSlider.PropertyChanged += (_, e) =>
         {
             if (!_updatingZoomSlider && e.Property == RangeBase.ValueProperty)
@@ -2632,9 +2632,9 @@ public sealed partial class MainWindow : Window
         _zoomLabel.MinWidth = 38;
         _zoomLabel.TextAlignment = global::Avalonia.Media.TextAlignment.Right;
 
-        panel.Children.Add(BuildZoomButton("\u2212", "Zoom out", foreground, () => ApplyZoom(ZoomLevels.StepDown(_zoomScale))));
+        panel.Children.Add(BuildZoomButton("\u2212", FreeWUiTextCatalog.ZoomOut, foreground, () => ApplyZoom(ZoomLevels.StepDown(_zoomScale))));
         panel.Children.Add(_zoomSlider);
-        panel.Children.Add(BuildZoomButton("+", "Zoom in", foreground, () => ApplyZoom(ZoomLevels.StepUp(_zoomScale))));
+        panel.Children.Add(BuildZoomButton("+", FreeWUiTextCatalog.ZoomIn, foreground, () => ApplyZoom(ZoomLevels.StepUp(_zoomScale))));
 
         var percentage = new Button
         {
@@ -2644,8 +2644,8 @@ public sealed partial class MainWindow : Window
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1),
         };
-        AutomationProperties.SetName(percentage, "Zoom");
-        ToolTip.SetTip(percentage, "Zoom");
+        AutomationProperties.SetName(percentage, FreeWUiTextCatalog.Zoom);
+        ToolTip.SetTip(percentage, FreeWUiTextCatalog.Zoom);
         percentage.Click += (_, _) => _ = OpenZoomDialogAsync();
         panel.Children.Add(percentage);
         return panel;

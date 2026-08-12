@@ -26,6 +26,39 @@ public sealed record AvaloniaPrintDialogCollation(bool IsSelectable, bool FixedV
     public bool Resolve(bool? selectedValue) => IsSelectable ? selectedValue != false : FixedValue;
 }
 
+public sealed record AvaloniaPrintDialogText(
+    string Title,
+    string PrinterLabel,
+    string CopiesLabel,
+    string PagesLabel,
+    string FirstPageLabel,
+    string LastPageLabel,
+    string OrientationLabel,
+    string LayoutLabel,
+    IReadOnlyList<string> PageRangeChoices,
+    IReadOnlyList<string> OrientationChoices,
+    string CollateCopiesLabel,
+    string SubmitLabel,
+    string CancelLabel,
+    PrintDialogText Status)
+{
+    public static AvaloniaPrintDialogText DefaultEnglish { get; } = new(
+        "Print",
+        "Printer:",
+        "Copies:",
+        "Pages:",
+        "First:",
+        "Last:",
+        "Orientation:",
+        "Layout:",
+        ["All pages", "Single page", "Page range"],
+        ["Document", "Portrait", "Landscape"],
+        "Collate copies",
+        "Print",
+        "Cancel",
+        PrintDialogText.DefaultEnglish);
+}
+
 public sealed record AvaloniaPrintDialogOptions
 {
     public double Width { get; init; } = 480;
@@ -39,6 +72,8 @@ public sealed record AvaloniaPrintDialogOptions
     public AvaloniaPrintDialogCollation Collation { get; init; } = AvaloniaPrintDialogCollation.Fixed(true);
 
     public bool ApplyCompactActionButtonChrome { get; init; } = true;
+
+    public AvaloniaPrintDialogText Text { get; init; } = AvaloniaPrintDialogText.DefaultEnglish;
 }
 
 /// <summary>
@@ -48,8 +83,6 @@ public sealed record AvaloniaPrintDialogOptions
 /// </summary>
 public static class AvaloniaPrintDialogWorkflow
 {
-    private static readonly PrintDialogText DialogText = PrintDialogText.DefaultEnglish;
-
     public static async Task<PrintSelection?> ShowAsync(
         Window owner,
         PrinterDiscoveryResult discovery,
@@ -84,7 +117,7 @@ public static class AvaloniaPrintDialogWorkflow
 
             if (!submission.Succeeded)
             {
-                controls.Status.Text = DialogText.ValidationMessage(submission.ValidationIssue);
+                controls.Status.Text = options.Text.Status.ValidationMessage(submission.ValidationIssue);
                 FocusInvalidField(controls, submission.ValidationIssue);
                 return;
             }
@@ -116,7 +149,8 @@ public static class AvaloniaPrintDialogWorkflow
         AvaloniaPrintDialogOptions options)
     {
         var state = session.State;
-        dialog.Title = "Print";
+        var text = options.Text;
+        dialog.Title = text.Title;
         dialog.Width = options.Width;
         dialog.SizeToContent = SizeToContent.Height;
         dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -125,20 +159,20 @@ public static class AvaloniaPrintDialogWorkflow
 
         var printer = Choice(state.PrinterNames, state.SelectedPrinterIndex, options.ChoiceMinWidth);
         var copies = Text(state.CopiesText);
-        var pageRange = Choice(["All pages", "Single page", "Page range"], state.PageRangeIndex, options.ChoiceMinWidth);
+        var pageRange = Choice(text.PageRangeChoices, state.PageRangeIndex, options.ChoiceMinWidth);
         var firstPage = Text(state.FirstPageText);
         var lastPage = Text(state.LastPageText);
-        var orientation = Choice(["Document", "Portrait", "Landscape"], state.OrientationIndex, options.ChoiceMinWidth);
+        var orientation = Choice(text.OrientationChoices, state.OrientationIndex, options.ChoiceMinWidth);
         var collation = options.Collation.IsSelectable
-            ? new CheckBox { Content = "Collate copies", IsChecked = state.Collate }
+            ? new CheckBox { Content = text.CollateCopiesLabel, IsChecked = state.Collate }
             : null;
         var status = new TextBlock
         {
-            Text = state.StatusMessage(DialogText),
+            Text = state.StatusMessage(text.Status),
             TextWrapping = TextWrapping.Wrap,
         };
-        var submit = new Button { Content = "Print", IsDefault = true, IsEnabled = state.CanSubmit };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var submit = new Button { Content = text.SubmitLabel, IsDefault = true, IsEnabled = state.CanSubmit };
+        var cancel = new Button { Content = text.CancelLabel, IsCancel = true };
 
         if (options.ApplyCompactActionButtonChrome)
         {
@@ -163,7 +197,7 @@ public static class AvaloniaPrintDialogWorkflow
         var content = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
         if (!string.IsNullOrWhiteSpace(options.LayoutSummary))
         {
-            AddRow(content, "Layout:", new TextBlock
+            AddRow(content, text.LayoutLabel, new TextBlock
             {
                 Text = options.LayoutSummary,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -171,20 +205,20 @@ public static class AvaloniaPrintDialogWorkflow
             });
         }
 
-        AddRow(content, "Printer:", printer);
-        AddRow(content, "Copies:", copies);
-        AddRow(content, "Pages:", pageRange);
+        AddRow(content, text.PrinterLabel, printer);
+        AddRow(content, text.CopiesLabel, copies);
+        AddRow(content, text.PagesLabel, pageRange);
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = "First:", VerticalAlignment = VerticalAlignment.Center }, firstPage,
-                new TextBlock { Text = "Last:", VerticalAlignment = VerticalAlignment.Center }, lastPage,
+                new TextBlock { Text = text.FirstPageLabel, VerticalAlignment = VerticalAlignment.Center }, firstPage,
+                new TextBlock { Text = text.LastPageLabel, VerticalAlignment = VerticalAlignment.Center }, lastPage,
             },
         });
-        AddRow(content, "Orientation:", orientation);
+        AddRow(content, text.OrientationLabel, orientation);
         if (collation is not null)
             content.Children.Add(collation);
         content.Children.Add(status);

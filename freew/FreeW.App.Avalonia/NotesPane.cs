@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Panes;
 
 namespace FreeW.App.Avalonia;
@@ -61,8 +62,8 @@ internal sealed class NotesPane : Border
             IsVisible = false,
         };
         _subEditor = new DocumentView { MinHeight = 76, MaxHeight = 145, Margin = new Thickness(8, 0, 8, 4), IsVisible = false };
-        _apply = MakeButton("Apply", ApplySelected);
-        _delete = MakeButton("Delete", DeleteSelected);
+        _apply = MakeButton(FreeWUiTextCatalog.NotesApply, ApplySelected);
+        _delete = MakeButton(FreeWUiTextCatalog.NotesDelete, DeleteSelected);
         _apply.IsVisible = false;
         _delete.IsVisible = false;
 
@@ -73,7 +74,7 @@ internal sealed class NotesPane : Border
         DockPanel.SetDock(buttons, Dock.Bottom);
 
         var layout = new DockPanel { LastChildFill = true };
-        var header = new TextBlock { Text = "Notes", FontWeight = FontWeight.SemiBold, Margin = new Thickness(10, 7, 10, 4) };
+        var header = new TextBlock { Text = FreeWUiTextCatalog.NotesHeading, FontWeight = FontWeight.SemiBold, Margin = new Thickness(10, 7, 10, 4) };
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(_list, Dock.Top);
         DockPanel.SetDock(_selectedLabel, Dock.Top);
@@ -160,7 +161,7 @@ internal sealed class NoteTextDialog : FreeWDialogWindow
 
     private NoteTextDialog(bool footnote)
     {
-        Title = footnote ? "Insert Footnote" : "Insert Endnote";
+        Title = footnote ? FreeWUiTextCatalog.InsertFootnoteTitle : FreeWUiTextCatalog.InsertEndnoteTitle;
         Width = 390;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -168,7 +169,7 @@ internal sealed class NoteTextDialog : FreeWDialogWindow
         ShowInTaskbar = false;
         _text = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 90 };
         AvaloniaCompactDialogChrome.ApplyTextBox(_text, Chrome);
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = FreeWUiTextCatalog.NoteDialogOk, IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, Chrome, 72, true);
         ok.Click += (_, _) =>
         {
@@ -176,7 +177,7 @@ internal sealed class NoteTextDialog : FreeWDialogWindow
             if (!string.IsNullOrWhiteSpace(value))
                 Close(value);
         };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = FreeWUiTextCatalog.NoteDialogCancel, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, Chrome, 72);
         cancel.Click += (_, _) => Close(null);
         Content = new StackPanel
@@ -184,7 +185,7 @@ internal sealed class NoteTextDialog : FreeWDialogWindow
             Margin = new Thickness(14),
             Children =
             {
-                new TextBlock { Text = footnote ? "Footnote text:" : "Endnote text:", Margin = new Thickness(0, 0, 0, 4) },
+                new TextBlock { Text = footnote ? FreeWUiTextCatalog.FootnoteTextLabel : FreeWUiTextCatalog.EndnoteTextLabel, Margin = new Thickness(0, 0, 0, 4) },
                 _text,
                 AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
             },

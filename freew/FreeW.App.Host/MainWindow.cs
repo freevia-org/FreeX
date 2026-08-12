@@ -1827,7 +1827,7 @@ public sealed class MainWindow : Window
     {
         var header = new TextBlock
         {
-            Text = "Notes",
+            Text = FreeWUiTextCatalog.NotesHeading,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 4)
         };
@@ -1875,8 +1875,15 @@ public sealed class MainWindow : Window
             return btn;
         }
 
-        _notesApplyButton  = MakeButton("Apply",  "Commit edits back to this note",   ApplySelectedNote,  isPrimary: true);
-        _notesDeleteButton = MakeButton("Delete", "Delete this note and its marker",  DeleteSelectedNote);
+        _notesApplyButton = MakeButton(
+            FreeWUiTextCatalog.NotesApply,
+            FreeWUiTextCatalog.NotesApplyToolTip,
+            ApplySelectedNote,
+            isPrimary: true);
+        _notesDeleteButton = MakeButton(
+            FreeWUiTextCatalog.NotesDelete,
+            FreeWUiTextCatalog.NotesDeleteToolTip,
+            DeleteSelectedNote);
         _notesApplyButton.Visibility  = Visibility.Collapsed;
         _notesDeleteButton.Visibility = Visibility.Collapsed;
 
@@ -3016,7 +3023,7 @@ public sealed class MainWindow : Window
             TickFrequency = ZoomLevels.Step,
             SmallChange = ZoomLevels.Step,
             LargeChange = ZoomLevels.Step,
-            ToolTip = "Zoom"
+            ToolTip = FreeWUiTextCatalog.Zoom
         };
         _zoomSlider.ValueChanged += (_, e) => _editor.ZoomLevel = e.NewValue;
 
@@ -3047,7 +3054,7 @@ public sealed class MainWindow : Window
             Content = _zoomLabel,
             Style = (Style)FindResource("ChromeStatusButtonStyle"),
             Padding = new Thickness(2, 0, 2, 0),
-            ToolTip = "Zoom"
+            ToolTip = FreeWUiTextCatalog.Zoom
         };
         zoomButton.Click += (_, _) => OpenZoomDialog();
         panel.Children.Add(zoomButton);

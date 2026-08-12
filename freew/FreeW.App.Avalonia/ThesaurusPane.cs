@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Avalonia;
@@ -46,7 +47,7 @@ internal sealed class ThesaurusPane : Border
         _status = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)), Margin = new Thickness(10, 2, 10, 8), TextWrapping = TextWrapping.Wrap };
         _senses = new StackPanel();
         var layout = new DockPanel { LastChildFill = true };
-        var header = new TextBlock { Text = "Thesaurus", FontWeight = FontWeight.SemiBold, Margin = new Thickness(10, 8, 10, 6) };
+        var header = new TextBlock { Text = FreeWUiTextCatalog.ThesaurusHeading, FontWeight = FontWeight.SemiBold, Margin = new Thickness(10, 8, 10, 6) };
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(_heading, Dock.Top);
         DockPanel.SetDock(_status, Dock.Top);
@@ -142,7 +143,7 @@ internal sealed class ThesaurusPane : Border
             if (availability.ReplaceIntent is { } intent)
                 Replace(intent);
         };
-        var copy = new Button { Content = "Copy", MinWidth = 54 };
+        var copy = new Button { Content = FreeWUiTextCatalog.ThesaurusCopyButton, MinWidth = 54 };
         ToolTip.SetTip(copy, action.CopyToolTip);
         copy.Click += async (_, _) =>
         {

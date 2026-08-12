@@ -1564,7 +1564,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             BorderThickness = new Thickness(1, 0, 0, 0),
             Child = panel,
         };
-        _altTextCloseButton.Content = "Close";
+        _altTextCloseButton.Content = PresentationPaneTextResources.CloseCommand;
         return host;
     }
 

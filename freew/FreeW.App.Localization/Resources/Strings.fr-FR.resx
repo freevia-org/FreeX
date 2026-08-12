@@ -70,5 +70,64 @@
   <data name="AltText_Description_Label" xml:space="preserve"><value>Description :</value></data>
   <data name="AltText_ImageSelectionRequired_Message" xml:space="preserve"><value>Sélectionnez d'abord une image, puis choisissez Texte de remplacement.</value></data>
   <data name="AltText_ShapeSelectionRequired_Message" xml:space="preserve"><value>Sélectionnez d'abord une forme ou un objet WordArt, puis choisissez Texte de remplacement.</value></data>
+  <data name="Shell_Zoom_Label" xml:space="preserve"><value>Zoom</value></data>
+  <data name="Shell_ZoomIn_Label" xml:space="preserve"><value>Zoom avant</value></data>
+  <data name="Shell_ZoomOut_Label" xml:space="preserve"><value>Zoom arri&#232;re</value></data>
+  <data name="Design_Themes_Title" xml:space="preserve"><value>Th&#232;mes</value></data>
+  <data name="Design_Colors_Title" xml:space="preserve"><value>Couleurs</value></data>
+  <data name="Design_Fonts_Title" xml:space="preserve"><value>Polices</value></data>
+  <data name="Design_ParagraphSpacing_Title" xml:space="preserve"><value>Espacement des paragraphes</value></data>
+  <data name="Design_ParagraphSpacing_CompactLabel" xml:space="preserve"><value>Espacement&#xA;paragraphes</value></data>
+  <data name="Design_FontSample_Heading" xml:space="preserve"><value>Titre</value></data>
+  <data name="Design_FontSample_Body" xml:space="preserve"><value>Corps</value></data>
+  <data name="Design_ThemeColors_AutomationNameFormat" xml:space="preserve"><value>Couleurs {0}</value></data>
+  <data name="Design_StyleSet_AutomationNameFormat" xml:space="preserve"><value>Jeu de styles {0}</value></data>
+  <data name="Design_FontSet_AutomationNameFormat" xml:space="preserve"><value>Polices {0}</value></data>
+  <data name="Design_ParagraphSpacing_AutomationNameFormat" xml:space="preserve"><value>Espacement {0}</value></data>
+  <data name="Design_EffectSet_AutomationNameFormat" xml:space="preserve"><value>Effets {0}</value></data>
+  <data name="Design_TableStyles_Title" xml:space="preserve"><value>Styles de tableau</value></data>
+  <data name="Design_TableStyles_CompactLabel" xml:space="preserve"><value>Styles&#xA;tableau</value></data>
+  <data name="Design_TableStyle_AutomationNameFormat" xml:space="preserve"><value>Style de tableau {0}</value></data>
+  <data name="Design_Styles_MoreToolTip" xml:space="preserve"><value>Autres styles</value></data>
+  <data name="Dialog_DateTime_Title" xml:space="preserve"><value>Date et heure</value></data>
+  <data name="Dialog_DateTime_FormatsLabel" xml:space="preserve"><value>Formats disponibles :</value></data>
+  <data name="Dialog_DateTime_UpdateAutomatically" xml:space="preserve"><value>Mettre &#224; jour automatiquement</value></data>
+  <data name="Dialog_DateTime_UpdateAutomaticallyToolTip" xml:space="preserve"><value>Ins&#233;rer un champ DATE ou TIME actif mis &#224; jour avec F9 au lieu d'un texte statique.</value></data>
+  <data name="Dialog_MultilevelList_Title" xml:space="preserve"><value>D&#233;finir une nouvelle liste &#224; plusieurs niveaux</value></data>
+  <data name="Dialog_MultilevelList_Description" xml:space="preserve"><value>Configurer les niveaux de la liste.</value></data>
+  <data name="Dialog_MultilevelList_LevelsLabel" xml:space="preserve"><value>Nombre de niveaux (1-9) :</value></data>
+  <data name="Dialog_MultilevelList_Level1StartAtLabel" xml:space="preserve"><value>Niveau 1 commence &#224; :</value></data>
+  <data name="Dialog_MultilevelList_Level2StartAtLabel" xml:space="preserve"><value>Niveau 2 commence &#224; :</value></data>
+  <data name="Dialog_MultilevelList_Level1NumberStyleLabel" xml:space="preserve"><value>Style de num&#233;ro du niveau 1 :</value></data>
+  <data name="Dialog_MultilevelList_Level2NumberStyleLabel" xml:space="preserve"><value>Style de num&#233;ro du niveau 2 :</value></data>
+  <data name="Dialog_MultilevelList_Level3NumberStyleLabel" xml:space="preserve"><value>Style de num&#233;ro du niveau 3 :</value></data>
+  <data name="Dialog_MultilevelList_Level1StartAtToolTip" xml:space="preserve"><value>D&#233;but du niveau 1 (base 1)</value></data>
+  <data name="Dialog_MultilevelList_Level2StartAtToolTip" xml:space="preserve"><value>D&#233;but du niveau 2 (base 1)</value></data>
+  <data name="Dialog_MultilevelList_PositiveStartAtMessage" xml:space="preserve"><value>Les valeurs initiales doivent &#234;tre des entiers positifs ou vides.</value></data>
+  <data name="Pane_Thesaurus_Heading" xml:space="preserve"><value>Dictionnaire des synonymes</value></data>
+  <data name="Pane_Thesaurus_EmptyWordStatus" xml:space="preserve"><value>Placez le curseur sur un mot et appuyez sur Maj+F7.</value></data>
+  <data name="Pane_Thesaurus_NoSynonymsStatus" xml:space="preserve"><value>Aucun synonyme trouv&#233; pour ce mot.</value></data>
+  <data name="Pane_Thesaurus_InsertToolTipFormat" xml:space="preserve"><value>Ins&#233;rer &quot;{0}&quot; &#224; la place de &quot;{1}&quot;</value></data>
+  <data name="Pane_Thesaurus_CopyToolTipFormat" xml:space="preserve"><value>Copier &quot;{0}&quot; dans le presse-papiers</value></data>
+  <data name="Pane_Thesaurus_CopyButton" xml:space="preserve"><value>Copier</value></data>
+  <data name="Pane_Thesaurus_Adjective" xml:space="preserve"><value>adjectif</value></data>
+  <data name="Pane_Thesaurus_Adverb" xml:space="preserve"><value>adverbe</value></data>
+  <data name="Pane_Thesaurus_Noun" xml:space="preserve"><value>nom</value></data>
+  <data name="Pane_Thesaurus_Verb" xml:space="preserve"><value>verbe</value></data>
+  <data name="Pane_Thesaurus_Preposition" xml:space="preserve"><value>pr&#233;position</value></data>
+  <data name="Pane_Thesaurus_Pronoun" xml:space="preserve"><value>pronom</value></data>
+  <data name="Pane_Notes_Heading" xml:space="preserve"><value>Notes</value></data>
+  <data name="Pane_Notes_Apply" xml:space="preserve"><value>Appliquer</value></data>
+  <data name="Pane_Notes_Delete" xml:space="preserve"><value>Supprimer</value></data>
+  <data name="Pane_Notes_ApplyToolTip" xml:space="preserve"><value>Appliquer les modifications &#224; cette note</value></data>
+  <data name="Pane_Notes_DeleteToolTip" xml:space="preserve"><value>Supprimer cette note et son rep&#232;re</value></data>
+  <data name="Pane_Notes_FootnoteFormat" xml:space="preserve"><value>Note de bas de page {0}</value></data>
+  <data name="Pane_Notes_EndnoteFormat" xml:space="preserve"><value>Note de fin {0}</value></data>
+  <data name="Dialog_Note_InsertFootnoteTitle" xml:space="preserve"><value>Ins&#233;rer une note de bas de page</value></data>
+  <data name="Dialog_Note_InsertEndnoteTitle" xml:space="preserve"><value>Ins&#233;rer une note de fin</value></data>
+  <data name="Dialog_Note_FootnoteTextLabel" xml:space="preserve"><value>Texte de la note de bas de page :</value></data>
+  <data name="Dialog_Note_EndnoteTextLabel" xml:space="preserve"><value>Texte de la note de fin :</value></data>
+  <data name="Dialog_Note_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Dialog_Note_Cancel" xml:space="preserve"><value>Annuler</value></data>
   <data name="FreeW_ProductName" xml:space="preserve"><value>FreeW</value></data>
 </root>

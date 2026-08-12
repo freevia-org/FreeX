@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -72,7 +73,7 @@ internal sealed class StylesGallery : Control
             Width = 20,
             Margin = new Thickness(2, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Stretch,
-            ToolTip = "More styles"
+            ToolTip = FreeWUiTextCatalog.MoreStylesToolTip
         };
         var popup = gallery.BuildMorePopup(more);
         more.Checked += (_, _) => popup.IsOpen = true;

@@ -44,8 +44,8 @@ internal static class MultilevelListDialog
             levelsBox.Items.Add(choice);
         levelsBox.SelectedIndex = state.LevelsIndex;
 
-        var startAt0Box = new TextBox { Text = state.Level0StartAtText, MinWidth = MultilevelListDialogPlanner.StartAtMinWidth, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Start-at for level 1 (1-based)" };
-        var startAt1Box = new TextBox { Text = state.Level1StartAtText, MinWidth = MultilevelListDialogPlanner.StartAtMinWidth, Margin = new Thickness(0, 0, 0, 8), ToolTip = "Start-at for level 2 (1-based)" };
+        var startAt0Box = new TextBox { Text = state.Level0StartAtText, MinWidth = MultilevelListDialogPlanner.StartAtMinWidth, Margin = new Thickness(0, 0, 0, 8), ToolTip = MultilevelListDialogPlanner.Level0StartAtToolTip };
+        var startAt1Box = new TextBox { Text = state.Level1StartAtText, MinWidth = MultilevelListDialogPlanner.StartAtMinWidth, Margin = new Thickness(0, 0, 0, 8), ToolTip = MultilevelListDialogPlanner.Level1StartAtToolTip };
         var level0FormatBox = NumberFormatBox(session.NumberFormatChoices, state.Level0FormatIndex);
         var level1FormatBox = NumberFormatBox(session.NumberFormatChoices, state.Level1FormatIndex);
         var level2FormatBox = NumberFormatBox(session.NumberFormatChoices, state.Level2FormatIndex);

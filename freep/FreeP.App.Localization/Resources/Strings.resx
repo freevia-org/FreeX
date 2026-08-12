@@ -3748,6 +3748,53 @@
   <data name="Print_Status_PrinterSelected" xml:space="preserve">
     <value>Printer selected: {0}</value>
   </data>
+  <data name="Print_Surface_SettingsHeading" xml:space="preserve"><value>Settings</value></data>
+  <data name="Print_Surface_CustomRangeHeading" xml:space="preserve"><value>Custom range</value></data>
+  <data name="Print_Surface_CustomRangeDescription" xml:space="preserve"><value>Enter slide numbers and ranges, for example 2,4-6.</value></data>
+  <data name="Print_Surface_CustomRangePlaceholder" xml:space="preserve"><value>e.g. 2,4-6</value></data>
+  <data name="Print_Surface_CustomRangeApplyLabel" xml:space="preserve"><value>Apply range</value></data>
+  <data name="Print_Surface_PrintHeading" xml:space="preserve"><value>Print</value></data>
+  <data name="Print_Surface_LayoutField" xml:space="preserve"><value>Layout</value></data>
+  <data name="Print_Surface_SlidesField" xml:space="preserve"><value>Slides</value></data>
+  <data name="Print_Surface_PagesField" xml:space="preserve"><value>Pages</value></data>
+  <data name="Print_Surface_PreviewField" xml:space="preserve"><value>Preview</value></data>
+  <data name="Print_Surface_HiddenSlidesField" xml:space="preserve"><value>Hidden slides</value></data>
+  <data name="Print_Surface_OptionsField" xml:space="preserve"><value>Options</value></data>
+  <data name="Print_Surface_NativePrinterHandoffField" xml:space="preserve"><value>Native printer handoff</value></data>
+  <data name="Print_Surface_IncludedValue" xml:space="preserve"><value>Included</value></data>
+  <data name="Print_Surface_NotIncludedValue" xml:space="preserve"><value>Not included</value></data>
+  <data name="Print_Surface_OutputOptionsGroup" xml:space="preserve"><value>Output options</value></data>
+  <data name="Print_Surface_PreviewGroup" xml:space="preserve"><value>Preview</value></data>
+  <data name="Print_Surface_LayoutsGroup" xml:space="preserve"><value>Layouts</value></data>
+  <data name="Print_Surface_SlideRangeGroup" xml:space="preserve"><value>Slide range</value></data>
+  <data name="Print_Surface_GroupChoiceFormat" xml:space="preserve"><value>{0}: {1}</value></data>
+  <data name="Print_Surface_SelectedChoiceFormat" xml:space="preserve"><value>Selected: {0}</value></data>
+  <data name="Print_Surface_UnavailableChoiceFormat" xml:space="preserve"><value>{0} (unavailable)</value></data>
+  <data name="Print_Surface_ActionFormat" xml:space="preserve"><value>Print {0}</value></data>
+  <data name="Print_Dialog_Title" xml:space="preserve"><value>Print</value></data>
+  <data name="Print_Dialog_PrinterLabel" xml:space="preserve"><value>Printer:</value></data>
+  <data name="Print_Dialog_CopiesLabel" xml:space="preserve"><value>Copies:</value></data>
+  <data name="Print_Dialog_PagesLabel" xml:space="preserve"><value>Pages:</value></data>
+  <data name="Print_Dialog_FirstPageLabel" xml:space="preserve"><value>First:</value></data>
+  <data name="Print_Dialog_LastPageLabel" xml:space="preserve"><value>Last:</value></data>
+  <data name="Print_Dialog_OrientationLabel" xml:space="preserve"><value>Orientation:</value></data>
+  <data name="Print_Dialog_LayoutLabel" xml:space="preserve"><value>Layout:</value></data>
+  <data name="Print_Dialog_AllPages" xml:space="preserve"><value>All pages</value></data>
+  <data name="Print_Dialog_SinglePage" xml:space="preserve"><value>Single page</value></data>
+  <data name="Print_Dialog_PageRange" xml:space="preserve"><value>Page range</value></data>
+  <data name="Print_Dialog_DocumentOrientation" xml:space="preserve"><value>Document</value></data>
+  <data name="Print_Dialog_PortraitOrientation" xml:space="preserve"><value>Portrait</value></data>
+  <data name="Print_Dialog_LandscapeOrientation" xml:space="preserve"><value>Landscape</value></data>
+  <data name="Print_Dialog_CollateCopies" xml:space="preserve"><value>Collate copies</value></data>
+  <data name="Print_Dialog_Submit" xml:space="preserve"><value>Print</value></data>
+  <data name="Print_Dialog_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Print_Dialog_ReadyStatus" xml:space="preserve"><value>Choose the printer and print settings.</value></data>
+  <data name="Print_Dialog_UnavailableStatus" xml:space="preserve"><value>Printing is unavailable on this host.</value></data>
+  <data name="Print_Dialog_CopiesOutOfRange" xml:space="preserve"><value>Copies must be between 1 and 999.</value></data>
+  <data name="Print_Dialog_FirstPageInvalid" xml:space="preserve"><value>Enter a positive first page number.</value></data>
+  <data name="Print_Dialog_LastPageBeforeFirstPage" xml:space="preserve"><value>The last page must be at least the first page.</value></data>
+  <data name="Pane_Common_CloseCommand" xml:space="preserve"><value>Close</value></data>
+  <data name="Pane_Notes_Placeholder" xml:space="preserve"><value>Click to add notes</value></data>
   <data name="FreeP_Backstage_Options_EditText" xml:space="preserve">
     <value>Edit options…</value>
   </data>

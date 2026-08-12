@@ -524,5 +524,64 @@
   <data name="AltText_Description_Label" xml:space="preserve"><value>Description:</value></data>
   <data name="AltText_ImageSelectionRequired_Message" xml:space="preserve"><value>Select an image first, then choose Alt Text.</value></data>
   <data name="AltText_ShapeSelectionRequired_Message" xml:space="preserve"><value>Select a shape or WordArt first, then choose Alt Text.</value></data>
+  <data name="Shell_Zoom_Label" xml:space="preserve"><value>Zoom</value></data>
+  <data name="Shell_ZoomIn_Label" xml:space="preserve"><value>Zoom in</value></data>
+  <data name="Shell_ZoomOut_Label" xml:space="preserve"><value>Zoom out</value></data>
+  <data name="Design_Themes_Title" xml:space="preserve"><value>Themes</value></data>
+  <data name="Design_Colors_Title" xml:space="preserve"><value>Colors</value></data>
+  <data name="Design_Fonts_Title" xml:space="preserve"><value>Fonts</value></data>
+  <data name="Design_ParagraphSpacing_Title" xml:space="preserve"><value>Paragraph Spacing</value></data>
+  <data name="Design_ParagraphSpacing_CompactLabel" xml:space="preserve"><value>Paragraph&#xA;Spacing</value></data>
+  <data name="Design_FontSample_Heading" xml:space="preserve"><value>Heading</value></data>
+  <data name="Design_FontSample_Body" xml:space="preserve"><value>Body</value></data>
+  <data name="Design_ThemeColors_AutomationNameFormat" xml:space="preserve"><value>{0} colors</value></data>
+  <data name="Design_StyleSet_AutomationNameFormat" xml:space="preserve"><value>{0} style set</value></data>
+  <data name="Design_FontSet_AutomationNameFormat" xml:space="preserve"><value>{0} fonts</value></data>
+  <data name="Design_ParagraphSpacing_AutomationNameFormat" xml:space="preserve"><value>{0} paragraph spacing</value></data>
+  <data name="Design_EffectSet_AutomationNameFormat" xml:space="preserve"><value>{0} effects</value></data>
+  <data name="Design_TableStyles_Title" xml:space="preserve"><value>Table Styles</value></data>
+  <data name="Design_TableStyles_CompactLabel" xml:space="preserve"><value>Table&#xA;Styles</value></data>
+  <data name="Design_TableStyle_AutomationNameFormat" xml:space="preserve"><value>{0} table style</value></data>
+  <data name="Design_Styles_MoreToolTip" xml:space="preserve"><value>More styles</value></data>
+  <data name="Dialog_DateTime_Title" xml:space="preserve"><value>Date and Time</value></data>
+  <data name="Dialog_DateTime_FormatsLabel" xml:space="preserve"><value>Available formats:</value></data>
+  <data name="Dialog_DateTime_UpdateAutomatically" xml:space="preserve"><value>Update automatically</value></data>
+  <data name="Dialog_DateTime_UpdateAutomaticallyToolTip" xml:space="preserve"><value>Insert a live DATE or TIME field that updates when you press F9, instead of static text.</value></data>
+  <data name="Dialog_MultilevelList_Title" xml:space="preserve"><value>Define New Multilevel List</value></data>
+  <data name="Dialog_MultilevelList_Description" xml:space="preserve"><value>Configure multilevel list levels.</value></data>
+  <data name="Dialog_MultilevelList_LevelsLabel" xml:space="preserve"><value>Number of levels (1-9):</value></data>
+  <data name="Dialog_MultilevelList_Level1StartAtLabel" xml:space="preserve"><value>Level 1 start at:</value></data>
+  <data name="Dialog_MultilevelList_Level2StartAtLabel" xml:space="preserve"><value>Level 2 start at:</value></data>
+  <data name="Dialog_MultilevelList_Level1NumberStyleLabel" xml:space="preserve"><value>Level 1 number style:</value></data>
+  <data name="Dialog_MultilevelList_Level2NumberStyleLabel" xml:space="preserve"><value>Level 2 number style:</value></data>
+  <data name="Dialog_MultilevelList_Level3NumberStyleLabel" xml:space="preserve"><value>Level 3 number style:</value></data>
+  <data name="Dialog_MultilevelList_Level1StartAtToolTip" xml:space="preserve"><value>Start-at for level 1 (1-based)</value></data>
+  <data name="Dialog_MultilevelList_Level2StartAtToolTip" xml:space="preserve"><value>Start-at for level 2 (1-based)</value></data>
+  <data name="Dialog_MultilevelList_PositiveStartAtMessage" xml:space="preserve"><value>Start-at values must be positive integers or blank.</value></data>
+  <data name="Pane_Thesaurus_Heading" xml:space="preserve"><value>Thesaurus</value></data>
+  <data name="Pane_Thesaurus_EmptyWordStatus" xml:space="preserve"><value>Position the cursor on a word and press Shift+F7.</value></data>
+  <data name="Pane_Thesaurus_NoSynonymsStatus" xml:space="preserve"><value>No synonyms found for this word.</value></data>
+  <data name="Pane_Thesaurus_InsertToolTipFormat" xml:space="preserve"><value>Insert &quot;{0}&quot; in place of &quot;{1}&quot;</value></data>
+  <data name="Pane_Thesaurus_CopyToolTipFormat" xml:space="preserve"><value>Copy &quot;{0}&quot; to clipboard</value></data>
+  <data name="Pane_Thesaurus_CopyButton" xml:space="preserve"><value>Copy</value></data>
+  <data name="Pane_Thesaurus_Adjective" xml:space="preserve"><value>adjective</value></data>
+  <data name="Pane_Thesaurus_Adverb" xml:space="preserve"><value>adverb</value></data>
+  <data name="Pane_Thesaurus_Noun" xml:space="preserve"><value>noun</value></data>
+  <data name="Pane_Thesaurus_Verb" xml:space="preserve"><value>verb</value></data>
+  <data name="Pane_Thesaurus_Preposition" xml:space="preserve"><value>preposition</value></data>
+  <data name="Pane_Thesaurus_Pronoun" xml:space="preserve"><value>pronoun</value></data>
+  <data name="Pane_Notes_Heading" xml:space="preserve"><value>Notes</value></data>
+  <data name="Pane_Notes_Apply" xml:space="preserve"><value>Apply</value></data>
+  <data name="Pane_Notes_Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Pane_Notes_ApplyToolTip" xml:space="preserve"><value>Commit edits back to this note</value></data>
+  <data name="Pane_Notes_DeleteToolTip" xml:space="preserve"><value>Delete this note and its marker</value></data>
+  <data name="Pane_Notes_FootnoteFormat" xml:space="preserve"><value>Footnote {0}</value></data>
+  <data name="Pane_Notes_EndnoteFormat" xml:space="preserve"><value>Endnote {0}</value></data>
+  <data name="Dialog_Note_InsertFootnoteTitle" xml:space="preserve"><value>Insert Footnote</value></data>
+  <data name="Dialog_Note_InsertEndnoteTitle" xml:space="preserve"><value>Insert Endnote</value></data>
+  <data name="Dialog_Note_FootnoteTextLabel" xml:space="preserve"><value>Footnote text:</value></data>
+  <data name="Dialog_Note_EndnoteTextLabel" xml:space="preserve"><value>Endnote text:</value></data>
+  <data name="Dialog_Note_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Dialog_Note_Cancel" xml:space="preserve"><value>Cancel</value></data>
   <data name="FreeW_ProductName" xml:space="preserve"><value>FreeW</value></data>
 </root>

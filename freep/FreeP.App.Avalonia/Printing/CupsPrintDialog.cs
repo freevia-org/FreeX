@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Shell.Avalonia;
+using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia.Printing;
 
@@ -40,7 +41,34 @@ internal sealed class CupsPrintDialog : Window
                 AutomationIds = AutomationIds,
                 Collation = AvaloniaPrintDialogCollation.Selectable,
                 ApplyCompactActionButtonChrome = false,
+                Text = BuildText(),
             },
             requested,
             cancellationToken);
+
+    private static AvaloniaPrintDialogText BuildText()
+    {
+        static string Text(string suffix) => PresentationShellTextCatalog.PrintDialogText("Print_Dialog_" + suffix);
+
+        return new AvaloniaPrintDialogText(
+            Text("Title"),
+            Text("PrinterLabel"),
+            Text("CopiesLabel"),
+            Text("PagesLabel"),
+            Text("FirstPageLabel"),
+            Text("LastPageLabel"),
+            Text("OrientationLabel"),
+            Text("LayoutLabel"),
+            [Text("AllPages"), Text("SinglePage"), Text("PageRange")],
+            [Text("DocumentOrientation"), Text("PortraitOrientation"), Text("LandscapeOrientation")],
+            Text("CollateCopies"),
+            Text("Submit"),
+            Text("Cancel"),
+            new PrintDialogText(
+                Text("ReadyStatus"),
+                Text("UnavailableStatus"),
+                Text("CopiesOutOfRange"),
+                Text("FirstPageInvalid"),
+                Text("LastPageBeforeFirstPage")));
+    }
 }

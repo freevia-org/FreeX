@@ -163,4 +163,51 @@
   <data name="Export_VideoHost_FfmpegVideoOnlyAvailable" xml:space="preserve">
     <value>L'exportation ffmpeg vid&#233;o uniquement est disponible ; la narration et l'incrustation de la cam&#233;ra ne sont pas disponibles.</value>
   </data>
+  <data name="Print_Surface_SettingsHeading" xml:space="preserve"><value>Param&#232;tres</value></data>
+  <data name="Print_Surface_CustomRangeHeading" xml:space="preserve"><value>Plage personnalis&#233;e</value></data>
+  <data name="Print_Surface_CustomRangeDescription" xml:space="preserve"><value>Entrez les num&#233;ros et plages de diapositives, par exemple 2,4-6.</value></data>
+  <data name="Print_Surface_CustomRangePlaceholder" xml:space="preserve"><value>p. ex. 2,4-6</value></data>
+  <data name="Print_Surface_CustomRangeApplyLabel" xml:space="preserve"><value>Appliquer la plage</value></data>
+  <data name="Print_Surface_PrintHeading" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_Surface_LayoutField" xml:space="preserve"><value>Disposition</value></data>
+  <data name="Print_Surface_SlidesField" xml:space="preserve"><value>Diapositives</value></data>
+  <data name="Print_Surface_PagesField" xml:space="preserve"><value>Pages</value></data>
+  <data name="Print_Surface_PreviewField" xml:space="preserve"><value>Aper&#231;u</value></data>
+  <data name="Print_Surface_HiddenSlidesField" xml:space="preserve"><value>Diapositives masqu&#233;es</value></data>
+  <data name="Print_Surface_OptionsField" xml:space="preserve"><value>Options</value></data>
+  <data name="Print_Surface_NativePrinterHandoffField" xml:space="preserve"><value>Transfert vers l'imprimante native</value></data>
+  <data name="Print_Surface_IncludedValue" xml:space="preserve"><value>Incluses</value></data>
+  <data name="Print_Surface_NotIncludedValue" xml:space="preserve"><value>Non incluses</value></data>
+  <data name="Print_Surface_OutputOptionsGroup" xml:space="preserve"><value>Options de sortie</value></data>
+  <data name="Print_Surface_PreviewGroup" xml:space="preserve"><value>Aper&#231;u</value></data>
+  <data name="Print_Surface_LayoutsGroup" xml:space="preserve"><value>Dispositions</value></data>
+  <data name="Print_Surface_SlideRangeGroup" xml:space="preserve"><value>Plage de diapositives</value></data>
+  <data name="Print_Surface_GroupChoiceFormat" xml:space="preserve"><value>{0} : {1}</value></data>
+  <data name="Print_Surface_SelectedChoiceFormat" xml:space="preserve"><value>S&#233;lection : {0}</value></data>
+  <data name="Print_Surface_UnavailableChoiceFormat" xml:space="preserve"><value>{0} (indisponible)</value></data>
+  <data name="Print_Surface_ActionFormat" xml:space="preserve"><value>Imprimer {0}</value></data>
+  <data name="Print_Dialog_Title" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_Dialog_PrinterLabel" xml:space="preserve"><value>Imprimante :</value></data>
+  <data name="Print_Dialog_CopiesLabel" xml:space="preserve"><value>Copies :</value></data>
+  <data name="Print_Dialog_PagesLabel" xml:space="preserve"><value>Pages :</value></data>
+  <data name="Print_Dialog_FirstPageLabel" xml:space="preserve"><value>Premi&#232;re :</value></data>
+  <data name="Print_Dialog_LastPageLabel" xml:space="preserve"><value>Derni&#232;re :</value></data>
+  <data name="Print_Dialog_OrientationLabel" xml:space="preserve"><value>Orientation :</value></data>
+  <data name="Print_Dialog_LayoutLabel" xml:space="preserve"><value>Disposition :</value></data>
+  <data name="Print_Dialog_AllPages" xml:space="preserve"><value>Toutes les pages</value></data>
+  <data name="Print_Dialog_SinglePage" xml:space="preserve"><value>Une page</value></data>
+  <data name="Print_Dialog_PageRange" xml:space="preserve"><value>Plage de pages</value></data>
+  <data name="Print_Dialog_DocumentOrientation" xml:space="preserve"><value>Document</value></data>
+  <data name="Print_Dialog_PortraitOrientation" xml:space="preserve"><value>Portrait</value></data>
+  <data name="Print_Dialog_LandscapeOrientation" xml:space="preserve"><value>Paysage</value></data>
+  <data name="Print_Dialog_CollateCopies" xml:space="preserve"><value>Assembler les copies</value></data>
+  <data name="Print_Dialog_Submit" xml:space="preserve"><value>Imprimer</value></data>
+  <data name="Print_Dialog_Cancel" xml:space="preserve"><value>Annuler</value></data>
+  <data name="Print_Dialog_ReadyStatus" xml:space="preserve"><value>Choisissez l'imprimante et les param&#232;tres d'impression.</value></data>
+  <data name="Print_Dialog_UnavailableStatus" xml:space="preserve"><value>L'impression n'est pas disponible sur cet h&#244;te.</value></data>
+  <data name="Print_Dialog_CopiesOutOfRange" xml:space="preserve"><value>Le nombre de copies doit &#234;tre compris entre 1 et 999.</value></data>
+  <data name="Print_Dialog_FirstPageInvalid" xml:space="preserve"><value>Entrez un num&#233;ro de premi&#232;re page positif.</value></data>
+  <data name="Print_Dialog_LastPageBeforeFirstPage" xml:space="preserve"><value>La derni&#232;re page doit &#234;tre au moins &#233;gale &#224; la premi&#232;re.</value></data>
+  <data name="Pane_Common_CloseCommand" xml:space="preserve"><value>Fermer</value></data>
+  <data name="Pane_Notes_Placeholder" xml:space="preserve"><value>Cliquez pour ajouter des notes</value></data>
 </root>

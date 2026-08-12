@@ -11267,7 +11267,7 @@ public sealed class DocumentView : RichTextBox
     {
         AddMarker(wpf, m => m with { Control = new ContentControlMarker(control, location) });
         wpf.Background = new SolidColorBrush(ContentControlShade);
-        wpf.ToolTip = ContentControlTooltip(control);
+        wpf.ToolTip = ContentControlInteractionPlanner.Tooltip(control);
 
         switch (control.Kind)
         {
@@ -11299,26 +11299,6 @@ public sealed class DocumentView : RichTextBox
                 wpf.MouseLeftButtonUp += OnDatePickerClicked;
                 break;
         }
-    }
-
-    /// <summary>The hover tooltip shown for a content-control run, by kind (surfacing the alias when set).</summary>
-    private static string ContentControlTooltip(ModelContentControl control)
-    {
-        var label = control.Alias is { Length: > 0 } a ? a : null;
-        return control.Kind switch
-        {
-            ContentControlKind.CheckBox => label is null
-                ? "Checkbox content control (click to toggle)" : $"Checkbox: {label}",
-            ContentControlKind.RichText => label is null
-                ? "Rich-text content control" : $"Rich-text control: {label}",
-            ContentControlKind.DatePicker => label is null
-                ? "Date picker content control (click to pick a date)" : $"Date picker: {label}",
-            ContentControlKind.DropDownList => label is null
-                ? "Drop-down list content control (click to choose)" : $"Drop-down list: {label}",
-            ContentControlKind.ComboBox => label is null
-                ? "Combo box content control (click to choose or type)" : $"Combo box: {label}",
-            _ => label is null ? "Plain-text content control" : $"Content control: {label}"
-        };
     }
 
     /// <summary>

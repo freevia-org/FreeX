@@ -6,6 +6,55 @@ namespace FreeP.App.Compositor;
 /// <summary>Owns localized shell/status copy shared by the FreeP renderers.</summary>
 public static class PresentationShellTextCatalog
 {
+    public static IReadOnlyList<string> PrintSurfaceRequiredResourceKeys { get; } =
+    [
+        "Print_Surface_SettingsHeading",
+        "Print_Surface_CustomRangeHeading",
+        "Print_Surface_CustomRangeDescription",
+        "Print_Surface_CustomRangePlaceholder",
+        "Print_Surface_CustomRangeApplyLabel",
+        "Print_Surface_PrintHeading",
+        "Print_Surface_LayoutField",
+        "Print_Surface_SlidesField",
+        "Print_Surface_PagesField",
+        "Print_Surface_PreviewField",
+        "Print_Surface_HiddenSlidesField",
+        "Print_Surface_OptionsField",
+        "Print_Surface_NativePrinterHandoffField",
+        "Print_Surface_IncludedValue",
+        "Print_Surface_NotIncludedValue",
+        "Print_Surface_OutputOptionsGroup",
+        "Print_Surface_PreviewGroup",
+        "Print_Surface_LayoutsGroup",
+        "Print_Surface_SlideRangeGroup",
+        "Print_Surface_GroupChoiceFormat",
+        "Print_Surface_SelectedChoiceFormat",
+        "Print_Surface_UnavailableChoiceFormat",
+        "Print_Surface_ActionFormat",
+        "Print_Dialog_Title",
+        "Print_Dialog_PrinterLabel",
+        "Print_Dialog_CopiesLabel",
+        "Print_Dialog_PagesLabel",
+        "Print_Dialog_FirstPageLabel",
+        "Print_Dialog_LastPageLabel",
+        "Print_Dialog_OrientationLabel",
+        "Print_Dialog_LayoutLabel",
+        "Print_Dialog_AllPages",
+        "Print_Dialog_SinglePage",
+        "Print_Dialog_PageRange",
+        "Print_Dialog_DocumentOrientation",
+        "Print_Dialog_PortraitOrientation",
+        "Print_Dialog_LandscapeOrientation",
+        "Print_Dialog_CollateCopies",
+        "Print_Dialog_Submit",
+        "Print_Dialog_Cancel",
+        "Print_Dialog_ReadyStatus",
+        "Print_Dialog_UnavailableStatus",
+        "Print_Dialog_CopiesOutOfRange",
+        "Print_Dialog_FirstPageInvalid",
+        "Print_Dialog_LastPageBeforeFirstPage",
+    ];
+
     public static LocalizedTextDescriptor SlideSizeDialogStatus { get; } =
         Text("Shell_Status_SlideSizeDialog");
 
@@ -138,6 +187,77 @@ public static class PresentationShellTextCatalog
 
     public static LocalizedTextDescriptor PrintCustomRangeApplyHelp { get; } =
         Text("Print_Help_CustomRangeApply");
+
+    public static LocalizedTextDescriptor PrintSurfaceSettingsHeading { get; } =
+        Text("Print_Surface_SettingsHeading");
+
+    public static LocalizedTextDescriptor PrintSurfaceCustomRangeHeading { get; } =
+        Text("Print_Surface_CustomRangeHeading");
+
+    public static LocalizedTextDescriptor PrintSurfaceCustomRangeDescription { get; } =
+        Text("Print_Surface_CustomRangeDescription");
+
+    public static LocalizedTextDescriptor PrintSurfaceCustomRangePlaceholder { get; } =
+        Text("Print_Surface_CustomRangePlaceholder");
+
+    public static LocalizedTextDescriptor PrintSurfaceCustomRangeApplyLabel { get; } =
+        Text("Print_Surface_CustomRangeApplyLabel");
+
+    public static LocalizedTextDescriptor PrintSurfacePrintHeading { get; } =
+        Text("Print_Surface_PrintHeading");
+
+    public static LocalizedTextDescriptor PrintSurfaceLayoutField { get; } =
+        Text("Print_Surface_LayoutField");
+
+    public static LocalizedTextDescriptor PrintSurfaceSlidesField { get; } =
+        Text("Print_Surface_SlidesField");
+
+    public static LocalizedTextDescriptor PrintSurfacePagesField { get; } =
+        Text("Print_Surface_PagesField");
+
+    public static LocalizedTextDescriptor PrintSurfacePreviewField { get; } =
+        Text("Print_Surface_PreviewField");
+
+    public static LocalizedTextDescriptor PrintSurfaceHiddenSlidesField { get; } =
+        Text("Print_Surface_HiddenSlidesField");
+
+    public static LocalizedTextDescriptor PrintSurfaceOptionsField { get; } =
+        Text("Print_Surface_OptionsField");
+
+    public static LocalizedTextDescriptor PrintSurfaceNativePrinterHandoffField { get; } =
+        Text("Print_Surface_NativePrinterHandoffField");
+
+    public static LocalizedTextDescriptor PrintSurfaceIncludedValue { get; } =
+        Text("Print_Surface_IncludedValue");
+
+    public static LocalizedTextDescriptor PrintSurfaceNotIncludedValue { get; } =
+        Text("Print_Surface_NotIncludedValue");
+
+    public static LocalizedTextDescriptor PrintSurfaceOutputOptionsGroup { get; } =
+        Text("Print_Surface_OutputOptionsGroup");
+
+    public static LocalizedTextDescriptor PrintSurfacePreviewGroup { get; } =
+        Text("Print_Surface_PreviewGroup");
+
+    public static LocalizedTextDescriptor PrintSurfaceLayoutsGroup { get; } =
+        Text("Print_Surface_LayoutsGroup");
+
+    public static LocalizedTextDescriptor PrintSurfaceSlideRangeGroup { get; } =
+        Text("Print_Surface_SlideRangeGroup");
+
+    public static LocalizedTextDescriptor PrintSurfaceGroupChoice(string group, string choice) =>
+        Text("Print_Surface_GroupChoiceFormat", group, choice);
+
+    public static LocalizedTextDescriptor PrintSurfaceSelectedChoice(string choice) =>
+        Text("Print_Surface_SelectedChoiceFormat", choice);
+
+    public static LocalizedTextDescriptor PrintSurfaceUnavailableChoice(string choice) =>
+        Text("Print_Surface_UnavailableChoiceFormat", choice);
+
+    public static LocalizedTextDescriptor PrintSurfaceAction(string layout) =>
+        Text("Print_Surface_ActionFormat", layout);
+
+    public static string PrintDialogText(string resourceKey) => Resolve(Text(resourceKey));
 
     public static LocalizedTextDescriptor WindowsPrinterHeading { get; } =
         Text("Print_Windows_PrinterHeading");
