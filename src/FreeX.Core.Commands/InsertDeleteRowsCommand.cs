@@ -23,29 +23,14 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     // formula cells instead of the frozen forward payload -- see
     // RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress.
     private IReadOnlyList<CellAddress> _affectedCells = [];
-    private List<GridRange>? _mergeSnapshot;
+    private RowColumnMutationSnapshot? _mutationSnapshot;
     private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _commentSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _commentAuthorsSnapshot;
-    private List<CellAddress>? _shownCommentsSnapshot;
-    private List<KeyValuePair<CellAddress, ThreadedComment>>? _threadedCommentSnapshot;
-    private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
-    private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
-    private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
     // R106-io-hyperlink-range-shift: whole-column/row and oversized-bounded hyperlink refs live
     // outside the CellAddress-keyed Hyperlinks/HyperlinkMetadata dictionaries above (see
     // Sheet.RangeHyperlinks) and must be shifted independently.
-    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
-    private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
-    private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
-    private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
-    private List<(ConditionalFormat Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _conditionalFormatSnapshot;
-    private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
-    private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
     private List<GridRange>? _printAreaSnapshot;
     private List<uint>? _rowPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
-    private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp -- every SeriesIndex-keyed
     // per-series/per-point collection on a Switch-Row/Column chart whose plotted series span this
     // insert falls strictly inside must be captured here (undo) since the remap mutates them in place.
@@ -56,12 +41,6 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
     private AddressBearingStateSnapshot? _addressStateSnapshot;
     private List<(CellAddress Address, Cell? OldCell)>? _tableCalculatedColumnFillSnapshot;
-    private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
-    private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
-    private readonly Dictionary<(string Name, SheetId Sheet), string> _scopedNamedFormulaSnapshot = [];
-    private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
-    private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
 
     public string Label => $"Insert {_count} Row(s)";
 
@@ -115,6 +94,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
             return new CommandOutcome(false,
                 ErrorMessage: CommandGuards.CannotInsertRowsPastLastRow(_count));
 
+        _mutationSnapshot = RowColumnMutationSnapshot.Capture(ctx.Workbook, sheet);
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         _movedSnapshot = movedSnapshot;
@@ -136,45 +116,30 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         _rowHeightSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RowHeights);
         RowColumnShiftHelpers.ShiftIndexesUp(sheet.RowHeights, _beforeRow, _count);
 
-        _commentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Comments);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.Comments, _beforeRow, _count);
         // J17: CommentAuthors/ShownComments are address-keyed companions of Comments (legacy note
         // author + pinned/"Show Comment" state) and must shift in lockstep with it, or a note's
         // author/pinned box goes stale at the note's old address after the insert.
-        _commentAuthorsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CommentAuthors);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.CommentAuthors, _beforeRow, _count);
-        _shownCommentsSnapshot = RowColumnShiftHelpers.CaptureAddressSet(sheet.ShownComments);
         RowColumnShiftHelpers.ShiftCommentSetRowsUp(sheet.ShownComments, _beforeRow, _count);
-        _threadedCommentSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.ThreadedComments);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.ThreadedComments, _beforeRow, _count);
-        _hyperlinkSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.Hyperlinks);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.Hyperlinks, _beforeRow, _count);
-        _hyperlinkMetadataSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.HyperlinkMetadata);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.HyperlinkMetadata, _beforeRow, _count);
-        _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
-            ctx.Workbook, sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), sheet.Name);
-        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
         RowColumnShiftHelpers.ShiftRangeHyperlinksRowsUp(sheet, _beforeRow, _count);
-        _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.RichTextRuns, _beforeRow, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides is RichTextRuns' address-keyed
         // companion (furigana annotations for the same cell) and must shift in lockstep with it,
         // or an inserted row leaves a phonetic guide keyed to the cell's stale pre-insert address
         // while the rich text it decorates moves on to the new address.
-        _phoneticGuideSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.CellPhoneticGuides);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.CellPhoneticGuides, _beforeRow, _count);
 
-        (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
         RowColumnShiftHelpers.ShiftRuleRowsUp(sheet, _beforeRow, _count);
-        _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
-        _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         RowColumnShiftHelpers.ShiftNamedRangeRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         _printAreaSnapshot = sheet.PrintAreas.ToList();
         RowColumnShiftHelpers.ShiftPrintAreaRowsUp(sheet, _beforeRow, _count);
         _rowPageBreakSnapshot = RowColumnShiftHelpers.CaptureSortedSet(sheet.RowPageBreaks);
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
-        _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         // R102: must run BEFORE ShiftChartRowsUp below -- it needs each chart's PRE-insert DataRange
         // to tell whether _beforeRow falls strictly inside a Switch-Row/Column chart's plotted series
         // span (see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp -- every SeriesIndex-keyed
@@ -183,7 +148,6 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
         RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftChartRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
-        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count));
         // R86-commands-insert-move-refadjust-5-1: see ShiftChartPositionRowsUp — rows before
         // _beforeRow are untouched by this insert, so it is safe to read sheet.RowHeights here
         // regardless of whether the RowHeights re-key above has already run.
@@ -197,8 +161,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // store from the pre-insert snapshot and would otherwise wipe these new entries.
         RowColumnShiftHelpers.InheritVacatedRowFormatFromAbove(sheet, _beforeRow, _count);
 
-        _mergeSnapshot = sheet.MergedRegions.ToList();
-        var shiftedMerges = new List<GridRange>(_mergeSnapshot.Count);
+        var shiftedMerges = new List<GridRange>(sheet.MergedRegions.Count);
         foreach (var m in sheet.MergedRegions)
         {
             GridRange shifted;
@@ -227,15 +190,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         }
         sheet.ReplaceMergedRegions(shiftedMerges);
 
-        _formulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _formulaSnapshot);
-        _namedFormulaSnapshot.Clear();
-        _scopedNamedFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        _cfFormulaSnapshot.Clear();
-        _cfThresholdSnapshot.Clear();
-        _dvFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        _mutationSnapshot.RewriteReferences(
+            ctx.Workbook,
+            sheet,
+            new InsertRowsOp(sheet.Name, _beforeRow, _count));
 
         // R26-table-structured-ref-deep-2: the address-bearing shift above already grows a
         // structured table's Range (via ShiftStructuredTables) when the insert point falls inside
@@ -248,11 +206,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // post-insert row) would be incorrectly re-shifted again if written any earlier.
         _tableCalculatedColumnFillSnapshot = FillGrownCalculatedColumnsForInsertedRows(ctx.Workbook, sheet);
 
-        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
-            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _formulaSnapshot)
+        _affectedCells = _mutationSnapshot.BuildAffectedCells(
+            RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, movedSnapshot, _count, _mutationSnapshot.FormulaTexts)
                 .Concat(_tableCalculatedColumnFillSnapshot.Select(f => f.Address))
-                .Concat(VacatedAddressesForRelocatedFormulaCells(_sheetId, movedSnapshot)),
-            _formulaSnapshot);
+                .Concat(VacatedAddressesForRelocatedFormulaCells(_sheetId, movedSnapshot)));
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
 
@@ -261,7 +218,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     // regardless of whether RewriteAllFormulas needed to touch its formula TEXT. The OLD address is
     // therefore always left blank afterward (Insert only ever shifts rows DOWN, so nothing below the
     // insert point can move up into it), yet neither RelocatedFormulaCellsPendingDependencyRefresh
-    // (new-address only) nor _formulaSnapshot (also new-address only, since RewriteAllFormulas runs
+    // (new-address only) nor the shared formula snapshot (also new-address only, since RewriteAllFormulas runs
     // AFTER the physical move) ever surfaced it in AffectedCells. WorkbookCellEditService's
     // UpdateFormulaDependencies (and MainWindow.Editing's mirror) drives RecalcEngine purely off
     // AffectedCells: for each affected address it either re-registers dependencies or, if the cell
@@ -388,7 +345,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
 
     // R24-volatile-recalc-deep-3: a relocated formula cell whose text needs no rewrite (e.g. a
     // volatile 0-arg function like NOW()/RAND() with no cell references) is never added to
-    // _formulaSnapshot by RewriteAllFormulas, so it would otherwise be absent from AffectedCells and
+    // the shared formula snapshot by RewriteAllFormulas, so it would otherwise be absent from AffectedCells and
     // RecalcEngine would never re-register its dependencies/volatile tracking at its new address
     // (leaving a stale entry at the old, now-blank address and none at the new one). Surface such
     // cells as primary affected cells so the post-command pipeline still registers them.
@@ -437,15 +394,12 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
             }
         }
 
-        // R96-commands-undo-affected-cells-1: RestoreFormulas below clears _formulaSnapshot as its
+        // R96-commands-undo-affected-cells-1: RestoreFormulas below clears the shared formula snapshot as its
         // last step, so capture its keys (the post-shift addresses of every stationary-or-moved
         // formula cell whose text was rewritten by Apply) now, before that happens -- needed to
         // recompute _affectedCells at the end of this method.
-        var formulaSnapshotAddressesBeforeRestore = _formulaSnapshot.Keys.ToList();
-
-        RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
-        RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        if (_mutationSnapshot is null) return;
+        var formulaSnapshotAddressesBeforeRestore = _mutationSnapshot.RestoreRewrittenFormulas(ctx.Workbook);
 
         // R20-array-dynamic-spill-1: mirror MoveCellsForInsert's spill-relocation fix for undo —
         // capture any live spill rooted at the shifted-up address before clearing it back.
@@ -474,27 +428,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // R13-meta-1: undo the ColumnFilterOwnedRows shift in lockstep with the sibling sets above.
         RowColumnShiftHelpers.ShiftRowSetDictionaryDownFrom(sheet.ColumnFilterOwnedRows, _beforeRow + _count, _count);
 
-        if (_mergeSnapshot is not null)
-            sheet.ReplaceMergedRegions(_mergeSnapshot);
-
         RowColumnShiftHelpers.RestoreDictionary(sheet.RowHeights, _rowHeightSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.Comments, _commentSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.CommentAuthors, _commentAuthorsSnapshot);
-        RowColumnShiftHelpers.RestoreAddressSet(sheet.ShownComments, _shownCommentsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.ThreadedComments, _threadedCommentSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
-        RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
-        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
-        RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
-        RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
-        RowColumnShiftHelpers.RestoreNamedRanges(ctx.Workbook, _namedRangeSnapshot);
-        RowColumnShiftHelpers.RestoreScopedNamedRanges(ctx.Workbook, _scopedNamedRangeSnapshot);
+        _mutationSnapshot.RestoreCommonState(ctx.Workbook, sheet, restoreRulesInPlace: true);
         sheet.SetPrintAreas(_printAreaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
-        RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
@@ -511,12 +449,12 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         // nothing above the insert point can move down into it). That vacated post-shift address was
         // never included in AffectedCells either, leaving the identical stale dependency-graph entry
         // behind after an Undo.
-        _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
+        _affectedCells = _mutationSnapshot.BuildAffectedCells(
             RowColumnShiftHelpers.RelocatedFormulaCellsAtCapturedAddress(_movedSnapshot, _sheetId)
                 .Concat(_tableCalculatedColumnFillSnapshot?.Select(f => f.Address) ?? [])
                 .Concat(formulaSnapshotAddressesBeforeRestore)
                 .Concat(VacatedAddressesAfterRevert(_sheetId, _movedSnapshot, _count)),
-            []);
+            includeRewrittenFormulaAddresses: false);
     }
 
     private static IEnumerable<CellAddress> VacatedAddressesAfterRevert(

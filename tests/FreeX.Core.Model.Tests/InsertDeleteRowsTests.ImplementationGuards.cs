@@ -21,10 +21,11 @@ public partial class InsertDeleteRowsTests
     public void InsertRowsCommand_UsesCompactMetadataSnapshotsForUndo()
     {
         var source = ModelSourceTestSupport.ReadCommandsSource("InsertDeleteRowsCommand.cs");
+        var snapshotSource = ModelSourceTestSupport.ReadCommandsSource("RowColumnMutationSnapshot.cs");
 
         source.Should().Contain("private List<KeyValuePair<uint, double>>? _rowHeightSnapshot;");
         source.Should().Contain("CaptureDictionary(sheet.RowHeights)");
-        source.Should().Contain("CaptureDictionary(sheet.Comments)");
+        snapshotSource.Should().Contain("CaptureDictionary(sheet.Comments)");
         source.Should().Contain("CaptureSortedSet(sheet.RowPageBreaks)");
         source.Should().NotContain("new Dictionary<uint, double>(sheet.RowHeights)");
         source.Should().NotContain("new Dictionary<CellAddress, string>(sheet.Comments)");
