@@ -8,6 +8,39 @@ namespace FreeW.App.Presentation.Tests.DocumentFragments;
 public sealed class FreeWPictureImportWorkflowTests
 {
     [Fact]
+    public async Task DecoderPolicyReturnsFactsAndNormalizesDecoderFailures()
+    {
+        var facts = new FreeWPictureDecoderFacts(40, 20);
+
+        (await FreeWPictureDecoderPolicy.DecodeOrUnavailable(
+            CancellationToken.None,
+            () => facts)).Should().BeSameAs(facts);
+        (await FreeWPictureDecoderPolicy.DecodeOrUnavailable(
+            CancellationToken.None,
+            () => throw new InvalidDataException("invalid image")))
+            .Should().BeSameAs(FreeWPictureDecoderFacts.Unavailable);
+    }
+
+    [Fact]
+    public async Task DecoderPolicyHonorsCancellationBeforeNativeDecode()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var invoked = false;
+
+        var action = async () => await FreeWPictureDecoderPolicy.DecodeOrUnavailable(
+            cancellation.Token,
+            () =>
+            {
+                invoked = true;
+                return new FreeWPictureDecoderFacts(1, 1);
+            });
+
+        await action.Should().ThrowAsync<OperationCanceledException>();
+        invoked.Should().BeFalse();
+    }
+
+    [Fact]
     public void PickerPlanConvergesRendererFormatsToUnionWithoutDroppingAllFiles()
     {
         var picker = FreeWPictureImportPlanner.CreateRequest().PickerPlan;

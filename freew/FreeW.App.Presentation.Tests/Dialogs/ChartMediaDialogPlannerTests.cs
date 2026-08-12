@@ -7,6 +7,30 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ChartMediaDialogPlannerTests
 {
     [Fact]
+    public void InsertChartChromeResolvesThroughSharedResources()
+    {
+        var text = InsertChartDialogPlanner.ResolveText(key => $"localized:{key}");
+        var surface = InsertChartDialogPlanner.BuildSurface(key => $"localized:{key}");
+        var actions = InsertChartDialogPlanner.BuildActionButtons(key => $"localized:{key}");
+
+        text.Title.Should().Be("localized:InsertChart_Dialog_Title");
+        text.CategoryColumnHeader.Should().Be("localized:InsertChart_Category_Header");
+        text.AddRowLabel.Should().Be("localized:InsertChart_AddRow_Label");
+        surface.Title.Should().Be(text.Title);
+        surface.Field(InsertChartDialogField.Data).Label.Should().Be("localized:InsertChart_Data_Label");
+        actions.Select(action => action.Label).Should().Equal("localized:Common_Ok", "localized:Common_Cancel");
+
+        ChartTitleDialogPlanner.BuildSurface(key => $"localized:{key}").Title
+            .Should().Be("localized:ChartTitle_Dialog_Title");
+        ChartAxisTitlesDialogPlanner.BuildSurface(key => $"localized:{key}")
+            .Field(ChartAxisTitlesDialogField.Value).Label
+            .Should().Be("localized:ChartAxisTitles_Value_Label");
+        ChartSizeDialogPlanner.BuildSurface(key => $"localized:{key}")
+            .Field(ChartSizeDialogField.Width).Label
+            .Should().Be("localized:ChartSize_Width_Label");
+    }
+
+    [Fact]
     public void TitleAndAxisPoliciesTrimAndClearWhitespace()
     {
         ChartTitleDialogPlanner.BuildResult("  Sales  ")

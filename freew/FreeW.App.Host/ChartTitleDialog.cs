@@ -16,7 +16,7 @@ internal sealed class ChartTitleDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ChartTitleDialog(Window? owner, string? currentTitle)
     {
-        var surface = ChartTitleDialogPlanner.Surface;
+        var surface = ChartTitleDialogPlanner.BuildSurface(UiText.Get);
         Owner = owner;
         Title = surface.Title;
         Width = 320;

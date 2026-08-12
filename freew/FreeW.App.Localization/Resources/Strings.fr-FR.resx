@@ -129,4 +129,34 @@
   <data name="Dialog_Note_Ok" xml:space="preserve"><value>OK</value></data>
   <data name="Dialog_Note_Cancel" xml:space="preserve"><value>Annuler</value></data>
   <data name="FreeW_ProductName" xml:space="preserve"><value>FreeW</value></data>
+  <data name="Autosave_Recovery_Title" xml:space="preserve"><value>FreeW - Récupération</value></data>
+  <data name="Autosave_Recovery_Recover_Button" xml:space="preserve"><value>Récupérer</value></data>
+  <data name="Autosave_Recovery_Skip_Button" xml:space="preserve"><value>Ignorer</value></data>
+  <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>Aucun document non enregistré n'a été trouvé.</value></data>
+  <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Impossible de récupérer le document.&#xA;&#xA;{0}</value></data>
+  <data name="QuickParts_Save_Title" xml:space="preserve"><value>Enregistrer dans les composants QuickPart</value></data>
+  <data name="QuickParts_Name_Label" xml:space="preserve"><value>Nom :</value></data>
+  <data name="QuickParts_EmptySelection_Message" xml:space="preserve"><value>Sélectionnez d'abord du texte, puis choisissez Enregistrer la sélection dans les composants QuickPart.</value></data>
+  <data name="QuickParts_EmptyLibrary_Message" xml:space="preserve"><value>Aucun composant QuickPart n'est enregistré. Sélectionnez du texte, puis enregistrez la sélection dans les composants QuickPart.</value></data>
+  <data name="QuickParts_Insert_Title" xml:space="preserve"><value>Insérer un composant QuickPart</value></data>
+  <data name="QuickParts_Item_Label" xml:space="preserve"><value>Composant QuickPart :</value></data>
+  <data name="QuickParts_Insert_Button" xml:space="preserve"><value>Insérer</value></data>
+  <data name="InsertChart_Dialog_Title" xml:space="preserve"><value>Insérer un graphique</value></data>
+  <data name="InsertChart_ChartType_Label" xml:space="preserve"><value>Type de graphique :</value></data>
+  <data name="InsertChart_Title_Label" xml:space="preserve"><value>Titre (facultatif) :</value></data>
+  <data name="InsertChart_Data_Label" xml:space="preserve"><value>Données du graphique (première colonne = catégories, autres colonnes = valeurs des séries) :</value></data>
+  <data name="InsertChart_Category_Header" xml:space="preserve"><value>Catégorie</value></data>
+  <data name="InsertChart_AddRow_Label" xml:space="preserve"><value>Ajouter une ligne</value></data>
+  <data name="InsertChart_RemoveRow_Label" xml:space="preserve"><value>Supprimer la ligne</value></data>
+  <data name="InsertChart_EmptyRows_Validation" xml:space="preserve"><value>Saisissez au moins une ligne de données.</value></data>
+  <data name="ChartTitle_Dialog_Title" xml:space="preserve"><value>Titre du graphique</value></data>
+  <data name="ChartTitle_Title_Label" xml:space="preserve"><value>Titre :</value></data>
+  <data name="ChartAxisTitles_Dialog_Title" xml:space="preserve"><value>Titres des axes</value></data>
+  <data name="ChartAxisTitles_Category_Label" xml:space="preserve"><value>Axe des catégories :</value></data>
+  <data name="ChartAxisTitles_Value_Label" xml:space="preserve"><value>Axe des valeurs :</value></data>
+  <data name="ChartSize_Dialog_Title" xml:space="preserve"><value>Taille du graphique</value></data>
+  <data name="ChartSize_Width_Label" xml:space="preserve"><value>Largeur (pt) :</value></data>
+  <data name="ChartSize_Height_Label" xml:space="preserve"><value>Hauteur (pt) :</value></data>
+  <data name="ChartSize_Width_Validation" xml:space="preserve"><value>Saisissez une largeur positive en points.</value></data>
+  <data name="ChartSize_Height_Validation" xml:space="preserve"><value>Saisissez une hauteur positive en points.</value></data>
 </root>

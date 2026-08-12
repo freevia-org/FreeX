@@ -55,6 +55,7 @@ internal sealed partial class AutosaveCoordinator
     /// </summary>
     public bool OfferRecovery(Window owner)
     {
+        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
         try
         {
             return FreeWRecoveryWorkflow.RunAsync(
@@ -63,7 +64,7 @@ internal sealed partial class AutosaveCoordinator
                     offer => new ValueTask<bool>(DialogMessageHelper.AskYesNo(
                         owner,
                         offer.Prompt,
-                        "FreeW - Recover")),
+                        text.Title)),
                     (recovery, useCurrentWindow) =>
                     {
                         var recovered = _session.CompleteRecovery(
@@ -88,14 +89,15 @@ internal sealed partial class AutosaveCoordinator
 
     public bool RecoverUnsavedDocuments(Window owner)
     {
+        var text = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
         try
         {
             var recoveries = _session.PlanRecoveries();
             if (recoveries.Count == 0)
             {
                 DialogMessageHelper.ShowInfo(owner,
-                    "No unsaved documents were found.",
-                    "FreeW - Recover");
+                    text.NoDocumentsMessage,
+                    text.Title);
                 return false;
             }
 
@@ -105,7 +107,7 @@ internal sealed partial class AutosaveCoordinator
                     offer => new ValueTask<bool>(DialogMessageHelper.ShowMessage(
                         owner,
                         offer.Prompt,
-                        "FreeW - Recover",
+                        text.Title,
                         UserMessageButtons.OkCancel,
                         UserMessageIcon.Question) == UserMessageResult.Ok),
                     (recovery, useCurrentWindow) => new ValueTask<bool>(_session.CompleteRecovery(
@@ -121,8 +123,8 @@ internal sealed partial class AutosaveCoordinator
         catch (Exception ex)
         {
             DialogMessageHelper.ShowError(owner,
-                $"Could not recover the document.\n\n{ex.Message}",
-                "FreeW - Recover");
+                string.Format(System.Globalization.CultureInfo.CurrentCulture, text.FailureMessageFormat, ex.Message),
+                text.Title);
             return false;
         }
     }

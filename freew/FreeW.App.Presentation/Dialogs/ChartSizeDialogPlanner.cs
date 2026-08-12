@@ -26,14 +26,29 @@ public static class ChartSizeDialogPlanner
     public const string WidthValidationMessage = "Enter a positive width in points.";
     public const string HeightValidationMessage = "Enter a positive height in points.";
 
-    public static DialogSurfaceSpec<ChartSizeDialogField> Surface { get; } = new(
-        Title: "Chart Size",
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("ChartSize_Dialog_Title", "Chart Size"),
+        new("ChartSize_Width_Label", "Width (pt):"),
+        new("ChartSize_Height_Label", "Height (pt):"),
+        new("ChartSize_Width_Validation", WidthValidationMessage),
+        new("ChartSize_Height_Validation", HeightValidationMessage),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static DialogSurfaceSpec<ChartSizeDialogField> Surface { get; } = BuildSurface();
+
+    public static DialogSurfaceSpec<ChartSizeDialogField> BuildSurface(
+        Func<string, string?>? getText = null) => new(
+        Title: Texts[0].Resolve(getText),
         AutomationId: "ChartSizeDialog",
         AutomationName: "Chart Size",
         Fields:
         [
-            new(ChartSizeDialogField.Width, "Width (pt):", "ChartSizeWidthTextBox", "Chart width"),
-            new(ChartSizeDialogField.Height, "Height (pt):", "ChartSizeHeightTextBox", "Chart height"),
+            new(ChartSizeDialogField.Width, Texts[1].Resolve(getText), "ChartSizeWidthTextBox", "Chart width"),
+            new(ChartSizeDialogField.Height, Texts[2].Resolve(getText), "ChartSizeHeightTextBox", "Chart height"),
         ],
         ValidationAutomationId: "ChartSizeValidationText");
 
@@ -54,6 +69,14 @@ public static class ChartSizeDialogPlanner
         CultureInfo culture,
         out ChartSizeDialogResult? result,
         out string? errorMessage)
+        => TryBuildResult(input, culture, getText: null, out result, out errorMessage);
+
+    public static bool TryBuildResult(
+        ChartSizeDialogInput input,
+        CultureInfo culture,
+        Func<string, string?>? getText,
+        out ChartSizeDialogResult? result,
+        out string? errorMessage)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(culture);
@@ -63,13 +86,13 @@ public static class ChartSizeDialogPlanner
 
         if (!TryParsePositive(input.WidthText, culture, out var width))
         {
-            errorMessage = WidthValidationMessage;
+            errorMessage = Texts[3].Resolve(getText);
             return false;
         }
 
         if (!TryParsePositive(input.HeightText, culture, out var height))
         {
-            errorMessage = HeightValidationMessage;
+            errorMessage = Texts[4].Resolve(getText);
             return false;
         }
 

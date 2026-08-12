@@ -573,4 +573,34 @@
   <data name="Dialog_Note_Ok" xml:space="preserve"><value>OK</value></data>
   <data name="Dialog_Note_Cancel" xml:space="preserve"><value>Cancel</value></data>
   <data name="FreeW_ProductName" xml:space="preserve"><value>FreeW</value></data>
+  <data name="Autosave_Recovery_Title" xml:space="preserve"><value>FreeW - Recover</value></data>
+  <data name="Autosave_Recovery_Recover_Button" xml:space="preserve"><value>Recover</value></data>
+  <data name="Autosave_Recovery_Skip_Button" xml:space="preserve"><value>Skip</value></data>
+  <data name="Autosave_Recovery_None_Message" xml:space="preserve"><value>No unsaved documents were found.</value></data>
+  <data name="Autosave_Recovery_Failure_Message_Format" xml:space="preserve"><value>Could not recover the document.&#xA;&#xA;{0}</value></data>
+  <data name="QuickParts_Save_Title" xml:space="preserve"><value>Save to Quick Parts</value></data>
+  <data name="QuickParts_Name_Label" xml:space="preserve"><value>Name:</value></data>
+  <data name="QuickParts_EmptySelection_Message" xml:space="preserve"><value>Select some text first, then choose Save Selection to Quick Parts.</value></data>
+  <data name="QuickParts_EmptyLibrary_Message" xml:space="preserve"><value>No Quick Parts saved yet. Select some text and choose Save Selection to Quick Parts first.</value></data>
+  <data name="QuickParts_Insert_Title" xml:space="preserve"><value>Insert Quick Part</value></data>
+  <data name="QuickParts_Item_Label" xml:space="preserve"><value>Quick Part:</value></data>
+  <data name="QuickParts_Insert_Button" xml:space="preserve"><value>Insert</value></data>
+  <data name="InsertChart_Dialog_Title" xml:space="preserve"><value>Insert Chart</value></data>
+  <data name="InsertChart_ChartType_Label" xml:space="preserve"><value>Chart type:</value></data>
+  <data name="InsertChart_Title_Label" xml:space="preserve"><value>Title (optional):</value></data>
+  <data name="InsertChart_Data_Label" xml:space="preserve"><value>Chart data  (first column = category labels, remaining columns = series values):</value></data>
+  <data name="InsertChart_Category_Header" xml:space="preserve"><value>Category</value></data>
+  <data name="InsertChart_AddRow_Label" xml:space="preserve"><value>Add Row</value></data>
+  <data name="InsertChart_RemoveRow_Label" xml:space="preserve"><value>Remove Row</value></data>
+  <data name="InsertChart_EmptyRows_Validation" xml:space="preserve"><value>Enter at least one data row.</value></data>
+  <data name="ChartTitle_Dialog_Title" xml:space="preserve"><value>Chart Title</value></data>
+  <data name="ChartTitle_Title_Label" xml:space="preserve"><value>Title:</value></data>
+  <data name="ChartAxisTitles_Dialog_Title" xml:space="preserve"><value>Axis Titles</value></data>
+  <data name="ChartAxisTitles_Category_Label" xml:space="preserve"><value>Category axis:</value></data>
+  <data name="ChartAxisTitles_Value_Label" xml:space="preserve"><value>Value axis:</value></data>
+  <data name="ChartSize_Dialog_Title" xml:space="preserve"><value>Chart Size</value></data>
+  <data name="ChartSize_Width_Label" xml:space="preserve"><value>Width (pt):</value></data>
+  <data name="ChartSize_Height_Label" xml:space="preserve"><value>Height (pt):</value></data>
+  <data name="ChartSize_Width_Validation" xml:space="preserve"><value>Enter a positive width in points.</value></data>
+  <data name="ChartSize_Height_Validation" xml:space="preserve"><value>Enter a positive height in points.</value></data>
 </root>

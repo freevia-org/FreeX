@@ -2,6 +2,7 @@ using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Panes;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -52,6 +53,12 @@ public sealed class LocalizationKeyIntegrityTests
             .Concat(DrawTableCommandPlanner.RequiredResourceKeys)
             .Concat(ProofingLanguageDialogPlanner.RequiredResourceKeys)
             .Concat(AltTextDialogPlanner.RequiredResourceKeys)
+            .Concat(QuickPartCommandPlanner.RequiredResourceKeys)
+            .Concat(InsertChartDialogPlanner.RequiredResourceKeys)
+            .Concat(ChartTitleDialogPlanner.RequiredResourceKeys)
+            .Concat(ChartAxisTitlesDialogPlanner.RequiredResourceKeys)
+            .Concat(ChartSizeDialogPlanner.RequiredResourceKeys)
+            .Concat(AutosaveRecoveryTextCatalog.RequiredResourceKeys)
             .Distinct(StringComparer.Ordinal);
 
         required.Should().OnlyContain(key => available.Contains(key));

@@ -156,7 +156,8 @@ internal sealed partial class RecoveryPromptDialog : FreeWDialogWindow
 
     private RecoveryPromptDialog(string message)
     {
-        Title = "FreeW – Recover";
+        var recoveryText = AutosaveRecoveryTextCatalog.Resolve(UiText.Get);
+        Title = recoveryText.Title;
         Width = 420;
         Height = 160;
         CanResize = false;
@@ -169,11 +170,11 @@ internal sealed partial class RecoveryPromptDialog : FreeWDialogWindow
             Margin = new Thickness(16, 16, 16, 20),
         };
 
-        var yes = new Button { Content = "Recover", MinWidth = 82, IsDefault = true };
+        var yes = new Button { Content = recoveryText.RecoverButton, MinWidth = 82, IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(yes, DialogChromeStyle, minWidth: 82, isDefault: true);
         yes.Click += (_, _) => Close(true);
 
-        var no = new Button { Content = "Skip", MinWidth = 82, IsCancel = true };
+        var no = new Button { Content = recoveryText.SkipButton, MinWidth = 82, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(no, DialogChromeStyle, minWidth: 82);
         no.Click += (_, _) => Close(false);
 

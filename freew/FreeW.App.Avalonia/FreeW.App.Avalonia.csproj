@@ -84,9 +84,15 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf.Skia\Free.Shared.Pdf.Skia.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(FreeWHostTestSupport)' == 'true'">
     <InternalsVisibleTo Include="FreeW.App.Avalonia.Tests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreeWValidationHost)' == 'true'">
     <InternalsVisibleTo Include="FreeW.Validation.Avalonia" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="FreeW.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 

@@ -64,24 +64,17 @@ internal sealed class AvaloniaPictureDecoderPort : IFreeWPictureDecoderPort
     public ValueTask<FreeWPictureDecoderFacts> DecodeAsync(
         FreeWPictureImportSelection selection,
         byte[] bytes,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        try
+        CancellationToken cancellationToken) =>
+        FreeWPictureDecoderPolicy.DecodeOrUnavailable(cancellationToken, () =>
         {
             using var source = new MemoryStream(bytes, writable: false);
             using var bitmap = new Bitmap(source);
-            return ValueTask.FromResult(new FreeWPictureDecoderFacts(
+            return new FreeWPictureDecoderFacts(
                 bitmap.PixelSize.Width,
                 bitmap.PixelSize.Height,
                 bitmap.Dpi.X,
-                bitmap.Dpi.Y));
-        }
-        catch
-        {
-            return ValueTask.FromResult(FreeWPictureDecoderFacts.Unavailable);
-        }
-    }
+                bitmap.Dpi.Y);
+        });
 }
 
 internal sealed class AvaloniaPictureRasterizerPort : IFreeWPictureRasterizerPort

@@ -64,10 +64,52 @@ public static class DrawTableCommandPlanner
             : fallback;
 }
 
+public sealed record QuickPartCommandText(
+    string SaveTitle,
+    string NameLabel,
+    string EmptySelectionMessage,
+    string EmptyLibraryMessage,
+    string InsertTitle,
+    string ItemLabel,
+    string InsertButton,
+    string OkButton,
+    string CancelButton);
+
 public static class QuickPartCommandPlanner
 {
     public const string EmptySelectionMessage =
         "Select some text first, then choose Save Selection to Quick Parts.";
+
+    public const string EmptyLibraryMessage =
+        "No Quick Parts saved yet. Select some text and choose Save Selection to Quick Parts first.";
+
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("QuickParts_Save_Title", "Save to Quick Parts"),
+        new("QuickParts_Name_Label", "Name:"),
+        new("QuickParts_EmptySelection_Message", EmptySelectionMessage),
+        new("QuickParts_EmptyLibrary_Message", EmptyLibraryMessage),
+        new("QuickParts_Insert_Title", "Insert Quick Part"),
+        new("QuickParts_Item_Label", "Quick Part:"),
+        new("QuickParts_Insert_Button", "Insert"),
+        new("Common_Ok", "OK"),
+        new("Common_Cancel", "Cancel"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static QuickPartCommandText ResolveText(Func<string, string?>? getText = null) =>
+        new(
+            Texts[0].Resolve(getText),
+            Texts[1].Resolve(getText),
+            Texts[2].Resolve(getText),
+            Texts[3].Resolve(getText),
+            Texts[4].Resolve(getText),
+            Texts[5].Resolve(getText),
+            Texts[6].Resolve(getText),
+            Texts[7].Resolve(getText),
+            Texts[8].Resolve(getText));
 
     public static QuickPart? CreateSelection(string? selectedText, string? name)
     {

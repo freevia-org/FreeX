@@ -17,7 +17,7 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private ChartSizeDialog(Window? owner, double widthPt, double heightPt)
     {
-        var surface = ChartSizeDialogPlanner.Surface;
+        var surface = ChartSizeDialogPlanner.BuildSurface(UiText.Get);
         Owner = owner;
         Title = surface.Title;
         Width = 300;
@@ -75,10 +75,13 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (!ChartSizeDialogPlanner.TryBuildResult(
             new ChartSizeDialogInput(_widthBox.Text, _heightBox.Text),
             CultureInfo.CurrentCulture,
+            UiText.Get,
             out var result,
             out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? ChartSizeDialogPlanner.WidthValidationMessage);
+            DialogMessageHelper.ShowWarning(
+                this,
+                errorMessage ?? UiText.Get("ChartSize_Width_Validation"));
             return;
         }
 

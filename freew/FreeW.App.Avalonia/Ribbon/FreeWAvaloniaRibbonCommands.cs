@@ -55,6 +55,19 @@ internal static class FreeWAvaloniaRibbonCommands
     private static IRibbonCommand HostCommand(Action? action) =>
         action is null ? FreeWRibbonExecutionProfile.UnavailableCommand : new ActionRibbonCommand(action);
 
+    private static FreeWRibbonFormattingSession CreateFormattingSession(DocumentView editor) =>
+        new(new FreeWRibbonFormattingPorts(
+            () => editor.GetCaretFormatting().Paragraph,
+            points => editor.SetIndents(leftPt: points),
+            points => editor.SetIndents(rightPt: points),
+            editor.SetSpaceBefore,
+            editor.SetSpaceAfter,
+            () => editor.Document,
+            () => editor.CurrentParagraphStyleId,
+            styleId => editor.ApplyNamedStyle(styleId),
+            editor.ApplyTheme,
+            editor.ApplyStyleSet));
+
     /// <summary>
     /// Build and return the complete command registry for the Avalonia ribbon.
     /// </summary>
@@ -76,6 +89,7 @@ internal static class FreeWAvaloniaRibbonCommands
         var referenceCommands = new FreeWRibbonEditorCommandFamilyBuilder();
         var headerFooterCommands = new FreeWRibbonEditorCommandFamilyBuilder();
         mailMerge = new MailMergeEngine(editor, callbacks, UiText.Get);
+        var formatting = CreateFormattingSession(editor);
         FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);
 
         // ── File ─────────────────────────────────────────────────────────────
@@ -143,26 +157,18 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.increase-indent",  new ActionRibbonCommand(editor.IncreaseIndent));
         r.Register("freew.decrease-indent",  new ActionRibbonCommand(editor.DecreaseIndent));
         r.Bind(FreeWRibbonCommandAction.IndentLeft, new ParagraphValueCommand(
-            editor,
-            pt => editor.SetIndents(leftPt: pt),
-            paragraph => paragraph.IndentLeftPt));
+            formatting, FreeWParagraphValueKind.IndentLeft));
         r.Bind(FreeWRibbonCommandAction.IndentRight, new ParagraphValueCommand(
-            editor,
-            pt => editor.SetIndents(rightPt: pt),
-            paragraph => paragraph.IndentRightPt));
+            formatting, FreeWParagraphValueKind.IndentRight));
         var formattingMarks = r.BindToggle(FreeWRibbonCommandAction.FormattingMarks,
             () => editor.ShowParagraphMarks = !editor.ShowParagraphMarks,
             () => editor.ShowParagraphMarks);
         r.Register("freew.show-hide-para", formattingMarks);
         // Paragraph spacing commands (value = points as an invariant-culture decimal string).
         r.Bind(FreeWRibbonCommandAction.SpaceBefore, new ParagraphValueCommand(
-            editor,
-            editor.SetSpaceBefore,
-            paragraph => paragraph.SpaceBeforePt));
+            formatting, FreeWParagraphValueKind.SpaceBefore));
         r.Bind(FreeWRibbonCommandAction.SpaceAfter, new ParagraphValueCommand(
-            editor,
-            editor.SetSpaceAfter,
-            paragraph => paragraph.SpaceAfterPt));
+            formatting, FreeWParagraphValueKind.SpaceAfter));
         r.Bind(FreeWRibbonCommandAction.SpaceBeforeToggle, new ActionRibbonCommand(() => ToggleSpaceBefore(editor)));
         r.Bind(FreeWRibbonCommandAction.SpaceAfterToggle, new ActionRibbonCommand(() => ToggleSpaceAfter(editor)));
         r.Bind(FreeWRibbonCommandAction.KeepWithNext, new ActionRibbonCommand(editor.ToggleKeepWithNext));
@@ -187,7 +193,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // ── Styles (AV-STYLES) ────────────────────────────────────────────────
         // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
         // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
-        r.Bind(FreeWRibbonCommandAction.Style, new ParagraphStyleCommand(editor));
+        r.Bind(FreeWRibbonCommandAction.Style, new ParagraphStyleCommand(formatting));
         r.Bind(FreeWRibbonCommandAction.StyleNormal,   new ActionRibbonCommand(() => editor.ApplyNamedStyle("Normal")));
         r.Bind(FreeWRibbonCommandAction.StyleHeading1, new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading1")));
         r.Bind(FreeWRibbonCommandAction.StyleHeading2, new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading2")));
@@ -545,7 +551,7 @@ internal static class FreeWAvaloniaRibbonCommands
         RegisterMailingsCommands(r, mailMerge);
 
         // ── Design (AV-DESIGN) ───────────────────────────────────────────────
-        RegisterDesignCommands(r, editor, callbacks);
+        RegisterDesignCommands(r, editor, callbacks, formatting);
 
         // ── AV-PICTAB: Picture Format + Drawing Format contextual tabs ────────
         FreeWRibbonEditorExecutionProfile.RegisterFamilies(
@@ -767,53 +773,20 @@ internal static class FreeWAvaloniaRibbonCommands
     }
 
     private sealed class ParagraphValueCommand(
-        DocumentView editor,
-        Action<double> apply,
-        Func<ParagraphFormatting, double> current) : IRibbonStatefulCommand
+        FreeWRibbonFormattingSession session,
+        FreeWParagraphValueKind kind) : IRibbonStatefulCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (double.TryParse(context.SelectedValue, NumberStyles.Any, CultureInfo.InvariantCulture, out var points)
-                && points >= 0)
-            {
-                apply(points);
-            }
-        }
+        public void Execute(RibbonCommandContext context) =>
+            session.ApplyParagraphValue(kind, context.SelectedValue);
 
-        public RibbonCommandState GetState()
-        {
-            var paragraph = editor.GetCaretFormatting().Paragraph;
-            return new(Value: current(paragraph).ToString("0.##", CultureInfo.InvariantCulture));
-        }
+        public RibbonCommandState GetState() => new(Value: session.CurrentParagraphValue(kind));
     }
 
-    private sealed class ParagraphStyleCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class ParagraphStyleCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (string.IsNullOrWhiteSpace(context.SelectedValue))
-                return;
+        public void Execute(RibbonCommandContext context) => session.ApplyParagraphStyle(context.SelectedValue);
 
-            var descriptor = BuiltInStyles.Gallery.FirstOrDefault(style =>
-                style.Type == StyleType.Paragraph
-                && string.Equals(style.Name, context.SelectedValue, StringComparison.OrdinalIgnoreCase));
-            if (descriptor is not null)
-                editor.ApplyNamedStyle(descriptor.Id);
-        }
-
-        public RibbonCommandState GetState()
-        {
-            var styleId = editor.CurrentParagraphStyleId;
-            if (string.IsNullOrWhiteSpace(styleId))
-                return new(Value: "Normal");
-
-            if (BuiltInStyles.Find(styleId) is { } builtIn)
-                return new(Value: builtIn.Name);
-
-            return editor.Document.Styles.TryGetValue(styleId, out var style)
-                ? new RibbonCommandState(Value: style.Name)
-                : new RibbonCommandState(Value: styleId);
-        }
+        public RibbonCommandState GetState() => new(Value: session.CurrentParagraphStyleName());
     }
 
     private sealed class ToggleActionCommand(Action toggle, Func<bool> isChecked) : IRibbonStatefulCommand
@@ -823,33 +796,19 @@ internal static class FreeWAvaloniaRibbonCommands
         public RibbonCommandState GetState() => new(IsChecked: isChecked());
     }
 
-    private sealed class ThemeCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class ThemeCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!string.IsNullOrWhiteSpace(context.SelectedValue)
-                && DocumentTheme.FindByName(context.SelectedValue) is { } theme)
-            {
-                editor.ApplyTheme(theme);
-            }
-        }
+        public void Execute(RibbonCommandContext context) => session.ApplyTheme(context.SelectedValue);
 
-        public RibbonCommandState GetState() => new(Value: editor.Document.Theme.Name);
+        public RibbonCommandState GetState() => new(Value: session.CurrentThemeName());
     }
 
-    private sealed class StyleSetCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class StyleSetCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!string.IsNullOrWhiteSpace(context.SelectedValue)
-                && DocumentStyleSet.FindByName(context.SelectedValue) is { } styleSet)
-            {
-                editor.ApplyStyleSet(styleSet);
-            }
-        }
+        public void Execute(RibbonCommandContext context) => session.ApplyStyleSet(context.SelectedValue);
 
         public RibbonCommandState GetState() =>
-            new(Value: DocumentStyleSet.FindMatching(editor.Document)?.Name);
+            new(Value: session.CurrentStyleSetName());
     }
 
     private sealed class ProofingLanguageCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks) : IRibbonCommand
@@ -1877,10 +1836,13 @@ internal static class FreeWAvaloniaRibbonCommands
     /// (so the registry-completeness guard passes and parallel waves / tests keep compiling).
     /// </summary>
     private static void RegisterDesignCommands(
-        IRibbonCommandRegistry r, DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
+        IRibbonCommandRegistry r,
+        DocumentView editor,
+        FreeWRibbonHostExecutionPorts callbacks,
+        FreeWRibbonFormattingSession formatting)
     {
         // ── Themes ───────────────────────────────────────────────────────────
-        r.Bind(FreeWRibbonCommandAction.Theme, new ThemeCommand(editor));
+        r.Bind(FreeWRibbonCommandAction.Theme, new ThemeCommand(formatting));
         foreach (var theme in DocumentTheme.Catalog)
         {
             var t = theme;
@@ -1925,7 +1887,7 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         // ── Page Color swatches (+ No Color) ─────────────────────────────────
-        r.Bind(FreeWRibbonCommandAction.StyleSet, new StyleSetCommand(editor));
+        r.Bind(FreeWRibbonCommandAction.StyleSet, new StyleSetCommand(formatting));
         r.Bind(FreeWRibbonCommandAction.ResetStyleSet, new ActionRibbonCommand(() => editor.ApplyStyleSet(DocumentStyleSet.Default)));
 
         r.Bind(FreeWRibbonCommandAction.PageColor, new ActionRibbonCommand(() => { /* dropdown opener */ }));

@@ -59,6 +59,18 @@ public sealed class FinalCommandParityPlannerTests
     }
 
     [Fact]
+    public void QuickPartPromptsResolveThroughSharedResources()
+    {
+        var text = QuickPartCommandPlanner.ResolveText(key => $"localized:{key}");
+
+        text.SaveTitle.Should().Be("localized:QuickParts_Save_Title");
+        text.NameLabel.Should().Be("localized:QuickParts_Name_Label");
+        text.EmptySelectionMessage.Should().Be("localized:QuickParts_EmptySelection_Message");
+        text.EmptyLibraryMessage.Should().Be("localized:QuickParts_EmptyLibrary_Message");
+        text.InsertButton.Should().Be("localized:QuickParts_Insert_Button");
+    }
+
+    [Fact]
     public void TableEraserPlanner_MapsGridColumnsAcrossExistingSpans()
     {
         var table = Table.Create(1, 3);

@@ -44,27 +44,20 @@ internal sealed class WpfPictureDecoderPort : IFreeWPictureDecoderPort
     public ValueTask<FreeWPictureDecoderFacts> DecodeAsync(
         FreeWPictureImportSelection selection,
         byte[] bytes,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        try
+        CancellationToken cancellationToken) =>
+        FreeWPictureDecoderPolicy.DecodeOrUnavailable(cancellationToken, () =>
         {
             using var source = new MemoryStream(bytes, writable: false);
             var frame = BitmapFrame.Create(
                 source,
                 BitmapCreateOptions.PreservePixelFormat,
                 BitmapCacheOption.OnLoad);
-            return ValueTask.FromResult(new FreeWPictureDecoderFacts(
+            return new FreeWPictureDecoderFacts(
                 frame.PixelWidth,
                 frame.PixelHeight,
                 frame.DpiX,
-                frame.DpiY));
-        }
-        catch
-        {
-            return ValueTask.FromResult(FreeWPictureDecoderFacts.Unavailable);
-        }
-    }
+                frame.DpiY);
+        });
 }
 
 internal sealed class WpfPictureRasterizerPort : IFreeWPictureRasterizerPort

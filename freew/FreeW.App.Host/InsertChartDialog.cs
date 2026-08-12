@@ -25,7 +25,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── Constructor ──────────────────────────────────────────────────────────────────────────────
     private InsertChartDialog(Window? owner, Chart? seed)
     {
-        var surface = InsertChartDialogPlanner.Surface;
+        var surface = InsertChartDialogPlanner.BuildSurface(UiText.Get);
         Owner = owner;
         Title = surface.Title;
         Width = 500;
@@ -72,7 +72,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(_dataGrid);
 
         // ── OK / Cancel ──────────────────────────────────────────────────────────────────────────
-        var actionPlans = InsertChartDialogPlanner.ActionButtons;
+        var actionPlans = InsertChartDialogPlanner.BuildActionButtons(UiText.Get);
         var buttons = DialogButtonRowFactory.Create(
             Accept,
             buttonWidth: 72,
@@ -107,7 +107,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // Category column
         grid.Columns.Add(new DataGridTextColumn
         {
-            Header = InsertChartDialogPlanner.CategoryColumnHeader,
+            Header = InsertChartDialogPlanner.ResolveText(UiText.Get).CategoryColumnHeader,
             Binding = new System.Windows.Data.Binding("Category") { UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.PropertyChanged },
             Width = 100
         });
@@ -142,10 +142,13 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 seriesNames,
                 rows.Select(row => new InsertChartDialogRow(row.Category, row.SeriesValues)),
                 CultureInfo.CurrentCulture,
+                UiText.Get,
                 out var chart,
                 out var errorMessage))
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? InsertChartDialogPlanner.EmptyRowsValidationMessage);
+            DialogMessageHelper.ShowWarning(
+                this,
+                errorMessage ?? InsertChartDialogPlanner.ResolveText(UiText.Get).EmptyRowsValidationMessage);
             return;
         }
 

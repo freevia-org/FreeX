@@ -99,6 +99,7 @@ internal static class FreeWRibbonCommands
         FreeWRibbonHostExecutionPorts? hostPorts,
         FreeWWpfRibbonNativeExecutionPorts nativePorts)
     {
+        var formatting = CreateFormattingSession(editor);
         var onPrintPreview = hostPorts?.OpenPrintPreview;
         var onToggleNavPane = hostPorts?.ToggleNavigationPane;
         var isNavPaneVisible = hostPorts?.IsNavigationPaneVisible;
@@ -1067,19 +1068,19 @@ internal static class FreeWRibbonCommands
         // Layout > Paragraph > numeric indent/spacing combos: exact-value controls that mirror Word's
         // Layout tab Paragraph group. Each is stateful so SelectionChanged can push the live value
         // back into the ribbon combo and the displayed number tracks the current paragraph.
-        var indentLeft = new IndentLeftCommand(editor);
+        var indentLeft = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentLeft);
         registry.Bind(FreeWRibbonCommandAction.IndentLeft, indentLeft);
         stateful.Add(("freew.indent-left", indentLeft));
 
-        var indentRight = new IndentRightCommand(editor);
+        var indentRight = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.IndentRight);
         registry.Bind(FreeWRibbonCommandAction.IndentRight, indentRight);
         stateful.Add(("freew.indent-right", indentRight));
 
-        var spaceBefore = new SpaceBeforeCommand(editor);
+        var spaceBefore = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceBefore);
         registry.Bind(FreeWRibbonCommandAction.SpaceBefore, spaceBefore);
         stateful.Add(("freew.space-before", spaceBefore));
 
-        var spaceAfter = new SpaceAfterCommand(editor);
+        var spaceAfter = new ParagraphValueCommand(formatting, FreeWParagraphValueKind.SpaceAfter);
         registry.Bind(FreeWRibbonCommandAction.SpaceAfter, spaceAfter);
         stateful.Add(("freew.space-after", spaceAfter));
 
@@ -1133,7 +1134,7 @@ internal static class FreeWRibbonCommands
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
         // (reversible via the bus), then re-renders so the style's run/paragraph formatting resolves.
-        var paragraphStyle = new ApplyParagraphStyleCommand(editor);
+        var paragraphStyle = new ApplyParagraphStyleCommand(formatting);
         registry.Bind(FreeWRibbonCommandAction.Style, paragraphStyle);
         stateful.Add(("freew.style", paragraphStyle));
         stateStore.SetState("freew.style", paragraphStyle.GetState());
@@ -1147,11 +1148,11 @@ internal static class FreeWRibbonCommands
         // Design > Document Formatting: Themes apply a full preset, Colors preserve fonts while applying
         // a palette, Style Sets rewrite built-in styles, and Fonts preserve colours while applying a
         // heading/body font pair. All are backed document-wide style changes.
-        var theme = new ApplyThemeCommand(editor);
+        var theme = new ApplyThemeCommand(formatting);
         registry.Bind(FreeWRibbonCommandAction.Theme, theme);
         stateful.Add(("freew.theme", theme));
         stateStore.SetState("freew.theme", theme.GetState());
-        var styleSet = new ApplyStyleSetCommand(editor);
+        var styleSet = new ApplyStyleSetCommand(formatting);
         registry.Bind(FreeWRibbonCommandAction.StyleSet, styleSet);
         stateful.Add(("freew.style-set", styleSet));
         stateStore.SetState("freew.style-set", styleSet.GetState());
@@ -1818,93 +1819,75 @@ internal static class FreeWRibbonCommands
             : null;
     }
 
+    private static string? DesignValue(RibbonCommandContext context)
+    {
+        if (context.SelectedValue is { Length: > 0 } selectedValue)
+            return selectedValue;
+        if (context.Parameters.TryGetValue("value", out var legacyRaw) && legacyRaw is string legacyValue)
+            return legacyValue;
+        return context.Parameters.TryGetValue(
+                   Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey,
+                   out var sender)
+               && sender is System.Windows.Controls.MenuItem { Tag: string header }
+            ? header
+            : null;
+    }
+
+    private static FreeWRibbonFormattingSession CreateFormattingSession(DocumentView editor) =>
+        new(new FreeWRibbonFormattingPorts(
+            () => editor.CurrentParagraphFormatting,
+            points =>
+            {
+                editor.Focus();
+                var (_, right, firstLine) = editor.CurrentParagraphIndents();
+                editor.SetParagraphIndents(points, right, firstLine);
+            },
+            points =>
+            {
+                editor.Focus();
+                var (left, _, firstLine) = editor.CurrentParagraphIndents();
+                editor.SetParagraphIndents(left, points, firstLine);
+            },
+            points =>
+            {
+                editor.Focus();
+                editor.FormatSelectedParagraphSpaceBefore(points);
+            },
+            points =>
+            {
+                editor.Focus();
+                editor.FormatSelectedParagraphSpaceAfter(points);
+            },
+            () => editor.Model,
+            () => editor.CurrentParagraphStyleId,
+            styleId =>
+            {
+                editor.Focus();
+                editor.ApplyNamedStyle(styleId);
+            },
+            theme =>
+            {
+                editor.Focus();
+                editor.ApplyTheme(theme);
+            },
+            styleSet =>
+            {
+                editor.Focus();
+                editor.ApplyStyleSet(styleSet);
+            }));
+
     // Layout > Paragraph > Indent Left / Indent Right: numeric combo boxes (points) that display the
     // first selected paragraph's left/right indent and apply an exact value while preserving the
     // existing first-line indent. Both implement IRibbonStatefulCommand so SelectionChanged can push
     // the live value into the ribbon store and the combo reflects the current paragraph state.
-    private sealed class IndentLeftCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class ParagraphValueCommand(
+        FreeWRibbonFormattingSession session,
+        FreeWParagraphValueKind kind) : IRibbonStatefulCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
-            {
-                editor.Focus();
-                var (_, right, firstLine) = editor.CurrentParagraphIndents();
-                editor.SetParagraphIndents(pt, right, firstLine);
-            }
-        }
+        public void Execute(RibbonCommandContext context) =>
+            session.ApplyParagraphValue(kind, ComboValue(context));
 
-        public RibbonCommandState GetState()
-        {
-            var (left, _, _) = editor.CurrentParagraphIndents();
-            return new RibbonCommandState(Value: left.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
-        }
-    }
-
-    private sealed class IndentRightCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
-            {
-                editor.Focus();
-                var (left, _, firstLine) = editor.CurrentParagraphIndents();
-                editor.SetParagraphIndents(left, pt, firstLine);
-            }
-        }
-
-        public RibbonCommandState GetState()
-        {
-            var (_, right, _) = editor.CurrentParagraphIndents();
-            return new RibbonCommandState(Value: right.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
-        }
-    }
-
-    // Layout > Paragraph > Space Before / Space After: numeric combo boxes (points) that display the
-    // first selected paragraph's space-before/after and apply an exact value reversibly via the bus.
-    // Like the indent combos, both are stateful so the ribbon reflects the current selection's value.
-    private sealed class SpaceBeforeCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
-            {
-                editor.Focus();
-                editor.FormatSelectedParagraphSpaceBefore(pt);
-            }
-        }
-
-        public RibbonCommandState GetState()
-        {
-            var f = editor.CurrentParagraphFormatting;
-            return new RibbonCommandState(Value: f.SpaceBeforePt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
-        }
-    }
-
-    private sealed class SpaceAfterCommand(DocumentView editor) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { } value)
-                return;
-            if (double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var pt) && pt >= 0)
-            {
-                editor.Focus();
-                editor.FormatSelectedParagraphSpaceAfter(pt);
-            }
-        }
-
-        public RibbonCommandState GetState()
-        {
-            var f = editor.CurrentParagraphFormatting;
-            return new RibbonCommandState(Value: f.SpaceAfterPt.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
-        }
+        public RibbonCommandState GetState() => new(Value: session.CurrentParagraphValue(kind));
     }
 
     // Home > Paragraph > Paragraph…: open the indent dialog seeded with the first selected paragraph's
@@ -2041,41 +2024,13 @@ internal static class FreeWRibbonCommands
     // Home > Styles: apply a real paragraph style. The styles dropdown's value is a display name
     // (e.g. "Heading 1"); this maps it to the matching style id in the model's catalog and sets the
     // selected paragraph(s)' StyleId through the view's undo/redo bus (re-rendered to resolve formatting).
-    private sealed class ApplyParagraphStyleCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class ApplyParagraphStyleCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (ComboValue(context) is not { Length: > 0 } value)
-                return;
-
-            var styleId = ResolveStyleId(editor.Model, value);
-            if (styleId is null)
-                return;
-
-            editor.Focus();
-            editor.ApplyNamedStyle(styleId);
-        }
+        public void Execute(RibbonCommandContext context) =>
+            session.ApplyParagraphStyle(ComboValue(context));
 
         public RibbonCommandState GetState() =>
-            new(Value: editor.CurrentParagraphStyleName);
-
-        // Match the chosen combo entry to a style in the document by id first, then by display name
-        // (case-insensitive, ignoring spaces) so "Heading 1" resolves to the "Heading1" style id.
-        private static string? ResolveStyleId(TextDocument model, string choice)
-        {
-            if (model.Styles.ContainsKey(choice))
-                return choice;
-            foreach (var style in model.Styles.Values)
-            {
-                if (string.Equals(style.Name, choice, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(Compact(style.Id), Compact(choice), StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(Compact(style.Name), Compact(choice), StringComparison.OrdinalIgnoreCase))
-                    return style.Id;
-            }
-            return null;
-        }
-
-        private static string Compact(string value) => value.Replace(" ", string.Empty);
+            new(Value: session.CurrentParagraphStyleName());
     }
 
     // References > Table of Contents > Add Text: Word exposes TOC inclusion as level choices. FreeW's
@@ -2155,58 +2110,22 @@ internal static class FreeWRibbonCommands
 
     // Design > Document Formatting: apply a built-in document theme. The selected name may arrive from
     // a combo value, older host context, or a WPF menu item header; all resolve to the same catalog entry.
-    private sealed class ApplyThemeCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class ApplyThemeCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
-            if (string.IsNullOrWhiteSpace(value))
-                return;
-            if (DocumentTheme.FindByName(value) is not { } theme)
-                return;
-
-            editor.Focus();
-            editor.ApplyTheme(theme);
-        }
+        public void Execute(RibbonCommandContext context) =>
+            session.ApplyTheme(DesignValue(context));
 
         public RibbonCommandState GetState() =>
-            new(IsEnabled: true, Value: editor.Model.Theme.Name);
-
-        private static string? LegacyValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
-
-        private static string? MenuHeaderValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
-            && sender is System.Windows.Controls.MenuItem { Tag: string header }
-                ? header
-                : null;
+            new(IsEnabled: true, Value: session.CurrentThemeName());
     }
 
-    private sealed class ApplyStyleSetCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class ApplyStyleSetCommand(FreeWRibbonFormattingSession session) : IRibbonStatefulCommand
     {
-        public void Execute(RibbonCommandContext context)
-        {
-            var value = context.SelectedValue ?? LegacyValue(context) ?? MenuHeaderValue(context);
-            if (string.IsNullOrWhiteSpace(value))
-                return;
-            if (DocumentStyleSet.FindByName(value) is not { } styleSet)
-                return;
-
-            editor.Focus();
-            editor.ApplyStyleSet(styleSet);
-        }
+        public void Execute(RibbonCommandContext context) =>
+            session.ApplyStyleSet(DesignValue(context));
 
         public RibbonCommandState GetState() =>
-            new(Value: DocumentStyleSet.FindMatching(editor.Model)?.Name);
-
-        private static string? LegacyValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue("value", out var raw) ? raw as string : null;
-
-        private static string? MenuHeaderValue(RibbonCommandContext context) =>
-            context.Parameters.TryGetValue(Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey, out var sender)
-            && sender is System.Windows.Controls.MenuItem { Tag: string header }
-                ? header
-                : null;
+            new(Value: session.CurrentStyleSetName());
     }
 
     private sealed class ApplyThemeColorsCommand(DocumentView editor) : IRibbonCommand
@@ -4590,17 +4509,22 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            var quickPartText = QuickPartCommandPlanner.ResolveText(UiText.Get);
             var text = editor.Selection.Text;
             if (string.IsNullOrEmpty(text))
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Select some text first, then choose Save Selection to Quick Parts.",
+                    quickPartText.EmptySelectionMessage,
                     "FreeW");
                 return;
             }
 
-            var name = TextPrompt.Ask(Window.GetWindow(editor), "Save to Quick Parts", "Name:", string.Empty);
+            var name = TextPrompt.Ask(
+                Window.GetWindow(editor),
+                quickPartText.SaveTitle,
+                quickPartText.NameLabel,
+                string.Empty);
             if (string.IsNullOrWhiteSpace(name))
                 return; // cancelled or blank — nothing to store under
 
@@ -4619,11 +4543,12 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            var quickPartText = QuickPartCommandPlanner.ResolveText(UiText.Get);
             if (library.IsEmpty)
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "No Quick Parts saved yet. Select some text and choose Save Selection to Quick Parts first.",
+                    quickPartText.EmptyLibraryMessage,
                     "FreeW");
                 return;
             }
@@ -4659,6 +4584,7 @@ internal static class FreeWRibbonCommands
     {
         public static string? Ask(Window? owner, IReadOnlyList<string> names)
         {
+            var text = QuickPartCommandPlanner.ResolveText(UiText.Get);
             var list = new System.Windows.Controls.ListBox
             {
                 MinWidth = 280,
@@ -4672,7 +4598,7 @@ internal static class FreeWRibbonCommands
             string? result = null;
             var dialog = new Window
             {
-                Title = "Insert Quick Part",
+                Title = text.InsertTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -4680,8 +4606,8 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "Insert", IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = text.InsertButton, IsDefault = true, MinWidth = 80, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = text.CancelButton, IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
             list.MouseDoubleClick += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
 
@@ -4694,7 +4620,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Quick Part:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = text.ItemLabel, Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;

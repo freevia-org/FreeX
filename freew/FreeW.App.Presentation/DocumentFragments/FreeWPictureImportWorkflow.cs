@@ -93,6 +93,25 @@ public sealed record FreeWPictureDecoderFacts(
     public bool HasNaturalSize => PixelWidth > 0 && PixelHeight > 0;
 }
 
+public static class FreeWPictureDecoderPolicy
+{
+    public static ValueTask<FreeWPictureDecoderFacts> DecodeOrUnavailable(
+        CancellationToken cancellationToken,
+        Func<FreeWPictureDecoderFacts> decode)
+    {
+        ArgumentNullException.ThrowIfNull(decode);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            return ValueTask.FromResult(decode());
+        }
+        catch
+        {
+            return ValueTask.FromResult(FreeWPictureDecoderFacts.Unavailable);
+        }
+    }
+}
+
 public interface IFreeWPictureDecoderPort
 {
     ValueTask<FreeWPictureDecoderFacts> DecodeAsync(

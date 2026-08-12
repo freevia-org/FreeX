@@ -192,7 +192,8 @@ internal sealed class ChartTitleDialog : FreeWDialogWindow
 
     private ChartTitleDialog(string? currentTitle)
     {
-        Title = "Chart Title";
+        var surface = ChartTitleDialogPlanner.BuildSurface(UiText.Get);
+        Title = surface.Title;
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -201,7 +202,7 @@ internal sealed class ChartTitleDialog : FreeWDialogWindow
         _title = Chrome.TextBox(currentTitle ?? string.Empty, 220);
 
         var grid = AvaloniaLabeledFormRow.CreateCompactGrid(2);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Title:", _title, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartTitleDialogField.Title).Label, _title, 0);
         AvaloniaLabeledFormRow.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 1, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
         Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_title);
@@ -221,7 +222,8 @@ internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
 
     private ChartAxisTitlesDialog(string? categoryTitle, string? valueTitle)
     {
-        Title = "Axis Titles";
+        var surface = ChartAxisTitlesDialogPlanner.BuildSurface(UiText.Get);
+        Title = surface.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -231,8 +233,8 @@ internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
         _value = Chrome.TextBox(valueTitle ?? string.Empty, 220);
 
         var grid = AvaloniaLabeledFormRow.CreateCompactGrid(3);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Category axis:", _category, 0);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Value axis:", _value, 1);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartAxisTitlesDialogField.Category).Label, _category, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartAxisTitlesDialogField.Value).Label, _value, 1);
         AvaloniaLabeledFormRow.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 2, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
         Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_category);
@@ -256,7 +258,8 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
 
     private ChartSizeDialog(double widthPt, double heightPt)
     {
-        Title = "Chart Size";
+        var surface = ChartSizeDialogPlanner.BuildSurface(UiText.Get);
+        Title = surface.Title;
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -268,8 +271,8 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
         var grid = AvaloniaLabeledFormRow.CreateCompactGrid(4);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Width (pt):", _width, 0);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Height (pt):", _height, 1);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartSizeDialogField.Width).Label, _width, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ChartSizeDialogField.Height).Label, _height, 1);
         Grid.SetRow(_status, 2);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
@@ -287,6 +290,7 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
         if (ChartSizeDialogPlanner.TryBuildResult(
                 new ChartSizeDialogInput(_width.Text, _height.Text),
                 CultureInfo.CurrentCulture,
+                UiText.Get,
                 out var result,
                 out var errorMessage))
         {
@@ -294,8 +298,9 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
             return;
         }
 
-        _status.Text = errorMessage ?? ChartSizeDialogPlanner.WidthValidationMessage;
-        AvaloniaCompactDialogChrome.FocusAndSelect(errorMessage == ChartSizeDialogPlanner.HeightValidationMessage ? _height : _width);
+        _status.Text = errorMessage ?? UiText.Get("ChartSize_Width_Validation");
+        AvaloniaCompactDialogChrome.FocusAndSelect(
+            errorMessage == UiText.Get("ChartSize_Height_Validation") ? _height : _width);
     }
 }
 
@@ -314,7 +319,8 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
     private InsertSmartArtDialog(SmartArt? seed)
     {
         var metrics = SmartArtDialogPlanner.VisualMetrics;
-        Title = seed is null ? "Insert SmartArt" : "Edit SmartArt Text";
+        var dialogText = SmartArtDialogPlanner.ResolveText(UiText.Get);
+        Title = seed is null ? dialogText.InsertTitle : dialogText.EditTitle;
         Width = metrics.DialogWidth;
         MinHeight = metrics.MinimumDialogHeight;
         SizeToContent = SizeToContent.Height;
@@ -357,8 +363,8 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
         };
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
-        var add = Chrome.Button("Add Shape", AddNode, minWidth: 0);
-        var remove = Chrome.Button("Remove Shape", RemoveNode, minWidth: 0);
+        var add = Chrome.Button(dialogText.AddShapeLabel, AddNode, minWidth: 0);
+        var remove = Chrome.Button(dialogText.RemoveShapeLabel, RemoveNode, minWidth: 0);
         add.Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding);
         remove.Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding);
         var actions = new StackPanel
@@ -380,9 +386,9 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
             Margin = new Thickness(metrics.OuterMargin),
             Children =
             {
-                new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) },
+                new TextBlock { Text = dialogText.LayoutLabel, Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) },
                 _kind,
-                new TextBlock { Text = SmartArtDialogPlanner.NodeTextLabel, Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) },
+                new TextBlock { Text = dialogText.NodeTextLabel, Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) },
                 _nodes,
                 _edit,
                 actions,
@@ -401,7 +407,7 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 
     private void AddNode()
     {
-        _nodes.Items.Add("New Item");
+        _nodes.Items.Add(SmartArtDialogPlanner.ResolveText(UiText.Get).NewItemLabel);
         _nodes.SelectedIndex = _nodes.Items.Count - 1;
         AvaloniaCompactDialogChrome.FocusAndSelect(_edit);
     }
@@ -419,12 +425,12 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
     {
         var kind = _kind.SelectedItem is SmartArtKind selected ? selected : SmartArtKind.Process;
         if (SmartArtDialogPlanner.TryBuildResult(
-                kind, _nodes.Items.Cast<string>(), out var result, out var errorMessage))
+                kind, _nodes.Items.Cast<string>(), out var result, out var errorMessage, UiText.Get))
         {
             Close(result);
             return;
         }
-        _status.Text = errorMessage ?? SmartArtDialogPlanner.EmptyNodesValidationMessage;
+        _status.Text = errorMessage ?? SmartArtDialogPlanner.ResolveText(UiText.Get).EmptyNodesValidationMessage;
     }
 }
 
@@ -443,10 +449,12 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
     private readonly List<RowControls> _rows = [];
     private readonly IReadOnlyList<string> _seriesNames;
     private readonly TextBlock _status = new();
+    private readonly InsertChartDialogText _text;
 
     private InsertChartDialog(Chart? seed)
     {
-        Title = "Insert Chart";
+        _text = InsertChartDialogPlanner.ResolveText(UiText.Get);
+        Title = _text.Title;
         Width = 500;
         MinHeight = 380;
         SizeToContent = SizeToContent.Height;
@@ -486,16 +494,16 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         };
 
         var panel = new StackPanel();
-        AddLabeledControl(panel, "Chart type:", _kind);
-        AddLabeledControl(panel, "Title (optional):", _title);
+        AddLabeledControl(panel, _text.ChartTypeLabel, _kind);
+        AddLabeledControl(panel, _text.TitleLabel, _title);
         panel.Children.Add(new TextBlock
         {
-            Text = "Chart data  (first column = category labels, remaining columns = series values):",
+            Text = _text.DataLabel,
             Margin = new Thickness(0, 3, 0, 4),
             TextWrapping = TextWrapping.Wrap,
         });
         panel.Children.Add(table);
-        var actionPlans = InsertChartDialogPlanner.ActionButtons;
+        var actionPlans = InsertChartDialogPlanner.BuildActionButtons(UiText.Get);
         panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
             [
                 Chrome.Button(
@@ -527,7 +535,7 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         for (var i = 0; i < _seriesNames.Count; i++)
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = SeriesColumnWidth() });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        AddHeaderCell(header, "Category", 0);
+        AddHeaderCell(header, _text.CategoryColumnHeader, 0);
         for (var i = 0; i < _seriesNames.Count; i++)
             AddHeaderCell(header, _seriesNames[i], i + 1);
         _rowsPanel.Children.Add(header);
@@ -586,9 +594,9 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
     private void ApplyRowContextMenu(RowControls controls)
     {
         var menu = new ContextMenu();
-        var add = new MenuItem { Header = "Add Row" };
+        var add = new MenuItem { Header = _text.AddRowLabel };
         add.Click += (_, _) => AddRow(string.Empty, _seriesNames.Select(_ => string.Empty).ToArray());
-        var remove = new MenuItem { Header = "Remove Row" };
+        var remove = new MenuItem { Header = _text.RemoveRowLabel };
         remove.Click += (_, _) => RemoveRow(controls);
         menu.Items.Add(add);
         menu.Items.Add(remove);
@@ -600,12 +608,19 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         var kind = _kind.SelectedItem is ChartKind selected ? selected : ChartKind.Column;
         var rows = _rows.Select(row => new InsertChartDialogRow(row.Category.Text ?? string.Empty, row.Values.Select(box => box.Text ?? string.Empty).ToArray()));
         if (InsertChartDialogPlanner.TryBuildResult(
-                kind, _title.Text, _seriesNames, rows, CultureInfo.CurrentCulture, out var result, out var errorMessage))
+                kind,
+                _title.Text,
+                _seriesNames,
+                rows,
+                CultureInfo.CurrentCulture,
+                UiText.Get,
+                out var result,
+                out var errorMessage))
         {
             Close(result);
             return;
         }
-        _status.Text = errorMessage ?? InsertChartDialogPlanner.EmptyRowsValidationMessage;
+        _status.Text = errorMessage ?? _text.EmptyRowsValidationMessage;
     }
 
     private static void AddLabeledControl(StackPanel panel, string label, Control control)

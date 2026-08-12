@@ -16,7 +16,8 @@ internal sealed class QuickPartNameDialog : FreeWDialogWindow
 
     private QuickPartNameDialog()
     {
-        Title = "Save to Quick Parts";
+        var text = QuickPartCommandPlanner.ResolveText(UiText.Get);
+        Title = text.SaveTitle;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -24,11 +25,11 @@ internal sealed class QuickPartNameDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         var panel = DialogPanel();
-        panel.Children.Add(new TextBlock { Text = "Name:" });
+        panel.Children.Add(new TextBlock { Text = text.NameLabel });
         panel.Children.Add(_name);
         panel.Children.Add(ButtonRow(
-            Button("OK", Accept, isDefault: true),
-            Button("Cancel", () => Close(null), isCancel: true)));
+            Button(text.OkButton, Accept, isDefault: true),
+            Button(text.CancelButton, () => Close(null), isCancel: true)));
         Content = panel;
         Opened += (_, _) => _name.Focus();
         CloseOnEscape(this);

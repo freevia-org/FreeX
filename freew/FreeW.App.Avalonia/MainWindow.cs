@@ -3586,7 +3586,9 @@ public sealed partial class MainWindow : Window
         var selectedText = _editor.SelectedText;
         if (string.IsNullOrEmpty(selectedText))
         {
-            await FreeWInfoDialog.ShowAsync(this, QuickPartCommandPlanner.EmptySelectionMessage);
+            await FreeWInfoDialog.ShowAsync(
+                this,
+                QuickPartCommandPlanner.ResolveText(UiText.Get).EmptySelectionMessage);
             _editor.Focus();
             return;
         }

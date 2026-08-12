@@ -16,7 +16,7 @@ internal sealed class ChartAxisTitlesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private ChartAxisTitlesDialog(Window? owner, string? currentCategory, string? currentValue)
     {
-        var surface = ChartAxisTitlesDialogPlanner.Surface;
+        var surface = ChartAxisTitlesDialogPlanner.BuildSurface(UiText.Get);
         Owner = owner;
         Title = surface.Title;
         Width = 340;

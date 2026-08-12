@@ -10,6 +10,17 @@ public sealed class AutosaveRecoveryWorkflowTests : IDisposable
     private string RecoveryDirectory => _temporaryDirectory.Path;
 
     [Fact]
+    public void RecoveryChromeResolvesThroughSharedResources()
+    {
+        var text = AutosaveRecoveryTextCatalog.Resolve(key => $"localized:{key}");
+
+        text.Title.Should().Be("localized:Autosave_Recovery_Title");
+        text.RecoverButton.Should().Be("localized:Autosave_Recovery_Recover_Button");
+        text.SkipButton.Should().Be("localized:Autosave_Recovery_Skip_Button");
+        text.NoDocumentsMessage.Should().Be("localized:Autosave_Recovery_None_Message");
+    }
+
+    [Fact]
     public void PlanLatest_EnumeratesSelectsAndBuildsDisplayName()
     {
         CreateCandidate("older", "2026-08-05T08:00:00Z", "Older");

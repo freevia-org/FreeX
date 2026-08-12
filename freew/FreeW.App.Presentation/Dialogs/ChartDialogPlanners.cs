@@ -12,13 +12,25 @@ public enum ChartTitleDialogField
 
 public static class ChartTitleDialogPlanner
 {
-    public static DialogSurfaceSpec<ChartTitleDialogField> Surface { get; } = new(
-        Title: "Chart Title",
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("ChartTitle_Dialog_Title", "Chart Title"),
+        new("ChartTitle_Title_Label", "Title:"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static DialogSurfaceSpec<ChartTitleDialogField> Surface { get; } = BuildSurface();
+
+    public static DialogSurfaceSpec<ChartTitleDialogField> BuildSurface(
+        Func<string, string?>? getText = null) => new(
+        Title: Texts[0].Resolve(getText),
         AutomationId: "ChartTitleDialog",
         AutomationName: "Chart Title",
         Fields:
         [
-            new(ChartTitleDialogField.Title, "Title:", "ChartTitleTextBox", "Chart title"),
+            new(ChartTitleDialogField.Title, Texts[1].Resolve(getText), "ChartTitleTextBox", "Chart title"),
         ]);
 
     public static string? NormalizeTitle(string? text) =>
@@ -42,14 +54,27 @@ public enum ChartAxisTitlesDialogField
 
 public static class ChartAxisTitlesDialogPlanner
 {
-    public static DialogSurfaceSpec<ChartAxisTitlesDialogField> Surface { get; } = new(
-        Title: "Axis Titles",
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("ChartAxisTitles_Dialog_Title", "Axis Titles"),
+        new("ChartAxisTitles_Category_Label", "Category axis:"),
+        new("ChartAxisTitles_Value_Label", "Value axis:"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static DialogSurfaceSpec<ChartAxisTitlesDialogField> Surface { get; } = BuildSurface();
+
+    public static DialogSurfaceSpec<ChartAxisTitlesDialogField> BuildSurface(
+        Func<string, string?>? getText = null) => new(
+        Title: Texts[0].Resolve(getText),
         AutomationId: "ChartAxisTitlesDialog",
         AutomationName: "Axis Titles",
         Fields:
         [
-            new(ChartAxisTitlesDialogField.Category, "Category axis:", "ChartCategoryAxisTitleTextBox", "Category axis title"),
-            new(ChartAxisTitlesDialogField.Value, "Value axis:", "ChartValueAxisTitleTextBox", "Value axis title"),
+            new(ChartAxisTitlesDialogField.Category, Texts[1].Resolve(getText), "ChartCategoryAxisTitleTextBox", "Category axis title"),
+            new(ChartAxisTitlesDialogField.Value, Texts[2].Resolve(getText), "ChartValueAxisTitleTextBox", "Value axis title"),
         ]);
 
     public static ChartAxisTitlesDialogResult BuildResult(string? categoryText, string? valueText) =>
@@ -75,6 +100,18 @@ public enum InsertChartDialogField
     Data
 }
 
+public sealed record InsertChartDialogText(
+    string Title,
+    string ChartTypeLabel,
+    string TitleLabel,
+    string DataLabel,
+    string CategoryColumnHeader,
+    string AddRowLabel,
+    string RemoveRowLabel,
+    string EmptyRowsValidationMessage,
+    string OkButton,
+    string CancelButton);
+
 public static class InsertChartDialogPlanner
 {
     public const string DefaultSeriesName = ChartDataPresetCatalog.DefaultSeriesName;
@@ -82,27 +119,72 @@ public static class InsertChartDialogPlanner
     public const string EmptyRowsValidationMessage = "Enter at least one data row.";
     public const string CategoryColumnHeader = "Category";
 
-    public static DialogSurfaceSpec<InsertChartDialogField> Surface { get; } = new(
-        Title: "Insert Chart",
+    private static readonly ResourceTextDescriptor[] Texts =
+    [
+        new("InsertChart_Dialog_Title", "Insert Chart"),
+        new("InsertChart_ChartType_Label", "Chart type:"),
+        new("InsertChart_Title_Label", "Title (optional):"),
+        new("InsertChart_Data_Label", "Chart data  (first column = category labels, remaining columns = series values):"),
+        new("InsertChart_Category_Header", CategoryColumnHeader),
+        new("InsertChart_AddRow_Label", "Add Row"),
+        new("InsertChart_RemoveRow_Label", "Remove Row"),
+        new("InsertChart_EmptyRows_Validation", EmptyRowsValidationMessage),
+        new("Common_Ok", "OK"),
+        new("Common_Cancel", "Cancel"),
+    ];
+
+    public static IReadOnlyList<string> RequiredResourceKeys =>
+        Texts.Select(text => text.ResourceKey).ToArray();
+
+    public static InsertChartDialogText ResolveText(Func<string, string?>? getText = null) =>
+        new(
+            Texts[0].Resolve(getText),
+            Texts[1].Resolve(getText),
+            Texts[2].Resolve(getText),
+            Texts[3].Resolve(getText),
+            Texts[4].Resolve(getText),
+            Texts[5].Resolve(getText),
+            Texts[6].Resolve(getText),
+            Texts[7].Resolve(getText),
+            Texts[8].Resolve(getText),
+            Texts[9].Resolve(getText));
+
+    public static DialogSurfaceSpec<InsertChartDialogField> Surface { get; } = BuildSurface();
+
+    public static DialogSurfaceSpec<InsertChartDialogField> BuildSurface(
+        Func<string, string?>? getText = null)
+    {
+        var text = ResolveText(getText);
+        return new(
+        Title: text.Title,
         AutomationId: "InsertChartDialog",
         AutomationName: "Insert Chart",
         Fields:
         [
-            new(InsertChartDialogField.ChartType, "Chart type:", "InsertChartTypeComboBox", "Chart type"),
-            new(InsertChartDialogField.Title, "Title (optional):", "InsertChartTitleTextBox", "Chart title"),
+            new(InsertChartDialogField.ChartType, text.ChartTypeLabel, "InsertChartTypeComboBox", "Chart type"),
+            new(InsertChartDialogField.Title, text.TitleLabel, "InsertChartTitleTextBox", "Chart title"),
             new(
                 InsertChartDialogField.Data,
-                "Chart data  (first column = category labels, remaining columns = series values):",
+                text.DataLabel,
                 "InsertChartDataEditor",
                 "Chart data"),
         ],
         ValidationAutomationId: "InsertChartValidationText");
+    }
 
     public static IReadOnlyList<DialogActionButtonPlan> ActionButtons { get; } =
-    [
-        new("OK", IsDefault: true),
-        new("Cancel", IsCancel: true),
-    ];
+        BuildActionButtons();
+
+    public static IReadOnlyList<DialogActionButtonPlan> BuildActionButtons(
+        Func<string, string?>? getText = null)
+    {
+        var text = ResolveText(getText);
+        return
+        [
+            new(text.OkButton, IsDefault: true),
+            new(text.CancelButton, IsCancel: true),
+        ];
+    }
 
     public static InsertChartDialogInitialState BuildInitialState(
         Chart? seed,
@@ -154,6 +236,25 @@ public static class InsertChartDialogPlanner
         CultureInfo culture,
         out Chart? result,
         out string? errorMessage)
+        => TryBuildResult(
+            kind,
+            titleText,
+            seriesNames,
+            inputRows,
+            culture,
+            getText: null,
+            out result,
+            out errorMessage);
+
+    public static bool TryBuildResult(
+        ChartKind kind,
+        string? titleText,
+        IReadOnlyList<string> seriesNames,
+        IEnumerable<InsertChartDialogRow> inputRows,
+        CultureInfo culture,
+        Func<string, string?>? getText,
+        out Chart? result,
+        out string? errorMessage)
     {
         ArgumentNullException.ThrowIfNull(seriesNames);
         ArgumentNullException.ThrowIfNull(inputRows);
@@ -167,7 +268,7 @@ public static class InsertChartDialogPlanner
             .ToList();
         if (rows.Count == 0)
         {
-            errorMessage = EmptyRowsValidationMessage;
+            errorMessage = ResolveText(getText).EmptyRowsValidationMessage;
             return false;
         }
 
