@@ -38,28 +38,6 @@ public static class DataValidationPresetPlanner
     public static bool RequiresSecondFormula(DvType type, DvOperator op) =>
         DataValidationDisplayTextPlanner.RequiresSecondFormula(type, op);
 
-    public static DataValidation CreateDefaultRule(DvType type, GridRange selectedRange)
-    {
-        var op = DvOperator.Between;
-        return new DataValidation
-        {
-            AppliesTo = selectedRange,
-            Type = type,
-            Operator = op,
-            Formula1 = "",
-            Formula2 = RequiresSecondFormula(type, op) ? "" : "",
-            AllowBlank = true,
-            ShowDropdown = type == DvType.List,
-            AlertStyle = DvAlertStyle.Stop,
-            ShowInputMessage = true,
-            ShowErrorMessage = true,
-            ErrorTitle = "",
-            ErrorMessage = "",
-            PromptTitle = "",
-            PromptMessage = ""
-        };
-    }
-
     public static DataValidationSelectionSummary CreateSelectionSummary(
         Workbook workbook,
         Sheet sheet,

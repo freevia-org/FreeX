@@ -53,52 +53,8 @@ public static partial class NumberFormatter
         return sections;
     }
 
-    private static string[] SplitSectionsUncached(string format)
-    {
-        if (format.IndexOf(';') < 0)
-            return [format];
-
-        var sections = new List<string>();
-        var sb = new System.Text.StringBuilder();
-        bool inQuote = false;
-        bool inBracket = false;
-
-        for (int i = 0; i < format.Length; i++)
-        {
-            char c = format[i];
-            if (c == '"' && !inBracket)
-            {
-                inQuote = !inQuote;
-                sb.Append(c);
-            }
-            else if (c == '\\' && !inQuote && i + 1 < format.Length)
-            {
-                sb.Append(c);
-                sb.Append(format[++i]);
-            }
-            else if (c == '[' && !inQuote)
-            {
-                inBracket = true;
-                sb.Append(c);
-            }
-            else if (c == ']' && !inQuote)
-            {
-                inBracket = false;
-                sb.Append(c);
-            }
-            else if (c == ';' && !inQuote && !inBracket)
-            {
-                sections.Add(sb.ToString());
-                sb.Clear();
-            }
-            else
-            {
-                sb.Append(c);
-            }
-        }
-        sections.Add(sb.ToString());
-        return [.. sections];
-    }
+    private static string[] SplitSectionsUncached(string format) =>
+        NumberFormatSectionTokenizer.Split(format);
 
     private static (ParsedSection Section, double DisplayValue) SelectPositionalSection(
         double value,

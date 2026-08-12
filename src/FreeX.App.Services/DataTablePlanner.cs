@@ -1,4 +1,5 @@
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -234,7 +235,10 @@ public static class DataTablePlanner
         var orientation = hasRowInput && !hasColumnInput
             ? DataTableInputOrientation.Row
             : DataTableInputOrientation.Column;
-        var formulaCell = GetDefaultFormulaCell(tableRange, orientation, mode == DataTablePlanMode.TwoVariable);
+        var formulaCell = DataTableInputParser.GetDefaultFormulaCell(
+            tableRange,
+            orientation,
+            mode == DataTablePlanMode.TwoVariable);
         if (string.IsNullOrWhiteSpace(sheet.GetCell(formulaCell)?.FormulaText))
             return DataTablePlanResult.Invalid(
                 DataTablePlanStatus.FormulaCellMustContainFormula,
@@ -276,15 +280,6 @@ public static class DataTablePlanner
         plan = default!;
         return false;
     }
-
-    public static CellAddress GetDefaultFormulaCell(
-        GridRange range,
-        DataTableInputOrientation orientation,
-        bool twoVariable = false) =>
-        new(
-            range.Start.Sheet,
-            twoVariable || orientation == DataTableInputOrientation.Column ? range.Start.Row : range.Start.Row + 1,
-            twoVariable || orientation == DataTableInputOrientation.Row ? range.Start.Col : range.Start.Col + 1);
 
     public static bool TryParseRange(
         SheetId defaultSheetId,

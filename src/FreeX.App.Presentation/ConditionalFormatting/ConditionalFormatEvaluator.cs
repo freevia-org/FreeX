@@ -229,10 +229,10 @@ public static class ConditionalFormatEvaluator
 
         // Explicit thresholds (resolved here, or supplied pre-resolved for formula thresholds).
         if (TryResolveIconThresholds(rule, stats, iconCount, thresholdOverrides, out var values, out var comparisons))
-            return BucketFromThresholds(cellValue, values, comparisons, iconCount);
+            return ConditionalFormatEvaluationMath.ResolveIconBucket(cellValue, values, comparisons, iconCount);
 
         // Fallback: equal-width interpolation between min and max.
-        return InterpolatedBucket(cellValue, stats.Min, stats.Max, iconCount);
+        return ConditionalFormatEvaluationMath.ResolveInterpolatedIconBucket(cellValue, stats.Min, stats.Max, iconCount);
     }
 
     private static bool TryResolveIconThresholds(
@@ -254,7 +254,7 @@ public static class ConditionalFormatEvaluator
 
             values = new double[thresholdCount];
             comparisons = new bool[thresholdCount];
-            var startIndex = GetIconSetThresholdStartIndex(rule, iconCount);
+            var startIndex = ConditionalFormatEvaluationMath.GetIconSetThresholdStartIndex(rule.IconSetThresholds.Count, iconCount);
             for (var i = 0; i < thresholdCount; i++)
             {
                 values[i] = thresholdOverrides[i];
@@ -272,7 +272,7 @@ public static class ConditionalFormatEvaluator
         if (rule.IconSetThresholds.Count < thresholdCount)
             return false;
 
-        var thresholdStartIndex = GetIconSetThresholdStartIndex(rule, iconCount);
+        var thresholdStartIndex = ConditionalFormatEvaluationMath.GetIconSetThresholdStartIndex(rule.IconSetThresholds.Count, iconCount);
         if (rule.IconSetThresholds.Count - thresholdStartIndex < thresholdCount)
             return false;
 
@@ -293,41 +293,9 @@ public static class ConditionalFormatEvaluator
         return true;
     }
 
-    private static int BucketFromThresholds(
-        double value,
-        ReadOnlySpan<double> thresholdValues,
-        ReadOnlySpan<bool> greaterThanOrEqual,
-        int iconCount)
-    {
-        var index = 0;
-        for (var i = 0; i < thresholdValues.Length; i++)
-        {
-            if (greaterThanOrEqual[i] ? value >= thresholdValues[i] : value > thresholdValues[i])
-                index++;
-        }
-
-        return Math.Clamp(index, 0, iconCount - 1);
-    }
-
-    private static int InterpolatedBucket(double value, double min, double max, int iconCount)
-    {
-        if (!double.IsFinite(value) || !double.IsFinite(min) || !double.IsFinite(max))
-            return 0;
-        if (max <= min)
-            return iconCount - 1;
-
-        var t = Math.Clamp((value - min) / (max - min), 0d, 1d);
-        return Math.Clamp((int)Math.Floor(t * iconCount), 0, iconCount - 1);
-    }
-
     /// <summary>Icon count encoded in the style name (3, 4 or 5), defaulting to 3.</summary>
     public static int GetIconSetCount(string? style) =>
-        !string.IsNullOrWhiteSpace(style) && char.IsDigit(style![0])
-            ? Math.Clamp(style[0] - '0', 3, 5)
-            : 3;
-
-    private static int GetIconSetThresholdStartIndex(ConditionalFormat rule, int iconCount) =>
-        rule.IconSetThresholds.Count >= iconCount ? 1 : 0;
+        ConditionalFormatEvaluationMath.GetIconSetCount(style);
 
     // ── Highlight / selection rules ──────────────────────────────────────────
 
@@ -369,18 +337,12 @@ public static class ConditionalFormatEvaluator
         ArgumentNullException.ThrowIfNull(rule);
         ArgumentNullException.ThrowIfNull(stats);
 
-        if (!double.IsFinite(cellValue) || stats.Count == 0)
-            return false;
-
-        var threshold = stats.Average;
-        if (rule.StdDevCount is { } n && n > 0)
-            threshold = rule.AboveAverage
-                ? stats.Average + n * stats.StdDev
-                : stats.Average - n * stats.StdDev;
-
-        return rule.AboveAverage
-            ? (rule.EqualAverage ? cellValue >= threshold : cellValue > threshold)
-            : (rule.EqualAverage ? cellValue <= threshold : cellValue < threshold);
+        return ConditionalFormatEvaluationMath.MatchesAboveAverage(
+            cellValue,
+            stats.EvaluationStatistics,
+            rule.AboveAverage,
+            rule.EqualAverage,
+            rule.StdDevCount);
     }
 
     private static bool ResolveThreshold(

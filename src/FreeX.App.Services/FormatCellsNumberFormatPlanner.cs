@@ -171,7 +171,7 @@ public static class FormatCellsNumberFormatPlanner
         if (string.IsNullOrWhiteSpace(format))
             return 2;
 
-        var firstSection = format.Split(';')[0];
+        var firstSection = NumberFormatSectionTokenizer.Split(format)[0];
         var dotIndex = firstSection.IndexOf('.');
         if (dotIndex < 0)
             return 0;
@@ -346,8 +346,8 @@ public static class FormatCellsNumberFormatPlanner
 
     private static bool HasNumericLayoutDirective(string format)
     {
-        var sections = SplitFormatSections(format);
-        var numericSectionCount = Math.Min(sections.Count, 3);
+        var sections = NumberFormatSectionTokenizer.Split(format);
+        var numericSectionCount = Math.Min(sections.Length, 3);
         for (var i = 0; i < numericSectionCount; i++)
         {
             if (SectionHasActiveLayoutDirective(sections[i]) &&
@@ -359,51 +359,6 @@ public static class FormatCellsNumberFormatPlanner
         }
 
         return false;
-    }
-
-    private static List<string> SplitFormatSections(string format)
-    {
-        var sections = new List<string>();
-        var section = new System.Text.StringBuilder();
-        var inQuote = false;
-        var inBracket = false;
-
-        for (var i = 0; i < format.Length; i++)
-        {
-            var c = format[i];
-            if (c == '"' && !inBracket)
-            {
-                inQuote = !inQuote;
-                section.Append(c);
-            }
-            else if (c == '\\' && !inQuote && i + 1 < format.Length)
-            {
-                section.Append(c);
-                section.Append(format[++i]);
-            }
-            else if (c == '[' && !inQuote)
-            {
-                inBracket = true;
-                section.Append(c);
-            }
-            else if (c == ']' && !inQuote)
-            {
-                inBracket = false;
-                section.Append(c);
-            }
-            else if (c == ';' && !inQuote && !inBracket)
-            {
-                sections.Add(section.ToString());
-                section.Clear();
-            }
-            else
-            {
-                section.Append(c);
-            }
-        }
-
-        sections.Add(section.ToString());
-        return sections;
     }
 
     private static bool SectionHasActiveLayoutDirective(string section)

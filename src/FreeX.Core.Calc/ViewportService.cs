@@ -1527,22 +1527,7 @@ public sealed partial class ViewportService : IViewportService
         if (string.IsNullOrEmpty(numberFormat))
             return false;
 
-        var sectionCount = 1;
-        var inQuote = false;
-        var inBracket = false;
-        foreach (var c in numberFormat)
-        {
-            if (c == '"' && !inBracket)
-                inQuote = !inQuote;
-            else if (c == '[' && !inQuote)
-                inBracket = true;
-            else if (c == ']' && !inQuote)
-                inBracket = false;
-            else if (c == ';' && !inQuote && !inBracket)
-                sectionCount++;
-        }
-
-        return sectionCount >= 3;
+        return NumberFormatSectionTokenizer.Count(numberFormat) >= 3;
     }
 
     private static bool TryParseHexColor(string? hex, out CellColor color)

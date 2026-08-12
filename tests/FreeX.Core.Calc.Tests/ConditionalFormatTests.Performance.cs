@@ -373,7 +373,7 @@ public partial class ConditionalFormatTests
         var source = CalcSourceTestSupport.ReadCalcSource("ViewportService.ConditionalFormatIcons.cs");
 
         source.Should().Contain("cfContext.IconSetThresholds.TryGetValue");
-        source.Should().Contain("ResolveIconSetIndexFromThresholds");
+        source.Should().Contain("ConditionalFormatEvaluationMath.ResolveIconBucket");
         source.Should().Contain("stackalloc double[thresholdCount]");
         source.Should().Contain("stackalloc bool[thresholdCount]");
         source.Should().NotContain("new List<(double Value, bool GreaterThanOrEqual)>");
@@ -390,7 +390,7 @@ public partial class ConditionalFormatTests
             evaluatorSource.IndexOf("private static IReadOnlySet<CellAddress>? ResolveTopBottomMatches", StringComparison.Ordinal)];
 
         evaluatorSource.Should().Contain("CfRuleType.IconSet => RequiresIconSetAggregateCache(cf)");
-        evaluatorSource.Should().Contain("List<double>? numericValues = RequiresSortedNumericValues(cf) ? [] : null");
+        evaluatorSource.Should().Contain("new ConditionalFormatEvaluationMath.StatisticsAccumulator(retainSortedValues)");
         evaluatorSource.Should().Contain("TryGetIconSetAggregateCache(cf, aggregates, out var cache)");
         aggregateThresholds.Should().NotContain(
             "CfThresholdType.Number",

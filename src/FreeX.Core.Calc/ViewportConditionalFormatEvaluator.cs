@@ -5,6 +5,7 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Calc;
 
 internal sealed record CfAggregateCache(
+    int Count,
     double Average,
     double Min,
     double Max,
@@ -699,11 +700,7 @@ internal static partial class ViewportConditionalFormatEvaluator
         return false;
     }
 
-    public static bool TryParseDouble(string? text, out double result)
-    {
-        if (text is null) { result = 0; return false; }
-        return double.TryParse(text, System.Globalization.NumberStyles.Any,
-            System.Globalization.CultureInfo.InvariantCulture, out result);
-    }
+    public static bool TryParseDouble(string? text, out double result) =>
+        ConditionalFormatEvaluationMath.TryParseInvariant(text, out result);
 
 }

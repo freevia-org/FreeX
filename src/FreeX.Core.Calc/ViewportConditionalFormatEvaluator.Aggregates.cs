@@ -13,15 +13,14 @@ internal static partial class ViewportConditionalFormatEvaluator
             if (!RequiresAggregateCache(cf))
                 continue;
 
-            double sum = 0, sumSq = 0, min = double.MaxValue, max = double.MinValue;
-            int count = 0;
+            var retainSortedValues = RequiresSortedNumericValues(cf);
+            var statistics = new ConditionalFormatEvaluationMath.StatisticsAccumulator(retainSortedValues);
             List<(CellAddress Address, double Value, int Index)>? rankedValues =
                 cf.RuleType == CfRuleType.Top10 ? [] : null;
             Dictionary<string, int>? valueCounts =
                 cf.RuleType is CfRuleType.DuplicateValues or CfRuleType.UniqueValues
                     ? new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
                     : null;
-            List<double>? numericValues = RequiresSortedNumericValues(cf) ? [] : null;
             foreach (var (a, v) in EnumerateAllAggregateValues(sheet, cf))
             {
                 if (valueCounts is not null && !IsBlankValue(v))
@@ -32,35 +31,24 @@ internal static partial class ViewportConditionalFormatEvaluator
 
                 if (TryGetDouble(v, out double x))
                 {
-                    sum += x;
-                    sumSq += x * x;
-                    if (x < min) min = x;
-                    if (x > max) max = x;
-                    rankedValues?.Add((a, x, count));
-                    numericValues?.Add(x);
-                    count++;
+                    rankedValues?.Add((a, x, statistics.Count));
+                    statistics.Add(x);
                 }
             }
 
             var topBottomMatches = ResolveTopBottomMatches(cf, rankedValues);
-            numericValues?.Sort();
-            if (count > 0 || valueCounts?.Count > 0 || topBottomMatches is not null)
+            var aggregate = statistics.Build();
+            if (aggregate.Count > 0 || valueCounts?.Count > 0 || topBottomMatches is not null)
             {
-                var average = count > 0 ? sum / count : 0;
-                // Sample standard deviation (STDEV semantics), matching Excel's "N standard
-                // deviations above/below average" conditional format rule. Needs at least 2
-                // points; otherwise there is no variance to speak of.
-                var stdDev = count > 1
-                    ? Math.Sqrt(Math.Max(0, (sumSq - count * average * average) / (count - 1)))
-                    : 0;
                 (result ??= new Dictionary<ConditionalFormat, CfAggregateCache>(ReferenceEqualityComparer.Instance))[cf] = new CfAggregateCache(
-                    average,
-                    count > 0 ? min : 0,
-                    count > 0 ? max : 0,
-                    numericValues,
+                    aggregate.Count,
+                    aggregate.Average,
+                    aggregate.Min,
+                    aggregate.Max,
+                    aggregate.SortedValues,
                     topBottomMatches,
                     valueCounts?.Count > 0 ? valueCounts : null,
-                    stdDev);
+                    aggregate.StdDev);
             }
         }
         return result ?? EmptyAggregates;
@@ -81,9 +69,9 @@ internal static partial class ViewportConditionalFormatEvaluator
 
     private static bool RequiresIconSetAggregateCache(ConditionalFormat cf)
     {
-        var iconCount = GetIconSetCount(cf.IconSetStyle);
+        var iconCount = ConditionalFormatEvaluationMath.GetIconSetCount(cf.IconSetStyle);
         var thresholdCount = iconCount - 1;
-        var thresholdStartIndex = GetIconSetThresholdStartIndex(cf, iconCount);
+        var thresholdStartIndex = ConditionalFormatEvaluationMath.GetIconSetThresholdStartIndex(cf.IconSetThresholds.Count, iconCount);
         if (cf.IconSetThresholds.Count - thresholdStartIndex < thresholdCount)
             return true;
 
@@ -118,8 +106,8 @@ internal static partial class ViewportConditionalFormatEvaluator
         if (cf.RuleType != CfRuleType.IconSet)
             return false;
 
-        var iconCount = GetIconSetCount(cf.IconSetStyle);
-        var thresholdStartIndex = GetIconSetThresholdStartIndex(cf, iconCount);
+        var iconCount = ConditionalFormatEvaluationMath.GetIconSetCount(cf.IconSetStyle);
+        var thresholdStartIndex = ConditionalFormatEvaluationMath.GetIconSetThresholdStartIndex(cf.IconSetThresholds.Count, iconCount);
         var thresholdCount = Math.Min(iconCount - 1, cf.IconSetThresholds.Count - thresholdStartIndex);
         for (var i = 0; i < thresholdCount; i++)
         {
@@ -428,15 +416,12 @@ internal static partial class ViewportConditionalFormatEvaluator
         // "N standard deviations above/below average" band: threshold is mean ± N*stdDev
         // instead of the plain mean. Falls back to the plain average when stdDev is
         // unavailable (e.g. fewer than 2 numeric points in the range).
-        var threshold = cache.Average;
-        if (cf.StdDevCount is { } n && n > 0)
-            threshold = cf.AboveAverage
-                ? cache.Average + n * cache.StdDev
-                : cache.Average - n * cache.StdDev;
-
-        return cf.AboveAverage
-            ? (cf.EqualAverage ? cellVal >= threshold : cellVal > threshold)
-            : (cf.EqualAverage ? cellVal <= threshold : cellVal < threshold);
+        return ConditionalFormatEvaluationMath.MatchesAboveAverage(
+            cellVal,
+            ToEvaluationStatistics(cache),
+            cf.AboveAverage,
+            cf.EqualAverage,
+            cf.StdDevCount);
     }
 
     private static bool MatchesTopBottom(

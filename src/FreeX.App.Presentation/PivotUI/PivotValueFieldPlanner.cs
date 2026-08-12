@@ -367,12 +367,14 @@ public static class PivotValueFieldPlanner
         // OOXML catalog retains its optional alignment padding and negative section. Treat those
         // spellings as the same built-in preset before falling back to a custom format.
         var normalized = NormalizeNumberFormatCode(trimmed);
+        var inputSections = NumberFormatSectionTokenizer.Split(trimmed);
         foreach (var preset in NumberFormatPresets)
         {
             var presetCode = NormalizeNumberFormatCode(preset.FormatCode);
+            var presetSections = NumberFormatSectionTokenizer.Split(presetCode);
             if (string.Equals(presetCode, normalized, StringComparison.OrdinalIgnoreCase) ||
-                (!trimmed.Contains(';', StringComparison.Ordinal) &&
-                 string.Equals(presetCode.Split(';')[0], normalized, StringComparison.OrdinalIgnoreCase)))
+                (inputSections.Length == 1 &&
+                 string.Equals(presetSections[0], normalized, StringComparison.OrdinalIgnoreCase)))
             {
                 return (preset.NumberFormatId, null);
             }

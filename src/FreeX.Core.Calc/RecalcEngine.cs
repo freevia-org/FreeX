@@ -812,7 +812,7 @@ public sealed class RecalcEngine
                 return false;
         }
 
-        var firstSection = numberFormat.Split(';')[0];
+        var firstSection = NumberFormatSectionTokenizer.Split(numberFormat)[0];
         var dotIndex = firstSection.IndexOf('.');
         if (dotIndex < 0)
             return true; // Explicit integer format (e.g. "#,##0") -- round to a whole number.

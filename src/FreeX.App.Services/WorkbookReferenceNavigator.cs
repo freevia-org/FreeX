@@ -1,4 +1,4 @@
-using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -6,11 +6,7 @@ namespace FreeX.App.Services;
 public static class WorkbookReferenceNavigator
 {
     public static bool TryParseAddress(string text, SheetId sheetId, out CellAddress address)
-    {
-        var normalized = AbsoluteCellReferenceNormalizer.Normalize(text);
-        return normalized is not null && CellAddress.TryParse(normalized, sheetId, out address) ||
-            TryParseAbsoluteR1C1CellReference(text, sheetId, out address);
-    }
+        => CellReferenceInputParser.TryParseCell(text, sheetId, out address);
 
     public static IReadOnlyList<string> BuildReferenceChoices(
         string defaultAddress,
@@ -95,7 +91,7 @@ public static class WorkbookReferenceNavigator
         }
 
         if (!string.IsNullOrWhiteSpace(text) &&
-            TryParseRange(defaultSheetId, text, resolveSheetId, out range))
+            WorkbookRangeTextCodec.TryParse(defaultSheetId, text, resolveSheetId, out range))
             return true;
 
         var trimmedName = text.Trim();
@@ -107,7 +103,7 @@ public static class WorkbookReferenceNavigator
         // silently failing to match any key.
         var nameLookupText = trimmedName;
         var scopedNameSheetId = defaultSheetId;
-        if (TryResolveReferenceSheet(defaultSheetId, trimmedName, resolveSheetId, out var resolvedSheetId, out var strippedRemainder))
+        if (WorkbookRangeTextCodec.TryResolveReferenceSheet(defaultSheetId, trimmedName, resolveSheetId, out var resolvedSheetId, out var strippedRemainder))
         {
             // The qualifier's sheet (e.g. "Sheet2" in "Sheet2!Rate") is the scope a sheet-scoped name
             // lookup must use, not the caller's active/default sheet -- otherwise a name scoped to
@@ -169,7 +165,7 @@ public static class WorkbookReferenceNavigator
         out IReadOnlyList<GridRange> ranges)
     {
         var parsed = new List<GridRange>();
-        foreach (var area in SplitReferenceAreas(text))
+        foreach (var area in WorkbookRangeTextCodec.SplitReferences(text))
         {
             if (!TryParseReferenceRange(area, defaultSheetId, resolveSheetId, definedNames, resolveScopedName, out var range))
             {
@@ -182,39 +178,6 @@ public static class WorkbookReferenceNavigator
 
         ranges = parsed;
         return parsed.Count > 0;
-    }
-
-    // Splits on top-level commas only -- a comma inside a single-quoted sheet name (which may
-    // legally contain one, e.g. 'Q1, Actuals'!A1) is not an area separator. Mirrors
-    // WorkbookRangeTextCodec.SplitReferences.
-    private static IEnumerable<string> SplitReferenceAreas(string input)
-    {
-        var start = 0;
-        var inQuotedSheetName = false;
-        for (var index = 0; index < input.Length; index++)
-        {
-            if (input[index] == '\'')
-            {
-                if (index + 1 < input.Length && input[index + 1] == '\'')
-                {
-                    index++;
-                    continue;
-                }
-
-                inQuotedSheetName = !inQuotedSheetName;
-            }
-            else if (input[index] == ',' && !inQuotedSheetName)
-            {
-                var segment = input[start..index].Trim();
-                if (segment.Length > 0)
-                    yield return segment;
-                start = index + 1;
-            }
-        }
-
-        var finalSegment = input[start..].Trim();
-        if (finalSegment.Length > 0)
-            yield return finalSegment;
     }
 
     /// <summary>
@@ -238,7 +201,7 @@ public static class WorkbookReferenceNavigator
         var trimmedName = text.Trim();
         var nameLookupText = trimmedName;
         var scopedNameSheetId = defaultSheetId;
-        if (TryResolveReferenceSheet(defaultSheetId, trimmedName, resolveSheetId, out var resolvedSheetId, out var strippedRemainder))
+        if (WorkbookRangeTextCodec.TryResolveReferenceSheet(defaultSheetId, trimmedName, resolveSheetId, out var resolvedSheetId, out var strippedRemainder))
         {
             scopedNameSheetId = resolvedSheetId;
             if (!string.IsNullOrWhiteSpace(strippedRemainder))
@@ -252,184 +215,6 @@ public static class WorkbookReferenceNavigator
     }
 
     public static string Format(GridRange range, SheetId currentSheetId, Func<SheetId, string?> resolveSheetName)
-    {
-        var reference = $"{range.Start.ToA1()}:{range.End.ToA1()}";
-        var sheetName = resolveSheetName(range.Start.Sheet);
-        return sheetName is null || range.Start.Sheet.Equals(currentSheetId)
-            ? reference
-            : $"{SheetNameFormatter.QuoteIfNeeded(sheetName)}!{reference}";
-    }
-
-    private static bool TryParseRange(
-        SheetId defaultSheetId,
-        string input,
-        Func<string, SheetId?> resolveSheetId,
-        out GridRange range)
-    {
-        range = default;
-        var normalized = input.Trim();
-        if (!TryResolveReferenceSheet(defaultSheetId, normalized, resolveSheetId, out var sheetId, out normalized))
-            return false;
-
-        var parts = normalized.Split(':', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length is 0 or > 2)
-            return false;
-
-        try
-        {
-            // Whole-column (A:A, C:E) and whole-row (5:5, 5:9) references, matching Excel's Name Box
-            // and Go To reference syntax: each side is a bare column-letter run or a bare row-digit
-            // run (never both mixed within the same reference).
-            if (parts.Length == 2 && TryParseFullColumnOrRowRange(sheetId, parts[0], parts[1], out range))
-                return true;
-
-            if (!TryParseAddress(parts[0], sheetId, out var start))
-                return false;
-
-            var end = start;
-            if (parts.Length == 2 && !TryParseAddress(parts[1], sheetId, out end))
-                return false;
-
-            range = new GridRange(start, end);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static bool TryParseFullColumnOrRowRange(SheetId sheetId, string left, string right, out GridRange range)
-    {
-        if (TryParseColumnLetters(left, out var startCol) && TryParseColumnLetters(right, out var endCol))
-        {
-            range = new GridRange(
-                new CellAddress(sheetId, 1, startCol),
-                new CellAddress(sheetId, CellAddress.MaxRow, endCol));
-            return true;
-        }
-
-        if (TryParseRowNumber(left, out var startRow) && TryParseRowNumber(right, out var endRow))
-        {
-            range = new GridRange(
-                new CellAddress(sheetId, startRow, 1),
-                new CellAddress(sheetId, endRow, CellAddress.MaxCol));
-            return true;
-        }
-
-        range = default;
-        return false;
-    }
-
-    private static bool TryParseColumnLetters(string text, out uint column)
-    {
-        column = 0;
-        var value = text.AsSpan().Trim();
-        if (value.Length > 0 && value[0] == '$')
-            value = value[1..];
-
-        if (value.IsEmpty)
-            return false;
-
-        foreach (var c in value)
-        {
-            if (!char.IsLetter(c))
-                return false;
-        }
-
-        column = CellAddress.ColumnNameToNumber(value.ToString());
-        return column is > 0 and <= CellAddress.MaxCol;
-    }
-
-    private static bool TryParseRowNumber(string text, out uint row)
-    {
-        row = 0;
-        var value = text.AsSpan().Trim();
-        if (value.Length > 0 && value[0] == '$')
-            value = value[1..];
-
-        if (value.IsEmpty)
-            return false;
-
-        foreach (var c in value)
-        {
-            if (!char.IsDigit(c))
-                return false;
-        }
-
-        return uint.TryParse(value, out row) && row is > 0 and <= CellAddress.MaxRow;
-    }
-
-    private static bool TryResolveReferenceSheet(
-        SheetId defaultSheetId,
-        string reference,
-        Func<string, SheetId?> resolveSheetId,
-        out SheetId sheetId,
-        out string addressReference)
-    {
-        sheetId = defaultSheetId;
-        addressReference = reference;
-
-        var bangIndex = reference.LastIndexOf('!');
-        if (bangIndex < 0)
-            return true;
-
-        var sheetName = UnquoteSheetName(reference[..bangIndex].Trim());
-        if (resolveSheetId(sheetName) is not { } resolvedSheetId)
-            return false;
-
-        sheetId = resolvedSheetId;
-        addressReference = reference[(bangIndex + 1)..].Trim();
-        return true;
-    }
-
-    private static bool TryParseAbsoluteR1C1CellReference(string input, SheetId sheetId, out CellAddress address)
-    {
-        address = default;
-        var value = input.AsSpan().Trim();
-        if (value.Length < 4 || !IsR1C1Prefix(value[0], 'R'))
-            return false;
-
-        var index = 1;
-        if (!TryReadR1C1Number(value, ref index, CellAddress.MaxRow, out var row))
-            return false;
-
-        if (index >= value.Length || !IsR1C1Prefix(value[index], 'C'))
-            return false;
-
-        index++;
-        if (!TryReadR1C1Number(value, ref index, CellAddress.MaxCol, out var column) || index != value.Length)
-            return false;
-
-        address = new CellAddress(sheetId, row, column);
-        return true;
-    }
-
-    private static bool TryReadR1C1Number(ReadOnlySpan<char> value, ref int index, uint max, out uint number)
-    {
-        number = 0;
-        var start = index;
-        while (index < value.Length && char.IsDigit(value[index]))
-        {
-            number = number * 10 + (uint)(value[index] - '0');
-            if (number > max)
-                return false;
-
-            index++;
-        }
-
-        return index > start && number > 0;
-    }
-
-    private static bool IsR1C1Prefix(char actual, char expected) =>
-        char.ToUpperInvariant(actual) == expected;
-
-    private static string UnquoteSheetName(string sheetName)
-    {
-        if (sheetName.Length >= 2 && sheetName[0] == '\'' && sheetName[^1] == '\'')
-            return sheetName[1..^1].Replace("''", "'", StringComparison.Ordinal);
-
-        return sheetName;
-    }
+        => WorkbookRangeTextCodec.Format(range, currentSheetId, resolveSheetName);
 
 }

@@ -2,6 +2,7 @@ using FreeX.App.Presentation;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.QuickAnalysis;
+using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -2256,7 +2257,7 @@ public sealed class WorkbookSession : IDisposable
     {
         var result = _cellEditService.ExecuteEditCommand(
             Workbook,
-            new AddSheetCommand(WorkbookSheetNameGenerator.GenerateUniqueSheetName(Workbook)));
+            new AddSheetCommand(SheetTabListPlanner.GenerateUniqueSheetName(Workbook)));
         if (!result.Success)
             return result;
 

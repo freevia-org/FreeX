@@ -106,6 +106,29 @@ public sealed class WorkbookRangeTextCodecTests
             .BeFalse();
     }
 
+    [Theory]
+    [InlineData("A:A", 1, 1, 1048576, 1)]
+    [InlineData("$B:$D", 1, 2, 1048576, 4)]
+    [InlineData("5:9", 5, 1, 9, 16384)]
+    [InlineData("$7:$7", 7, 1, 7, 16384)]
+    [InlineData("R2C3:R4C5", 2, 3, 4, 5)]
+    public void TryParse_SupportsCanonicalWholeRangesAndAbsoluteR1C1(
+        string input, uint startRow, uint startColumn, uint endRow, uint endColumn)
+    {
+        var sheetId = SheetId.New();
+
+        WorkbookRangeTextCodec.TryParseOnCurrentSheet(sheetId, input, out var range).Should().BeTrue();
+        range.Start.Should().Be(new CellAddress(sheetId, startRow, startColumn));
+        range.End.Should().Be(new CellAddress(sheetId, endRow, endColumn));
+    }
+
+    [Fact]
+    public void SplitReferences_HandlesBothSeparatorsWithoutSplittingQuotedSheetNames()
+    {
+        WorkbookRangeTextCodec.SplitReferences("'Q1, Actuals'!A1;'Bob''s; Sheet'!B2,C3", allowSemicolon: true)
+            .Should().Equal("'Q1, Actuals'!A1", "'Bob''s; Sheet'!B2", "C3");
+    }
+
     [Fact]
     public void Format_OmitsCurrentSheetName()
     {

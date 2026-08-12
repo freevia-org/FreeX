@@ -42,10 +42,7 @@ public static class ConsolidateDialogPlanner
     public static IReadOnlyList<(ConsolidateFunction Function, string Label)> FunctionChoices => FunctionChoiceValues;
 
     public static IReadOnlyList<string> SplitSourceRangeText(string sourceRangesText) =>
-        sourceRangesText
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(item => !string.IsNullOrWhiteSpace(item))
-            .ToList();
+        WorkbookRangeTextCodec.SplitReferences(sourceRangesText, allowSemicolon: true);
 
     public static string JoinSourceRanges(IEnumerable<string> sourceRanges) =>
         string.Join("; ", sourceRanges.Select(item => item.Trim()).Where(item => item.Length > 0));
