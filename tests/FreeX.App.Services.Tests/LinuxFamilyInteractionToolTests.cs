@@ -190,7 +190,7 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("contractValidation");
         runner.Should().Contain("parameters.fileKey");
         runner.Should().Contain("appSurface");
-        runner.Should().Contain("Length -le 0");
+        source.Should().Contain("Length -le 0");
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
         runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 24 } else { 45 }");
@@ -403,6 +403,90 @@ public sealed class LinuxFamilyInteractionToolTests
 
         result.ExitCode.Should().Be(0, result.Output);
         result.Output.Should().Contain("settled");
+    }
+
+    [Fact]
+    public void ManifestEvidenceContractHelpers_ValidateAndCompleteTheGenericContract()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var powershell = ResolvePowerShellExecutable();
+        powershell.Should().NotBeNull("the manifest helper regression requires PowerShell");
+
+        using var temporary = new TestTemporaryDirectory();
+        var schemaPath = Path.Combine(temporary.Path, "schema.json");
+        var evidencePath = Path.Combine(temporary.Path, "proof.txt");
+        var manifestPath = Path.Combine(temporary.Path, "manifest.json");
+        File.WriteAllText(schemaPath, "{\"$schema\":\"https://json-schema.org/draft/2020-12/schema\"}", Encoding.UTF8);
+        File.WriteAllText(evidencePath, "proof", Encoding.UTF8);
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(new
+        {
+            contractValidation = new { status = "pending" },
+            summary = new { passed = 1, failed = 0, total = 1 },
+            results = new[] { new { id = "ok", status = "passed", evidence = new[] { "proof.txt" } },
+            screenshots = Array.Empty<object>()
+        }), Encoding.UTF8);
+
+        var helperPath = RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "ManifestEvidence.ps1");
+        var command =
+            $". '{EscapePowerShell(helperPath)}'; " +
+            $"$manifest = Read-ManifestContract -ManifestPath '{EscapePowerShell(manifestPath)}' -SchemaPath '{EscapePowerShell(schemaPath)}'; " +
+            "$results = @($manifest.results); " +
+            "Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 1 -RequireCompleteStatuses; " +
+            $"$map = Get-ManifestEvidenceFileMap -EvidenceDirectory '{EscapePowerShell(temporary.Path)}'; " +
+            "Assert-ManifestEvidenceReference -FileMap $map -Name 'proof.txt' -Owner 'Result ok'; " +
+            "$rejected = $false; try { Assert-ManifestEvidenceReference -FileMap $map -Name '../proof.txt' -Owner 'Result bad' } catch { $rejected = $true }; " +
+            "if (-not $rejected) { throw 'non-basename evidence was accepted' }; " +
+            $"Complete-ManifestContract -Manifest $manifest -ManifestPath '{EscapePowerShell(manifestPath)}' -Validator 'test-validator' -ContractReference 'schema.json' | Out-Null; " +
+            "'validated'";
+
+        var result = RunPowerShellCommand(powershell!, command);
+
+        result.ExitCode.Should().Be(0, result.Output);
+        result.Output.Should().Contain("validated");
+        using var completed = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        completed.RootElement.GetProperty("contractValidation").GetProperty("status").GetString()
+            .Should().Be("passed");
+    }
+
+    [Fact]
+    public void PhysicalValidationSupport_OwnsFixtureInvocationAndKeyValueParsing()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var supportPath = RepositoryFileLocator.Find("tools", "PhysicalValidationScriptSupport.ps1");
+        var support = File.ReadAllText(supportPath);
+        support.Should().Contain("function Invoke-PhysicalValidationFixture")
+            .And.Contain("function ConvertFrom-PhysicalValidationKeyValueLines")
+            .And.Contain("function Read-PhysicalValidationFixtureValues")
+            .And.Contain("--configuration Release --no-restore");
+
+        foreach (var runnerName in new[]
+        {
+            "Run-FreeWWave61GroupedChildValidation.ps1",
+            "Run-FreeWWave62NestedGroupChildValidation.ps1",
+            "Run-FreeWWave63NestedEditPointsValidation.ps1",
+            "Run-FreeWWave64NestedTextValidation.ps1"
+        })
+        {
+            var runner = File.ReadAllText(RepositoryFileLocator.Find("tools", runnerName));
+            runner.Should().Contain("PhysicalValidationScriptSupport.ps1")
+                .And.NotContain("function Invoke-Fixture")
+                .And.NotContain("function Read-Geometry");
+        }
+
+        var powershell = ResolvePowerShellExecutable();
+        powershell.Should().NotBeNull("the physical validation helper regression requires PowerShell");
+        var command =
+            $". '{EscapePowerShell(supportPath)}'; " +
+            "$values = ConvertFrom-PhysicalValidationKeyValueLines -Lines @('alpha=one=two', 'ignored', 'beta=3'); " +
+            "\"$($values['alpha'])|$($values['beta'])\"";
+        var result = RunPowerShellCommand(powershell!, command);
+
+        result.ExitCode.Should().Be(0, result.Output);
+        result.Output.Should().Contain("one=two|3");
     }
 
     private static string EscapePowerShell(string value) => value.Replace("'", "''", StringComparison.Ordinal);

@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutput = if ([IO.Path]::IsPathRooted($OutputDir)) { [IO.Path]::GetFullPath($OutputDir) } else { [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir)) }
 $fixtureProject = Join-Path $repoRoot "freew/tools/FreeW.GroupChildPhysicalFixture/FreeW.GroupChildPhysicalFixture.csproj"
 $fixturePath = Join-Path $resolvedOutput "nested-group-child-wave62.docx"
@@ -14,23 +15,14 @@ $sessionPath = Join-Path $resolvedOutput "freew/current-session.json"
 $containerName = "freex-linux-interactive-freew-$Port"
 $started = $false
 
-function Invoke-Fixture { param([string]$Action, [string]$Path)
-    $lines = @(& dotnet run --project $fixtureProject --configuration Release --no-restore -- $Action $Path 2>&1)
-    if ($LASTEXITCODE -ne 0) { throw "Fixture '$Action' failed: $($lines -join [Environment]::NewLine)" }
-    return $lines
-}
-function Read-Geometry { param([string]$Action, [string]$Path)
-    $values = [ordered]@{}
-    foreach ($line in @(Invoke-Fixture $Action $Path)) { if ($line -match '^([^=]+)=(.*)$') { $values[$Matches[1]] = $Matches[2] } }
-    return $values
-}
 function Pair([System.Collections.IDictionary]$Values, [string]$Key) { return @($Values[$Key].Split(',') | ForEach-Object { [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) }) }
 function Same-Pair([double[]]$Left, [double[]]$Right) { return [Math]::Abs($Left[0]-$Right[0]) -lt 0.01 -and [Math]::Abs($Left[1]-$Right[1]) -lt 0.01 }
 
 try {
     New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
-    Invoke-Fixture generate-nested $fixturePath | Out-File (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
-    $before = Read-Geometry inspect-nested $fixturePath
+    Invoke-PhysicalValidationFixture -ProjectPath $fixtureProject -Action "generate-nested" -ArtifactPath $fixturePath |
+        Out-File (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
+    $before = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect-nested" -ArtifactPath $fixturePath
     & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath -Replace
     $started = $true
     $session = Get-Content $sessionPath -Raw | ConvertFrom-Json
@@ -41,7 +33,7 @@ try {
 
     $savedPath = Join-Path $resolvedOutput "freew/documents/nested-group-child-wave62.docx"
     if (-not (Test-Path $savedPath -PathType Leaf)) { throw "The FreeW document was not persisted at '$savedPath'." }
-    $after = Read-Geometry inspect-nested $savedPath
+    $after = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect-nested" -ArtifactPath $savedPath
     foreach ($key in 'outer-offset-pt','outer-size-pt','inner-offset-pt','inner-size-pt','outer-transform','inner-transform','child-transform') {
         if ($after[$key] -ne $before[$key]) { throw "Nested owning-group geometry changed for ${key}: before '$($before[$key])', after '$($after[$key])'." }
     }

@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "PhysicalValidationScriptSupport.ps1")
 $resolvedOutput = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
 } else {
@@ -18,31 +19,11 @@ $sessionPath = Join-Path $resolvedOutput "freew/current-session.json"
 $containerName = "freex-linux-interactive-freew-$Port"
 $started = $false
 
-function Invoke-Fixture {
-    param([string]$Action, [string]$Path)
-    $lines = @(& dotnet run --project $fixtureProject --configuration Release --no-restore -- $Action $Path 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "Fixture '$Action' failed with exit code $LASTEXITCODE.`n$($lines -join [Environment]::NewLine)"
-    }
-    return $lines
-}
-
-function Read-Geometry {
-    param([string]$Path)
-    $lines = @(Invoke-Fixture inspect $Path)
-    $values = [ordered]@{}
-    foreach ($line in $lines) {
-        if ($line -match '^([^=]+)=(.*)$') {
-            $values[$Matches[1]] = $Matches[2]
-        }
-    }
-    return $values
-}
-
 try {
     New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
-    Invoke-Fixture generate $fixturePath | Out-File -LiteralPath (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
-    $before = Read-Geometry $fixturePath
+    Invoke-PhysicalValidationFixture -ProjectPath $fixtureProject -Action "generate" -ArtifactPath $fixturePath |
+        Out-File -LiteralPath (Join-Path $resolvedOutput "fixture-generation.txt") -Encoding utf8
+    $before = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect" -ArtifactPath $fixturePath
 
     & powershell -NoProfile -File (Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1") `
         -Action Start -App FreeW -Port $Port -OutputDir $resolvedOutput -DocumentPath $fixturePath `
@@ -61,7 +42,7 @@ try {
     if (-not (Test-Path -LiteralPath $savedPath -PathType Leaf)) {
         throw "The FreeW document was not persisted at '$savedPath'."
     }
-    $after = Read-Geometry $savedPath
+    $after = Read-PhysicalValidationFixtureValues -ProjectPath $fixtureProject -Action "inspect" -ArtifactPath $savedPath
     $beforeOffset = $before['child-offset-pt'].Split(',') | ForEach-Object { [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) }
     $afterOffset = $after['child-offset-pt'].Split(',') | ForEach-Object { [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) }
     $beforeSize = $before['child-size-pt'].Split(',') | ForEach-Object { [double]::Parse($_, [Globalization.CultureInfo]::InvariantCulture) }

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
+using Free.Shared.AppServices;
 
 namespace FreeP.RenderCompare;
 
@@ -115,8 +116,7 @@ internal sealed record CorpusSummary(
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var options = new JsonSerializerOptions { WriteIndented = true };
         options.Converters.Add(new JsonStringEnumConverter());
-        var json = JsonSerializer.Serialize(manifest, options);
-        File.WriteAllText(path, json);
+        JsonArtifactIO.Write(path, manifest, options);
     }
 }
 

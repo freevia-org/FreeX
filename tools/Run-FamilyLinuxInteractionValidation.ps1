@@ -72,16 +72,7 @@ function Assert-ManifestContract {
         [Parameter(Mandatory = $true)][string]$EvidenceDirectory
     )
 
-    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) {
-        throw "Manifest schema is missing: $schemaPath"
-    }
-
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") {
-        throw "Manifest contract reference is not a JSON Schema document."
-    }
-
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
     if ($manifest.schemaVersion -ne 1 -or
         $manifest.suite -ne "family-linux-physical-baseline" -or
         $manifest.platform -ne "linux" -or
@@ -181,13 +172,7 @@ function Assert-ManifestContract {
         }
     }
 
-    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
-    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne $results.Count -or
-        $manifest.summary.passed -ne $passed -or
-        $manifest.summary.failed -ne $failed) {
-        throw "Manifest summary does not match its result rows."
-    }
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal $results.Count
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
     foreach ($result in $results) {
@@ -198,32 +183,18 @@ function Assert-ManifestContract {
         }
         foreach ($evidence in @($result.evidence)) {
             $evidenceName = [string]$evidence
-            if (-not $fileMap.ContainsKey($evidenceName)) {
-                throw "Result '$($result.id)' references missing evidence '$evidence'."
-            }
-            if ($fileMap[$evidenceName].Length -le 0) {
-                throw "Result '$($result.id)' references empty evidence '$evidence'."
-            }
+            Assert-ManifestEvidenceReference -FileMap $fileMap -Name $evidenceName -Owner "Result '$($result.id)'"
         }
     }
 
     foreach ($screenshot in @($manifest.screenshots)) {
         $screenshotName = [string]$screenshot.name
-        if (-not $fileMap.ContainsKey($screenshotName)) {
-            throw "Manifest references missing screenshot '$($screenshot.name)'."
-        }
-        if ($fileMap[$screenshotName].Length -le 0) {
-            throw "Manifest references empty screenshot '$($screenshot.name)'."
-        }
+        Assert-ManifestEvidenceReference -FileMap $fileMap -Name $screenshotName -Owner "Manifest" -ReferenceKind "screenshot"
     }
 
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{
-            status = "passed"
-            validator = "tools/Run-FamilyLinuxInteractionValidation.ps1"
-            contractReference = "tools/LinuxInteractiveDocker/family-x11-validation.schema.json"
-        }) -Force
-    $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FamilyLinuxInteractionValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/family-x11-validation.schema.json"
 }
 
 if (-not (Test-Path -LiteralPath $probeSource -PathType Leaf)) {

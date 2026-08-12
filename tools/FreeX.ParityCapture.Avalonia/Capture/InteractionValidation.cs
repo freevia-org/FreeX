@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using Free.Shared.AppServices;
@@ -188,6 +187,9 @@ internal sealed record InteractionValidationManifest(
 
 internal static class InteractionValidationCoordinator
 {
+    private static readonly JsonSerializerOptions ManifestJsonOptions =
+        JsonArtifactIO.CreateSerializerOptions(ignoreNullValues: true);
+
     private const int ShutdownBackstopMilliseconds = 8000;
 
     public static void Start(
@@ -312,8 +314,10 @@ internal static class InteractionValidationCoordinator
             ValidationSelectionIds: validationSelectionIds,
             Summary: summary,
             Results: results);
-        var json = JsonSerializer.Serialize(manifest, JsonOptions());
-        File.WriteAllText(Path.Combine(outputDirectory, "interaction-validation.json"), json);
+        JsonArtifactIO.Write(
+            Path.Combine(outputDirectory, "interaction-validation.json"),
+            manifest,
+            ManifestJsonOptions);
     }
 
     internal static void WriteManifestForTest(
@@ -332,17 +336,11 @@ internal static class InteractionValidationCoordinator
             shell = "avalonia",
             error = $"{ex.GetType().Name}: {ex.Message}",
         };
-        File.WriteAllText(
+        JsonArtifactIO.Write(
             Path.Combine(outputDirectory, "interaction-validation.json"),
-            JsonSerializer.Serialize(failure, JsonOptions()));
+            failure,
+            ManifestJsonOptions);
     }
-
-    private static JsonSerializerOptions JsonOptions() => new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
 
     private static string PlatformName() =>
         OperatingSystem.IsLinux() ? "linux" :

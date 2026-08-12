@@ -46,11 +46,8 @@ function Assert-ManifestContract {
         [Parameter(Mandatory = $true)][string]$ManifestPath,
         [Parameter(Mandatory = $true)][string]$EvidenceDirectory
     )
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") {
-        throw "Field shortcut schema is not a JSON Schema document."
-    }
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath `
+        -InvalidSchemaMessage "Field shortcut schema is not a JSON Schema document."
     if ($manifest.schemaVersion -ne 1 -or
         $manifest.suite -ne "freew-linux-field-shortcut-physical" -or
         $manifest.platform -ne "linux" -or
@@ -82,11 +79,8 @@ function Assert-ManifestContract {
             throw "Field shortcut manifest is missing required result '$requiredId'."
         }
     }
-    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
-    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne 4 -or $manifest.summary.passed -ne $passed -or $manifest.summary.failed -ne $failed) {
-        throw "Field shortcut manifest summary does not match its result rows."
-    }
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 4 `
+        -FailureMessage "Field shortcut manifest summary does not match its result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
     foreach ($result in $results) {
@@ -97,28 +91,16 @@ function Assert-ManifestContract {
         }
         foreach ($evidence in @($result.evidence)) {
             $name = [string]$evidence
-            if ([IO.Path]::IsPathRooted($name) -or $name.Contains("/") -or $name.Contains("\")) {
-                throw "Result '$($result.id)' uses a non-basename evidence path '$name'."
-            }
-            if (-not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) {
-                throw "Result '$($result.id)' references missing or empty evidence '$name'."
-            }
+            Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Result '$($result.id)'"
         }
     }
     foreach ($screenshot in @($manifest.screenshots)) {
         $name = [string]$screenshot.name
-        if ([IO.Path]::IsPathRooted($name) -or $name.Contains("/") -or $name.Contains("\") -or
-            -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) {
-            throw "Manifest references missing, empty, or non-basename screenshot '$name'."
-        }
+        Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Manifest" -ReferenceKind "screenshot"
     }
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{
-            status = "passed"
-            validator = "tools/Run-FreeWFieldShortcutValidation.ps1"
-            contractReference = "tools/LinuxInteractiveDocker/field-shortcut-validation.schema.json"
-        }) -Force
-    $manifest | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreeWFieldShortcutValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/field-shortcut-validation.schema.json"
 }
 
 New-Item -ItemType Directory -Path (Split-Path -Parent $fixturePath) -Force | Out-Null

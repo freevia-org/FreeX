@@ -46,10 +46,7 @@ $requiredIds = @(
 
 function Assert-ManifestContract {
     param([Parameter(Mandatory = $true)][string]$ManifestPath, [Parameter(Mandatory = $true)][string]$EvidenceDirectory)
-    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) { throw "Manifest schema is missing: $schemaPath" }
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") { throw "Manifest contract reference is not a JSON Schema document." }
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
     if ($manifest.contractValidation.status -ne "pending") { throw "Probe must leave contractValidation pending until the runner passes strict validation." }
     $scope = "physical FreeP clipboard shortcut evidence lane"
     if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-linux-clipboard-shortcut-physical" -or
@@ -64,9 +61,8 @@ function Assert-ManifestContract {
     $ids = @($results | ForEach-Object { [string]$_.id })
     if ($results.Count -ne 8 -or $ids.Count -ne ($ids | Select-Object -Unique).Count -or
         [string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest must contain exactly the eight required unique result rows in contract order." }
-    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
-    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne 8 -or $manifest.summary.passed -ne $passed -or $manifest.summary.failed -ne $failed -or ($passed + $failed) -ne 8) { throw "Manifest summary does not match its eight result rows." }
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 8 `
+        -RequireCompleteStatuses -FailureMessage "Manifest summary does not match its eight result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
     foreach ($result in $results) {
@@ -74,16 +70,17 @@ function Assert-ManifestContract {
             @($result.evidence).Count -lt 1 -or [string]::IsNullOrWhiteSpace([string]$result.note) -or $result.status -notin @("passed", "failed")) { throw "Result '$($result.id)' is missing strict physical evidence metadata or has an invalid status." }
         foreach ($evidence in @($result.evidence)) {
             $name = [string]$evidence
-            if ([string]::IsNullOrWhiteSpace($name) -or [IO.Path]::IsPathRooted($name) -or [IO.Path]::GetFileName($name) -ne $name -or $name.Contains("/") -or $name.Contains("\") -or -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) { throw "Result '$($result.id)' references missing, empty, or non-basename evidence '$name'." }
+            Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Result '$($result.id)'"
         }
     }
     foreach ($screenshot in @($manifest.screenshots)) {
         $name = [string]$screenshot.name
-        if ($screenshot.kind -ne "screenshot" -or [string]::IsNullOrWhiteSpace($name) -or [IO.Path]::IsPathRooted($name) -or [IO.Path]::GetFileName($name) -ne $name -or $name.Contains("/") -or $name.Contains("\") -or -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) { throw "Manifest references missing, empty, or non-basename screenshot '$name'." }
+        if ($screenshot.kind -ne "screenshot") { throw "Manifest screenshot '$name' has an invalid kind." }
+        Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Manifest" -ReferenceKind "screenshot"
     }
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{ status = "passed"; validator = "tools/Run-FreePClipboardShortcutValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-clipboard-shortcut-validation.schema.json" }) -Force
-    $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreePClipboardShortcutValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freep-clipboard-shortcut-validation.schema.json" -JsonDepth 16
 }
 
 if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw "Fixture was not found: $fixturePath" }

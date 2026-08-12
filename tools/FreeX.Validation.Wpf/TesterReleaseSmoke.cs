@@ -1,9 +1,9 @@
 using System.IO;
 using System.Reflection;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using FreeX.App.Host;
 using FreeX.App.UI;
@@ -46,10 +46,10 @@ internal static class TesterReleaseSmoke
             : "tester-release-smoke.json";
         var report = Validate();
         var fullReportPath = Path.GetFullPath(reportPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(fullReportPath)!);
-        File.WriteAllText(
+        JsonArtifactIO.Write(
             fullReportPath,
-            JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+            report,
+            JsonArtifactIO.CreateSerializerOptions(camelCase: false));
         exitCode = report.Success ? 0 : 1;
         return true;
     }
