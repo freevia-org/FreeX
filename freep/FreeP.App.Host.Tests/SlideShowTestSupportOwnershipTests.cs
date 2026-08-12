@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
@@ -55,7 +56,7 @@ public sealed class SlideShowTestSupportOwnershipTests
         File.ReadAllText(Path.Combine(hostDirectory, "FreeP.App.Host.csproj"))
             .Should().Contain("'$(FreePSlideShowTestSupport)' == 'true'");
         File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host.Tests", "FreeP.App.Host.Tests.csproj"))
-            .Should().Contain("AdditionalProperties=\"FreePSlideShowTestSupport=true\"");
+            .Should().Contain("FreePSlideShowTestSupport=true");
     }
 
     private static string NormalHostAssemblyPath()

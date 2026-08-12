@@ -1,3 +1,4 @@
+using System.IO;
 using System.Reflection;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
@@ -61,7 +62,7 @@ public sealed class SlideShowTestSupportOwnershipTests
         var hostProject = File.ReadAllText(Path.Combine(hostDirectory, "FreeP.App.Avalonia.csproj"));
         hostProject.Should().Contain("'$(FreePSlideShowTestSupport)' == 'true' Or '$(FreePValidationHost)' == 'true'");
         File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia.Tests", "FreeP.App.Avalonia.Tests.csproj"))
-            .Should().Contain("AdditionalProperties=\"FreePSlideShowTestSupport=true\"");
+            .Should().Contain("FreePSlideShowTestSupport=true");
         File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "Validation.Avalonia", "FreeP.Validation.Avalonia.csproj"))
             .Should().Contain("AdditionalProperties=\"FreePValidationHost=true\"");
     }

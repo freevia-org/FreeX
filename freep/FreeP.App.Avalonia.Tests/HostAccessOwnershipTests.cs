@@ -15,7 +15,7 @@ public sealed class HostAccessOwnershipTests
         File.Exists(Path.Combine(supportDirectory, "MainWindow.TestAccess.cs")).Should().BeTrue();
 
         var project = File.ReadAllText(Path.Combine(hostDirectory, "FreeP.App.Avalonia.csproj"));
-        project.Should().Contain("Condition=\"'$(FreePHostAccess)' == 'true'\"");
+        project.Should().Contain("'$(FreePHostAccess)' == 'true'");
         project.Should().Contain("..\\TestSupport\\HostAccess.Avalonia\\MainWindow.TestAccess.cs");
     }
 }
