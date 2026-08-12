@@ -997,16 +997,40 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Mutate page settings as one undoable command and re-render through the command bus. Pending
-    /// in-progress edits are committed first so the layout refresh does not drop them.
+    /// in-progress edits are committed first so the layout refresh does not drop them. Targets the
+    /// section containing the caret (see <see cref="CurrentSectionIndex"/>) rather than always the
+    /// document's final section, so a multi-section document's Layout/Page Setup ribbon commands edit
+    /// the section the user is actually in.
     /// </summary>
     public void ApplyPageSettings(Action<PageSettings> apply)
     {
         ArgumentNullException.ThrowIfNull(apply);
 
         CommitToModel();
-        var settings = _model.Page.Clone();
+        var sectionIndex = CurrentSectionIndex();
+        var settings = PageSettingsSectionResolver.Resolve(_model, sectionIndex).Clone();
         apply(settings);
-        _commands.Execute(new SetPageSettingsCommand(settings));
+        _commands.Execute(new SetPageSettingsCommand(settings, sectionIndex));
+    }
+
+    /// <summary>
+    /// The index into <see cref="TextDocument.Sections"/> of the section containing the caret's block
+    /// (<see cref="CaretBlockIndex"/>), reusing <see cref="HeaderFooterPagePlanner.MapBlocksToSections"/>
+    /// — the same block-to-section walk headers/footers use — so page-setup commands (Orientation,
+    /// Margins, Columns, Page Setup dialog, Watermark, Page Border, ...) target the section the caret is
+    /// actually in on a multi-section document instead of always the final section.
+    /// </summary>
+    private int CurrentSectionIndex()
+    {
+        var sections = _model.Sections;
+        if (sections.Count <= 1)
+            return 0;
+
+        var blockSections = HeaderFooterPagePlanner.MapBlocksToSections(_model.Blocks, sections.Count);
+        var blockIndex = CaretBlockIndex();
+        return blockIndex >= 0 && blockIndex < blockSections.Length
+            ? blockSections[blockIndex]
+            : sections.Count - 1;
     }
 
     /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
@@ -8687,7 +8711,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressAutoHyphensIsSet = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false, int? ListStartOverride = null, ComplexField? SpanningFieldStart = null, ComplexField? SpanningFieldOwner = null, bool EndsSpanningField = false, RevisionKind MarkRevision = RevisionKind.None, string? MarkRevisionAuthor = null, string? MarkRevisionDateXml = null);
 
     private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
 
@@ -8946,7 +8970,13 @@ public sealed class DocumentView : RichTextBox
             DropCap = tag?.DropCap,
             SpanningFieldStart = tag?.SpanningFieldStart,
             SpanningFieldOwner = tag?.SpanningFieldOwner,
-            EndsSpanningField = tag?.EndsSpanningField ?? false
+            EndsSpanningField = tag?.EndsSpanningField ?? false,
+            // Recover the paragraph-mark tracked-change state stamped on the Tag (see BuildParagraph) —
+            // it has no FlowDocument slot, so without this a tracked-deleted paragraph mark would vanish
+            // on the very next commit.
+            MarkRevision = tag?.MarkRevision ?? RevisionKind.None,
+            MarkRevisionAuthor = tag?.MarkRevisionAuthor,
+            MarkRevisionDateXml = tag?.MarkRevisionDateXml
         };
         if (tag?.BookmarkNames is { Count: > 0 } bookmarkNames)
             modelParagraph.BookmarkNames.AddRange(bookmarkNames);
@@ -10900,7 +10930,14 @@ public sealed class DocumentView : RichTextBox
             paraFmt.ListStartOverride,
             paragraph.SpanningFieldStart,
             paragraph.SpanningFieldOwner,
-            paragraph.EndsSpanningField);
+            paragraph.EndsSpanningField,
+            // The paragraph-mark tracked-change state (Word's w:pPr/w:rPr/w:ins or w:del) has no
+            // FlowDocument slot either — a tracked Backspace/Delete at a paragraph boundary sets
+            // ModelParagraph.MarkRevision without touching this paragraph's runs, so without carrying it
+            // here it would be silently dropped on the very next CommitToModel (see ReadParagraph).
+            paragraph.MarkRevision,
+            paragraph.MarkRevisionAuthor,
+            paragraph.MarkRevisionDateXml);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell
@@ -15411,7 +15448,7 @@ public sealed class DocumentView : RichTextBox
         if (hasSelection)
             return TryRecordTrackedDeletion(paragraphIndex, startOffset, endOffset, placeAfterKeptForwardDelete: false);
         if (startOffset <= 0)
-            return false;
+            return TryRecordTrackedParagraphMergeBackward(paragraphIndex);
         return TryRecordTrackedDeletion(paragraphIndex, startOffset - 1, startOffset, placeAfterKeptForwardDelete: false);
     }
 
@@ -15427,8 +15464,64 @@ public sealed class DocumentView : RichTextBox
         if (paragraphIndex < 0 || paragraphIndex >= _model.Blocks.Count || _model.Blocks[paragraphIndex] is not ModelParagraph paragraph)
             return false;
         if (startOffset >= paragraph.PlainText.Length)
-            return false;
+            return TryRecordTrackedParagraphMergeForward(paragraphIndex);
         return TryRecordTrackedDeletion(paragraphIndex, startOffset, startOffset + 1, placeAfterKeptForwardDelete: true);
+    }
+
+    /// <summary>
+    /// Backspace at the very start of a (non-first) body paragraph, under Track Changes: rather than
+    /// physically merging into the preceding paragraph now (which would bypass Track Changes entirely —
+    /// the family bug this fixes), mark the PRECEDING paragraph's own end-of-paragraph mark as a tracked
+    /// deletion (<see cref="RevisionKind.Deleted"/>). Word's convention: a paragraph's formatting is
+    /// carried by its own trailing mark, so the paragraph whose mark is deleted is always the earlier of
+    /// the pair — the eventual merge (performed by <see cref="TrackChanges.AcceptAll"/> on Accept) keeps
+    /// the later paragraph's formatting, matching real Word. Both paragraphs stay in place — and the
+    /// document keeps looking exactly as it did before the keystroke — until the mark is resolved.
+    /// No-op (returns false, so the caller falls through to native handling) at the very start of the
+    /// document, or when the preceding block is not itself a body paragraph (e.g. a table) — deleting text
+    /// into a table cell this way isn't something Word's pilcrow-delete model covers.
+    /// </summary>
+    private bool TryRecordTrackedParagraphMergeBackward(int paragraphIndex)
+    {
+        CommitToModel();
+        if (paragraphIndex <= 0 || paragraphIndex - 1 >= _model.Blocks.Count)
+            return false;
+        if (_model.Blocks[paragraphIndex - 1] is not ModelParagraph)
+            return false;
+
+        _commands.Execute(new SetParagraphMarkRevisionCommand(
+            paragraphIndex - 1, RevisionKind.Deleted, CurrentRevisionAuthor(), CurrentRevisionDateXml()));
+        // Execute() re-renders the FlowDocument from the model (via the command bus's Changed event),
+        // which replaces every WPF paragraph object — restore the caret to where it visually already was
+        // (nothing textual moved: the two paragraphs are still separate blocks until Accept).
+        PlaceCaretAtModelTextOffset(paragraphIndex, 0);
+        return true;
+    }
+
+    /// <summary>
+    /// Forward-Delete at the very end of a (non-last) body paragraph, under Track Changes: the sibling of
+    /// <see cref="TryRecordTrackedParagraphMergeBackward"/> — deleting the boundary between paragraph N and
+    /// N+1 always marks paragraph N's own mark deleted, whichever key/direction reached the boundary (this
+    /// keeps a subsequent Backspace at the start of N+1 and a Delete at the end of N produce the identical
+    /// tracked state). No-op at the very end of the document, or when the following block is not itself a
+    /// body paragraph.
+    /// </summary>
+    private bool TryRecordTrackedParagraphMergeForward(int paragraphIndex)
+    {
+        CommitToModel();
+        if (paragraphIndex < 0 || paragraphIndex + 1 >= _model.Blocks.Count
+            || _model.Blocks[paragraphIndex] is not ModelParagraph currentParagraph)
+            return false;
+        if (_model.Blocks[paragraphIndex + 1] is not ModelParagraph)
+            return false;
+
+        var endOffsetForCaret = currentParagraph.PlainText.Length;
+        _commands.Execute(new SetParagraphMarkRevisionCommand(
+            paragraphIndex, RevisionKind.Deleted, CurrentRevisionAuthor(), CurrentRevisionDateXml()));
+        // See TryRecordTrackedParagraphMergeBackward: Execute() re-renders the FlowDocument, so the caret
+        // must be explicitly restored to where it visually already was (the end of this paragraph).
+        PlaceCaretAtModelTextOffset(paragraphIndex, endOffsetForCaret);
+        return true;
     }
 
     private bool TryRecordTrackedDeletion(int paragraphIndex, int startOffset, int endOffset, bool placeAfterKeptForwardDelete)

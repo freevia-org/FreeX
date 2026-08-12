@@ -3381,7 +3381,15 @@ public sealed class DeleteShapeCommand : IPresentationCommand
         }
 
         shapes.RemoveAt(_capturedIndex);
-        slide.Animations.RemoveAll(animation => deletedShapeIds.Contains(animation.ShapeId));
+        // Also drop animations that merely TRIGGER on a deleted shape (TriggerShapeId), not just
+        // ones whose own target (ShapeId) was deleted. Otherwise the stale TriggerShapeId survives
+        // and silently rebinds to whatever shape is next allocated that numeric id (NextShapeId
+        // reuses the freed id once it's no longer the slide's max), firing the animation on click
+        // of an unrelated shape. This mirrors PowerPoint's own behavior of deleting the trigger
+        // animation when its trigger shape is removed.
+        slide.Animations.RemoveAll(animation =>
+            deletedShapeIds.Contains(animation.ShapeId) ||
+            (animation.TriggerShapeId is { } triggerShapeId && deletedShapeIds.Contains(triggerShapeId)));
         slide.AnimationBuildListXml = RemoveBuildListEntriesForShapes(
             slide.AnimationBuildListXml,
             deletedShapeIds);

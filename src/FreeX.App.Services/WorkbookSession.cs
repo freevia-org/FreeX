@@ -6801,10 +6801,29 @@ public sealed class WorkbookSession : IDisposable
         var sheet = Workbook.GetSheet(range.Start.Sheet);
         var cells = new List<(CellAddress Source, Cell Cell)>();
         var pictureCells = CapturePictureCells(range, sheet, viewport);
-        foreach (var address in range.AllCells())
+        for (var r = range.Start.Row; r <= range.End.Row; r++)
         {
-            var cell = sheet?.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
-            cells.Add((address, cell));
+            // Matches the WPF host's MainWindow.ClipboardCommands.ExecuteCopy: real Excel implicitly
+            // restricts copying a FILTERED range to its VISIBLE rows only -- rows hidden by AutoFilter
+            // are never reproduced at the paste destination -- but never applies this restriction to a
+            // plain manually-hidden or group-collapsed row (those DO get copied). Sheet's own
+            // IsRowFilterHidden (as opposed to the broader IsRowEffectivelyHidden, which folds every
+            // hiding mechanism together) exists precisely to preserve that distinction. Skipping the
+            // row here leaves its addresses absent from `cells`, exactly like the "gap" cells between
+            // disjoint multi-area copies elsewhere -- PasteCommandFactory's internal-paste path already
+            // never writes to a destination cell whose source address is missing from this list.
+            // Without this guard, same-instance copy/paste (and Cut, which shares this method) silently
+            // resurrected filtered-out rows into the paste destination, misaligning every later row --
+            // the WPF host already guards this; only the Avalonia path was missing it.
+            if (sheet is not null && sheet.IsRowFilterHidden(r))
+                continue;
+
+            for (var c = range.Start.Col; c <= range.End.Col; c++)
+            {
+                var address = new CellAddress(range.Start.Sheet, r, c);
+                var cell = sheet?.GetCell(address)?.Clone() ?? Cell.FromValue(BlankValue.Instance);
+                cells.Add((address, cell));
+            }
         }
 
         return new InternalClipboard(range, cells, pictureCells, text, isCut);

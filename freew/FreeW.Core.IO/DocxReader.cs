@@ -42,6 +42,8 @@ public static class DocxReader
     public static TextDocument Read(Stream stream)
     {
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
+        WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
         var documentXml = LoadPart(archive, "word/document.xml")
             ?? throw new InvalidDataException("Not a Word document: word/document.xml is missing.");
 
@@ -1400,7 +1402,7 @@ public static class DocxReader
                 partRelationships,
                 partHyperlinks,
                 numbering,
-                EmptyStartOverrides,
+                new NumberingRestartState(EmptyStartOverrides, EmptyDefaultStarts),
                 document,
                 inheritedControl: null,
                 subDocumentRelationships: null);
@@ -1453,10 +1455,14 @@ public static class DocxReader
         return result;
     }
 
-    /// <summary>Empty numbering-restart-override map for the header/footer table-preservation path (table
-    /// restarts inside a layout-only header/footer table are not tracked, mirroring every other reader path
-    /// that has no restart context to feed in).</summary>
+    /// <summary>Backing (always-empty) dictionaries for a fresh, no-context <see cref="NumberingRestartState"/>
+    /// on the header/footer table-preservation path (table restarts inside a layout-only header/footer table
+    /// are not tracked, mirroring every other reader path that has no restart context to feed in). A NEW
+    /// <see cref="NumberingRestartState"/> must be constructed per call (see call site) rather than sharing
+    /// one static instance: the state is mutable ("last numId seen") and reused across calls would leak
+    /// continuation tracking between unrelated header/footer parts (and even unrelated documents).</summary>
     private static readonly Dictionary<(int NumId, int Level), int> EmptyStartOverrides = new();
+    private static readonly Dictionary<(int NumId, int Level), int> EmptyDefaultStarts = new();
 
     /// <summary>
     /// True when a header/footer part's entire visible content is exactly one top-level w:tbl (optionally
@@ -1675,7 +1681,7 @@ public static class DocxReader
         TextDocument? preservedDrawingTarget = null,
         IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets = null,
         ContentControl? inheritedControl = null,
-        IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null,
+        NumberingRestartState? startOverrides = null,
         IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
     {
         var paragraph = new Paragraph();
@@ -1871,7 +1877,7 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> altChunkRelationships,
         IReadOnlyDictionary<string, string> subDocumentRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
-        IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
+        NumberingRestartState startOverrides,
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
         SpanningFieldReadState spanningField,
@@ -4121,7 +4127,7 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
-        IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
+        NumberingRestartState startOverrides,
         TextDocument? preservedDrawingTarget = null,
         ContentControl? inheritedControl = null,
         IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
@@ -6685,7 +6691,7 @@ public static class DocxReader
         XElement pPr,
         IReadOnlyDictionary<int, ListKind> numbering,
         ParagraphFormatting? docDefaults,
-        IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null)
+        NumberingRestartState? startOverrides = null)
     {
         var spacing = pPr.Element(W + "spacing");
         var indent = pPr.Element(W + "ind");
@@ -6707,8 +6713,7 @@ public static class DocxReader
             {
                 listKind = kind;
                 listLevel = ParseInt(numPr.Element(W + "ilvl")?.Attribute(W + "val")?.Value);
-                if (startOverrides is not null && startOverrides.TryGetValue((numId, listLevel), out var startAt))
-                    listStartOverride = startAt;
+                listStartOverride = startOverrides?.Resolve(kind, numId, listLevel);
             }
         }
 
@@ -7056,15 +7061,89 @@ public static class DocxReader
         return new PreservedNumbering(numId, ilvl);
     }
 
-    private static (Dictionary<int, ListKind> KindByNumId, Dictionary<(int NumId, int Level), int> StartOverrideByNumIdLevel) ReadNumbering(
+    /// <summary>
+    /// Tracks numbering-INSTANCE identity (the <c>w:numId</c>, not just the abstract definition it points
+    /// at) while paragraphs are read in document order, so <see cref="ReadParagraphFormatting"/> can tell
+    /// a paragraph that continues the list its predecessor belongs to from one that opens an unrelated
+    /// list instance — even one sharing the same <see cref="ListKind"/> and abstractNumId, which is the
+    /// normal case: Word assigns every "new list" a fresh numId, usually against the SAME abstract
+    /// definition the previous list used. Two independent numIds must count independently even with no
+    /// explicit <c>w:lvlOverride/startOverride</c> in the source — Word only emits that element for an
+    /// EXPLICIT "Restart at 1", not for the implicit fresh start every new numId already gets from its
+    /// abstract level's declared <c>w:start</c>. A numId change is therefore itself a restart signal,
+    /// resolved to that numId's own effective start (the explicit override when present, else the
+    /// abstract level's declared start, else 1) and surfaced through the existing
+    /// <see cref="ParagraphFormatting.ListStartOverride"/> mechanism so the render layer — already correct,
+    /// see <c>ListNumberingRestartWpfTests</c> and its Avalonia twin — restarts exactly as it does for an
+    /// explicit override.
+    /// <para>
+    /// Continuation across a non-list interruption (R132) is preserved: re-encountering the SAME numId
+    /// (even after intervening body text) resolves to "continue" (null), same as before this fix.
+    /// </para>
+    /// </summary>
+    internal sealed class NumberingRestartState
+    {
+        private readonly IReadOnlyDictionary<(int NumId, int Level), int> _explicitOverrides;
+        private readonly IReadOnlyDictionary<(int NumId, int Level), int> _defaultStarts;
+        private int? _lastNumberNumId;
+        private int? _lastMultiLevelNumId;
+
+        public NumberingRestartState(
+            IReadOnlyDictionary<(int NumId, int Level), int> explicitOverrides,
+            IReadOnlyDictionary<(int NumId, int Level), int> defaultStarts)
+        {
+            _explicitOverrides = explicitOverrides;
+            _defaultStarts = defaultStarts;
+        }
+
+        /// <summary>
+        /// Resolves <see cref="ParagraphFormatting.ListStartOverride"/> for the next Number/MultiLevel
+        /// paragraph in document order (numId/level as read off its <c>w:numPr</c>); null means "continue
+        /// the running counter" (including the very first list of its kind in the document — nothing has
+        /// counted yet, so the natural default is already correct and forcing an override there would only
+        /// pollute a round-tripped document with a needless dedicated restart <c>w:num</c>, see
+        /// <c>PreservedNumberingRoundTripTests.FreeWAuthoredLists_RoundTripUnchanged_WithNoPreservedNumbering</c>
+        /// and <c>DocxRoundTripTests.NumberedList_StartOverride_RoundTripsAndEmitsLvlOverride</c>). Mutates the
+        /// tracked "last numId" as a side effect — callers must invoke this exactly once per paragraph, in
+        /// reading order. Bullets (and any other kind) pass through unaffected: there is no counter to restart.
+        /// </summary>
+        public int? Resolve(ListKind kind, int numId, int level)
+        {
+            if (_explicitOverrides.TryGetValue((numId, level), out var explicitStart))
+                return explicitStart;
+
+            int? previousNumId;
+            switch (kind)
+            {
+                case ListKind.Number:
+                    previousNumId = _lastNumberNumId;
+                    _lastNumberNumId = numId;
+                    break;
+                case ListKind.MultiLevel:
+                    previousNumId = _lastMultiLevelNumId;
+                    _lastMultiLevelNumId = numId;
+                    break;
+                default:
+                    return null;
+            }
+
+            if (previousNumId is null || previousNumId == numId)
+                return null; // no prior instance to conflict with, or continuing the same one — don't restart
+
+            return _defaultStarts.TryGetValue((numId, level), out var defaultStart) ? defaultStart : 1;
+        }
+    }
+
+    private static (Dictionary<int, ListKind> KindByNumId, NumberingRestartState RestartState) ReadNumbering(
         ZipArchive archive, TextDocument document)
     {
         var map = new Dictionary<int, ListKind>();
         var startOverrides = new Dictionary<(int, int), int>();
+        var defaultStarts = new Dictionary<(int, int), int>();
         var numberingXml = LoadPart(archive, "word/numbering.xml");
         var root = numberingXml?.Root;
         if (root is null)
-            return (map, startOverrides);
+            return (map, new NumberingRestartState(startOverrides, defaultStarts));
 
         // Preserve the ORIGINAL numbering element so the writer can merge its definitions alongside FreeW's
         // own (under a disjoint numId range) and re-emit the paragraphs' w:numPr that FreeW does not model.
@@ -7074,6 +7153,9 @@ public static class DocxReader
         // abstractNumId -> ListKind, taken from the format of its lowest level.
         var abstractKinds = new Dictionary<int, ListKind>();
         var abstractMultiLevelFormats = new Dictionary<int, IReadOnlyList<ListNumberFormat>>();
+        // abstractNumId -> (level -> declared w:start). Every numId built on a given abstract inherits
+        // these as its own per-level default start (see NumberingRestartState) unless overridden.
+        var abstractLevelStarts = new Dictionary<int, Dictionary<int, int>>();
         foreach (var abstractNum in root.Elements(W + "abstractNum"))
         {
             var abstractNumId = ParseInt(abstractNum.Attribute(W + "abstractNumId")?.Value);
@@ -7091,6 +7173,20 @@ public static class DocxReader
             abstractKinds[abstractNumId] = isMultiLevel
                 ? ListKind.MultiLevel
                 : numFmt == "bullet" ? ListKind.Bullet : ListKind.Number;
+
+            var levelStarts = new Dictionary<int, int>();
+            foreach (var level in levels)
+            {
+                var ilvl = ParseInt(level.Attribute(W + "ilvl")?.Value);
+                levelStarts[ilvl] = int.TryParse(
+                    level.Element(W + "start")?.Attribute(W + "val")?.Value,
+                    System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var startVal)
+                    ? startVal
+                    : 1;
+            }
+            abstractLevelStarts[abstractNumId] = levelStarts;
         }
 
         var appliedMultiLevelFormats = false;
@@ -7108,6 +7204,11 @@ public static class DocxReader
                     document.MultiLevelList.SetNumberFormats(numberFormats);
                     appliedMultiLevelFormats = true;
                 }
+                if (abstractLevelStarts.TryGetValue(abstractNumId, out var levelStarts))
+                {
+                    foreach (var (level, start) in levelStarts)
+                        defaultStarts[(numId, level)] = start;
+                }
             }
 
             // Detect restart-override w:num elements: each w:lvlOverride/w:startOverride pair is a
@@ -7122,7 +7223,7 @@ public static class DocxReader
                 startOverrides[(numId, level)] = startVal;
             }
         }
-        return (map, startOverrides);
+        return (map, new NumberingRestartState(startOverrides, defaultStarts));
     }
 
     /// <summary>

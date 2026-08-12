@@ -356,14 +356,32 @@ public partial class MainWindow
         var currentAddress = _formulaEditCell ?? SheetGrid.SelectedRange?.Start;
         var trimmedSelector = selector.Trim();
 
-        if (trimmedSelector.StartsWith('@') && trimmedSelector.Length > 1)
+        if (trimmedSelector.StartsWith('@'))
         {
+            var columnSelector = trimmedSelector.Length > 1 ? trimmedSelector[1..].Trim() : "";
+
+            // The bare '@' shorthand (Table1[@] / [@], no column name at all) means "this entire
+            // row" -- same as Table1[#This Row] -- and must highlight the whole-row range, not a
+            // single-cell column lookup. Route it through Resolve's own "#This Row" handling
+            // (mirrors FormulaEvaluator.References.EvaluateCurrentRowReference's evaluation-side
+            // fix for the same shape) instead of falling into ResolveCurrentRowColumn below, which
+            // has no column name to search for and always returned null (no highlight box) for it.
+            if (string.IsNullOrWhiteSpace(columnSelector))
+            {
+                return StructuredReferenceResolver.Resolve(
+                    _workbook,
+                    currentSheet,
+                    tableName,
+                    "#This Row",
+                    currentAddress);
+            }
+
             var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
                 _workbook,
                 currentSheet,
                 currentAddress,
                 string.IsNullOrWhiteSpace(tableName) ? null : tableName,
-                trimmedSelector[1..].Trim());
+                columnSelector);
 
             return address is null ? null : new GridRange(address.Value, address.Value);
         }

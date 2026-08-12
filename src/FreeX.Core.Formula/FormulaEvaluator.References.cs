@@ -926,6 +926,28 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue EvaluateCurrentRowReference(StructuredCurrentRowReferenceNode node, IEvalContext context)
     {
+        // Table1[@] (and the bare [@] shorthand, table-unqualified) is Excel's shorthand for "this
+        // entire row" — exactly equivalent to the long-form Table1[#This Row] / [#This Row], spanning
+        // every column of the table's data body at the formula's own row, not a single named column.
+        // The parser hands this shape through with an empty ColumnName (see Parser's
+        // StructuredCurrentRowReferenceNode construction in both the table-qualified and bare
+        // StructuredReferenceSelector cases). Route it to the same "#This Row" resolution the long
+        // form already uses via StructuredReferenceResolver.Resolve, instead of falling into the
+        // single-column / column-range lookups below — those have no column name to search for and
+        // always returned null (-> #NAME?) for an empty selector.
+        if (string.IsNullOrWhiteSpace(node.ColumnName))
+        {
+            var wholeRow = StructuredReferenceResolver.Resolve(
+                context.CurrentWorkbook,
+                context.CurrentSheet,
+                node.TableName ?? "",
+                "#This Row",
+                context.CurrentCellAddress);
+            return wholeRow is null
+                ? ErrorValue.Name
+                : BuildRangeValueOrError(wholeRow.Value, context);
+        }
+
         var address = StructuredReferenceResolver.ResolveCurrentRowColumn(
             context.CurrentWorkbook,
             context.CurrentSheet,

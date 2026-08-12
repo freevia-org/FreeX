@@ -2,6 +2,7 @@ using OxyPlot;
 using OxyPlot.Axes;
 
 using FreeX.App.Presentation.Charts;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -20,7 +21,16 @@ public static partial class ChartRenderer
             if (axis is not LinearAxis linearAxis)
                 continue;
 
-            if (ShouldUseLogAxis(chart, linearAxis))
+            // R135-render-chart-secondary-axis-scale: the secondary value axis (added by
+            // AddSecondaryAxisIfRequested, identified by Key == SecondaryYAxisKey) carries its OWN
+            // Minimum/Maximum/unit/number-format/log-scale fields (ChartModel.SecondaryAxis*,
+            // round-tripped by XlsxChartAxisReader.ApplySecondaryAxisProperties) that must not be
+            // conflated with the primary Y axis's chart.YAxis* fields consulted below -- otherwise a
+            // combo chart with a primary axis fixed 0-10 and a secondary axis fixed 0-1000 draws the
+            // secondary series against the primary's 0-10 scale, misrepresenting the data.
+            var isSecondaryAxis = linearAxis.Key == SecondaryYAxisKey;
+
+            if (isSecondaryAxis ? ShouldUseSecondaryLogAxis(chart) : ShouldUseLogAxis(chart, linearAxis))
             {
                 var logAxis = new LogarithmicAxis
                 {
@@ -63,9 +73,9 @@ public static partial class ChartRenderer
                 }
                 var xDisplayUnitDivisor = GetAxisDisplayUnitDivisor(chart.XAxisDisplayUnit, chart.XAxisCustomDisplayUnit);
                 if (ChartTypeSupport.SupportsXAxisBounds(chart.Type) &&
-                    chart.XAxisNumberFormat != ChartDataLabelNumberFormat.General &&
+                    HasExplicitAxisNumberFormat(chart.XAxisNumberFormat, chart.XAxisNumberFormatCode) &&
                     axis.LabelFormatter is null)
-                    axis.LabelFormatter = value => ChartDataLabelTextPlanner.FormatAxisValue(chart.XAxisNumberFormat, value);
+                    axis.LabelFormatter = value => FormatValueAxisLabel(chart.XAxisNumberFormat, chart.XAxisNumberFormatCode, value);
                 ApplyAxisDisplayUnit(axis, xDisplayUnitDivisor, chart.XAxisDisplayUnit, chart.XAxisCustomDisplayUnit);
                 ApplyGridlineStyle(
                     axis,
@@ -83,22 +93,39 @@ public static partial class ChartRenderer
                 ApplyAxisCrossesPosition(axis, chart.YAxisCrosses);
                 ApplyAxisTitleStyle(axis, chart, theme);
                 ApplyAxisReverseOrder(axis, chart.YAxisReverseOrder);
-                if (ChartTypeSupport.SupportsYAxisBounds(chart.Type))
+
+                // R135-render-chart-secondary-axis-scale: route to the secondary axis's OWN
+                // Minimum/Maximum/unit/number-format when this is the secondary axis (see the
+                // isSecondaryAxis comment above) instead of always reading the primary Y axis's
+                // chart.YAxis* fields, which -- before this fix -- this branch applied to every
+                // Left/Right axis in the model unconditionally, including the secondary one.
+                var boundsMinimum = isSecondaryAxis ? chart.SecondaryAxisMinimum : chart.YAxisMinimum;
+                var boundsMaximum = isSecondaryAxis ? chart.SecondaryAxisMaximum : chart.YAxisMaximum;
+                var boundsMajorUnit = isSecondaryAxis ? chart.SecondaryAxisMajorUnit : chart.YAxisMajorUnit;
+                var boundsMinorUnit = isSecondaryAxis ? chart.SecondaryAxisMinorUnit : chart.YAxisMinorUnit;
+                var boundsNumberFormat = isSecondaryAxis ? chart.SecondaryAxisNumberFormat : chart.YAxisNumberFormat;
+                var boundsNumberFormatCode = isSecondaryAxis ? chart.SecondaryAxisNumberFormatCode : chart.YAxisNumberFormatCode;
+                var boundsSupported = isSecondaryAxis
+                    ? ChartTypeSupport.SupportsSecondaryAxis(chart.Type)
+                    : ChartTypeSupport.SupportsYAxisBounds(chart.Type);
+                var boundsUseLogAxis = isSecondaryAxis ? ShouldUseSecondaryLogAxis(chart) : ShouldUseLogAxis(chart, axis);
+
+                if (boundsSupported)
                 {
-                    if (chart.YAxisMinimum is { } minimum)
-                        axis.Minimum = ShouldUseLogAxis(chart, axis) ? Math.Max(double.Epsilon, minimum) : minimum;
-                    if (chart.YAxisMaximum is { } maximum)
-                        axis.Maximum = ShouldUseLogAxis(chart, axis) ? Math.Max(double.Epsilon, maximum) : maximum;
-                    if (chart.YAxisMajorUnit is { } majorUnit)
+                    if (boundsMinimum is { } minimum)
+                        axis.Minimum = boundsUseLogAxis ? Math.Max(double.Epsilon, minimum) : minimum;
+                    if (boundsMaximum is { } maximum)
+                        axis.Maximum = boundsUseLogAxis ? Math.Max(double.Epsilon, maximum) : maximum;
+                    if (boundsMajorUnit is { } majorUnit)
                         axis.MajorStep = majorUnit;
-                    if (chart.YAxisMinorUnit is { } minorUnit)
+                    if (boundsMinorUnit is { } minorUnit)
                         axis.MinorStep = minorUnit;
                 }
                 var yDisplayUnitDivisor = GetAxisDisplayUnitDivisor(chart.YAxisDisplayUnit, chart.YAxisCustomDisplayUnit);
-                if (ChartTypeSupport.SupportsYAxisBounds(chart.Type) &&
-                    chart.YAxisNumberFormat != ChartDataLabelNumberFormat.General &&
+                if (boundsSupported &&
+                    HasExplicitAxisNumberFormat(boundsNumberFormat, boundsNumberFormatCode) &&
                     axis.LabelFormatter is null)
-                    axis.LabelFormatter = value => ChartDataLabelTextPlanner.FormatAxisValue(chart.YAxisNumberFormat, value);
+                    axis.LabelFormatter = value => FormatValueAxisLabel(boundsNumberFormat, boundsNumberFormatCode, value);
                 ApplyAxisDisplayUnit(axis, yDisplayUnitDivisor, chart.YAxisDisplayUnit, chart.YAxisCustomDisplayUnit);
                 ApplyGridlineStyle(
                     axis,
@@ -166,6 +193,42 @@ public static partial class ChartRenderer
         var index = (int)Math.Round(value);
         return index >= 0 && index < labels.Count ? labels[index] : "";
     }
+
+    /// <summary>
+    /// Whether a value axis has an explicit (non-default) number format to apply -- either the raw
+    /// OOXML format code (<paramref name="formatCode"/>, e.g. <c>"#,##0"</c> or a custom currency/date
+    /// code) or the coarse <paramref name="format"/> enum bucket. Gates the WPF <c>LabelFormatter</c>
+    /// override the same way <see cref="FormatValueAxisLabel"/> reads it, so the two never disagree
+    /// about whether an axis "has formatting".
+    /// </summary>
+    private static bool HasExplicitAxisNumberFormat(ChartDataLabelNumberFormat format, string? formatCode) =>
+        format != ChartDataLabelNumberFormat.General || HasUsableNumberFormatCode(formatCode);
+
+    private static bool HasUsableNumberFormatCode(string? formatCode) =>
+        !string.IsNullOrWhiteSpace(formatCode) && !formatCode.Equals("General", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// R135-render-chart-axis-numfmt-parity: the WPF value-axis <c>LabelFormatter</c> previously only
+    /// ever consulted the coarse <see cref="ChartDataLabelNumberFormat"/> enum bucket
+    /// (<see cref="ChartDataLabelTextPlanner.FormatAxisValue"/>, a 4-way switch recognizing only
+    /// General/Number/Currency/Percent) and never looked at the raw OOXML format code stored
+    /// side-by-side on the model (<c>XAxisNumberFormatCode</c>/<c>YAxisNumberFormatCode</c>, populated
+    /// from <c>&lt;c:numFmt formatCode="..."/&gt;</c> by <see cref="FreeX.Core.IO.XlsxChartAxisReader.FromXlsxNumberFormatCode"/>,
+    /// which itself only maps 3 exact literal codes to a non-General bucket and collapses every other
+    /// real-world code -- thousands separators, custom currency/accounting codes, date codes, extra
+    /// decimal places -- to General). So a value axis formatted in Excel as e.g. "#,##0" or "0.0%" or a
+    /// custom currency code rendered with plain "0.###" ticks (or, when the enum itself also landed on
+    /// General, OxyPlot's own unrelated default) instead of the format the workbook actually specifies.
+    /// The portable/Avalonia layout (<c>ChartLayoutEngine.BuildValueAxisLayout</c>) already prefers the
+    /// raw code through the shared <see cref="NumberFormatter"/> (the same engine that formats cell
+    /// values) and only falls back to the enum bucket when no raw code is present; this routes the WPF
+    /// renderer through the identical precedence so both shells render the exact same tick text for the
+    /// exact same chart.
+    /// </summary>
+    private static string FormatValueAxisLabel(ChartDataLabelNumberFormat format, string? formatCode, double value) =>
+        HasUsableNumberFormatCode(formatCode)
+            ? NumberFormatter.Format(new NumberValue(value), formatCode!)
+            : ChartDataLabelTextPlanner.FormatAxisValue(format, value);
 
     /// <summary>
     /// R131-render-chart-date-category-axis: when the category axis is marked as a date axis
@@ -378,6 +441,18 @@ public static partial class ChartRenderer
         axis.Position is AxisPosition.Bottom or AxisPosition.Top
             ? chart.XAxisLogScale && ChartTypeSupport.SupportsXAxisLogScale(chart.Type)
             : chart.YAxisLogScale && ChartTypeSupport.SupportsYAxisLogScale(chart.Type);
+
+    /// <summary>
+    /// R135-render-chart-secondary-axis-scale: the secondary value axis's OWN log-scale flag
+    /// (<see cref="ChartModel.SecondaryAxisLogScale"/>, round-tripped separately from the primary
+    /// Y axis's <see cref="ChartModel.YAxisLogScale"/> by <c>XlsxChartAxisReader.ApplySecondaryAxisProperties</c>)
+    /// -- previously <see cref="ShouldUseLogAxis"/> was applied to every Left/Right axis including
+    /// the secondary one, so a combo chart with only its PRIMARY axis set to log scale silently
+    /// log-converted the secondary axis too (and vice versa, a log-scale secondary axis stayed
+    /// linear unless the primary also asked for log scale).
+    /// </summary>
+    private static bool ShouldUseSecondaryLogAxis(ChartModel chart) =>
+        chart.SecondaryAxisLogScale == true && ChartTypeSupport.SupportsSecondaryAxis(chart.Type);
 
     private static double GetPositiveAxisValue(double value) =>
         double.IsNaN(value) || value <= 0 ? double.NaN : value;

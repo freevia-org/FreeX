@@ -178,6 +178,7 @@ public sealed class DataValidationDialogModelTests
     [InlineData(DvType.WholeNumber, "5")]
     [InlineData(DvType.WholeNumber, "=A1")]
     [InlineData(DvType.Decimal, "3.14")]
+    [InlineData(DvType.Decimal, "1E+10")]
     [InlineData(DvType.Date, "2024-01-15")]
     [InlineData(DvType.Time, "13:30")]
     [InlineData(DvType.Time, "0.5")]

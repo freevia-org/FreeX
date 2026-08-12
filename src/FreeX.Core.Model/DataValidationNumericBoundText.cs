@@ -26,10 +26,24 @@ namespace FreeX.Core.Model;
 /// </summary>
 public static class DataValidationNumericBoundText
 {
+    /// <summary>
+    /// Deliberately NOT <see cref="NumberStyles.Any"/> (the style the pre-r134
+    /// <c>DataValidationBoundsParser</c> used): <see cref="NumberStyles.AllowExponent"/> is included
+    /// because it is required both for legitimate Excel DV bound syntax (e.g. "1E+10") and, more
+    /// importantly, because <see cref="ToInvariantString"/> itself emits scientific notation for
+    /// sufficiently extreme magnitudes (e.g. 1e21 formats as "1E+21") -- without it this parser could
+    /// not read back text its own formatter produces, which is the self-inconsistency r134 shipped
+    /// as a regression.
+    /// <see cref="NumberStyles.AllowParentheses"/> (accounting-style negatives, e.g. "(5)") and
+    /// <see cref="NumberStyles.AllowCurrencySymbol"/> / <see cref="NumberStyles.AllowTrailingSign"/>
+    /// are deliberately excluded: none of these are valid Excel data-validation bound syntax, and
+    /// <see cref="ToInvariantString"/> never emits them, so allowing them on the parse side would
+    /// only widen the accepted grammar past what the app itself ever writes.
+    /// </summary>
     private const NumberStyles Styles =
         NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite |
         NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint |
-        NumberStyles.AllowThousands;
+        NumberStyles.AllowThousands | NumberStyles.AllowExponent;
 
     /// <summary>
     /// Parses a numeric bound the way a user actually types (or a file actually stores) it: first

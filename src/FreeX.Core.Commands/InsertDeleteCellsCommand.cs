@@ -1772,6 +1772,13 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
+    // R135-commands-cf-dv-promote-anchor-1: see DeleteRowsCommand.cs -- separate snapshot for the
+    // anchor-delta rewrite AdjustRulesDeleteShiftLeft/Up apply when a CF/DV rule's primary AppliesTo
+    // area is fully consumed and it promotes an AdditionalRanges survivor to the new primary. Shared
+    // by both shift directions below since only one of them runs per Apply call.
+    private readonly Dictionary<Guid, string?> _cfPromotionFormulaSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _cfPromotionThresholdSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _dvPromotionFormulaSnapshot = [];
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     private Dictionary<string, NamedRangeSnapshot>? _namedRangeSnapshot;
     private Dictionary<(string Name, SheetId Sheet), (GridRange Range, NamedRangeMetadata Metadata)>? _scopedNamedRangeSnapshot;
@@ -1871,7 +1878,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             // Snapshot and adjust CF/DV rule ranges that are fully inside the band
             (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
-            RowColumnShiftHelpers.AdjustRulesDeleteShiftLeft(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+            _cfPromotionFormulaSnapshot.Clear();
+            _cfPromotionThresholdSnapshot.Clear();
+            _dvPromotionFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.AdjustRulesDeleteShiftLeft(
+                sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width,
+                _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
 
             // R21-defined-name-management-1/-3: named ranges fully inside the band's row span are
             // shifted left (surviving portion) or removed (fully inside the deleted columns — see
@@ -1976,7 +1988,12 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
             // Snapshot and adjust CF/DV rule ranges that are fully inside the band
             (_dvRuleSnapshot, _cfRuleSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
-            RowColumnShiftHelpers.AdjustRulesDeleteShiftUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+            _cfPromotionFormulaSnapshot.Clear();
+            _cfPromotionThresholdSnapshot.Clear();
+            _dvPromotionFormulaSnapshot.Clear();
+            RowColumnShiftHelpers.AdjustRulesDeleteShiftUp(
+                sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height,
+                _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
 
             // R21-defined-name-management-1/-3: see the Delete-Shift-Left branch above.
             _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
@@ -2053,6 +2070,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        // R135-commands-cf-dv-promote-anchor-1: undo the promotion-driven anchor-delta rewrite AFTER
+        // the DeleteCells-op-driven rewrite above (LIFO -- see DeleteRowsCommand.cs). Uses the
+        // per-sheet overload directly (promotion only ever touches the single sheet being shifted).
+        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));

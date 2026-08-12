@@ -800,4 +800,121 @@ public sealed class DocumentViewTrackEditTests
         ParagraphOf(rejectView).PlainText.Should().Be("abc");
         ParagraphOf(rejectView).Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
     }
+
+    // ── R135: Backspace/Delete at a paragraph boundary must record a tracked paragraph-mark deletion
+    // instead of silently, permanently merging the two paragraphs (bypassing Track Changes entirely). ──
+
+    private static DocumentView BuildTwoParagraphView(string first, string second)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph(first));
+        doc.Blocks.Add(new Paragraph(second));
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        return view;
+    }
+
+    [StaFact]
+    public void Backspace_AtParagraphStart_WithTrackChangesOn_MarksBoundaryDeletedWithoutMerging()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.TrackChangesEnabled = true;
+        view.MoveCaretToBlockForTest(1, 0);          // caret at the very start of the second paragraph
+
+        view.BackspaceForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(2, "the two paragraphs must NOT be physically merged while the deletion is only tracked");
+        var first = (Paragraph)view.Model.Blocks[0];
+        var second = (Paragraph)view.Model.Blocks[1];
+        first.MarkRevision.Should().Be(RevisionKind.Deleted, "the first paragraph's own mark records the tracked boundary deletion");
+        first.MarkRevisionAuthor.Should().Be("FreeW User");
+        first.PlainText.Should().Be("First");
+        second.PlainText.Should().Be("Second");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void Backspace_AtParagraphStart_WithTrackChangesOff_MergesParagraphsImmediately()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.MoveCaretToBlockForTest(1, 0);
+
+        view.BackspaceForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(1, "with Track Changes off, Backspace merges the paragraphs as before (regression guard)");
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("FirstSecond");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void DeleteForward_AtParagraphEnd_WithTrackChangesOn_MarksBoundaryDeletedWithoutMerging()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.TrackChangesEnabled = true;
+        view.MoveCaretToBlockForTest(0, 5);           // caret at the very end of the first paragraph ("First")
+
+        view.DeleteForwardForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(2, "the two paragraphs must NOT be physically merged while the deletion is only tracked");
+        var first = (Paragraph)view.Model.Blocks[0];
+        var second = (Paragraph)view.Model.Blocks[1];
+        first.MarkRevision.Should().Be(RevisionKind.Deleted, "forward-Delete marks the SAME paragraph's own mark deleted as Backspace at the next paragraph's start would");
+        first.PlainText.Should().Be("First");
+        second.PlainText.Should().Be("Second");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void DeleteForward_AtParagraphEnd_WithTrackChangesOff_MergesParagraphsImmediately()
+    {
+        // Sibling regression guard: Track-Changes-off behaviour at a paragraph boundary must be unchanged
+        // by this fix (the WPF host's native RichTextBox EditingCommands.Delete merges paragraphs here,
+        // same as before).
+        var view = BuildTwoParagraphView("First", "Second");
+        view.MoveCaretToBlockForTest(0, 5);
+
+        view.DeleteForwardForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(1);
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("FirstSecond");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void AcceptAll_AfterTrackedParagraphBoundaryBackspace_PerformsTheMerge()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.TrackChangesEnabled = true;
+        view.MoveCaretToBlockForTest(1, 0);
+        view.BackspaceForTest();                     // tracked boundary deletion only, no merge yet
+
+        view.AcceptAllRevisions();                    // accept -> the merge actually happens now
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(1, "accepting the tracked paragraph-mark deletion performs the merge");
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("FirstSecond");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void RejectAll_AfterTrackedParagraphBoundaryBackspace_RestoresTwoSeparateParagraphs()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.TrackChangesEnabled = true;
+        view.MoveCaretToBlockForTest(1, 0);
+        view.BackspaceForTest();
+
+        view.RejectAllRevisions();                    // reject -> the boundary deletion is undone
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(2, "rejecting keeps the two paragraphs separate");
+        ((Paragraph)view.Model.Blocks[0]).MarkRevision.Should().Be(RevisionKind.None, "reject clears the tracked mark-deletion");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
 }

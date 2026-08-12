@@ -938,8 +938,15 @@ public sealed class Parser
             {
                 var selector = Advance();
                 var value = selector.Value.Trim();
-                if (value.StartsWith('@') && value.Length > 1)
-                    return new StructuredCurrentRowReferenceNode(value[1..].Trim());
+                // The bare '@' shorthand (no table qualifier, e.g. =[@]*2 inside a table's own row)
+                // means "this entire row" — same as [#This Row] — with no column name at all, not a
+                // column literally named "@". Previously only `value.Length > 1` reached this branch,
+                // so the single-character "@" fell through to the generic StructuredReferenceNode
+                // below, which then hunted for a column named "@" and always missed (#NAME?).
+                // Route it here too, with an empty ColumnName that EvaluateCurrentRowReference
+                // recognizes as the whole-row case.
+                if (value.StartsWith('@'))
+                    return new StructuredCurrentRowReferenceNode(value.Length > 1 ? value[1..].Trim() : "");
                 if (value.Contains("#This Row", StringComparison.OrdinalIgnoreCase))
                     return new StructuredReferenceNode("", value);
                 if (!string.IsNullOrWhiteSpace(value))

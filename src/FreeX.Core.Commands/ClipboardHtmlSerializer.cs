@@ -95,7 +95,15 @@ public static class ClipboardHtmlSerializer
             "EndHTML:0000000000\r\n" +
             "StartFragment:0000000000\r\n" +
             "EndFragment:0000000000\r\n";
-        const string htmlStart = "<html><body>\r\n<!--StartFragment-->";
+        // R135: declare charset=utf-8 explicitly. The WPF host's DataObject.SaveHtmlToHandle (used
+        // for the WPF Html clipboard format) always encodes the CF_HTML payload as UTF-8 bytes on
+        // the OS clipboard, matching the UTF-8 byte offsets computed below via Utf8Length -- but without
+        // an explicit charset meta tag, an external HTML-aware consumer (Word, a browser, a mail
+        // client) that doesn't assume UTF-8 falls back to its own default codepage and mojibakes any
+        // non-ASCII cell text. The StartFragment/StartHTML/EndHTML/EndFragment offsets below are all
+        // derived from Utf8Length() over the actual header/preamble/fragment/trailer strings, so
+        // adding this tag keeps the offsets correct automatically -- no offset arithmetic to hand-fix.
+        const string htmlStart = "<html><head><meta charset=\"utf-8\"></head><body>\r\n<!--StartFragment-->";
         const string htmlEnd = "<!--EndFragment-->\r\n</body></html>";
 
         var startHtml = Utf8Length(placeholderHeader);

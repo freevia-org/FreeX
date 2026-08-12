@@ -93,12 +93,15 @@ public static class SlideCompositor
 
         // 2. Master/layout decoration in z-order. Placeholder roots remain inheritance-only;
         // showMasterSp controls authored master decoration without hiding the background.
-        // Two independent gates: presentation.ShowMasterShapes is FreeP's Slide Show Settings
+        // Three independent gates: presentation.ShowMasterShapes is FreeP's Slide Show Settings
         // toggle (applies to every slide in the deck for the duration of a slideshow session);
         // slide.ShowMasterShapes is the authored per-slide p:sld/@showMasterSp ("Hide Background
-        // Graphics" in PowerPoint's Design tab — some slides in a deck can hide it, others not).
-        // Both must be true for a given slide to show its master's decoration shapes.
-        if (presentation.ShowMasterShapes && slide.ShowMasterShapes && master is not null)
+        // Graphics" in PowerPoint's Design tab — some slides in a deck can hide it, others not);
+        // layout.ShowMasterShapes is the authored per-layout p:sldLayout/@showMasterSp ("Hide
+        // Background Graphics" set against a layout in Slide Master view — every slide using that
+        // layout inherits the hidden master decoration unless it overrides showMasterSp itself).
+        // All three must be true for a given slide to show its master's decoration shapes.
+        if (presentation.ShowMasterShapes && slide.ShowMasterShapes && (layout?.ShowMasterShapes ?? true) && master is not null)
         {
             foreach (var shape in master.Placeholders.Where(shape => shape.Placeholder is null))
                 ComposeShape(shape, slide, presentation, theme, ops, slideIndex, effectiveClrMap);

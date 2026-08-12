@@ -138,6 +138,80 @@ public sealed class R134_DataValidationThousandsBoundThreeWayParityTests
         }
     }
 
+    // ── R135: exponent-notation bound must also survive the same three-way parity round trip. ──
+    // r134's unification dropped NumberStyles.AllowExponent, so a bound typed as "1E+3" (a
+    // legitimate Excel DV bound, and the exact shape ToInvariantString itself emits for large
+    // magnitudes) could not be created/edited via the dialog gate, and DataValidationBoundsParser
+    // could not enforce it live. This extends the three-way parity coverage this test class exists
+    // for to the exponent format, not just the thousands-grouped format r134 originally fixed.
+
+    [Fact]
+    public void ExponentNotationUpperBound_LiveEnforcement_MatchesPostSaveReloadEnforcement_AndPersistsInvariant()
+    {
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+
+            // "1E+3" == 1000, exactly as it would be typed into the Data Validation dialog's
+            // Formula2 box using Excel's own scientific-notation bound syntax.
+            var dv = new DataValidation
+            {
+                Type = DvType.WholeNumber,
+                Operator = DvOperator.Between,
+                Formula1 = "1",
+                Formula2 = "1E+3",
+            };
+
+            // ── 1. Live enforcement (in-session, before any save) ──────────────────────
+            DataValidationService.Validate(dv, new NumberValue(900))
+                .Should().BeNull("900 is within the intended upper bound 1000 while the session runs");
+            DataValidationService.Validate(dv, new NumberValue(1100))
+                .Should().NotBeNull("1100 exceeds the intended upper bound 1000 while the session runs");
+
+            // ── 2. Save + reload through the real XLSX pipeline ────────────────────────
+            var workbook = new Workbook("R135");
+            var sheet = workbook.AddSheet("Sheet1");
+            sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
+
+            var saved = new DataValidation
+            {
+                AppliesTo = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 2, 2)),
+                Type = DvType.WholeNumber,
+                Operator = DvOperator.Between,
+                Formula1 = "1",
+                Formula2 = "1E+3",
+            };
+            sheet.DataValidations.Add(saved);
+
+            using var stream = new MemoryStream();
+            new XlsxFileAdapter().Save(workbook, stream);
+
+            // ── 3. The persisted XML must be canonical invariant digits ("1000"), not left
+            //        unparsed/verbatim the way the r135 regression would have (its Save-side
+            //        canonicalizer also delegates to DataValidationNumericBoundText.TryParse, so
+            //        a bound it can't parse falls through to the original text unchanged).
+            var persistedFormula2 = ReadFormula2(stream);
+            persistedFormula2.Should().Be("1000",
+                "the persisted bound must be canonicalized from exponent notation to plain invariant digits");
+
+            stream.Position = 0;
+            var reloaded = new XlsxFileAdapter().Load(stream);
+            var reloadedSheet = reloaded.Sheets.Single();
+            var reloadedDv = reloadedSheet.DataValidations.Single();
+
+            // ── 4. Post-save-reload enforcement must agree EXACTLY with pre-save enforcement.
+            DataValidationService.Validate(reloadedDv, new NumberValue(900))
+                .Should().BeNull("900 must still be within the upper bound 1000 after save/reload");
+            DataValidationService.Validate(reloadedDv, new NumberValue(1100))
+                .Should().NotBeNull("1100 must still exceed the upper bound 1000 after save/reload");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
     private static string? ReadFormula1(MemoryStream package) => ReadFormula(package, "formula1");
 
     private static string? ReadFormula2(MemoryStream package) => ReadFormula(package, "formula2");

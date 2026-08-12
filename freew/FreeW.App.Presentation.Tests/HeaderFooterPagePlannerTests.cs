@@ -196,8 +196,13 @@ public sealed class HeaderFooterPagePlannerTests
     }
 
     [Fact]
-    public void MapPagesToSections_EmptySectionHeadersFootersUseDocumentLevelStore()
+    public void MapPagesToSections_EmptyLeadingSectionRendersBlankNotDocumentLevelStore()
     {
+        // Section 1 (index 0) defines no header of its own and has no earlier section to link to, so
+        // it must render blank -- exactly like Word -- rather than reaching past itself into the LATER
+        // final section's header purely because that happens to be where the document-level store lives.
+        // Only the final section (which genuinely owns document.FinalSectionHeadersFooters) may resolve
+        // to it.
         var document = new TextDocument();
         var emptyFirstSection = new Section(new PageSettings());
         document.Blocks.Add(new Paragraph("Section 1") { SectionBreak = emptyFirstSection });
@@ -210,15 +215,66 @@ public sealed class HeaderFooterPagePlannerTests
             pageCount: 3);
 
         pages[0].SectionIndex.Should().Be(0);
-        pages[0].HeadersFooters.Should().BeSameAs(document.FinalSectionHeadersFooters);
+        pages[0].HeadersFooters.Header.Should().BeNull();
+        pages[0].HeadersFooters.Should().NotBeSameAs(document.FinalSectionHeadersFooters);
         pages[1].SectionIndex.Should().Be(0);
-        pages[1].HeadersFooters.Should().BeSameAs(document.FinalSectionHeadersFooters);
+        pages[1].HeadersFooters.Header.Should().BeNull();
+        pages[1].HeadersFooters.Should().NotBeSameAs(document.FinalSectionHeadersFooters);
         pages[1].SectionRelativePageNumber.Should().Be(2);
         pages[0].SectionPageCount.Should().Be(2);
         pages[1].SectionPageCount.Should().Be(2);
         pages[2].SectionIndex.Should().Be(1);
         pages[2].HeadersFooters.Should().BeSameAs(document.FinalSectionHeadersFooters);
+        pages[2].HeadersFooters.Header.Should().BeSameAs(document.FinalSectionHeadersFooters.Header);
         pages[2].SectionPageCount.Should().Be(1);
+    }
+
+    [Fact]
+    public void MapPagesToSections_EmptyLeadingSectionFooterAlsoRendersBlankNotDocumentLevelStore()
+    {
+        // Footer twin of the header case above: Section 1 defines no footer and has no earlier section
+        // to link to, so its footer must be blank too, not Section 2's (the final section's) footer.
+        var document = new TextDocument();
+        var emptyFirstSection = new Section(new PageSettings());
+        document.Blocks.Add(new Paragraph("Section 1") { SectionBreak = emptyFirstSection });
+        document.Blocks.Add(new Paragraph("Section 2"));
+        document.FinalSectionHeadersFooters.Footer = new HeaderFooter("Document Footer");
+
+        var pages = HeaderFooterPagePlanner.MapPagesToSections(
+            document,
+            blockPageAssignments: [0, 2],
+            pageCount: 3);
+
+        pages[0].SectionIndex.Should().Be(0);
+        pages[0].HeadersFooters.Footer.Should().BeNull();
+        pages[1].SectionIndex.Should().Be(0);
+        pages[1].HeadersFooters.Footer.Should().BeNull();
+        pages[2].SectionIndex.Should().Be(1);
+        pages[2].HeadersFooters.Footer.Should().BeSameAs(document.FinalSectionHeadersFooters.Footer);
+    }
+
+    [Fact]
+    public void MapPagesToSections_MiddleSectionWithNoDefinitionAnywhereBeforeItRendersBlank()
+    {
+        // Sibling/no-regression for the same rule one level deeper: a MIDDLE section (not just the very
+        // first one) that defines nothing itself, and whose predecessors also define nothing, must still
+        // render blank rather than reaching forward into a later section's header.
+        var document = new TextDocument();
+        var section1 = new Section(new PageSettings());
+        var section2 = new Section(new PageSettings());
+
+        document.Blocks.Add(new Paragraph("Section 1") { SectionBreak = section1 });
+        document.Blocks.Add(new Paragraph("Section 2") { SectionBreak = section2 });
+        document.Blocks.Add(new Paragraph("Section 3"));
+        document.FinalSectionHeadersFooters.Header = new HeaderFooter("Final Header");
+
+        var pages = HeaderFooterPagePlanner.MapPagesToSections(
+            document,
+            blockPageAssignments: [0, 1, 2],
+            pageCount: 3);
+
+        pages[1].SectionIndex.Should().Be(1);
+        pages[1].HeadersFooters.Header.Should().BeNull();
     }
 
     [Fact]

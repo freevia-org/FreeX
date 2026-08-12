@@ -337,7 +337,11 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
-    internal static void ShiftRuleRowsDown(Sheet sheet, uint start, uint count)
+    internal static void ShiftRuleRowsDown(
+        Sheet sheet, uint start, uint count,
+        Dictionary<Guid, string?> cfFormulaSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> dvFormulaSnapshot)
     {
         if (sheet.DataValidations.Count != 0)
         {
@@ -351,7 +355,7 @@ internal static partial class RowColumnShiftHelpers
                 ShiftAdditionalRanges(rule, range => ShiftRangeRowsDown(range, start, count));
                 if (shifted is null)
                 {
-                    if (PromoteDvSurvivorOrRemove(rule))
+                    if (PromoteDvSurvivorOrRemove(rule, sheet.Name, dvFormulaSnapshot))
                         sheet.DataValidations.RemoveAt(i);
                 }
                 else
@@ -370,7 +374,7 @@ internal static partial class RowColumnShiftHelpers
                 ShiftCfAdditionalRanges(rule, range => ShiftRangeRowsDown(range, start, count));
                 if (shifted is null)
                 {
-                    if (PromoteCfSurvivorOrRemove(rule))
+                    if (PromoteCfSurvivorOrRemove(rule, sheet.Name, cfFormulaSnapshot, cfThresholdSnapshot))
                         sheet.ConditionalFormats.RemoveAt(i);
                 }
                 else
@@ -404,7 +408,11 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
-    internal static void ShiftRuleColumnsDown(Sheet sheet, uint start, uint count)
+    internal static void ShiftRuleColumnsDown(
+        Sheet sheet, uint start, uint count,
+        Dictionary<Guid, string?> cfFormulaSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> dvFormulaSnapshot)
     {
         if (sheet.DataValidations.Count != 0)
         {
@@ -417,7 +425,7 @@ internal static partial class RowColumnShiftHelpers
                 ShiftAdditionalRanges(rule, range => ShiftRangeColumnsDown(range, start, count));
                 if (shifted is null)
                 {
-                    if (PromoteDvSurvivorOrRemove(rule))
+                    if (PromoteDvSurvivorOrRemove(rule, sheet.Name, dvFormulaSnapshot))
                         sheet.DataValidations.RemoveAt(i);
                 }
                 else
@@ -436,7 +444,7 @@ internal static partial class RowColumnShiftHelpers
                 ShiftCfAdditionalRanges(rule, range => ShiftRangeColumnsDown(range, start, count));
                 if (shifted is null)
                 {
-                    if (PromoteCfSurvivorOrRemove(rule))
+                    if (PromoteCfSurvivorOrRemove(rule, sheet.Name, cfFormulaSnapshot, cfThresholdSnapshot))
                         sheet.ConditionalFormats.RemoveAt(i);
                 }
                 else
@@ -457,13 +465,72 @@ internal static partial class RowColumnShiftHelpers
     /// (R44-commands-insert-delete-shift-3-1). Returns <see langword="true"/> when the rule has
     /// no surviving area at all and must be removed entirely.
     /// </summary>
-    private static bool PromoteDvSurvivorOrRemove(DataValidation rule)
+    private static bool PromoteDvSurvivorOrRemove(
+        DataValidation rule,
+        string sheetName,
+        Dictionary<(Guid Id, int Slot), string?> dvFormulaSnapshot)
     {
         if (rule.AdditionalRanges.Count == 0)
             return true;
+
+        var oldAnchor = rule.AppliesTo.Start;
         rule.AppliesTo = rule.AdditionalRanges[0];
         rule.AdditionalRanges.RemoveAt(0);
+
+        // R135-commands-cf-dv-promote-anchor-1: DataValidationService (Formula1/Formula2 relative
+        // reference resolution, see e.g. DataValidationService.cs ResolveListValues/TryParseNumberBound)
+        // shifts relative refs by (targetCell - AppliesTo.Start), exactly like the CF anchor below --
+        // re-anchor the formulas so they keep meaning the same thing now that AppliesTo.Start moved.
+        RewriteDvFormulaByAnchorDelta(rule, oldAnchor, sheetName, dvFormulaSnapshot);
+
         return false;
+    }
+
+    /// <summary>
+    /// Rewrites <see cref="DataValidation.Formula1"/>/<see cref="DataValidation.Formula2"/>'s relative
+    /// references by the delta between <paramref name="oldAnchor"/> and the rule's NEW
+    /// <see cref="DataValidation.AppliesTo"/>.Start, so the formula keeps referencing the same cells
+    /// after <see cref="PromoteDvSurvivorOrRemove"/> moves the anchor. DV formulas are evaluated
+    /// "as if written for the anchor cell" (relative refs shifted by targetCell - AppliesTo.Start at
+    /// evaluation time -- see DataValidationService.cs), so re-anchoring without this compensating
+    /// shift silently changes which cells a relative reference resolves to. Uses the same
+    /// <see cref="PasteOffsetOp"/> FreeX already uses for ordinary relative-reference paste, which
+    /// leaves absolute ($) references untouched, matching Excel's own paste semantics.
+    /// </summary>
+    private static void RewriteDvFormulaByAnchorDelta(
+        DataValidation rule,
+        CellAddress oldAnchor,
+        string sheetName,
+        Dictionary<(Guid Id, int Slot), string?> dvFormulaSnapshot)
+    {
+        var newAnchor = rule.AppliesTo.Start;
+        int rowDelta = (int)newAnchor.Row - (int)oldAnchor.Row;
+        int colDelta = (int)newAnchor.Col - (int)oldAnchor.Col;
+        if (rowDelta == 0 && colDelta == 0)
+            return;
+
+        var op = new PasteOffsetOp(rowDelta, colDelta);
+
+        if (rule.Formula1 is { } f1)
+        {
+            var rewritten = FormulaRewriter.Rewrite(f1, op, sheetName);
+            if (rewritten is not null && rewritten != f1)
+            {
+                if (!dvFormulaSnapshot.ContainsKey((rule.Id, 1)))
+                    dvFormulaSnapshot[(rule.Id, 1)] = f1;
+                rule.Formula1 = rewritten;
+            }
+        }
+        if (rule.Formula2 is { } f2)
+        {
+            var rewritten = FormulaRewriter.Rewrite(f2, op, sheetName);
+            if (rewritten is not null && rewritten != f2)
+            {
+                if (!dvFormulaSnapshot.ContainsKey((rule.Id, 2)))
+                    dvFormulaSnapshot[(rule.Id, 2)] = f2;
+                rule.Formula2 = rewritten;
+            }
+        }
     }
 
     /// <summary>
@@ -473,10 +540,16 @@ internal static partial class RowColumnShiftHelpers
     /// fully consumed. Returns <see langword="true"/> when nothing survived and the rule must be
     /// removed entirely.
     /// </summary>
-    private static bool PromoteCfSurvivorOrRemove(ConditionalFormat rule)
+    private static bool PromoteCfSurvivorOrRemove(
+        ConditionalFormat rule,
+        string sheetName,
+        Dictionary<Guid, string?> cfFormulaSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot)
     {
         if (rule.AdditionalRanges is not { Count: > 0 } survivors)
             return true;
+
+        var oldAnchor = rule.AppliesTo.Start;
         rule.AppliesTo = survivors[0];
         if (survivors.Count > 1)
         {
@@ -488,7 +561,79 @@ internal static partial class RowColumnShiftHelpers
         {
             rule.AdditionalRanges = null;
         }
+
+        // R135-commands-cf-dv-promote-anchor-1: ViewportService.ConditionalFormatFormulas.cs
+        // (MatchesFormula/EvaluateFormulaUncached) and ViewportConditionalFormatEvaluator.Thresholds.cs
+        // both shift FormulaText/threshold-formula relative references by
+        // (targetCell - AppliesTo.Start) at evaluation time -- promoting AppliesTo to a different
+        // area without a compensating rewrite here silently re-anchors every relative reference in
+        // the rule to the wrong cell (the rule keeps evaluating, but against the wrong operands).
+        // Re-anchor the formula/thresholds by the same delta the AppliesTo anchor just moved by, so
+        // the rule keeps meaning exactly what it meant before the promotion.
+        RewriteCfFormulaByAnchorDelta(rule, oldAnchor, sheetName, cfFormulaSnapshot, cfThresholdSnapshot);
+
         return false;
+    }
+
+    /// <summary>
+    /// CF analogue of <see cref="RewriteDvFormulaByAnchorDelta"/>: rewrites FormulaText and every
+    /// Formula-type threshold (colorScale/dataBar/iconSet cfvo) by the delta between
+    /// <paramref name="oldAnchor"/> and the rule's NEW <see cref="ConditionalFormat.AppliesTo"/>.Start,
+    /// so a promoted rule (see <see cref="PromoteCfSurvivorOrRemove"/>) keeps evaluating against the
+    /// same cells it did before its primary area was consumed by a delete.
+    /// </summary>
+    private static void RewriteCfFormulaByAnchorDelta(
+        ConditionalFormat rule,
+        CellAddress oldAnchor,
+        string sheetName,
+        Dictionary<Guid, string?> cfFormulaSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot)
+    {
+        var newAnchor = rule.AppliesTo.Start;
+        int rowDelta = (int)newAnchor.Row - (int)oldAnchor.Row;
+        int colDelta = (int)newAnchor.Col - (int)oldAnchor.Col;
+        if (rowDelta == 0 && colDelta == 0)
+            return;
+
+        var op = new PasteOffsetOp(rowDelta, colDelta);
+
+        if (rule.FormulaText is { } ft)
+        {
+            var rewritten = FormulaRewriter.Rewrite(ft, op, sheetName);
+            if (rewritten is not null && rewritten != ft)
+            {
+                if (!cfFormulaSnapshot.ContainsKey(rule.Id))
+                    cfFormulaSnapshot[rule.Id] = ft;
+                rule.FormulaText = rewritten;
+            }
+        }
+
+        RewriteThreshold(rule, SlotColorScaleMin, rule.MinThresholdType, rule.MinThresholdValue,
+            op, sheetName, cfThresholdSnapshot, v => rule.MinThresholdValue = v);
+        RewriteThreshold(rule, SlotColorScaleMid, rule.MidThresholdType, rule.MidThresholdValue,
+            op, sheetName, cfThresholdSnapshot, v => rule.MidThresholdValue = v);
+        RewriteThreshold(rule, SlotColorScaleMax, rule.MaxThresholdType, rule.MaxThresholdValue,
+            op, sheetName, cfThresholdSnapshot, v => rule.MaxThresholdValue = v);
+        RewriteThreshold(rule, SlotDataBarMin, rule.DataBarMinThresholdType, rule.DataBarMinThresholdValue,
+            op, sheetName, cfThresholdSnapshot, v => rule.DataBarMinThresholdValue = v);
+        RewriteThreshold(rule, SlotDataBarMax, rule.DataBarMaxThresholdType, rule.DataBarMaxThresholdValue,
+            op, sheetName, cfThresholdSnapshot, v => rule.DataBarMaxThresholdValue = v);
+
+        for (var i = 0; i < rule.IconSetThresholds.Count; i++)
+        {
+            var threshold = rule.IconSetThresholds[i];
+            if (threshold.Type == CfThresholdType.Formula && threshold.Value is { } tv)
+            {
+                var rewritten = FormulaRewriter.Rewrite(tv, op, sheetName);
+                if (rewritten is not null && rewritten != tv)
+                {
+                    var key = (rule.Id, SlotIconSetBase + i);
+                    if (!cfThresholdSnapshot.ContainsKey(key))
+                        cfThresholdSnapshot[key] = tv;
+                    rule.IconSetThresholds[i] = threshold with { Value = rewritten };
+                }
+            }
+        }
     }
 
     private static void ShiftAdditionalRanges(DataValidation rule, Func<GridRange, GridRange?> shift)
@@ -639,7 +784,10 @@ internal static partial class RowColumnShiftHelpers
     internal static void AdjustRulesDeleteShiftUp(
         Sheet sheet,
         uint bandStartCol, uint bandEndCol,
-        uint deletedStartRow, uint deletedEndRow, uint count)
+        uint deletedStartRow, uint deletedEndRow, uint count,
+        Dictionary<Guid, string?> cfFormulaSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> dvFormulaSnapshot)
     {
         bool dvChanged = false;
         for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
@@ -653,7 +801,7 @@ internal static partial class RowColumnShiftHelpers
                 // shift/adjust those first so a surviving area can be promoted instead of
                 // dropping the whole rule (R44-commands-insert-delete-shift-3-1).
                 AdjustAdditionalRangesDeleteUp(rule, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
-                if (PromoteDvSurvivorOrRemove(rule))
+                if (PromoteDvSurvivorOrRemove(rule, sheet.Name, dvFormulaSnapshot))
                     sheet.DataValidations.RemoveAt(i);
                 dvChanged = true;
             }
@@ -683,7 +831,7 @@ internal static partial class RowColumnShiftHelpers
             if (result == RangeDeleteResult.Remove)
             {
                 AdjustCfAdditionalRangesDeleteUp(rule, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
-                if (PromoteCfSurvivorOrRemove(rule))
+                if (PromoteCfSurvivorOrRemove(rule, sheet.Name, cfFormulaSnapshot, cfThresholdSnapshot))
                     sheet.ConditionalFormats.RemoveAt(i);
                 cfChanged = true;
             }
@@ -712,7 +860,10 @@ internal static partial class RowColumnShiftHelpers
     internal static void AdjustRulesDeleteShiftLeft(
         Sheet sheet,
         uint bandStartRow, uint bandEndRow,
-        uint deletedStartCol, uint deletedEndCol, uint count)
+        uint deletedStartCol, uint deletedEndCol, uint count,
+        Dictionary<Guid, string?> cfFormulaSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> dvFormulaSnapshot)
     {
         bool dvChanged = false;
         for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
@@ -725,7 +876,7 @@ internal static partial class RowColumnShiftHelpers
                 // non-primary area can be promoted instead of dropping the whole rule
                 // (R44-commands-insert-delete-shift-3-1).
                 AdjustAdditionalRangesDeleteLeft(rule, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
-                if (PromoteDvSurvivorOrRemove(rule))
+                if (PromoteDvSurvivorOrRemove(rule, sheet.Name, dvFormulaSnapshot))
                     sheet.DataValidations.RemoveAt(i);
                 dvChanged = true;
             }
@@ -753,7 +904,7 @@ internal static partial class RowColumnShiftHelpers
             if (result == RangeDeleteResult.Remove)
             {
                 AdjustCfAdditionalRangesDeleteLeft(rule, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
-                if (PromoteCfSurvivorOrRemove(rule))
+                if (PromoteCfSurvivorOrRemove(rule, sheet.Name, cfFormulaSnapshot, cfThresholdSnapshot))
                     sheet.ConditionalFormats.RemoveAt(i);
                 cfChanged = true;
             }

@@ -80,6 +80,8 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
     public TextDocument Load(Stream stream)
     {
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
+        WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
 
         var content = ReadXmlPart(archive, "content.xml")
             ?? throw new InvalidDataException("Not an OpenDocument Text package: missing content.xml.");

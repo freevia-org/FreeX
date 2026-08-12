@@ -183,6 +183,51 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
         (Paragraph)context.Document.Blocks[index];
 }
 
+/// <summary>
+/// Set (or clear) a paragraph's <see cref="Paragraph.MarkRevision"/> — the tracked insert/delete state of
+/// the paragraph's own end-of-paragraph mark (pilcrow) — snapshotting the previous mark-revision state for
+/// undo. Used by a tracked Backspace/Delete at a paragraph boundary: rather than physically merging the two
+/// paragraphs immediately (which would silently bypass Track Changes), the boundary's owning paragraph is
+/// left in place with its mark flagged <see cref="RevisionKind.Deleted"/>; the two paragraphs only actually
+/// merge when <see cref="TrackChanges.AcceptAll"/> (or a single accept) resolves the mark later. Word's own
+/// convention: a paragraph's formatting is carried by its own trailing mark, so the paragraph whose mark is
+/// deleted is always the EARLIER of the pair — the surviving merged paragraph keeps the later paragraph's
+/// formatting.
+/// </summary>
+public sealed class SetParagraphMarkRevisionCommand(
+    int index, RevisionKind kind, string? author, string? dateXml) : IDocumentCommand
+{
+    private RevisionKind _previousKind;
+    private string? _previousAuthor;
+    private string? _previousDateXml;
+    private bool _applied;
+
+    public string Label => kind == RevisionKind.Deleted ? "Delete Paragraph Mark" : "Insert Paragraph Mark";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (context.Document.Blocks.ElementAtOrDefault(index) is not Paragraph paragraph)
+            return;
+        _previousKind = paragraph.MarkRevision;
+        _previousAuthor = paragraph.MarkRevisionAuthor;
+        _previousDateXml = paragraph.MarkRevisionDateXml;
+        paragraph.MarkRevision = kind;
+        paragraph.MarkRevisionAuthor = author;
+        paragraph.MarkRevisionDateXml = dateXml;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || context.Document.Blocks.ElementAtOrDefault(index) is not Paragraph paragraph)
+            return;
+        paragraph.MarkRevision = _previousKind;
+        paragraph.MarkRevisionAuthor = _previousAuthor;
+        paragraph.MarkRevisionDateXml = _previousDateXml;
+        _applied = false;
+    }
+}
+
 /// <summary>Replace one run's formatting, snapshotting the previous value for undo.</summary>
 public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, RunFormatting formatting) : IDocumentCommand
 {

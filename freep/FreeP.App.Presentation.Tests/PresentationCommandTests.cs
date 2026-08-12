@@ -680,6 +680,60 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteShapeCommand_RemovesTriggerAnimation_AndUndoRestoresIt()
+    {
+        // A click-trigger animation targets a still-live shape but fires on click of the shape
+        // being deleted (TriggerShapeId). Deleting the trigger shape must also drop the
+        // animation - otherwise the stale TriggerShapeId can later rebind to whatever shape
+        // NextShapeId hands out next (it reuses a freed id once it's no longer the slide max),
+        // silently firing the animation on click of an unrelated shape.
+        var (p, bus) = Make();
+        var triggerShape = MakeShape(1);
+        var animatedShape = MakeShape(2);
+        p.Slides[0].Shapes.Add(triggerShape);
+        p.Slides[0].Shapes.Add(animatedShape);
+
+        var triggerAnimation = new ShapeAnimation { ShapeId = animatedShape.Id, TriggerShapeId = triggerShape.Id };
+        p.Slides[0].Animations.Add(triggerAnimation);
+
+        bus.Execute(new DeleteShapeCommand(0, triggerShape.Id));
+
+        p.Slides[0].Animations.Should().BeEmpty();
+
+        bus.Undo();
+
+        p.Slides[0].Shapes.Should().Contain(triggerShape);
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(triggerAnimation);
+        p.Slides[0].Animations[0].TriggerShapeId.Should().Be(triggerShape.Id);
+
+        bus.Redo();
+
+        p.Slides[0].Animations.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeleteShapeCommand_LeavesUnrelatedTriggerAnimation_Untouched()
+    {
+        // Sibling of the trigger-cleanup test above: deleting an unrelated shape must not
+        // disturb a trigger animation whose ShapeId and TriggerShapeId both point elsewhere.
+        var (p, bus) = Make();
+        var triggerShape = MakeShape(1);
+        var animatedShape = MakeShape(2);
+        var unrelated = MakeShape(3);
+        p.Slides[0].Shapes.Add(triggerShape);
+        p.Slides[0].Shapes.Add(animatedShape);
+        p.Slides[0].Shapes.Add(unrelated);
+
+        var triggerAnimation = new ShapeAnimation { ShapeId = animatedShape.Id, TriggerShapeId = triggerShape.Id };
+        p.Slides[0].Animations.Add(triggerAnimation);
+
+        bus.Execute(new DeleteShapeCommand(0, unrelated.Id));
+
+        p.Slides[0].Animations.Should().ContainSingle().Which.Should().BeSameAs(triggerAnimation);
+        p.Slides[0].Animations[0].TriggerShapeId.Should().Be(triggerShape.Id);
+    }
+
+    [Fact]
     public void DeleteShapeCommand_DetachesConnectedEndpoints_AndUndoRestoresThem()
     {
         var (p, bus) = Make();

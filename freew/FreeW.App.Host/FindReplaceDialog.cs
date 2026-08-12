@@ -8,6 +8,7 @@ using System.Windows.Media;
 using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.ContextMenus;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 
@@ -109,6 +110,14 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     internal FindReplaceDialogOpenMode? FocusedFieldForTest =>
         _findBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Find :
         _replaceBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Replace : null;
+
+    // Test seams (FreeW.App.Host.Tests has InternalsVisibleTo): drive Find/Replace/Replace All the
+    // same way the buttons do, without needing to synthesize WPF click/input events.
+    internal void SetFindTextForTest(string text) => _findBox.Text = text;
+    internal void SetReplaceTextForTest(string text) => _replaceBox.Text = text;
+    internal void ReplaceForTest() => Replace();
+    internal void ReplaceAllForTest() => ReplaceAll();
+    internal string StatusForTest => _status.Text;
 
     // Track which text field was focused last so Special inserts into the right box.
     private TextBox _lastFocusedBox = null!;
@@ -284,14 +293,23 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
-        var replaced = !_editor.Selection.IsEmpty && IsTermSelected(request!);
+        var replaced = !_editor.Selection.IsEmpty
+            && IsTermSelected(request!)
+            && _editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit);
+        var originalMatchText = replaced ? _editor.Selection.Text : null;
         if (replaced)
         {
-            _editor.Selection.Text = request!.Replacement;
+            // Route through the editor's normal tracked-edit path (the same one ordinary typing and
+            // ReplaceCaretWord use) instead of assigning Selection.Text directly, so Track Changes
+            // records the replacement and Restrict Editing enforcement applies the same way it does
+            // for every other body edit -- a raw Selection.Text write bypasses both.
+            _editor.InsertText(request!.Replacement);
         }
 
         var searchRequest = new FindReplaceSearchRequest(request!.Term, request.Options);
-        var start = _editor.Selection.IsEmpty ? _editor.CaretPosition : _editor.Selection.End;
+        var start = _editor.Selection.IsEmpty
+            ? _editor.CaretPosition
+            : SkipTrackedLeftoverMatch(_editor.Selection.End, originalMatchText);
         var found = SelectFrom(start, searchRequest)
             || SelectFrom(_editor.Document.ContentStart, searchRequest);
         _status.Text = FindReplaceDialogPlanner.BuildReplaceStatus(request!, found);
@@ -317,28 +335,59 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
+        // Restrict Editing can permit body edits (TrackChangesOnly) while still requiring every one of
+        // them to be recorded, or forbid them outright (ReadOnly/CommentsOnly/FillingForms/Final). Check
+        // once up front: InsertText below already refuses per-call, but bailing here avoids counting
+        // matches as "replaced" when every InsertText call was actually a silent no-op.
+        if (!_editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit))
+        {
+            _status.Text = FindReplaceDialogPlanner.BuildReplaceAllStatus(request!, 0, inSelection: !_editor.Selection.IsEmpty);
+            return;
+        }
+
         // Restrict to the current selection when there is one; otherwise sweep the whole document.
         var restrictToSelection = !_editor.Selection.IsEmpty;
         var (from, limit) = restrictToSelection
             ? (_editor.Selection.Start, _editor.Selection.End)
             : (_editor.Document.ContentStart, _editor.Document.ContentEnd);
 
+        // Defensive backstop only: SkipTrackedLeftoverMatch below is what keeps the sweep making real
+        // forward progress each iteration; this cap just guarantees termination if that ever fails.
         var count = 0;
         var pointer = from;
         var searchRequest = new FindReplaceSearchRequest(request!.Term, request.Options);
-        while (TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
+        while (count < 100_000 && TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
         {
             // When restricted to a selection, stop once a match would start past the selection end.
             if (restrictToSelection && matchStart.CompareTo(limit) >= 0)
                 break;
 
+            var originalMatchText = new TextRange(matchStart, matchEnd).Text;
             _editor.Selection.Select(matchStart, matchEnd);
-            _editor.Selection.Text = request!.Replacement;
-            pointer = _editor.Selection.End;
+            // Same shared tracked-edit path as Replace() above (see its comment): records the
+            // replacement as a revision under Track Changes instead of silently rewriting the text.
+            _editor.InsertText(request!.Replacement);
+            pointer = SkipTrackedLeftoverMatch(_editor.Selection.End, originalMatchText);
             count++;
         }
 
         _status.Text = FindReplaceDialogPlanner.BuildReplaceAllStatus(request!, count, restrictToSelection);
+    }
+
+    // Under Track Changes, a replaced occurrence's original text stays in the document (struck
+    // through) immediately after the newly inserted replacement instead of being removed -- that is
+    // how tracked deletions round-trip. Continuing a search/sweep from right there would re-match
+    // (and, for Replace All, re-replace) the very occurrence just handled, forever. If the text
+    // immediately following the edit still reads back as the original match, skip past it; otherwise
+    // (Track Changes off, or the match text was genuinely removed) leave the pointer where it is.
+    private static TextPointer SkipTrackedLeftoverMatch(TextPointer afterReplace, string? originalMatchText)
+    {
+        if (string.IsNullOrEmpty(originalMatchText))
+            return afterReplace;
+        var probeEnd = afterReplace.GetPositionAtOffset(originalMatchText.Length);
+        if (probeEnd is null)
+            return afterReplace;
+        return new TextRange(afterReplace, probeEnd).Text == originalMatchText ? probeEnd : afterReplace;
     }
 
     private bool SelectFrom(TextPointer from, FindReplaceSearchRequest request)

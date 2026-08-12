@@ -2,8 +2,13 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Editing;
 
-/// <summary>Reversibly set (or clear) the whole-page background colour (<c>w:background</c>).</summary>
-internal sealed class SetPageColorCommand(string? colorHex) : IDocumentCommand
+/// <summary>
+/// Reversibly set (or clear) the whole-page background colour (<c>w:background</c>).
+/// <paramref name="sectionIndex"/> selects which section's <see cref="PageSettings"/> to mutate
+/// (see <see cref="PageSettingsSectionResolver"/>); a negative value targets the document's final
+/// section, matching the original single-section-only behavior.
+/// </summary>
+internal sealed class SetPageColorCommand(string? colorHex, int sectionIndex = -1) : IDocumentCommand
 {
     public string Label => "Page Color";
 
@@ -12,7 +17,7 @@ internal sealed class SetPageColorCommand(string? colorHex) : IDocumentCommand
 
     public void Apply(IDocumentCommandContext context)
     {
-        var page = context.Document.Page;
+        var page = PageSettingsSectionResolver.Resolve(context.Document, sectionIndex);
         if (!_captured)
         {
             _previous = page.BackgroundColorHex;
@@ -22,11 +27,16 @@ internal sealed class SetPageColorCommand(string? colorHex) : IDocumentCommand
     }
 
     public void Revert(IDocumentCommandContext context) =>
-        context.Document.Page.BackgroundColorHex = _previous;
+        PageSettingsSectionResolver.Resolve(context.Document, sectionIndex).BackgroundColorHex = _previous;
 }
 
-/// <summary>Reversibly set (or clear) the page border (<c>w:pgBorders</c>).</summary>
-internal sealed class SetPageBorderCommand(PageBorder? border) : IDocumentCommand
+/// <summary>
+/// Reversibly set (or clear) the page border (<c>w:pgBorders</c>).
+/// <paramref name="sectionIndex"/> selects which section's <see cref="PageSettings"/> to mutate
+/// (see <see cref="PageSettingsSectionResolver"/>); a negative value targets the document's final
+/// section, matching the original single-section-only behavior.
+/// </summary>
+internal sealed class SetPageBorderCommand(PageBorder? border, int sectionIndex = -1) : IDocumentCommand
 {
     public string Label => "Page Border";
 
@@ -35,7 +45,7 @@ internal sealed class SetPageBorderCommand(PageBorder? border) : IDocumentComman
 
     public void Apply(IDocumentCommandContext context)
     {
-        var page = context.Document.Page;
+        var page = PageSettingsSectionResolver.Resolve(context.Document, sectionIndex);
         if (!_captured)
         {
             _previous = page.PageBorder;
@@ -45,7 +55,7 @@ internal sealed class SetPageBorderCommand(PageBorder? border) : IDocumentComman
     }
 
     public void Revert(IDocumentCommandContext context) =>
-        context.Document.Page.PageBorder = _previous;
+        PageSettingsSectionResolver.Resolve(context.Document, sectionIndex).PageBorder = _previous;
 }
 
 /// <summary>
@@ -53,8 +63,11 @@ internal sealed class SetPageBorderCommand(PageBorder? border) : IDocumentComman
 /// <see cref="PageSettings.WatermarkOptions"/> and the legacy <see cref="PageSettings.Watermark"/> string
 /// so Undo restores the exact prior state. Applying clears the legacy string so the new options drive the
 /// render entirely.
+/// <paramref name="sectionIndex"/> selects which section's <see cref="PageSettings"/> to mutate
+/// (see <see cref="PageSettingsSectionResolver"/>); a negative value targets the document's final
+/// section, matching the original single-section-only behavior.
 /// </summary>
-internal sealed class SetWatermarkCommand(WatermarkOptions? options) : IDocumentCommand
+internal sealed class SetWatermarkCommand(WatermarkOptions? options, int sectionIndex = -1) : IDocumentCommand
 {
     public string Label => "Watermark";
 
@@ -64,7 +77,7 @@ internal sealed class SetWatermarkCommand(WatermarkOptions? options) : IDocument
 
     public void Apply(IDocumentCommandContext context)
     {
-        var page = context.Document.Page;
+        var page = PageSettingsSectionResolver.Resolve(context.Document, sectionIndex);
         if (!_captured)
         {
             _prevOptions = page.WatermarkOptions;
@@ -77,7 +90,7 @@ internal sealed class SetWatermarkCommand(WatermarkOptions? options) : IDocument
 
     public void Revert(IDocumentCommandContext context)
     {
-        var page = context.Document.Page;
+        var page = PageSettingsSectionResolver.Resolve(context.Document, sectionIndex);
         page.WatermarkOptions = _prevOptions;
         page.Watermark = _prevLegacy;
     }

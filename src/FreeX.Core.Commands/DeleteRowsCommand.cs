@@ -73,6 +73,16 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
     private readonly Dictionary<Guid, string?> _cfFormulaSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _cfThresholdSnapshot = [];
     private readonly Dictionary<(Guid Id, int Slot), string?> _dvFormulaSnapshot = [];
+    // R135-commands-cf-dv-promote-anchor-1: separate snapshot for the anchor-delta rewrite
+    // ShiftRuleRowsDown applies when a CF/DV rule's primary AppliesTo area is fully consumed by the
+    // delete and it promotes an AdditionalRanges survivor to the new primary (see
+    // RowColumnShiftHelpers.PromoteCfSurvivorOrRemove/PromoteDvSurvivorOrRemove). Kept independent of
+    // _cfFormulaSnapshot/_cfThresholdSnapshot/_dvFormulaSnapshot above -- those are captured (and
+    // cleared) LATER for the DeleteRowsOp-driven reference rewrite, which would wipe out an entry
+    // recorded here if they shared a dictionary.
+    private readonly Dictionary<Guid, string?> _cfPromotionFormulaSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _cfPromotionThresholdSnapshot = [];
+    private readonly Dictionary<(Guid Id, int Slot), string?> _dvPromotionFormulaSnapshot = [];
 
     public string Label => $"Delete {_count} Row(s)";
 
@@ -182,7 +192,12 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.CellPhoneticGuides, _startRow, _count);
 
         (_dataValidationSnapshot, _conditionalFormatSnapshot) = RowColumnShiftHelpers.CaptureRuleRanges(sheet);
-        RowColumnShiftHelpers.ShiftRuleRowsDown(sheet, _startRow, _count);
+        _cfPromotionFormulaSnapshot.Clear();
+        _cfPromotionThresholdSnapshot.Clear();
+        _dvPromotionFormulaSnapshot.Clear();
+        RowColumnShiftHelpers.ShiftRuleRowsDown(
+            sheet, _startRow, _count,
+            _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
         _namedRangeSnapshot = RowColumnShiftHelpers.CaptureNamedRanges(ctx.Workbook);
         _scopedNamedRangeSnapshot = RowColumnShiftHelpers.CaptureScopedNamedRanges(ctx.Workbook);
         RowColumnShiftHelpers.ShiftNamedRangeRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
@@ -403,6 +418,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand,
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        // R135-commands-cf-dv-promote-anchor-1: undo the promotion-driven anchor-delta rewrite AFTER
+        // the DeleteRowsOp-driven rewrite above (LIFO -- it was applied to the rule BEFORE that one,
+        // in ShiftRuleRowsDown, so it must be reverted after it here).
+        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfPromotionFormulaSnapshot, _cfPromotionThresholdSnapshot, _dvPromotionFormulaSnapshot);
 
         // R20-array-dynamic-spill-1: mirror MoveCellsForDelete's spill-relocation fix for undo —
         // capture any live spill rooted at the shifted-down address before clearing it back.

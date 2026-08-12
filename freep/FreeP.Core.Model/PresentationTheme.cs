@@ -1,3 +1,5 @@
+using System.Xml.Linq;
+
 namespace FreeP.Core.Model;
 
 /// <summary>
@@ -173,6 +175,42 @@ public sealed class PresentationTheme
     public PresentationColorScheme ColorScheme { get; set; } = PresentationColorScheme.CreateDefault();
 
     public PresentationFontScheme FontScheme { get; set; } = new();
+
+    /// <summary>
+    /// The original <c>&lt;a:fontScheme&gt;</c> XML captured when this theme was read from a .pptx.
+    /// Carries East-Asian/complex-script <c>&lt;a:ea&gt;</c>/<c>&lt;a:cs&gt;</c> typefaces that
+    /// <see cref="FontScheme"/> does not model. Null for themes created programmatically (e.g. brand
+    /// new presentations). The writer patches only the major/minor <c>&lt;a:latin&gt;</c> typeface into
+    /// this XML and preserves everything else verbatim — mirrors FreeX's WorkbookTheme.WithFonts.
+    /// </summary>
+    public string? NativeFontSchemeXml { get; set; }
+
+    /// <summary>
+    /// Raw <c>a:fillStyleLst</c> entries from the theme's format scheme (<c>a:fmtScheme</c>), in
+    /// document order (index 0 = <c>idx="1"</c>, ...). PowerPoint's built-in Shape Styles gallery
+    /// encodes a shape's fill purely as a <c>p:style/a:fillRef</c> index into this list (with a
+    /// <c>phClr</c> placeholder color substituted at resolve time) — shapes styled from the
+    /// gallery carry no explicit <c>spPr</c> fill at all.
+    /// </summary>
+    public IReadOnlyList<XElement> FillStyles { get; set; } = Array.Empty<XElement>();
+
+    /// <summary>
+    /// Raw <c>a:ln</c> entries from <c>a:lnStyleLst</c>, referenced by <c>p:style/a:lnRef</c> the
+    /// same way <see cref="FillStyles"/> is referenced by fillRef.
+    /// </summary>
+    public IReadOnlyList<XElement> LineStyles { get; set; } = Array.Empty<XElement>();
+
+    /// <summary>
+    /// Raw <c>a:bgFillStyleLst</c> entries. Per ECMA-376, a <c>fillRef idx</c> of 1000 or greater
+    /// refers here instead of <see cref="FillStyles"/>, using (idx - 1000) as the 1-based index.
+    /// </summary>
+    public IReadOnlyList<XElement> BackgroundFillStyles { get; set; } = Array.Empty<XElement>();
+
+    /// <summary>
+    /// Raw <c>a:effectStyle</c> entries from <c>a:effectStyleLst</c>, referenced by
+    /// <c>p:style/a:effectRef</c> the same way <see cref="FillStyles"/> is referenced by fillRef.
+    /// </summary>
+    public IReadOnlyList<XElement> EffectStyles { get; set; } = Array.Empty<XElement>();
 
     public static PresentationTheme CreateDefault() => new();
 }

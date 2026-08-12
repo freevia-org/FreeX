@@ -199,22 +199,25 @@ public static class HeaderFooterPagePlanner
     /// Resolves the effective header/footer set for a section, honoring "link to previous"
     /// per slot type (default/even/first, header and footer independently) rather than treating a
     /// section's header/footer set as one all-or-nothing unit. When a section does not define a given
-    /// slot itself, this walks BACKWARD through preceding sections (nearest first) looking for the
-    /// closest one that defines it, only falling back to the document's final-section value if no
-    /// preceding section (including this one) defines that slot either. A section can therefore define
-    /// its own even-page header while still inheriting the default header from an earlier section.
+    /// slot itself, this walks BACKWARD through preceding sections (nearest first, including this one)
+    /// looking for the closest one that defines it. If NO section from this one back to the start of
+    /// the document defines the slot, there is no earlier definition to link to -- exactly like Word,
+    /// which renders a blank header/footer for a leading section with no headerReference/footerReference
+    /// of its own, rather than reaching past it into a LATER section (e.g. the document's final section)
+    /// that happens to define one. A section can therefore define its own even-page header while still
+    /// inheriting the default header from an earlier section.
     /// </summary>
     private static SectionHeadersFooters ResolveEffectiveHeadersFooters(
         IReadOnlyList<Section> sections,
         int sectionIndex,
         SectionHeadersFooters finalSectionHeadersFooters)
     {
-        var header = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.Header);
-        var footer = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.Footer);
-        var evenHeader = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.EvenHeader);
-        var evenFooter = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.EvenFooter);
-        var firstHeader = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.FirstHeader);
-        var firstFooter = ResolveSlot(sections, sectionIndex, finalSectionHeadersFooters, hf => hf.FirstFooter);
+        var header = ResolveSlot(sections, sectionIndex, hf => hf.Header);
+        var footer = ResolveSlot(sections, sectionIndex, hf => hf.Footer);
+        var evenHeader = ResolveSlot(sections, sectionIndex, hf => hf.EvenHeader);
+        var evenFooter = ResolveSlot(sections, sectionIndex, hf => hf.EvenFooter);
+        var firstHeader = ResolveSlot(sections, sectionIndex, hf => hf.FirstHeader);
+        var firstFooter = ResolveSlot(sections, sectionIndex, hf => hf.FirstFooter);
 
         var own = sections[sectionIndex].HeadersFooters;
         if (MatchesResolvedSlots(own, header, footer, evenHeader, evenFooter, firstHeader, firstFooter))
@@ -237,7 +240,6 @@ public static class HeaderFooterPagePlanner
     private static HeaderFooter? ResolveSlot(
         IReadOnlyList<Section> sections,
         int sectionIndex,
-        SectionHeadersFooters finalSectionHeadersFooters,
         Func<SectionHeadersFooters, HeaderFooter?> selector)
     {
         for (var i = sectionIndex; i >= 0; i--)
@@ -247,7 +249,12 @@ public static class HeaderFooterPagePlanner
                 return value;
         }
 
-        return selector(finalSectionHeadersFooters);
+        // No section from sectionIndex back to the start of the document defines this slot -- there is
+        // no earlier section to link to, so (matching Word) the slot is blank. Do NOT fall back to the
+        // document's final section: that section is not "earlier" for a leading section and reaching
+        // into it here would make an early section without its own header render a LATER section's
+        // running header.
+        return null;
     }
 
     /// <summary>
@@ -325,7 +332,14 @@ public static class HeaderFooterPagePlanner
             HeaderFooterDialogPlanner.SlotNameFor(footerSlot));
     }
 
-    private static int[] MapBlocksToSections(IReadOnlyList<Block> blocks, int sectionCount)
+    /// <summary>
+    /// Maps each block index to the (0-based) index of the section it belongs to, by walking the
+    /// blocks in order and advancing past each <see cref="Paragraph.SectionBreak"/> marker. Public so
+    /// callers that need to resolve a section from a caret/selection block index (e.g. Layout ribbon
+    /// and Page Setup dialog commands, which must target the section containing the caret rather than
+    /// always the document's final section) can reuse this same walk instead of re-deriving it.
+    /// </summary>
+    public static int[] MapBlocksToSections(IReadOnlyList<Block> blocks, int sectionCount)
     {
         var blockSection = new int[blocks.Count];
         var sectionIndex = 0;

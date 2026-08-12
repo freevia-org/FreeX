@@ -56,6 +56,8 @@ public sealed partial class OdsFileAdapter : IFileAdapter
         ArgumentNullException.ThrowIfNull(stream);
 
         using var archive = new ZipArchive(EnsureSeekable(stream), ZipArchiveMode.Read, leaveOpen: true);
+        // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
+        WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
         var contentEntry = archive.GetEntry("content.xml")
             ?? throw new InvalidDataException("The ODS package does not contain a content.xml part.");
 

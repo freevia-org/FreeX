@@ -220,4 +220,14 @@ public sealed class SlideLayout
     /// Populated by the reader; written back faithfully by the writer.
     /// </summary>
     public Dictionary<int, TextStyleLevels> PlaceholderLstStyles { get; } = new();
+
+    /// <summary>
+    /// <c>p:sldLayout/@showMasterSp</c> attribute (OOXML default: true). Controls whether this
+    /// layout's slide master's placeholder shapes ("Hide Background Graphics" in PowerPoint's
+    /// Slide Master view, per-layout) are shown through on slides that use this layout.
+    /// Independent of <see cref="Slide.ShowMasterShapes"/> (per-slide override) and
+    /// <see cref="Presentation.ShowMasterShapes"/> (deck-wide slideshow-session toggle); all three
+    /// gates must be true for master decoration to render on a given slide.
+    /// </summary>
+    public bool ShowMasterShapes { get; set; } = true;
 }

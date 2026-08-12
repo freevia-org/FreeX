@@ -16,8 +16,17 @@ namespace FreeW.Core.Model;
 /// the command copies the full page setup surface and remains suitable for undoable column/layout
 /// changes as well as the Page Setup dialog's geometry changes.
 /// </para>
+///
+/// <para>
+/// <paramref name="sectionIndex"/> selects which section's <see cref="PageSettings"/> Apply/Revert
+/// read from and write to, resolved via <see cref="PageSettingsSectionResolver"/>: a negative value
+/// (the default) targets the document's final section (<see cref="TextDocument.Page"/>), matching the
+/// original single-section-only behavior; a non-negative value targets that section of a multi-section
+/// document (e.g. the section containing the caret when the command was built), so Layout/Page Setup
+/// edits land on the section the user is actually editing instead of always the last one.
+/// </para>
 /// </summary>
-public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCommand
+public sealed class SetPageSettingsCommand(PageSettings settings, int sectionIndex = -1) : IDocumentCommand
 {
     private PageSettings? _previous;
 
@@ -25,7 +34,7 @@ public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCom
 
     public void Apply(IDocumentCommandContext context)
     {
-        var page = context.Document.Page;
+        var page = PageSettingsSectionResolver.Resolve(context.Document, sectionIndex);
         // Snapshot for undo on first Apply.
         _previous ??= page.Clone();
         CopyTo(settings, page);
@@ -35,7 +44,7 @@ public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCom
     {
         if (_previous is null)
             return;
-        CopyTo(_previous, context.Document.Page);
+        CopyTo(_previous, PageSettingsSectionResolver.Resolve(context.Document, sectionIndex));
         _previous = null;
     }
 

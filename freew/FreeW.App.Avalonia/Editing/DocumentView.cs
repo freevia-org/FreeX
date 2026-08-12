@@ -958,8 +958,12 @@ public sealed class DocumentView : Control
     {
         if (string.IsNullOrEmpty(query))
             return false;
-        if (string.Equals(SelectedText, query, StringComparison.OrdinalIgnoreCase))
+        if (!IsEditingLocked && string.Equals(SelectedText, query, StringComparison.OrdinalIgnoreCase))
+        {
+            var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
+            SkipTrackedLeftoverMatch(originalMatchText);
+        }
         return FindNext(query);
     }
 
@@ -971,8 +975,12 @@ public sealed class DocumentView : Control
         if (string.IsNullOrEmpty(query))
             return false;
 
-        if (FindReplaceDialogPlanner.MatchesExactly(SelectedText, query, options))
+        if (!IsEditingLocked && FindReplaceDialogPlanner.MatchesExactly(SelectedText, query, options))
+        {
+            var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
+            SkipTrackedLeftoverMatch(originalMatchText);
+        }
 
         return FindNext(query, options);
     }
@@ -980,15 +988,25 @@ public sealed class DocumentView : Control
     /// <summary>Replace every occurrence of <paramref name="query"/> from the document start. Returns the count.</summary>
     public int ReplaceAll(string query, string replacement)
     {
-        if (string.IsNullOrEmpty(query))
+        // Restrict Editing can permit body edits (TrackChangesOnly, which ReplaceSelectionWith/InsertText
+        // records as tracked revisions) or forbid them outright. Check once up front: looping anyway
+        // would count every match as "replaced" even though each ReplaceSelectionWith call is a silent
+        // no-op once IsEditingLocked is true.
+        if (string.IsNullOrEmpty(query) || IsEditingLocked)
             return 0;
 
         _caret = new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = _caret;
         var count = 0;
-        while (count < 10000 && FindNext(query))
+        while (count < 10000)
         {
+            var searchFrom = _caret;
+            if (!FindNext(query) || HasWrappedAround(searchFrom))
+                break;
+
+            var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
+            SkipTrackedLeftoverMatch(originalMatchText);
             count++;
         }
 
@@ -1001,15 +1019,23 @@ public sealed class DocumentView : Control
         string replacement,
         FindReplaceSearchOptions options)
     {
-        if (string.IsNullOrEmpty(query))
+        // See the other ReplaceAll overload: bail before the loop rather than mis-reporting a full
+        // sweep of no-op replacements when Restrict Editing forbids body text edits.
+        if (string.IsNullOrEmpty(query) || IsEditingLocked)
             return 0;
 
         _caret = new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = _caret;
         var count = 0;
-        while (count < 10000 && FindNext(query, options))
+        while (count < 10000)
         {
+            var searchFrom = _caret;
+            if (!FindNext(query, options) || HasWrappedAround(searchFrom))
+                break;
+
+            var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
+            SkipTrackedLeftoverMatch(originalMatchText);
             count++;
         }
 
@@ -1017,33 +1043,67 @@ public sealed class DocumentView : Control
         return count;
     }
 
+    // FindNext/FindNextMatch cycle back to the document start once forward matches run out -- the
+    // right contract for an interactive "Find Next" click, but wrong for a ReplaceAll sweep: without
+    // this check, once every real occurrence is exhausted, the wraparound fallback keeps re-finding
+    // (and re-"replacing") whatever struck-through-but-still-present text Track Changes left behind
+    // from occurrences this same sweep already handled, forever (bounded only by the 10000 cap, which
+    // made a 3-occurrence document take minutes instead of milliseconds). A match is only ever
+    // legitimate forward progress from where this iteration searched; anything at or before that
+    // point means the search wrapped, and the sweep is done.
+    private bool HasWrappedAround(DocPosition searchFrom)
+    {
+        if (_selectionAnchor is not { } anchor)
+            return false;
+        return anchor.Block < searchFrom.Block
+            || (anchor.Block == searchFrom.Block && anchor.Offset < searchFrom.Offset);
+    }
+
     private void ReplaceSelectionWith(string replacement)
     {
         if (NormalizedSelection() is not { } sel || sel.Start.Block != sel.End.Block)
             return;
-        var block = sel.Start.Block;
-        if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
+        if (_doc.Blocks[sel.Start.Block] is not Paragraph p0 || !IsEditable(p0))
             return;
 
-        var a = sel.Start.Offset;
-        var b = sel.End.Offset;
-        var existing = ParaCells(p0);
-        var fmt = existing.Count == 0
-            ? RunFormatting.Default
-            : existing[Math.Clamp(a > 0 ? a - 1 : 0, 0, existing.Count - 1)].Fmt;
+        // Route through the shared tracked-edit path (the same one ordinary typing uses via
+        // InsertText) instead of mutating paragraph runs directly. InsertText deletes the current
+        // selection -- as a tracked deletion when Track Changes is on -- then inserts the replacement
+        // as a tracked insertion, and it refuses the whole edit when Restrict Editing forbids body
+        // text changes. A direct ReplaceParagraphRunsCommand here bypassed both. Used by Find &
+        // Replace (both the modeless dialog and the inline find bar) and by spelling-suggestion
+        // replacement (ReplaceCurrentProofingWord).
+        _selectionAnchor = sel.Start;
+        _caret = sel.End;
+        InsertText(replacement);
+    }
 
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+    // Under Track Changes, a replaced occurrence's original text stays in the paragraph (struck
+    // through) immediately after the newly inserted replacement instead of being removed -- that is
+    // how tracked deletions round-trip (see DeleteSelection's MarkCellsDeleted branch). Continuing a
+    // search/sweep from right there would re-match (and, for Replace All, re-replace) the very
+    // occurrence just handled, forever. If the text immediately following the caret still reads back
+    // as the original match, skip the caret past it; otherwise (Track Changes off, or the match text
+    // was genuinely removed) leave the caret where InsertText put it.
+    private void SkipTrackedLeftoverMatch(string originalMatchText)
+    {
+        if (string.IsNullOrEmpty(originalMatchText))
+            return;
+        if (_doc.Blocks[_caret.Block] is not Paragraph paragraph)
+            return;
+
+        var cells = ParaCells(paragraph);
+        var start = _caret.Offset;
+        if (start + originalMatchText.Length > cells.Count)
+            return;
+
+        for (var i = 0; i < originalMatchText.Length; i++)
         {
-            var cells = ParaCells(p);
-            var lo = Math.Clamp(a, 0, cells.Count);
-            var hi = Math.Clamp(b, 0, cells.Count);
-            cells.RemoveRange(lo, Math.Max(0, hi - lo));
-            for (var i = 0; i < replacement.Length; i++)
-                cells.Insert(lo + i, new Cell(replacement[i], fmt));
-            SetRuns(p, cells);
-        }));
+            if (cells[start + i].Ch != originalMatchText[i])
+                return;
+        }
 
-        _caret = new DocPosition(block, a + replacement.Length);
+        _caret = _caret with { Offset = start + originalMatchText.Length };
         _selectionAnchor = _caret;
     }
 
@@ -19399,45 +19459,62 @@ public sealed class DocumentView : Control
             return;
         }
 
-        if (NormalizedSelection() is not null)
-            DeleteSelection();
-        if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
-            return;
-
-        var block = _caret.Block;
-        var bodyOffset = _caret.Offset;
-        // BZ5: use pending format if set (from collapsed-caret Font dialog apply), otherwise
-        // inherit from the character at the caret position.
-        var pendingFmt = _pendingRunFmt;
-        _pendingRunFmt = null; // consume immediately so only the next typed char gets it
-        var bodyFmt = pendingFmt ?? ActiveFormatting(paragraph, bodyOffset);
-        // AV-TRACKEDIT: when Track Changes is on, typed characters are recorded as a tracked insertion
-        // (author + date) so they render underlined/coloured and round-trip as w:ins. OFF behaves as before.
-        // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
-        // link's edge or outside a link inserts plain (un-linked) text.
-        var insLink = ActiveLink(paragraph, bodyOffset);
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+        var hadSelection = NormalizedSelection() is not null;
+        // Word treats typing/pasting/replacing over a selection as one edit -- the deletion of the
+        // selected text and the insertion of the new text undo together in a single step. DeleteSelection
+        // and the insert below are each their own bus command, so without an explicit group a single
+        // Undo() after a selection-replace (Find & Replace, spelling-suggestion replacement, typing over
+        // a selection) would only revert the insert and leave the deletion applied.
+        var ownsBodyUndoGroup = hadSelection && !_bus.IsUndoGroupOpen;
+        if (ownsBodyUndoGroup)
+            _bus.BeginUndoGroup();
+        try
         {
-            // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
-            // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
-            // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
-            RevisionEditPlanner.InsertText(
-                p,
-                bodyOffset,
-                text,
-                bodyFmt,
-                new RevisionEditPlanner.InsertOptions(
-                    TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
-                    TrackChangesEnabled ? RevisionAuthor : null,
-                    TrackChangesEnabled ? CurrentRevisionDateXml() : null,
-                    insLink?.Url,
-                    insLink?.Anchor,
-                    insLink?.Tooltip));
-            CoalesceAdjacentPlainTextRuns(p);
-            CoalesceAdjacentHyperlinkRuns(p);
-        }));
-        _caret = new DocPosition(block, bodyOffset + text.Length);
-        _selectionAnchor = _caret;
+            if (hadSelection)
+                DeleteSelection();
+            if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+                return;
+
+            var block = _caret.Block;
+            var bodyOffset = _caret.Offset;
+            // BZ5: use pending format if set (from collapsed-caret Font dialog apply), otherwise
+            // inherit from the character at the caret position.
+            var pendingFmt = _pendingRunFmt;
+            _pendingRunFmt = null; // consume immediately so only the next typed char gets it
+            var bodyFmt = pendingFmt ?? ActiveFormatting(paragraph, bodyOffset);
+            // AV-TRACKEDIT: when Track Changes is on, typed characters are recorded as a tracked insertion
+            // (author + date) so they render underlined/coloured and round-trip as w:ins. OFF behaves as before.
+            // AV-LINK: typing strictly inside a hyperlink span extends that link (Word's behaviour); typing at a
+            // link's edge or outside a link inserts plain (un-linked) text.
+            var insLink = ActiveLink(paragraph, bodyOffset);
+            _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+            {
+                // BE4 (body parity): insert at an incrementing position so multi-char text (paste / IME /
+                // model inserts like a citation string) keeps its order — a fixed insert index would reverse it.
+                // Cells carry the tracked-insertion revision tags when Track Changes is on (null otherwise).
+                RevisionEditPlanner.InsertText(
+                    p,
+                    bodyOffset,
+                    text,
+                    bodyFmt,
+                    new RevisionEditPlanner.InsertOptions(
+                        TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
+                        TrackChangesEnabled ? RevisionAuthor : null,
+                        TrackChangesEnabled ? CurrentRevisionDateXml() : null,
+                        insLink?.Url,
+                        insLink?.Anchor,
+                        insLink?.Tooltip));
+                CoalesceAdjacentPlainTextRuns(p);
+                CoalesceAdjacentHyperlinkRuns(p);
+            }));
+            _caret = new DocPosition(block, bodyOffset + text.Length);
+            _selectionAnchor = _caret;
+        }
+        finally
+        {
+            if (ownsBodyUndoGroup)
+                _bus.CommitUndoGroup("Type over selection");
+        }
     }
 
     private void InsertShapeText(
@@ -19862,6 +19939,14 @@ public sealed class DocumentView : Control
             _caret = new DocPosition(block, offset - 1);
             _selectionAnchor = _caret;
         }
+        else if (TrackChangesEnabled)
+        {
+            // AV-TRACKEDIT sibling: Backspace at the very start of a (non-first) body paragraph must not
+            // physically merge into the preceding paragraph while Track Changes is on — that silently
+            // bypasses Track Changes (the family bug this fixes; mirrors the WPF host's
+            // TryRecordTrackedParagraphMergeBackward). See TryRecordTrackedParagraphMergeBackward below.
+            TryRecordTrackedParagraphMergeBackward();
+        }
         else
         {
             MergeWithPrevious();
@@ -19996,6 +20081,61 @@ public sealed class DocumentView : Control
                 }));
             }
         }
+        else if (TrackChangesEnabled)
+        {
+            // AV-TRACKEDIT sibling: forward-Delete at the very end of a (non-last) body paragraph must not
+            // bypass Track Changes either — see TryRecordTrackedParagraphMergeForward below (mirrors the
+            // WPF host's TryRecordTrackedParagraphMergeForward and this method's own Backspace-at-start
+            // sibling, TryRecordTrackedParagraphMergeBackward).
+            TryRecordTrackedParagraphMergeForward(_caret.Block);
+        }
+        // else: Track Changes off and the caret is at the end of a paragraph — forward-Delete here is a
+        // pre-existing no-op (there is no untracked "merge with next paragraph" path in this method,
+        // unlike Backspace's MergeWithPrevious()); left exactly as-is, since that gap is unrelated to Track
+        // Changes and is not part of this fix.
+    }
+
+    /// <summary>
+    /// Backspace at the very start of a (non-first) body paragraph, under Track Changes: rather than
+    /// physically merging into the preceding paragraph now (which would bypass Track Changes entirely —
+    /// the family bug this fixes), mark the PRECEDING paragraph's own end-of-paragraph mark as a tracked
+    /// deletion (<see cref="RevisionKind.Deleted"/>). Word's convention: a paragraph's formatting is
+    /// carried by its own trailing mark, so the paragraph whose mark is deleted is always the earlier of
+    /// the pair — the eventual merge (performed when the revision is accepted) keeps the later paragraph's
+    /// formatting, matching real Word. Both paragraphs stay in place — the document keeps looking exactly
+    /// as it did before the keystroke — until the mark is resolved. Deliberately checks only the
+    /// immediately-preceding block (not <see cref="PreviousEditableBlock"/>, which can skip over an
+    /// intervening table): a no-op when there is no preceding body paragraph, or the preceding block is
+    /// not itself an ordinary paragraph (e.g. a table) — merging text into/across a table this way isn't
+    /// something Word's pilcrow-delete model covers.
+    /// </summary>
+    private void TryRecordTrackedParagraphMergeBackward()
+    {
+        var block = _caret.Block;
+        if (block <= 0 || _doc.Blocks[block - 1] is not Paragraph)
+            return;
+
+        _bus.Execute(new SetParagraphMarkRevisionCommand(
+            block - 1, RevisionKind.Deleted, RevisionAuthor, CurrentRevisionDateXml()));
+        // Nothing textual moved: the caret already sits exactly where it should stay (start of this
+        // paragraph) — no repositioning needed, unlike the WPF host (which rebuilds its FlowDocument).
+    }
+
+    /// <summary>
+    /// Forward-Delete at the very end of a (non-last) body paragraph, under Track Changes: the sibling of
+    /// <see cref="TryRecordTrackedParagraphMergeBackward"/> — deleting the boundary between paragraph N and
+    /// N+1 always marks paragraph N's own mark deleted, whichever key/direction reached the boundary (this
+    /// keeps a subsequent Backspace at the start of N+1 and a Delete at the end of N produce the identical
+    /// tracked state). No-op at the very end of the document, or when the following block is not itself a
+    /// body paragraph.
+    /// </summary>
+    private void TryRecordTrackedParagraphMergeForward(int block)
+    {
+        if (block < 0 || block + 1 >= _doc.Blocks.Count || _doc.Blocks[block + 1] is not Paragraph)
+            return;
+
+        _bus.Execute(new SetParagraphMarkRevisionCommand(
+            block, RevisionKind.Deleted, RevisionAuthor, CurrentRevisionDateXml()));
     }
 
     private void InsertParagraphBreak()
@@ -21899,24 +22039,51 @@ public sealed class DocumentView : Control
     /// Apply <paramref name="settings"/> to the document's page geometry in a single undoable step
     /// (AV-PAGE). The command snapshots the prior values and restores them on Undo. Triggers a
     /// relayout so the page chrome (size, margins) updates immediately in Print Layout mode.
+    /// <paramref name="sectionIndex"/> selects which section to target (see
+    /// <see cref="PageSettingsSectionResolver"/>); a negative value (the default) targets the
+    /// document's final section, matching the original single-section-only behavior.
     /// </summary>
-    public void SetPageSettings(PageSettings settings)
+    public void SetPageSettings(PageSettings settings, int sectionIndex = -1)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        _bus.Execute(new SetPageSettingsCommand(settings));
+        _bus.Execute(new SetPageSettingsCommand(settings, sectionIndex));
     }
 
     /// <summary>
     /// Clone the current page settings, apply a layout mutation, then commit it as one undoable page
-    /// setup command. Used by Layout ribbon commands such as Columns.
+    /// setup command. Used by Layout ribbon commands such as Columns. Targets the section containing
+    /// the caret (see <see cref="CurrentSectionIndex"/>) rather than always the document's final
+    /// section, so a multi-section document's Layout/Page Setup ribbon commands edit the section the
+    /// user is actually in.
     /// </summary>
     public void ApplyPageSettings(Action<PageSettings> apply)
     {
         ArgumentNullException.ThrowIfNull(apply);
 
-        var settings = _doc.Page.Clone();
+        var sectionIndex = CurrentSectionIndex();
+        var settings = PageSettingsSectionResolver.Resolve(_doc, sectionIndex).Clone();
         apply(settings);
-        SetPageSettings(settings);
+        SetPageSettings(settings, sectionIndex);
+    }
+
+    /// <summary>
+    /// The index into <see cref="TextDocument.Sections"/> of the section containing the caret's block
+    /// (<see cref="_caret"/>), reusing <see cref="HeaderFooterPagePlanner.MapBlocksToSections"/> — the
+    /// same block-to-section walk headers/footers use (see <see cref="BuildBodyComplexFieldDisplayPlan"/>'s
+    /// SECTION/SECTIONPAGES field resolution) — so page-setup commands (Orientation, Margins, Columns,
+    /// Page Setup dialog, Watermark, Page Border, Page Color, ...) target the section the caret is
+    /// actually in on a multi-section document instead of always the final section.
+    /// </summary>
+    private int CurrentSectionIndex()
+    {
+        var sections = _doc.Sections;
+        if (sections.Count <= 1)
+            return 0;
+
+        var blockSections = HeaderFooterPagePlanner.MapBlocksToSections(_doc.Blocks, sections.Count);
+        return _caret.Block >= 0 && _caret.Block < blockSections.Length
+            ? blockSections[_caret.Block]
+            : sections.Count - 1;
     }
 
     /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
@@ -24592,32 +24759,45 @@ public sealed class DocumentView : Control
     /// <summary>
     /// AV-DESIGN: set (or clear) the whole-page background colour (Design &gt; Page Color). A null/empty
     /// value clears it back to the default white sheet; the hex is normalised to "#RRGGBB". Undoable; the
-    /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.
+    /// page sheet recolours immediately and round-trips through <c>w:background</c> on save. Targets the
+    /// section containing the caret (see <see cref="CurrentSectionIndex"/>) on a multi-section document.
     /// </summary>
     public void SetPageColor(string? colorHex) =>
-        _bus.Execute(new SetPageColorCommand(PageColorDialogPlanner.NormalizeForModel(colorHex)));
+        // Both halves of a concurrent change belong here: the shared PageColorDialogPlanner
+        // normalization (which replaced a local copy of this trim/prefix logic) AND the caret's
+        // section index, so Design > Page Color colours the section the user is in rather than the
+        // document's final section.
+        _bus.Execute(new SetPageColorCommand(PageColorDialogPlanner.NormalizeForModel(colorHex), CurrentSectionIndex()));
 
     /// <summary>
     /// AV-DESIGN: set (or clear) the page border (Design &gt; Page Borders). Pass null to remove it.
     /// Undoable; the border draws around the page immediately and round-trips through <c>w:pgBorders</c>.
+    /// Targets the section containing the caret (see <see cref="CurrentSectionIndex"/>) on a
+    /// multi-section document.
     /// </summary>
     public void SetPageBorder(PageBorder? border) =>
-        _bus.Execute(new SetPageBorderCommand(border));
+        _bus.Execute(new SetPageBorderCommand(border, CurrentSectionIndex()));
 
     /// <summary>
     /// AV-DESIGN: toggle the page border on/off with the given colour/width (Design &gt; Page Borders quick
-    /// action). When no border is set one is added; otherwise it is cleared. Undoable.
+    /// action). When no border is set one is added; otherwise it is cleared. Undoable. Reads and writes
+    /// the section containing the caret (see <see cref="CurrentSectionIndex"/>), not always the document's
+    /// final section.
     /// </summary>
-    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
-        SetPageBorder(_doc.Page.PageBorder is null ? new PageBorder(colorHex, widthPt) : null);
+    public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0)
+    {
+        var currentBorder = PageSettingsSectionResolver.Resolve(_doc, CurrentSectionIndex()).PageBorder;
+        SetPageBorder(currentBorder is null ? new PageBorder(colorHex, widthPt) : null);
+    }
 
     /// <summary>
     /// AV-DESIGN: set (or clear) the page watermark with full options (text, font, colour, layout,
     /// opacity). Pass null to remove it. Undoable; the faint diagonal text draws behind the body and
-    /// round-trips on save.
+    /// round-trips on save. Targets the section containing the caret (see
+    /// <see cref="CurrentSectionIndex"/>) on a multi-section document.
     /// </summary>
     public void SetWatermark(WatermarkOptions? options) =>
-        _bus.Execute(new SetWatermarkCommand(options));
+        _bus.Execute(new SetWatermarkCommand(options, CurrentSectionIndex()));
 
     /// <summary>
     /// AV-DESIGN: convenience to set a plain-text watermark with sensible defaults (Word's preset

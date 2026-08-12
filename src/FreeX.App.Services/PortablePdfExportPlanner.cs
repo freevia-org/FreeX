@@ -149,31 +149,46 @@ public static class PortablePdfExportPlanner
     {
         var pageRequests = new List<PortablePdfExportPageRequest>();
         for (var sheetIndex = 0; sheetIndex < sheetPlans.Count; sheetIndex++)
-            AddSheetPageRequests(sheetPlans[sheetIndex], sheetIndex, workbook, pageRequests);
+        {
+            var sheetPlan = sheetPlans[sheetIndex];
+
+            // The plan's flattened sheetIndex is the print AREA's position within the export, not
+            // the sheet's own index in the workbook (a sheet can contribute more than one print
+            // area) -- resolve the actual Sheet by the SheetId the print range belongs to instead
+            // (matches WorkbookPdfContentBuilder's N45/N46 resolution).
+            var sheet = workbook?.GetSheet(sheetPlan.PrintRange.Start.Sheet);
+
+            AddAreaPageRequests(sheetPlan, sheetIndex, sheet, pageRequests);
+
+            // A sheet can contribute more than one consecutive sheetPlan entry here (one per
+            // configured print area, all adjacent because ResolveVisibleWorkbookRanges/
+            // ResolveSheetPrintRanges emit every area for a sheet together before moving to the
+            // next sheet). Excel prints the "at end of sheet" comment appendix exactly ONCE per
+            // sheet, after all of that sheet's printed pages -- never once per print area -- so
+            // only emit it when this is the LAST area belonging to the current sheet. This mirrors
+            // PrintRenderer.RenderWorksheet (WPF), which builds commentSummaryPages once from the
+            // combined multi-area WorksheetPrintRenderPlan and appends them once after every area's
+            // grid pages instead of interleaving a copy after each area.
+            var isLastAreaForSheet = sheetIndex == sheetPlans.Count - 1 ||
+                sheetPlans[sheetIndex + 1].PrintRange.Start.Sheet != sheetPlan.PrintRange.Start.Sheet;
+            if (isLastAreaForSheet && sheet is { PrintComments: WorksheetPrintComments.AtEnd })
+                AddCommentSummaryPageRequests(sheetPlan, sheetIndex, sheet, pageRequests);
+        }
 
         return pageRequests;
     }
 
-    private static void AddSheetPageRequests(
+    private static void AddAreaPageRequests(
         WorkbookSheetExportPrintPlanSummary sheetPlan,
         int sheetIndex,
-        Workbook? workbook,
+        Sheet? sheet,
         List<PortablePdfExportPageRequest> pageRequests)
     {
-        // The plan's flattened sheetIndex is the print AREA's position within the export, not the
-        // sheet's own index in the workbook (a sheet can contribute more than one print area) --
-        // resolve the actual Sheet by the SheetId the print range belongs to instead (matches
-        // WorkbookPdfContentBuilder's N45/N46 resolution).
-        var sheet = workbook?.GetSheet(sheetPlan.PrintRange.Start.Sheet);
-
         foreach (var page in PrintPageGridPlanner.Build(
                      sheetPlan.RowPagePlans,
                      sheetPlan.ColumnPagePlans,
                      sheetPlan.PageOrder))
             AddPageRequest(sheetPlan, sheetIndex, sheet, page, pageRequests);
-
-        if (sheet is { PrintComments: WorksheetPrintComments.AtEnd })
-            AddCommentSummaryPageRequests(sheetPlan, sheetIndex, sheet, pageRequests);
     }
 
     private static void AddPageRequest(
