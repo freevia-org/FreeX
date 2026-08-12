@@ -8,6 +8,7 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
     public void FindReplaceDialog_DelegatesOptionPolicyAndWorkflowToPresentationSession()
     {
         var source = ReadAvaloniaSource("FindReplaceDialog.cs");
+        var commandHost = ReadAvaloniaSource("Editing", "AvaloniaFindReplaceCommandHost.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
         source.Should().Contain("FindReplaceDialogPlanner.Surface");
@@ -23,9 +24,10 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().Contain("ApplyCompactCheckBox(_matchCase");
         source.Should().Contain("ApplyCompactCheckBox(_wholeWord");
         source.Should().Contain("ApplyCompactCheckBox(_useWildcards");
-        source.Should().Contain("editor.FindNext(request.Term, request.Options)");
-        source.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
-        source.Should().Contain("editor.ReplaceAll(request.Term, request.Replacement, request.Options)");
+        source.Should().Contain("new AvaloniaFindReplaceCommandHost(_editor)");
+        commandHost.Should().Contain("editor.FindNext(request.Term, request.Options)");
+        commandHost.Should().Contain("editor.ReplaceNext(request.Term, request.Replacement, request.Options)");
+        commandHost.Should().Contain("editor.ReplaceAll(request.Term, request.Replacement, request.Options)");
         source.Should().NotContain("TextSearch.FindAll(");
         source.Should().NotContain("internal static int CountMatches(");
         source.Should().NotContain("FindReplaceDialogPlanner.TryCreateSearchRequest(");
@@ -39,6 +41,21 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().NotContain("\"Enter a search term.\"");
         source.Should().NotContain("not found.\"");
         source.Should().NotContain("Replaced {count}");
+    }
+
+    [Fact]
+    public void MainWindowInlineFindBar_UsesSharedSessionAndCommandHost()
+    {
+        var source = ReadAvaloniaSource("MainWindow.cs");
+
+        source.Should().Contain("FindReplaceDialogSession _inlineFindReplaceSession");
+        source.Should().Contain("new AvaloniaFindReplaceCommandHost(_editor)");
+        source.Should().Contain("_inlineFindReplaceSession.Execute(");
+        source.Should().Contain("FindReplaceDialogActionKind.FindNext");
+        source.Should().Contain("FindReplaceDialogActionKind.Replace");
+        source.Should().Contain("FindReplaceDialogActionKind.ReplaceAll");
+        source.Should().NotContain("$\"No match for \\\"{query}\\\".\"");
+        source.Should().NotContain("$\"Replaced {n} occurrence");
     }
 
     [Fact]

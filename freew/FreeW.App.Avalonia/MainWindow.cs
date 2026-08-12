@@ -53,6 +53,7 @@ public sealed partial class MainWindow : Window
 
     private readonly DocumentPersistenceWorkflow _documentPersistence;
     private readonly FreeWDocumentFileWorkflow _documentFileWorkflow;
+    private readonly FreeWDocumentFileCommandSession _fileCommands;
     private readonly IPlatformPrintService _printService;
     private readonly FreeWPortablePrintWorkflow _portablePrintWorkflow;
     private readonly Func<Window, PrinterDiscoveryResult, CancellationToken, Task<PrintSelection?>> _showPrintSelectionDialog;
@@ -79,6 +80,7 @@ public sealed partial class MainWindow : Window
     private MailMergeEngine? _mailMerge;
     private readonly TextBox _findBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBox _replaceBox = new() { Width = 200, VerticalAlignment = VerticalAlignment.Center };
+    private readonly FindReplaceDialogSession _inlineFindReplaceSession;
     private TextBlock _zoomLabel = null!;
     private Slider _zoomSlider = null!;
     private readonly ScaleTransform _zoom = new(1, 1);
@@ -261,6 +263,27 @@ public sealed partial class MainWindow : Window
                     }
                     return ValueTask.CompletedTask;
                 }));
+        _fileCommands = new FreeWDocumentFileCommandSession(
+            _documentFileWorkflow,
+            new FreeWFileCommandLifecyclePorts(
+                CurrentPath: () => _fileWorkflow.CurrentPath,
+                CurrentFileName: () => _fileWorkflow.CurrentFileName,
+                NewAsync: (action, loadAsync) => _fileWorkflow.NewAsync(action, loadAsync),
+                OpenAsync: _fileWorkflow.OpenAsync,
+                SaveAsync: _fileWorkflow.SaveAsync),
+            new FreeWDocumentFileCommandPorts(
+                LoadNewDocumentAsync: () =>
+                {
+                    LoadDocumentContent(TextDocument.CreateEmpty());
+                    return Task.CompletedTask;
+                },
+                PickOpenPathAsync: PromptOpenPathAsync,
+                PickPdfImportPathAsync: _pickPdfImportPathAsync,
+                PickSaveTargetAsync: PromptSavePathAsync,
+                PresentFeedback: feedback => ApplyFileFeedback(feedback)),
+            FileText);
+        _inlineFindReplaceSession = new FindReplaceDialogSession(
+            new AvaloniaFindReplaceCommandHost(_editor));
         _applicationCommands = new FreeWApplicationCommandRouter(new FreeWApplicationCommandActions(
             NewDocument: NewDocument,
             OpenDocument: () => _ = OpenAsync(),
@@ -2941,14 +2964,7 @@ public sealed partial class MainWindow : Window
 
     private void NewDocument() => _ = NewDocumentAsync();
 
-    private Task<bool> NewDocumentAsync() =>
-        _fileWorkflow.NewAsync(
-            FileText.NewAction,
-            () =>
-            {
-                LoadDocumentContent(TextDocument.CreateEmpty());
-                return Task.CompletedTask;
-            });
+    private Task<bool> NewDocumentAsync() => _fileCommands.NewAsync();
 
     private void ToggleFindBar(bool show)
     {
@@ -2960,32 +2976,23 @@ public sealed partial class MainWindow : Window
     }
 
     private void DoFind()
-    {
-        var query = _findBox.Text;
-        if (string.IsNullOrEmpty(query))
-            return;
-        if (!_editor.FindNext(query))
-            _status.Text = $"No match for \"{query}\".";
-    }
+        => ExecuteInlineFindReplace(FindReplaceDialogActionKind.FindNext);
 
     private void DoReplace()
-    {
-        var query = _findBox.Text;
-        if (string.IsNullOrEmpty(query))
-            return;
-        if (!_editor.ReplaceNext(query, _replaceBox.Text ?? string.Empty))
-            _status.Text = $"No match for \"{query}\".";
-    }
+        => ExecuteInlineFindReplace(FindReplaceDialogActionKind.Replace);
 
     private void DoReplaceAll()
-    {
-        var query = _findBox.Text;
-        if (string.IsNullOrEmpty(query))
-            return;
-        var n = _editor.ReplaceAll(query, _replaceBox.Text ?? string.Empty);
-        _status.Text = $"Replaced {n} occurrence{(n == 1 ? "" : "s")} of \"{query}\".";
-        UpdateStatus();
-    }
+        => ExecuteInlineFindReplace(FindReplaceDialogActionKind.ReplaceAll);
+
+    private void ExecuteInlineFindReplace(FindReplaceDialogActionKind action) =>
+        _status.Text = _inlineFindReplaceSession.Execute(
+            action,
+            new FindReplaceDialogInput(
+                _findBox.Text,
+                _replaceBox.Text,
+                MatchCase: false,
+                WholeWord: false,
+                UseWildcards: false)).StatusText;
 
     private void ScrollCaretIntoView()
     {
@@ -3128,13 +3135,7 @@ public sealed partial class MainWindow : Window
             _status.Text = result.FeedbackMessage;
     }
 
-    private async Task OpenAsync()
-    {
-        await _fileWorkflow.OpenAsync(
-            FileText.OpenAction,
-            PromptOpenPathAsync,
-            OpenPathAsync);
-    }
+    private async Task OpenAsync() => await _fileCommands.OpenAsync();
 
     private Task<bool> OpenRecentPathAsync(string path) =>
 /*
@@ -3147,12 +3148,9 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private Task<bool> OpenRecentAsync(string path) =>
 */
-        _fileWorkflow.OpenAsync(
-            FileText.OpenAction,
-            () => Task.FromResult<string?>(path),
-            OpenPathAsync);
+        _fileCommands.OpenSelectedPathAsync(path);
 
-    private async Task<string?> PromptOpenPathAsync()
+    private async Task<string?> PromptOpenPathAsync(FreeWDocumentOpenPickerRequest request)
     {
         using var file = await AvaloniaFilePickerService.PickSingleOpenFileWithLocalPathAsync(
             StorageProvider,
@@ -3165,17 +3163,8 @@ public sealed partial class MainWindow : Window
         return file?.LocalPath;
     }
 
-    private async Task<bool> OpenPathAsync(string path)
-    {
-        var execution = await _documentFileWorkflow.OpenPathAsync(path);
-        return ApplyFileFeedback(FreeWDocumentFileFeedbackPlanner.PlanOpen(execution, path));
-    }
-
     private Task<bool> ImportPdfTextAsync() =>
-        _fileWorkflow.OpenAsync(
-            FreeWDocumentFileFeedbackPlanner.ImportPdfAction,
-            _pickPdfImportPathAsync,
-            ImportPdfTextPathAsync);
+        _fileCommands.ImportPdfTextAsync();
 
     private async Task<string?> PromptPdfImportPathAsync()
     {
@@ -3188,54 +3177,23 @@ public sealed partial class MainWindow : Window
         return file?.LocalPath;
     }
 
-    private async Task<bool> ImportPdfTextPathAsync(string path)
-    {
-        var result = await _documentFileWorkflow.ImportPdfTextPathAsync(path);
-        return ApplyFileFeedback(FreeWDocumentFileFeedbackPlanner.PlanImport(result, path));
-    }
+    private Task<bool> SaveAsync() => _fileCommands.SaveAsync();
 
-    private Task<bool> SaveAsync() =>
-        _fileWorkflow.SaveAsync(SaveToCurrentPathAsync, SaveAsAsync);
+    private Task<bool> SaveAsAsync() => _fileCommands.SaveAsAsync();
 
-    private Task<bool> SaveToCurrentPathAsync(string path) =>
-        SaveToCurrentPathCoreAsync(path);
-
-    private async Task<bool> SaveToCurrentPathCoreAsync(string path)
-    {
-        var result = await _documentFileWorkflow.SaveCurrentPathAsync(path);
-        var feedback = FreeWDocumentFileFeedbackPlanner.PlanSave(
-            result,
-            DocumentSaveExecutionKind.Save,
-            path);
-        return feedback.RequiresSaveAs ? await SaveAsAsync() : ApplyFileFeedback(feedback);
-    }
-
-    private async Task<bool> SaveAsAsync()
+    private async Task<FreeWDocumentSavePickerResult?> PromptSavePathAsync(
+        FreeWDocumentSavePickerRequest request)
     {
         var savePlan = _documentPersistence.BuildSavePickerPlan(
-            _fileWorkflow.CurrentPath,
-            _fileWorkflow.CurrentFileName,
-            FileText.FallbackDisplayName);
+            request.CurrentPath,
+            request.SuggestedFileName ?? request.CurrentFileName,
+            FileText.FallbackDisplayName,
+            request.PreferredExtension);
         using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
             StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(FileText.SavePickerTitle, savePlan));
+            AvaloniaFilePickerSaveRequest.FromSavePlan(request.Title, savePlan));
         var path = file?.LocalPath;
-        return path is not null && await SaveToPathAsync(path);
-    }
-
-    private Task<bool> SaveToPathAsync(string path) =>
-        SaveToPathAsync(path, filterIndex: 0);
-
-    private Task<bool> SaveToPathAsync(string path, int filterIndex)
-        => SavePathCoreAsync(path, filterIndex, DocumentSaveExecutionKind.Save);
-
-    private async Task<bool> SavePathCoreAsync(
-        string path,
-        int filterIndex,
-        DocumentSaveExecutionKind kind)
-    {
-        var execution = await _documentFileWorkflow.SavePathAsync(path, filterIndex, kind);
-        return ApplyFileFeedback(FreeWDocumentFileFeedbackPlanner.PlanSave(execution, kind, path));
+        return path is null ? null : new FreeWDocumentSavePickerResult(path);
     }
 
     private bool ApplyFileFeedback(FreeWDocumentFileFeedback feedback)
@@ -3908,26 +3866,10 @@ public sealed partial class MainWindow : Window
                 : null,
             PrintPreview: () => _ = OpenPrintPreviewAsync());
 
-    private async Task SaveCopyAsync()
-    {
-        var savePlan = _documentPersistence.BuildSavePickerPlan(
-            _fileWorkflow.CurrentPath,
-            _fileWorkflow.CurrentFileName,
-            FileText.FallbackDisplayName);
-        using var file = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-            StorageProvider,
-            AvaloniaFilePickerSaveRequest.FromSavePlan(
-                FreeWDocumentFileFeedbackPlanner.SaveCopyCommand,
-                savePlan));
-        var path = file?.LocalPath;
-        if (path is null)
-            return;
-
-        await SaveCopyToPathAsync(path);
-    }
+    private async Task SaveCopyAsync() => await _fileCommands.SaveCopyAsync();
 
     internal Task<bool> SaveCopyToPathAsync(string path, int filterIndex = 0)
-        => SavePathCoreAsync(path, filterIndex, DocumentSaveExecutionKind.SaveCopy);
+        => _fileCommands.SavePathAsync(path, filterIndex, DocumentSaveExecutionKind.SaveCopy);
 
     private async Task OpenPropertiesAsync()
     {
@@ -4064,7 +4006,7 @@ public sealed partial class MainWindow : Window
                 savePlan.DefaultExtensionWithoutDot));
         var path = file?.LocalPath;
         if (path is not null)
-            await SaveToPathAsync(path, filterIndex);
+            await _fileCommands.SavePathAsync(path, filterIndex);
     }
 
     // Opens an external URL raised by DocumentView.HyperlinkActivated through the shared scheme allowlist.

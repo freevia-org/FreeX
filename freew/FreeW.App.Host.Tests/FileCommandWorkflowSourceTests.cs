@@ -45,16 +45,17 @@ public sealed class FileCommandWorkflowSourceTests
         {
             source.Should().Contain("DocumentPersistenceWorkflow");
             source.Should().Contain("FreeWDocumentFileWorkflow");
-            source.Should().Contain("OpenPathAsync(path, suppressRecentFiles)");
-            source.Should().Contain("SavePathAsync(path, filterIndex, kind)");
+            source.Should().Contain("FreeWDocumentFileCommandSession");
+            source.Should().Contain("FreeWDocumentFileCommandPorts");
+            source.Should().Contain("FreeWFileCommandLifecyclePorts");
             source.Should().Contain("_persistence.BuildSaveDialogPlan(");
             source.Should().Contain("OpenRecentPath(string path)");
-            source.Should().Contain("_workflow.Open(\"opening another document\", () => path, OpenPath)");
+            source.Should().Contain("_fileCommands.OpenSelectedPathAsync(path)");
             source.Should().Contain("OpenFromFolder(string folderPath)");
-            source.Should().Contain("PromptOpenPath(folderPath)");
+            source.Should().Contain("_fileCommands.OpenAsync(folderPath)");
             source.Should().Contain("initialDirectory: initialDirectory");
             source.Should().Contain("SaveAsSuggested(string? suggestedFileName, string? preferredExtension)");
-            source.Should().Contain("TryPromptSavePath(preferredExtension, suggestedFileName");
+            source.Should().Contain(".SaveAsAsync(suggestedFileName, preferredExtension)");
             source.Should().NotContain("DocumentFileFormatResolver.FindOpenAdapter");
             source.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter");
             source.Should().NotContain("FileDialogSaveSelectionResolver.ResolveAdapter");

@@ -7,6 +7,7 @@ using Free.Shared.AppServices;
 using Free.Shared.IO;
 using Free.Shared.Shell.Wpf;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
@@ -45,6 +46,7 @@ internal sealed class FileCommands
 
     private readonly DocumentPersistenceWorkflow _persistence;
     private readonly FreeWDocumentFileWorkflow _documentWorkflow;
+    private readonly FreeWDocumentFileCommandSession _fileCommands;
     private readonly Func<string?> _promptPdfImportPath;
 
     public FileCommands(
@@ -95,6 +97,40 @@ internal sealed class FileCommands
                     return ValueTask.CompletedTask;
                 },
                 SetCurrentFileName: fileName => _editor.CurrentFileName = fileName));
+        _fileCommands = new FreeWDocumentFileCommandSession(
+            _documentWorkflow,
+            new FreeWFileCommandLifecyclePorts(
+                CurrentPath: () => _workflow.CurrentPath,
+                CurrentFileName: () => _workflow.CurrentFileName,
+                NewAsync: (action, loadAsync) => Task.FromResult(_workflow.New(
+                    action,
+                    () => loadAsync().GetAwaiter().GetResult())),
+                OpenAsync: (action, pickAsync, openAsync) => Task.FromResult(_workflow.Open(
+                    action,
+                    () => pickAsync().GetAwaiter().GetResult(),
+                    path => openAsync(path).GetAwaiter().GetResult())),
+                SaveAsync: (saveCurrentAsync, saveAsAsync) => Task.FromResult(_workflow.Save(
+                    path => saveCurrentAsync(path).GetAwaiter().GetResult(),
+                    () => saveAsAsync().GetAwaiter().GetResult()))),
+            new FreeWDocumentFileCommandPorts(
+                LoadNewDocumentAsync: () =>
+                {
+                    _editor.LoadModel(TextDocument.CreateEmpty());
+                    _editor.CurrentFileName = null;
+                    return Task.CompletedTask;
+                },
+                PickOpenPathAsync: request => Task.FromResult(PromptOpenPath(request.InitialDirectory)),
+                PickPdfImportPathAsync: () => Task.FromResult(_promptPdfImportPath()),
+                PickSaveTargetAsync: request => Task.FromResult(
+                    TryPromptSavePath(
+                        request.PreferredExtension,
+                        request.SuggestedFileName,
+                        out var path,
+                        out var filterIndex)
+                        ? new FreeWDocumentSavePickerResult(path, filterIndex)
+                        : null),
+                PresentFeedback: feedback => ApplyFeedback(feedback)),
+            FreeWFileTextResources.Document);
     }
 
     public bool IsDirty => _workflow.IsDirty;
@@ -138,60 +174,40 @@ internal sealed class FileCommands
     /// File &gt; New. Routes through the shared dirty-gate so unsaved work is not silently lost
     /// (previously FreeW dropped changes without prompting). Returns false if the user cancels.
     /// </summary>
-    public bool New() =>
-        _workflow.New(
-            "creating a new document",
-            () => _editor.LoadModel(TextDocument.CreateEmpty()),
-            () => _editor.CurrentFileName = null);
+    public bool New() => _fileCommands.NewAsync().GetAwaiter().GetResult();
 
     /// <summary>
     /// File &gt; Open. Dirty-gates first, then shows the open dialog and loads the chosen file.
     /// Returns false if the user cancels at either step.
     /// </summary>
-    public bool Open() =>
-        _workflow.Open("opening another document", () => PromptOpenPath(), OpenPath);
+    public bool Open() => _fileCommands.OpenAsync().GetAwaiter().GetResult();
 
     public bool OpenRecentPath(string path) =>
-        _workflow.Open("opening another document", () => path, OpenPath);
+        _fileCommands.OpenSelectedPathAsync(path).GetAwaiter().GetResult();
 
     public bool OpenFromFolder(string folderPath) =>
-        _workflow.Open("opening another document", () => PromptOpenPath(folderPath), OpenPath);
+        _fileCommands.OpenAsync(folderPath).GetAwaiter().GetResult();
 
     /// <summary>
     /// File &gt; Import PDF (text only). This is deliberately not a normal Open path: PDF extraction is lossy,
     /// read-only text import, so the result becomes an untitled dirty document that must be saved elsewhere.
     /// </summary>
     public bool ImportPdfText() =>
-        _workflow.Open(
-            FreeWDocumentFileFeedbackPlanner.ImportPdfAction,
-            _promptPdfImportPath,
-            ImportPdfTextPath);
+        _fileCommands.ImportPdfTextAsync().GetAwaiter().GetResult();
 
     /// <summary>
     /// Dialog-free PDF text import for tests and host integrations. The PDF path is never associated with the
     /// document or recent-files list because the imported text must be saved to a writable document format.
     /// </summary>
-    public bool ImportPdfTextPath(string path)
-    {
-        var result = _documentWorkflow.ImportPdfTextPathAsync(path).GetAwaiter().GetResult();
-        return ApplyFeedback(FreeWDocumentFileFeedbackPlanner.PlanImport(result, path));
-    }
+    public bool ImportPdfTextPath(string path) =>
+        _fileCommands.ImportPdfTextPathAsync(path).GetAwaiter().GetResult();
 
     /// <summary>
     /// Loads a specific path (recent-files click / drag-drop / startup). Does NOT dirty-gate: callers
     /// that bypass the dialog already chose to replace the document. Returns true on success.
     /// </summary>
-    public bool OpenPath(string path) => OpenPath(path, suppressRecentFiles: false);
-
-    private bool OpenPath(string path, bool suppressRecentFiles)
-    {
-        var execution = _documentWorkflow
-            .OpenPathAsync(path, suppressRecentFiles)
-            .GetAwaiter()
-            .GetResult();
-
-        return ApplyFeedback(FreeWDocumentFileFeedbackPlanner.PlanOpen(execution, path));
-    }
+    public bool OpenPath(string path) =>
+        _fileCommands.OpenPathAsync(path).GetAwaiter().GetResult();
 
     /// <summary>Recent files (most recent first) from the shared store; never throws.</summary>
     public IReadOnlyList<RecentFileEntry> RecentEntries => _workflow.RecentEntries;
@@ -201,7 +217,7 @@ internal sealed class FileCommands
     /// when there is one, otherwise falls through to Save-As. Returns true on a successful (or no-op)
     /// save, false on cancel/error.
     /// </summary>
-    public bool Save() => _workflow.Save(SaveToCurrentPath, SaveAs);
+    public bool Save() => _fileCommands.SaveAsync().GetAwaiter().GetResult();
 
     /// <summary>File &gt; Save As. Always prompts for a target. Returns true on a successful save.</summary>
     public bool SaveAs() => SaveAs(preferredExtension: null);
@@ -209,32 +225,23 @@ internal sealed class FileCommands
     public bool SaveAs(string? preferredExtension) =>
         SaveAsSuggested(suggestedFileName: null, preferredExtension);
 
-    public bool SaveAsSuggested(string? suggestedFileName, string? preferredExtension)
-    {
-        if (!TryPromptSavePath(preferredExtension, suggestedFileName, out var path, out var filterIndex))
-            return false;
-
-        return SavePath(path, filterIndex, DocumentSaveExecutionKind.Save);
-    }
+    public bool SaveAsSuggested(string? suggestedFileName, string? preferredExtension) =>
+        _fileCommands
+            .SaveAsAsync(suggestedFileName, preferredExtension)
+            .GetAwaiter()
+            .GetResult();
 
     /// <summary>
     /// File &gt; Save a Copy. Writes to a chosen path WITHOUT changing the current file or dirty state,
     /// reusing the same resolver + adapter plumbing as Save-As. Returns true on a successful save.
     /// </summary>
-    public bool SaveCopy()
-    {
-        if (!TryPromptSavePath(
-                preferredExtension: null,
-                suggestedFileName: null,
-                out var path,
-                out var filterIndex))
-            return false;
-
-        return SavePath(path, filterIndex, DocumentSaveExecutionKind.SaveCopy);
-    }
+    public bool SaveCopy() => _fileCommands.SaveCopyAsync().GetAwaiter().GetResult();
 
     internal bool SaveCopyToPath(string path, int filterIndex = 0) =>
-        SavePath(path, filterIndex, DocumentSaveExecutionKind.SaveCopy);
+        _fileCommands
+            .SavePathAsync(path, filterIndex, DocumentSaveExecutionKind.SaveCopy)
+            .GetAwaiter()
+            .GetResult();
 
     /// <summary>
     /// Save-before-close gate, called from the window's Closing handler. Returns true if the window
@@ -247,28 +254,6 @@ internal sealed class FileCommands
     /// Save to the current path, resolving its format adapter. Falls back to Save-As when the current file is
     /// a read-only format (e.g. a legacy format opened for viewing), so the user is steered to a writable one.
     /// </summary>
-    private bool SaveToCurrentPath(string path)
-    {
-        var result = _documentWorkflow.SaveCurrentPathAsync(path).GetAwaiter().GetResult();
-        var feedback = FreeWDocumentFileFeedbackPlanner.PlanSave(
-            result,
-            DocumentSaveExecutionKind.Save,
-            path);
-        return feedback.RequiresSaveAs ? SaveAs() : ApplyFeedback(feedback);
-    }
-
-    private bool SavePath(
-        string path,
-        int filterIndex,
-        DocumentSaveExecutionKind kind)
-    {
-        var result = _documentWorkflow
-            .SavePathAsync(path, filterIndex, kind)
-            .GetAwaiter()
-            .GetResult();
-        return ApplyFeedback(FreeWDocumentFileFeedbackPlanner.PlanSave(result, kind, path));
-    }
-
     private bool ApplyFeedback(FreeWDocumentFileFeedback feedback)
     {
         if (feedback.ShouldShowError)

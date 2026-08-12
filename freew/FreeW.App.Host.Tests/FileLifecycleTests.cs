@@ -288,7 +288,8 @@ public sealed class FileLifecycleTests : IDisposable
 
         Assert.Contains("private readonly DocumentPersistenceWorkflow _persistence;", source);
         Assert.Contains("private readonly FreeWDocumentFileWorkflow _documentWorkflow;", source);
-        Assert.Contains("SavePathAsync(path, filterIndex, kind)", source);
+        Assert.Contains("private readonly FreeWDocumentFileCommandSession _fileCommands;", source);
+        Assert.Contains("_fileCommands", source);
         Assert.Contains("ConfirmSaveCompatibilityAsync:", source);
         Assert.DoesNotContain("DocumentSaveCompatibilityPlanner.Build", source);
         Assert.DoesNotContain("_persistence.Save(_editor.Model, target)", source);

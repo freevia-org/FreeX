@@ -47,23 +47,32 @@ public sealed class FileWorkflowArchitectureTests
     [Fact]
     public void RenderersDelegateFileResultAndTargetHandling()
     {
+        var session = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Shell",
+            "FreeWDocumentFileCommandSession.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "FileCommands.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
 
-        wpf.Should().Contain("OpenPathAsync(path, suppressRecentFiles)");
-        wpf.Should().Contain("_documentWorkflow.ImportPdfTextPathAsync(");
-        wpf.Should().Contain("_documentWorkflow.SaveCurrentPathAsync(");
-        wpf.Should().Contain("SavePathAsync(path, filterIndex, kind)");
-        avalonia.Should().Contain("_documentFileWorkflow.OpenPathAsync(");
-        avalonia.Should().Contain("_documentFileWorkflow.ImportPdfTextPathAsync(");
-        avalonia.Should().Contain("_documentFileWorkflow.SaveCurrentPathAsync(");
-        avalonia.Should().Contain("_documentFileWorkflow.SavePathAsync(");
-        wpf.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanOpen(");
-        wpf.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanImport(");
-        wpf.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanSave(");
-        avalonia.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanOpen(");
-        avalonia.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanImport(");
-        avalonia.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanSave(");
+        session.Should().Contain("public sealed class FreeWDocumentFileCommandSession");
+        session.Should().Contain("_workflow.OpenPathAsync(path, suppressRecentFiles)");
+        session.Should().Contain("_workflow.ImportPdfTextPathAsync(path)");
+        session.Should().Contain("_workflow.SaveCurrentPathAsync(path)");
+        session.Should().Contain("_workflow.SavePathAsync(path, filterIndex, kind)");
+        session.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanOpen(");
+        session.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanImport(");
+        session.Should().Contain("FreeWDocumentFileFeedbackPlanner.PlanSave(");
+
+        foreach (var renderer in new[] { wpf, avalonia })
+        {
+            renderer.Should().Contain("FreeWDocumentFileCommandSession");
+            renderer.Should().Contain("FreeWDocumentFileCommandPorts");
+            renderer.Should().Contain("FreeWFileCommandLifecyclePorts");
+            renderer.Should().NotContain("FreeWDocumentFileFeedbackPlanner.PlanOpen(");
+            renderer.Should().NotContain("FreeWDocumentFileFeedbackPlanner.PlanImport(");
+            renderer.Should().NotContain("FreeWDocumentFileFeedbackPlanner.PlanSave(");
+        }
 
         foreach (var renderer in new[] { wpf, avalonia })
         {

@@ -299,9 +299,10 @@ public class RibbonAndDocumentTests
         importStart.Should().BeGreaterThanOrEqualTo(0);
         saveStart.Should().BeGreaterThan(importStart);
         var importSource = mainWindow[importStart..saveStart];
-        importSource.Should().Contain("_fileWorkflow.OpenAsync(");
+        importSource.Should().Contain("_fileCommands.ImportPdfTextAsync()");
         importSource.Should().Contain("_documentPersistence.BuildPdfImportPickerPlan().FileTypes");
-        importSource.Should().Contain("_documentFileWorkflow.ImportPdfTextPathAsync(path)");
+        mainWindow.Should().Contain("new FreeWDocumentFileCommandSession(");
+        mainWindow.Should().Contain("PickPdfImportPathAsync: _pickPdfImportPathAsync");
         importSource.Should().NotContain("_documentPersistence.ImportPdfText(path)");
         importSource.Should().NotContain("DocumentFileAdapterCatalog.CreatePdfImportAdapters()");
         importSource.Should().NotContain("File.OpenRead(path)");
