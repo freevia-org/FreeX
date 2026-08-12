@@ -18,7 +18,7 @@ namespace FreeP.App.Host;
 /// policy.
 /// </para>
 /// </summary>
-internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+internal sealed partial class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly OptionsDialogSession _session;
     private readonly OptionsDialogSurfaceSpec _surface;
@@ -30,11 +30,6 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     /// <summary>The normalized options produced on OK; equals the input options on Cancel.</summary>
     public CompositorOptions Result { get; private set; }
-
-    internal TextBox RecentFilesCapForTest => _recentFilesCap;
-    internal ComboBox DefaultFormatForTest => _defaultFormat;
-    internal TextBox UiLanguageForTest => _uiLanguage;
-    internal TextBlock StatusForTest => _status;
 
     public OptionsDialog(Window owner, CompositorOptions options)
     {
@@ -115,8 +110,6 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Close();
         }
     }
-
-    internal void AcceptForTest() => Accept();
 
     private static void AddRow(Grid grid, int row, string label, FrameworkElement field, string? hint = null)
     {

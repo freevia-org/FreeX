@@ -5,7 +5,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class ChartTextOptionsDialog : Window
+internal sealed partial class ChartTextOptionsDialog : Window
 {
     private readonly ChartTextOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -26,12 +26,6 @@ internal sealed class ChartTextOptionsDialog : Window
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         Content = _form.Content;
     }
-
-    internal ChartTextOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
-
-    internal void SetOptionsForTests(Func<ChartTextOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

@@ -6,7 +6,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style plot-area and legend manual-layout dialog.</summary>
-public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartLayoutOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -26,12 +26,6 @@ public sealed class ChartLayoutOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartLayoutOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()), CultureInfo.CurrentCulture);
-
-    internal void SetOptionsForTests(Func<ChartLayoutOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {

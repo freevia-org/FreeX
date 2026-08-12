@@ -5,7 +5,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Host;
 
-public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly HeaderFooterDialogSession _session;
     private readonly HeaderFooterDialogFormSession<Control> _formSession;
@@ -191,52 +191,6 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 DialogResult = true;
             }
         }
-    }
-
-    internal bool ApplyForTests(
-        bool showDateTime,
-        bool showFooter,
-        bool showSlideNumber,
-        string footerText,
-        HeaderFooterApplyScope scope,
-        bool suppressOnTitleSlide = false,
-        HeaderFooterDateTimeMode dateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
-        string dateTimeFieldType = "datetime1",
-        string fixedDateTimeText = "")
-    {
-        SetInputForTests(
-            showDateTime,
-            showFooter,
-            showSlideNumber,
-            footerText,
-            suppressOnTitleSlide,
-            dateTimeMode,
-            dateTimeFieldType,
-            fixedDateTimeText);
-        Apply(scope);
-        return LastApplyPlan?.ShouldApply == true;
-    }
-
-    internal void SetInputForTests(
-        bool showDateTime,
-        bool showFooter,
-        bool showSlideNumber,
-        string footerText,
-        bool suppressOnTitleSlide = false,
-        HeaderFooterDateTimeMode dateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
-        string dateTimeFieldType = "datetime1",
-        string fixedDateTimeText = "")
-    {
-        var state = _session.SetInput(
-            showDateTime,
-            showFooter,
-            showSlideNumber,
-            footerText,
-            suppressOnTitleSlide,
-            dateTimeMode,
-            dateTimeFieldType,
-            fixedDateTimeText);
-        _formSession.ApplyState(state);
     }
 
     private void RegisterControl(

@@ -12,6 +12,6 @@ public sealed partial class SlideShowMediaController
 
     internal uint? LastMediaClickShapeIdForTest { get; private set; }
 
-    partial void ObserveMediaClickForTests(SlideShowMediaClickPlan click) =>
+    partial void ObserveMediaClick(SlideShowMediaClickPlan click) =>
         LastMediaClickShapeIdForTest = click.Media?.ShapeId;
 }

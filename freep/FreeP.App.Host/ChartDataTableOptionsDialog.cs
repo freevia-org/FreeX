@@ -6,7 +6,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style chart data-table options dialog.</summary>
-public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartDataTableOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -26,12 +26,6 @@ public sealed class ChartDataTableOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartDataTableOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()), CultureInfo.CurrentCulture);
-
-    internal void SetOptionsForTests(Func<ChartDataTableOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

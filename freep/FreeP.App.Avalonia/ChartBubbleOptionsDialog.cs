@@ -5,7 +5,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class ChartBubbleOptionsDialog : Window
+internal sealed partial class ChartBubbleOptionsDialog : Window
 {
     private readonly ChartBubbleOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -26,12 +26,6 @@ internal sealed class ChartBubbleOptionsDialog : Window
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
         Content = _form.Content;
     }
-
-    internal ChartBubbleOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
-
-    internal void SetOptionsForTests(Func<ChartBubbleOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

@@ -2530,7 +2530,7 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(");
         source.Should().NotContain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
         source.Should().NotContain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
-        source.Should().Contain("_reviewWorkflowSession.RefreshAltTextPlans(");
+        source.Should().Contain("_altTextPaneHostCoordinator.RefreshSelection();");
         source.Should().Contain("_reviewWorkflowSession.ApplyReadingOrderMove(");
         source.Should().Contain("_reviewWorkflowSession.SelectReadingOrderItem(");
         workareaEndpointSource.Should().Contain(

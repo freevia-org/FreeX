@@ -10,7 +10,7 @@ namespace FreeP.App.Host;
 /// Modal slide-size dialog. WPF owns the controls and localization shell; shared
 /// presentation policy lives in <see cref="SlideSizeDialogPlanner"/>.
 /// </summary>
-public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly SlideSizeDialogSession _session;
     private bool _suppressPresetRefresh;
@@ -145,24 +145,6 @@ public sealed class SlideSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         cyEmu = parse.CyEmu;
         return parse.IsValid;
     }
-
-    internal void SetInputForTests(string widthText, string heightText, SlideSizeDialogUnit unit)
-    {
-        _suppressPresetRefresh = true;
-        try
-        {
-            var state = _session.SetInputUnit(widthText, heightText, unit);
-            _inchesRadio.IsChecked = unit == SlideSizeDialogUnit.Inches;
-            _cmRadio.IsChecked = unit == SlideSizeDialogUnit.Centimeters;
-            ApplyDisplay(state.Display);
-        }
-        finally
-        {
-            _suppressPresetRefresh = false;
-        }
-    }
-
-    internal bool ApplyForTests() => Apply(showValidationDialog: false);
 
     private void LoadInitialState()
     {

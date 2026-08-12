@@ -11,7 +11,7 @@ namespace FreeP.App.Host;
 /// <summary>
 /// Native WPF realization of the renderer-neutral slide-pane session.
 /// </summary>
-public sealed class SlidePane : Border
+public sealed partial class SlidePane : Border
 {
     private readonly PresentationWorkareaSession _workarea;
     private readonly ListBox _list;
@@ -587,12 +587,6 @@ public sealed class SlidePane : Border
                 item.Entry.SlideIndex == slideIndex)
             ?.Thumbnail;
 
-    internal ContextMenu BuildSlideContextMenuForTests(int slideIndex) =>
-        BuildSlideContextMenu(slideIndex);
-
-    internal ContextMenu BuildSectionContextMenuForTests(SlidePaneEntry entry) =>
-        BuildSectionContextMenu(entry);
-
     internal int SlidePaneSlideItemCount => _list.Items
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is int);
@@ -601,59 +595,8 @@ public sealed class SlidePane : Border
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is SectionHeaderTag);
 
-    internal IReadOnlyList<string?> SlidePaneThumbnailAutomationNamesForTests => _list.Items
-        .OfType<ListBoxItem>()
-        .Where(item => item.Tag is int)
-        .Select(AutomationProperties.GetName)
-        .ToArray();
-
-    internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _list.Items
-        .OfType<ListBoxItem>()
-        .Where(item => item.Tag is SectionHeaderTag)
-        .Select(AutomationProperties.GetName)
-        .ToArray();
-
-    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests => _list.Items
-        .OfType<FrameworkElement>()
-        .Where(item => AutomationProperties.GetAutomationId(item)
-            .StartsWith("FreePSlidePaneItem", StringComparison.Ordinal))
-        .ToArray();
-
-    internal bool ToggleSectionForTests(int sectionIndex)
-    {
-        if (sectionIndex < 0 || sectionIndex >= _workarea.Presentation.Sections.Count)
-            return false;
-        _workarea.ToggleSlidePaneSection(SlidePanePlanner.GetSectionIdentity(
-            _workarea.Presentation.Sections[sectionIndex],
-            sectionIndex));
-        return true;
-    }
-
-    internal bool TryApplySlideSectionActionForTests(
-        SlideSectionActionKind kind,
-        int slideIndex = -1,
-        int sectionIndex = -1,
-        string? promptedName = null)
-    {
-        var command = kind switch
-        {
-            SlideSectionActionKind.AddSection => FreePContextMenuCommand.AddSection,
-            SlideSectionActionKind.RenameSection => FreePContextMenuCommand.RenameSection,
-            SlideSectionActionKind.RemoveSection => FreePContextMenuCommand.RemoveSection,
-            SlideSectionActionKind.RemoveAllSections => FreePContextMenuCommand.RemoveAllSections,
-            _ => default,
-        };
-        var execution = _workarea.BuildSlidePaneContextCommandRoute(command, slideIndex, sectionIndex)
-            .SectionExecution;
-        return execution is not null && _workarea.ExecuteSlidePaneSectionAction(execution, promptedName);
-    }
-
     internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent) =>
         _workarea.ExecuteSlidePaneKeyboardAction(intent);
-
-    internal ListBox NativeListForTests => _list;
-
-    internal Button NewSlideButtonForTests => _newSlideButton;
 
     private static Brush BrushFromHex(string hex)
     {

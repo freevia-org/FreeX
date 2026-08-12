@@ -22,13 +22,20 @@ public sealed class HyperlinkDialogTests
             "freep",
             "FreeP.App.Avalonia",
             "HyperlinkDialog.cs"));
+        var testSupport = File.ReadAllText(FindRepoFile(
+            "freep",
+            "TestSupport",
+            "HostAccess.Avalonia",
+            "BasicDialogs.TestAccess.cs"));
 
         source.Should().Contain("HyperlinkDialogPlanner.BuildDialogRequest(slides, current)");
         source.Should().Contain("new HyperlinkDialogSession(request)");
         source.Should().Contain("_session.Surface");
         source.Should().Contain("AutomationProperties.SetName(");
         source.Should().Contain("AutomationProperties.SetAutomationId(");
-        source.Should().Contain("_session.SetInput(");
+        source.Should().NotContain("ForTests");
+        testSupport.Should().Contain("partial class HyperlinkDialog");
+        testSupport.Should().Contain("_session.SetInput(");
         source.Should().Contain("_session.SelectTarget(");
         source.Should().Contain("_session.SetUrlText(");
         source.Should().Contain("_session.SelectSlide(");

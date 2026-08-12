@@ -8,6 +8,11 @@ public sealed class ChartOptionsDialogDedupSourceTests
         foreach (var fileName in ChartOptionDialogFiles)
         {
             var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", fileName));
+            var testSupport = File.ReadAllText(RepoFile(
+                "freep",
+                "TestSupport",
+                "HostAccess.Avalonia",
+                "ChartOptionsDialogs.TestAccess.cs"));
             (source.Contains("ChartDialogOptionProjection.", StringComparison.Ordinal)
                 || source.Contains("DialogSession", StringComparison.Ordinal))
                 .Should().BeTrue(fileName);
@@ -18,7 +23,11 @@ public sealed class ChartOptionsDialogDedupSourceTests
             if (!string.Equals(fileName, "ChartExSeriesLayoutDialog.cs", StringComparison.Ordinal))
             {
                 source.Should().Contain("_session.BuildInput(_form.CaptureValues())", fileName);
-                source.Should().Contain("_session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues())", fileName);
+                source.Should().NotContain("ForTests", fileName);
+                testSupport.Should().Contain(
+                    $"partial class {Path.GetFileNameWithoutExtension(fileName)}",
+                    fileName);
+                testSupport.Should().Contain("BuildCommitPlanForTests()", fileName);
                 source.Should().NotContain("_form.SetText(", fileName);
                 source.Should().NotContain("_form.SetSelectedIndex(", fileName);
                 source.Should().NotContain("_form.SetChecked(", fileName);

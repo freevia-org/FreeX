@@ -7,15 +7,12 @@ using FreeP.App.Compositor;
 namespace FreeP.App.Host;
 
 /// <summary>Small host adapter for the shared Selection Pane projection.</summary>
-internal sealed class SelectionPane : Border
+internal sealed partial class SelectionPane : Border
 {
     private readonly PresentationSelectionPaneSession _session;
     private readonly Action? _onAccessibilityChanged;
     private readonly StackPanel _items = new();
     private readonly TextBlock _message = new();
-
-    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests =>
-        _items.Children.OfType<FrameworkElement>().ToArray();
 
     public SelectionPane(EditingSession editor, Action? onAccessibilityChanged = null)
     {

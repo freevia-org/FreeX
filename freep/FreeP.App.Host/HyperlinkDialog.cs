@@ -18,7 +18,7 @@ namespace FreeP.App.Host;
 /// OK calls <see cref="EditingSession.SetShapeHyperlink"/> (undoable).
 /// Cancel discards.
 /// </summary>
-public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly HyperlinkDialogSession _session;
 
@@ -199,17 +199,6 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     // ── OK handler ────────────────────────────────────────────────────────────────
-
-    internal bool ApplyInputForTests(
-        HyperlinkDialogTargetKind targetKind,
-        string url,
-        int selectedSlideIndex,
-        string tooltip)
-    {
-        var state = _session.SetInput(targetKind, url, selectedSlideIndex, tooltip);
-        RenderInputState(state);
-        return Apply(showValidationDialog: false);
-    }
 
     private void OnOk() => Apply(showValidationDialog: true);
 

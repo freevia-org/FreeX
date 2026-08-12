@@ -9,7 +9,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class RotationOptionsDialog : Window
+internal sealed partial class RotationOptionsDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly RotationOptionsDialogSession _session;
@@ -55,12 +55,8 @@ internal sealed class RotationOptionsDialog : Window
         };
     }
 
-    internal void SetRotationForTests(string text) => _rotationBox.Text = text;
-
     internal bool TryGetRotation(out double degrees) =>
         _session.TryParse(_rotationBox.Text, out degrees);
-
-    internal bool ApplyForTests() => Apply();
 
     private void OnOk()
     {

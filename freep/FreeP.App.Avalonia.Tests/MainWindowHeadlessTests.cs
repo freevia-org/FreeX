@@ -845,6 +845,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
     public void MainWindow_sources_route_animation_commands_through_shared_planner()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var testSupport = File.ReadAllText(FindRepoFile(
+            "freep",
+            "TestSupport",
+            "HostAccess.Avalonia",
+            "MainWindow.FeaturesTestAccess.cs"));
         var workflow = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "Ribbon", "FreePRibbonCommandWorkflow.cs"));
         var session = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Presentation", "AnimationPaneSession.cs"));
 
@@ -875,7 +880,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
         session.Should().Contain("AnimationPanePlanner.TryApplyRemoveMutation(");
         session.Should().Contain("AnimationPanePlanner.BuildParagraphBuildMutationPlan(");
         session.Should().Contain("AnimationPanePlanner.TryApplyParagraphBuildMutation(");
-        source.Should().Contain("ToggleParagraphBuildForTests(");
+        source.Should().NotContain("ForTests");
+        testSupport.Should().Contain("ToggleParagraphBuildForTests(");
         source.Should().Contain("BuildAnimationPaneActionButton(");
         source.Should().NotContain("item.EffectOptions.Options");
         source.Should().NotContain("item.EffectOptions.WheelSpokeOptions");

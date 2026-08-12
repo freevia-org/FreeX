@@ -5,7 +5,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style bubble chart sizing options dialog.</summary>
-public sealed class ChartBubbleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartBubbleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartBubbleOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -25,12 +25,6 @@ public sealed class ChartBubbleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartBubbleOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
-
-    internal void SetOptionsForTests(Func<ChartBubbleOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

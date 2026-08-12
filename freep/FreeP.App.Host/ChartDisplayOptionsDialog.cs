@@ -5,7 +5,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style chart display options dialog.</summary>
-public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartDisplayOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -25,12 +25,6 @@ public sealed class ChartDisplayOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartDisplayOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
-
-    internal void SetOptionsForTests(Func<ChartDisplayOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

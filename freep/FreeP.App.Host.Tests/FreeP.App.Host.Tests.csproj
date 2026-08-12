@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\ShippingTestHookOwnershipAssertions.cs"
+             Link="TestSupport\ShippingTestHookOwnershipAssertions.cs" />
     <Using Include="FreeP.App.Localization.LocalizedUiText" Alias="UiText" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="FluentAssertions" />

@@ -12,7 +12,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class HyperlinkDialog : Window
+internal sealed partial class HyperlinkDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = 26 };
@@ -29,17 +29,6 @@ internal sealed class HyperlinkDialog : Window
     private readonly TextBlock _validationText;
 
     internal Hyperlink? Result => _session.Result;
-
-    internal bool ApplyInputForTests(
-        HyperlinkDialogTargetKind targetKind,
-        string url,
-        int selectedSlideIndex,
-        string tooltip)
-    {
-        var state = _session.SetInput(targetKind, url, selectedSlideIndex, tooltip);
-        RenderInputState(state);
-        return Apply();
-    }
 
     public HyperlinkDialog(IReadOnlyList<Slide> slides, Hyperlink? current = null)
         : this(HyperlinkDialogPlanner.BuildDialogRequest(slides, current))

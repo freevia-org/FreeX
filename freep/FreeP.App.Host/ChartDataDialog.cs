@@ -32,7 +32,7 @@ namespace FreeP.App.Host;
 /// The commit marks the chart workbook for regeneration; the package writer emits the
 /// updated embedded workbook and cached chart data together on save.
 /// </summary>
-public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -149,33 +149,6 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     internal string ValidationText => _validationText.Text;
-
-    internal ChartDataDialogCommitPlan BuildCommitPlanForTests()
-    {
-        if (!TryFlushPendingEdits())
-            throw new InvalidOperationException("The chart data grid contains an invalid value.");
-        return _session.BuildCommitPlan();
-    }
-
-    internal bool PrepareInvalidValueForTests()
-    {
-        if (_grid.Items.Count == 0 || _grid.Columns.Count < 2)
-            return false;
-        _grid.CurrentCell = new DataGridCellInfo(_grid.Items[0], _grid.Columns[1]);
-        _grid.ScrollIntoView(_grid.Items[0], _grid.Columns[1]);
-        _grid.Focus();
-        if (!_grid.BeginEdit())
-            return false;
-        UpdateLayout();
-        var editor = FindVisualDescendants<TextBox>(_grid).FirstOrDefault(box => box.IsKeyboardFocusWithin)
-            ?? FindVisualDescendants<TextBox>(_grid).FirstOrDefault();
-        if (editor is null)
-            return false;
-        editor.Text = "not-a-number";
-        editor.Focus();
-        var committed = TryFlushPendingEdits();
-        return !committed && !string.IsNullOrWhiteSpace(_validationText.Text);
-    }
 
     // ── Grid rebuild ──────────────────────────────────────────────────────────────
 

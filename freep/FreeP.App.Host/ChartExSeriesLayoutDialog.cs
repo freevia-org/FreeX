@@ -3,7 +3,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Host;
 
-public sealed class ChartExSeriesLayoutDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartExSeriesLayoutDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartExSeriesLayoutDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -22,15 +22,6 @@ public sealed class ChartExSeriesLayoutDialog : Free.Shared.Ribbon.Wpf.DialogWin
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
-    }
-
-    internal int SelectedSeriesIndexForTests => _session.SelectedSeriesIndex;
-    internal string? SelectedLayoutIdForTests => _session.LayoutIdAt(SelectedLayoutIndex);
-
-    internal void ApplyForTests()
-    {
-        if (!_session.TryApply(SelectedLayoutIndex, out var error))
-            throw new ArgumentException(error);
     }
 
     private int SelectedLayoutIndex =>

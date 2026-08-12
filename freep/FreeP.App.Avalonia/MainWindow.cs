@@ -316,30 +316,6 @@ public sealed partial class MainWindow : Window,
     internal bool HasToolbar => _ribbonControl is not null;
     internal int SlideCount => _presentation.Slides.Count;
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
-    internal bool RibbonKeyTipsVisibleForTests => _ribbonKeyTipsVisible;
-    internal bool RibbonKeyTipMenuOpenForTests => _ribbonKeyTipMenuItems is not null;
-    internal bool RibbonKeyTipFlyoutOpenForTests => _ribbonKeyTipFlyout?.IsOpen == true;
-    internal bool SlideCanvasFocusedForTests => _slideCanvas.IsFocused;
-    internal IReadOnlyList<MenuItem> RibbonKeyTipRenderedMenuItemsForTests =>
-        _ribbonKeyTipRenderedMenuItems ?? Array.Empty<MenuItem>();
-    internal void SetRibbonKeyTipMenuScopeForTests(RibbonMenu menu, MenuFlyout flyout)
-    {
-        _ribbonKeyTipsVisible = true;
-        _ribbonKeyTipMenuItems = menu.Items;
-        _ribbonKeyTipFlyout = flyout;
-        _ribbonKeyTipRenderedMenuItems = flyout.Items.OfType<MenuItem>().ToArray();
-        _ribbonKeyTipSequence = string.Empty;
-    }
-    internal bool HandleRibbonMenuKeyTipForTests(string token) => TryHandleRibbonMenuKeyTip(token);
-    internal RibbonCommandRegistry RibbonCommandRegistryForTests => _ribbonCommandRegistry!;
-    internal Control? RibbonControlForTests => _ribbonControl;
-    internal Border TitleBarForTests => _titleBar;
-    internal IReadOnlyList<Button> QuickAccessButtonsForTests => _quickAccessButtons;
-    internal string StatusTextForTests => _statusText.Text ?? string.Empty;
-    internal bool HasWindowIconForTests => Icon is not null;
-    internal int OwnerFocusRestoreCountForTests => _ownerFocusRestoreCount;
-    internal void RaiseKeyDownForTests(KeyEventArgs args) => MainWindow_KeyDown(this, args);
-    internal Task ClipboardOperationForTests => _clipboardOperationQueue.Completion;
     internal int SlidePaneSlideItemCount => _slidePaneList.Items
         .OfType<ListBoxItem>()
         .Count(item => item.Tag is int);
@@ -350,12 +326,6 @@ public sealed partial class MainWindow : Window,
     internal bool IsSlidePaneNewSlideButtonVisible => _slidePaneNewSlideButton.IsVisible;
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
     internal string? SlidePaneNewSlideButtonAutomationName => AutomationProperties.GetName(_slidePaneNewSlideButton);
-    internal Button SlidePaneNewSlideButtonForTests => _slidePaneNewSlideButton;
-    internal IReadOnlyList<string?> SelectionPaneRenameToolTipsForTests => _selectionPane.RenameToolTipsForTests;
-    internal bool IsShellShortcutTargetForTests(Control? focused) => IsShellShortcutTarget(focused);
-    internal ListBoxItem? SelectedSlidePaneItemForTests => GetCurrentSlidePaneItem();
-    internal IReadOnlyList<int> SlidePaneSelectedSlideIndicesForTests =>
-        _workareaSession.SlidePaneSession.Selection.SelectedSlideIndices;
     internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans =>
         _workareaSession.SlidePaneSession.Projection.Items
             .Select(item => item.Thumbnail)
@@ -366,25 +336,9 @@ public sealed partial class MainWindow : Window,
             .Select(item => item.SectionHeader)
             .OfType<SlidePaneSectionHeaderVisualPlan>()
             .ToArray();
-    internal IReadOnlyList<string?> SlidePaneSectionHeaderAutomationNamesForTests => _slidePaneList.Items
-        .OfType<ListBoxItem>()
-        .Where(item => item.Tag is SlidePaneSectionHeaderTag)
-        .Select(AutomationProperties.GetName)
-        .ToArray();
-    internal IReadOnlyList<string?> SlidePaneThumbnailAutomationNamesForTests => _slidePaneList.Items
-        .OfType<ListBoxItem>()
-        .Where(item => item.Tag is int)
-        .Select(AutomationProperties.GetName)
-        .ToArray();
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
     internal int DirtyGeneration => _fileWorkflow.DirtyGeneration;
-    internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
-    internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
-    internal PresentationViewZoomState ViewZoomStateForTests => _viewZoomState;
-    internal PresentationViewZoomState SlideCanvasViewZoomStateForTests => _slideCanvas.ViewZoomState;
-    internal bool? GestureSnapToGridForTests => _gestureHandler?.SnapToGrid;
-    internal bool? GestureSnapToShapesForTests => _gestureHandler?.SnapToShapes;
 
     internal string? CurrentPath => _fileWorkflow.CurrentPath;
 
@@ -466,13 +420,8 @@ public sealed partial class MainWindow : Window,
     internal IReadOnlyList<string> LastVideoFrameImageDiagnostics =>
         _fileSession.LastVideoFrameImageDiagnostics;
     internal PrintSubmissionResult? LastPrintSubmissionResult { get; private set; }
-    internal PrinterDiscoveryResult? LatestPrinterDiscoveryForTests => _latestPrinterDiscovery;
-    internal PrintSelection? LastPrintSelectionForTests { get; private set; }
+    private PrintSelection? _lastPrintSelection;
     internal LinuxVideoExportResult? LastVideoExportResult { get; private set; }
-    internal bool NativeOutputDetectionStartedForTests => _nativeOutputDetectionStarted;
-    internal PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilitiesForTests => _nativePrintHostCapabilities;
-    internal PresentationVideoExportHandoffHostCapabilities VideoExportHostCapabilitiesForTests => _videoExportHostCapabilities;
-    internal void StartNativeOutputCapabilityDetectionForTests() => StartNativeOutputCapabilityDetection();
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -514,23 +463,6 @@ public sealed partial class MainWindow : Window,
                 PresentationSemanticIdentityCatalog.IsCommentMentionTag(tag))
             .Select(button => $"{button.Tag}|{button.Content}|{button.IsEnabled}")
             .ToArray();
-    internal bool InvokeReviewCommentPaneMentionActionForTests(string tag, string? candidateLabel = null)
-    {
-        var button = EnumerateReviewPaneButtons(_reviewCommentsPanePanel)
-            .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
-        if (button is null)
-            return false;
-
-        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        var item = button.ContextMenu?.Items.OfType<MenuItem>()
-            .FirstOrDefault(candidate => candidateLabel is null ||
-                string.Equals(candidate.Header as string, candidateLabel, StringComparison.Ordinal));
-        if (item is null)
-            return candidateLabel is null;
-
-        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-        return true;
-    }
     internal bool IsAltTextPaneVisible => _altTextPaneHostCoordinator.IsPaneVisible;
     internal bool IsAltTextPaneApplyEnabled => _altTextApplyButton?.IsEnabled == true;
     internal string AltTextPaneTitleLabel => _altTextTitleLabel?.Text ?? string.Empty;
@@ -620,7 +552,6 @@ public sealed partial class MainWindow : Window,
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)?.DisabledReason;
     internal bool IsAnimationPaneVisible => _animationPaneHost?.IsVisible == true;
-    internal bool EditPointsEnabledForTests => _slideCanvas.EditPointsEnabled;
     internal int AnimationPaneItemCount => LastAnimationPaneTimelinePlan?.Items.Count ?? 0;
     internal int AnimationPaneRenderedItemCount => _animationPaneItemsPanel?.Children.Count ?? 0;
     internal string AnimationPaneHeading => LastAnimationPaneWorkflowEvidencePlan?.View.Heading
@@ -640,38 +571,6 @@ public sealed partial class MainWindow : Window,
     internal bool IsFindReplaceDialogVisible => _findReplaceDialog?.IsVisible == true;
     internal bool IsFindReplaceReplaceInputVisible => _findReplaceDialog?.ShowReplace == true;
     internal bool IsPrintOptionsPaneVisible => _printOptionsPaneHost?.IsVisible == true;
-    internal IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> PaneAccessibilitySnapshotForTests =>
-        _paneAccessibility.BuildSnapshot();
-    internal string PaneAccessibilitySnapshotSerializationForTests =>
-        _paneAccessibility.SerializeSnapshot();
-    internal TextBox NotesPaneForAccessibilityTests => _notesBox;
-    internal ListBox SlidePaneForAccessibilityTests => _slidePaneList;
-    internal Border CommentsPaneForAccessibilityTests => _reviewCommentsPaneHost;
-    internal IReadOnlyList<Control> CommentsPaneItemsForAccessibilityTests =>
-        _reviewCommentsPanePanel is null
-            ? Array.Empty<Control>()
-            : _reviewCommentsPanePanel.Children
-                .OfType<Control>()
-                .Where(item => AutomationProperties.GetAutomationId(item)
-                    ?.StartsWith(
-                        PresentationSemanticIdentityCatalog.CommentsPaneItemAutomationIdPrefix,
-                        StringComparison.Ordinal) == true)
-                .ToArray();
-    internal SelectionPane SelectionPaneForAccessibilityTests => _selectionPane;
-    internal Border AnimationPaneForAccessibilityTests => _animationPaneHost;
-    internal IReadOnlyList<Control> SelectionPaneItemsForAccessibilityTests =>
-        _selectionPane?.AccessibilityItemsForTests ?? Array.Empty<Control>();
-    internal IReadOnlyList<Control> AnimationPaneItemsForAccessibilityTests =>
-        _animationPaneItemsPanel?.Children.OfType<Control>().ToArray() ?? Array.Empty<Control>();
-    internal IReadOnlyList<Control> SlidePaneItemsForAccessibilityTests =>
-        _slidePaneList is null
-            ? Array.Empty<Control>()
-            : _slidePaneList.Items
-                .OfType<ListBoxItem>()
-                .Where(item => AutomationProperties.GetAutomationId(item)
-                    ?.StartsWith("FreePSlidePaneItem", StringComparison.Ordinal) == true)
-                .Cast<Control>()
-                .ToArray();
     internal string PrintOptionsPaneHeading => _printOptionsPaneHeading?.Text ?? string.Empty;
     internal string PrintOptionsPaneMessage => _printOptionsPaneMessage?.Text ?? string.Empty;
     internal int PrintOptionsPaneRenderedRowCount => _printOptionsPaneRowsPanel?.Children.Count ?? 0;
@@ -679,15 +578,6 @@ public sealed partial class MainWindow : Window,
     internal IReadOnlyList<string> PrintOptionsPaneRenderedPreviewRows => _printOptionsPaneRenderedPreviewRows;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedLayoutRows => _printOptionsPaneRenderedLayoutRows;
     internal IReadOnlyList<string> PrintOptionsPaneRenderedRangeRows => _printOptionsPaneRenderedRangeRows;
-    internal bool ApplyPrintCustomRangeForTests(string rangeText)
-    {
-        if (_printCustomRangeInput is null || _printCustomRangeApplyButton is null)
-            return false;
-
-        _printCustomRangeInput.Text = rangeText;
-        _printCustomRangeApplyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        return true;
-    }
     internal bool IsBackstageOpen => _backstage.IsOpen;
     internal string? CurrentBackstagePaneLabel => _backstage.CurrentPaneLabel;
     internal IReadOnlyList<SisterBackstageEntryPlan<Control>> BackstageEntries => _backstage.Entries;
@@ -2409,22 +2299,9 @@ public sealed partial class MainWindow : Window,
         };
     }
 
-    internal ContextMenu BuildChartContextMenuForTests(ChartSubtargetHit hit) =>
-        BuildDomainContextMenu(_domainContextMenuSession.BuildChart(hit));
 
-    internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
-    {
-        var plan = _domainContextMenuSession.BuildTable(shapeId);
-        return plan is null ? null : BuildDomainContextMenu(plan);
-    }
 
-    internal bool ActivateTableCellEditForTests(uint shapeId, int row, int col)
-    {
-        _textEditor?.ActivateCellEdit(shapeId, row, col);
-        return _textEditor?.IsCellEditActive == true;
-    }
 
-    internal bool IsTableCellEditActiveForTests => _textEditor?.IsCellEditActive == true;
 
     // ── Ribbon ─────────────────────────────────────────────────────────────────
 
@@ -3018,7 +2895,6 @@ public sealed partial class MainWindow : Window,
 
     // ── File lifecycle ─────────────────────────────────────────────────────────
 
-    internal Task ApplyPictureBulletFromFileAsyncForTests() => ApplyPictureBulletFromFileAsync();
 
     private async Task ApplyPictureBulletFromFileAsync()
     {
@@ -3227,8 +3103,6 @@ public sealed partial class MainWindow : Window,
     internal void OpenHyperlinkDialog() =>
         RunGuarded(async () => await OpenHyperlinkDialogAsync(), "Hyperlink");
 
-    internal Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsyncForTests() =>
-        OpenHyperlinkDialogAsync();
 
     private async Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsync()
     {
@@ -3472,34 +3346,11 @@ public sealed partial class MainWindow : Window,
             dialog.Show();
     }
 
-    internal FindReplaceWorkflowPlan SetFindReplaceDialogInputForTests(
-        string? query,
-        string? replacement = null,
-        bool matchCase = false,
-        bool wholeWord = false)
-    {
-        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
-        LastFindReplaceWorkflowPlan = dialog.SetInputForTests(query, replacement, matchCase, wholeWord);
-        return LastFindReplaceWorkflowPlan;
-    }
 
-    internal FindReplaceWorkflowPlan NavigateFindReplaceDialogForTests(int direction)
-    {
-        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
-        LastFindReplaceWorkflowPlan = dialog.NavigateForTests(direction);
-        return LastFindReplaceWorkflowPlan;
-    }
 
-    internal FindReplaceWorkflowPlan ReplaceAllFindReplaceDialogForTests()
-    {
-        var dialog = _findReplaceDialog ?? throw new InvalidOperationException("Find/Replace is not open.");
-        LastFindReplaceWorkflowPlan = dialog.ReplaceAllForTests();
-        return LastFindReplaceWorkflowPlan;
-    }
 
     private void FileNew() => _ = FileNewAsync();
 
-    internal Task<bool> FileNewAsyncForTests() => FileNewAsync();
 
     private async Task<bool> FileNewAsync() =>
         (await _fileSession.NewAsync()).Succeeded;
@@ -3674,10 +3525,6 @@ public sealed partial class MainWindow : Window,
         return plan;
     }
 
-    internal Task<PrintSubmissionResult> ExecutePrintForTests(
-        PresentationPrintRequest? request = null,
-        CancellationToken cancellationToken = default) =>
-        ExecutePrintWorkflowAsync(request, cancellationToken);
 
     private async Task<PrintSubmissionResult> ExecutePrintWorkflowAsync(
         PresentationPrintRequest? request = null,
@@ -3732,7 +3579,7 @@ public sealed partial class MainWindow : Window,
 
             selection.Validate();
             _selectedPrinterName = selection.PrinterName;
-            LastPrintSelectionForTests = selection;
+            _lastPrintSelection = selection;
             var effectiveRequest = requestedRequest with
             {
                 Copies = selection.Copies,
@@ -4736,8 +4583,6 @@ public sealed partial class MainWindow : Window,
         }
     }
 
-    internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
-        => _reviewWorkflowSession.SetSelectedReviewCommentIndex(commentIndex);
 
     private void SelectReviewComment(int commentIndex)
         => _reviewWorkflowSession.SelectReviewComment(commentIndex);
@@ -4779,28 +4624,8 @@ public sealed partial class MainWindow : Window,
         string? initials = null)
         => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
 
-    internal PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForTests(
-        string? query = null,
-        string? currentAuthor = null,
-        string? currentInitials = null)
-        => _reviewWorkflowSession.BuildCommentMentionPickerPlan(query, currentAuthor, currentInitials);
 
-    internal PresentationCommentMentionInsertionPlan InsertCommentMentionForTests(
-        string? text,
-        int caretIndex,
-        PresentationCommentMentionCandidate? candidate)
-        => _reviewWorkflowSession.InsertCommentMention(text, caretIndex, candidate);
 
-    internal PresentationCommentMutationPlan InsertMentionInSelectedCommentForTests(
-        int caretIndex,
-        PresentationCommentMentionCandidate? candidate,
-        string? author = null,
-        string? initials = null)
-        => _reviewWorkflowSession.InsertMentionInSelectedComment(
-            caretIndex,
-            candidate,
-            author,
-            initials);
 
     private string? GetSelectedCommentText() => _reviewWorkflowSession.GetSelectedCommentText();
 
@@ -4935,14 +4760,6 @@ public sealed partial class MainWindow : Window,
     private void ExecuteAnimationPanePlaybackControl(AnimationPanePlaybackControlDescriptor control)
         => ExecuteAnimationPanePlaybackControl(control, startPreview: true);
 
-    internal AnimationPanePlaybackSessionPlan ExecuteAnimationPanePlaybackControlForTests(
-        AnimationPanePlaybackControlKind controlKind)
-    {
-        var control = RefreshAnimationPaneTimelinePlan(_animationPaneSession.SelectedAnimationIndex)
-            .PlaybackControls
-            .First(candidate => candidate.Kind == controlKind);
-        return ExecuteAnimationPanePlaybackControl(control, startPreview: false);
-    }
 
     private AnimationPanePlaybackSessionPlan ExecuteAnimationPanePlaybackControl(
         AnimationPanePlaybackControlDescriptor control,
@@ -5300,12 +5117,6 @@ public sealed partial class MainWindow : Window,
             RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
     }
 
-    internal AnimationPaneParagraphBuildMutationPlan ToggleParagraphBuildForTests(uint shapeId)
-    {
-        var plan = _animationPaneSession.ToggleParagraphBuild(shapeId);
-        RefreshVisibleAnimationPane(_animationPaneSession.SelectedAnimationIndex);
-        return plan;
-    }
 
     private static Button BuildAnimationPaneActionButton(
         string content,
@@ -5332,34 +5143,11 @@ public sealed partial class MainWindow : Window,
         return button;
     }
 
-    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneTriggerEditForTests(
-        int animationIndex,
-        int selectedTriggerIndex)
-        => ApplyAnimationPaneTriggerEdit(animationIndex, selectedTriggerIndex);
 
-    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDurationEditForTests(
-        int animationIndex,
-        string text)
-        => ApplyAnimationPaneDurationEdit(animationIndex, text);
 
-    internal AnimationPaneTimingMutationPlan ApplyAnimationPaneDelayEditForTests(
-        int animationIndex,
-        string text)
-        => ApplyAnimationPaneDelayEdit(animationIndex, text);
 
-    internal AnimationPaneEasingMutationPlan ApplyAnimationPaneEasingEditForTests(
-        int animationIndex,
-        string accelerationText,
-        string decelerationText)
-        => ApplyAnimationPaneEasingEdit(animationIndex, accelerationText, decelerationText);
 
-    internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTests(
-        int animationIndex,
-        string optionId)
-        => ApplyAnimationPaneEffectOptionEdit(animationIndex, optionId);
 
-    internal AnimationPaneReorderMutationPlan MoveAnimationPaneItemForTests(int animationIndex, int offset)
-        => MoveAnimationPaneItem(animationIndex, offset);
 
     private AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEdit(
         int animationIndex,
@@ -5432,8 +5220,6 @@ public sealed partial class MainWindow : Window,
         return plan;
     }
 
-    internal AnimationPaneRemoveMutationPlan RemoveAnimationPaneItemForTests(int animationIndex) =>
-        RemoveAnimationPaneItem(animationIndex);
 
     private AnimationPaneRemoveMutationPlan RemoveAnimationPaneItem(int animationIndex)
     {
@@ -5703,21 +5489,7 @@ public sealed partial class MainWindow : Window,
         return _smartArtTextPaneSession.ApplyOutline(rows);
     }
 
-    internal SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistantForTests(string? modelId = null)
-    {
-        if (modelId is not null)
-            _smartArtTextPaneSession.SelectModel(modelId);
-        return ToggleSmartArtTextPaneAssistant();
-    }
 
-    internal SmartArtNodeEditResult? ApplySmartArtTextPaneEditForTests(
-        SmartArtNodeEditKind kind,
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _smartArtTextPaneSession.SelectModel(modelId);
-        return ApplySmartArtTextPaneAction(kind);
-    }
 
     private SmartArtNodeEditResult? ApplySmartArtTextPaneAction(SmartArtNodeEditKind kind)
         => _smartArtTextPaneSession.ApplyAction(kind);
@@ -5725,14 +5497,8 @@ public sealed partial class MainWindow : Window,
     private SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistant()
         => _smartArtTextPaneSession.ToggleAssistant();
 
-    internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
-        ApplySmartArtColorPreset(preset);
 
-    internal SmartArtLayoutApplyResult ApplySmartArtLayoutPresetForTests(SmartArtLayoutPreset preset) =>
-        ApplySmartArtLayoutPreset(preset);
 
-    internal SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePresetForTests(SmartArtQuickStylePreset preset) =>
-        ApplySmartArtQuickStylePreset(preset);
 
     private SmartArtLayoutApplyResult ApplySmartArtLayoutPreset(SmartArtLayoutPreset preset)
         => _smartArtTextPaneSession.ApplyLayoutPreset(preset);
@@ -5743,15 +5509,6 @@ public sealed partial class MainWindow : Window,
     private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
         => _smartArtTextPaneSession.ApplyColorPreset(preset);
 
-    internal SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRouteForTests(
-        SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers,
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _smartArtTextPaneSession.SelectModel(modelId);
-        return ApplySmartArtTextPaneKeyboardRoute(key, modifiers);
-    }
 
     private IReadOnlyList<SmartArtNodeOutlineItem> RefreshSmartArtTextPane()
         => _smartArtTextPaneSession.Refresh().Rows;
@@ -5830,15 +5587,6 @@ public sealed partial class MainWindow : Window,
         SmartArtTextPaneShortcutModifiers modifiers) =>
         _smartArtTextPaneSession.ApplyKeyboardRoute(key, modifiers);
 
-    internal SmartArtNodeEditResult? ApplySmartArtTextPanePictureForTests(
-        byte[] imageBytes,
-        string contentType = "image/png",
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _smartArtTextPaneSession.SelectModel(modelId);
-        return ApplySmartArtTextPanePicture(imageBytes, contentType);
-    }
 
     private async Task ReplaceSmartArtTextPanePictureFromFileAsync()
     {
@@ -6590,8 +6338,6 @@ public sealed partial class MainWindow : Window,
     private async Task<bool> TrySavePresentationFileAsync(string path) =>
         (await _fileSession.SavePathAsync(path)).Succeeded;
 
-    internal Task<bool> TrySavePresentationFileAsyncForTests(string path) =>
-        TrySavePresentationFileAsync(path);
 
     private static bool IsSupportedPresentationPath(string path) =>
         PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path);
@@ -6868,8 +6614,6 @@ public sealed partial class MainWindow : Window,
         return menu;
     }
 
-    internal ContextMenu BuildSlidePaneContextMenuForTests(int slideIndex) =>
-        BuildSlidePaneContextMenu(slideIndex);
 
     internal bool TryApplySlidePaneContextAction(int slideIndex, SlidePaneActionKind kind)
         => _workareaSession.ExecuteSlidePaneAction(kind, slideIndex);
@@ -6889,8 +6633,6 @@ public sealed partial class MainWindow : Window,
         return menu;
     }
 
-    internal ContextMenu BuildSlidePaneSectionContextMenuForTests(SlidePaneEntry entry) =>
-        BuildSlidePaneSectionContextMenu(entry);
 
     private static void AddContextMenuEntries(
         ContextMenu menu,
@@ -6989,37 +6731,7 @@ public sealed partial class MainWindow : Window,
         _workareaSession.ToggleSlidePaneSection(sectionId);
     }
 
-    internal bool ToggleSlidePaneSectionForTests(int sectionIndex)
-    {
-        if (sectionIndex < 0 || sectionIndex >= _presentation.Sections.Count)
-            return false;
 
-        ToggleSlidePaneSection(SlidePanePlanner.GetSectionIdentity(_presentation.Sections[sectionIndex], sectionIndex));
-        return true;
-    }
-
-    internal bool TryApplySlideSectionActionForTests(
-        SlideSectionActionKind kind,
-        int slideIndex = -1,
-        int sectionIndex = -1,
-        string? promptedName = null)
-    {
-        var command = kind switch
-        {
-            SlideSectionActionKind.AddSection => FreePContextMenuCommand.AddSection,
-            SlideSectionActionKind.RenameSection => FreePContextMenuCommand.RenameSection,
-            SlideSectionActionKind.RemoveSection => FreePContextMenuCommand.RemoveSection,
-            SlideSectionActionKind.RemoveAllSections => FreePContextMenuCommand.RemoveAllSections,
-            _ => default,
-        };
-        var execution = _workareaSession.BuildSlidePaneContextCommandRoute(
-                command,
-                slideIndex,
-                sectionIndex)
-            .SectionExecution;
-        return execution is not null &&
-            _workareaSession.ExecuteSlidePaneSectionAction(execution, promptedName);
-    }
 
     private async Task<string?> PromptSectionNameAsync(SlideSectionActionExecutionPlan prompt)
     {
@@ -7154,31 +6866,7 @@ public sealed partial class MainWindow : Window,
             sourceSlideIndex,
             targetInsertionIndex);
 
-    internal SlidePaneDropVisualPlan PreviewSlidePaneDragForTests(
-        int sourceSlideIndex,
-        double startPointerY,
-        double pointerYWithinItem,
-        double pointerYWithinPane)
-    {
-        _workareaSession.BeginSlidePaneDrag(sourceSlideIndex, startPointerY);
-        var update = _workareaSession.UpdateSlidePaneDrag(
-            pointerYWithinItem,
-            pointerYWithinPane,
-            SlidePanePlanner.DefaultSlideItemHeight);
-        if (update.State.IsDragging)
-            ShowSlidePaneInsertionIndicator(update.DropVisualPlan);
-        else
-            HideSlidePaneInsertionIndicator();
 
-        return update.DropVisualPlan;
-    }
-
-    internal bool CompleteSlidePaneDragForTests()
-    {
-        var applied = _workareaSession.CompleteSlidePaneDrag(out var shouldReleaseCapture);
-        HideSlidePaneInsertionIndicator();
-        return shouldReleaseCapture && applied;
-    }
 
     internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent)
         => _workareaSession.ExecuteSlidePaneKeyboardAction(intent);
@@ -7265,12 +6953,6 @@ public sealed partial class MainWindow : Window,
         return intent != SlidePaneKeyboardIntentKind.None;
     }
 
-    internal bool ClickSlidePaneNewSlideAffordanceForTests()
-    {
-        var before = _presentation.Slides.Count;
-        var applied = InsertSlideFromSlidePaneAffordance();
-        return applied && _presentation.Slides.Count == before + 1;
-    }
 
     private Button BuildSlidePaneNewSlideButton()
     {
@@ -8238,8 +7920,6 @@ public sealed partial class MainWindow : Window,
     internal void OpenCustomShowDialog() =>
         RunGuarded(OpenCustomShowDialogAsync, "Custom Show");
 
-    internal Task OpenCustomShowDialogAsyncForTests() =>
-        OpenCustomShowDialogAsync();
 
     private async Task OpenCustomShowDialogAsync()
     {

@@ -10,7 +10,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class SlideSizeDialog : Window
+internal sealed partial class SlideSizeDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -114,24 +114,6 @@ internal sealed class SlideSizeDialog : Window
         cyEmu = parse.CyEmu;
         return parse.IsValid;
     }
-
-    internal void SetInputForTests(string widthText, string heightText, SlideSizeDialogUnit unit)
-    {
-        _suppressSelectionRefresh = true;
-        try
-        {
-            var state = _session.SetInputUnit(widthText, heightText, unit);
-            _inchesRadio.IsChecked = unit == SlideSizeDialogUnit.Inches;
-            _centimetersRadio.IsChecked = unit == SlideSizeDialogUnit.Centimeters;
-            ApplyDisplay(state.Display);
-        }
-        finally
-        {
-            _suppressSelectionRefresh = false;
-        }
-    }
-
-    internal bool ApplyForTests() => Apply(showValidation: false);
 
     private Control BuildContent()
     {

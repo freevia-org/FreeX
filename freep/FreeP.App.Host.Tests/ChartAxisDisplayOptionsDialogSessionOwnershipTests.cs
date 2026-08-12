@@ -12,12 +12,15 @@ public sealed class ChartAxisDisplayOptionsDialogSessionOwnershipTests
         string sessionType)
     {
         var source = ReadHostSource(fileName);
+        var testSupport = ReadChartOptionsTestSupport();
 
         source.Should().Contain($"new {sessionType}(editor");
-        source.Should().Contain("_session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()))");
         source.Should().Contain("_session.Submit(ReadInput())");
         source.Should().Contain("ReadInput()");
         source.Should().Contain("ChartOptionsDialogChrome.");
+        source.Should().NotContain("ForTests");
+        testSupport.Should().Contain($"partial class {Path.GetFileNameWithoutExtension(fileName)}");
+        testSupport.Should().Contain("BuildCommitPlanForTests()");
         source.Should().NotContain("private readonly EditingSession");
         source.Should().NotContain("private readonly ChartAxisOptionsPlanner");
         source.Should().NotContain("private readonly ChartDisplayOptionsPlanner");
@@ -34,5 +37,16 @@ public sealed class ChartAxisDisplayOptionsDialogSessionOwnershipTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         return File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", fileName));
+    }
+
+    private static string ReadChartOptionsTestSupport()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        return File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "TestSupport",
+            "HostAccess.Wpf",
+            "ChartOptionsDialogs.TestAccess.cs"));
     }
 }

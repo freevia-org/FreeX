@@ -5,7 +5,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style per-series chart formatting dialog.</summary>
-public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartSeriesOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -25,12 +25,6 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartSeriesOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
-
-    internal void SetOptionsForTests(Func<ChartSeriesOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {

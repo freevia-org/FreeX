@@ -11,7 +11,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class HeaderFooterDialog : Window
+internal sealed partial class HeaderFooterDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -129,51 +129,6 @@ internal sealed class HeaderFooterDialog : Window
             Close(false);
             e.Handled = true;
         };
-    }
-
-    internal bool ApplyForTests(
-        bool showDateTime,
-        bool showFooter,
-        bool showSlideNumber,
-        string footerText,
-        HeaderFooterApplyScope scope,
-        bool suppressOnTitleSlide = false,
-        HeaderFooterDateTimeMode dateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
-        string dateTimeFieldType = "datetime1",
-        string fixedDateTimeText = "")
-    {
-        SetInputForTests(
-            showDateTime,
-            showFooter,
-            showSlideNumber,
-            footerText,
-            suppressOnTitleSlide,
-            dateTimeMode,
-            dateTimeFieldType,
-            fixedDateTimeText);
-        return Apply(scope);
-    }
-
-    internal void SetInputForTests(
-        bool showDateTime,
-        bool showFooter,
-        bool showSlideNumber,
-        string footerText,
-        bool suppressOnTitleSlide = false,
-        HeaderFooterDateTimeMode dateTimeMode = HeaderFooterDateTimeMode.AutoUpdate,
-        string dateTimeFieldType = "datetime1",
-        string fixedDateTimeText = "")
-    {
-        var state = _session.SetInput(
-            showDateTime,
-            showFooter,
-            showSlideNumber,
-            footerText,
-            suppressOnTitleSlide,
-            dateTimeMode,
-            dateTimeFieldType,
-            fixedDateTimeText);
-        _formSession.ApplyState(state);
     }
 
     private Control BuildContent()

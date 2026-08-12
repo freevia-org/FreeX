@@ -9,13 +9,11 @@ using FreeP.App.Compositor;
 namespace FreeP.App.Avalonia;
 
 /// <summary>Small host adapter for the shared Selection Pane projection.</summary>
-internal sealed class SelectionPane : Border
+internal sealed partial class SelectionPane : Border
 {
     private readonly PresentationSelectionPaneSession _session;
     private readonly StackPanel _items = new() { Orientation = Orientation.Vertical };
     private readonly TextBlock _message = new();
-
-    internal IReadOnlyList<Control> AccessibilityItemsForTests => _items.Children.OfType<Control>().ToArray();
 
     public SelectionPane(EditingSession editor)
     {
@@ -175,13 +173,6 @@ internal sealed class SelectionPane : Border
                 PresentationPaneAccessibilityPlanner.BuildShapeKey(item.ShapeId)));
         return row;
     }
-
-    internal IReadOnlyList<string?> RenameToolTipsForTests =>
-        _items.Children
-            .OfType<DockPanel>()
-            .Select(row => row.Children.OfType<TextBox>().SingleOrDefault())
-            .Select(textBox => textBox is null ? null : ToolTip.GetTip(textBox)?.ToString())
-            .ToArray();
 
     private void ApplyTransition(
         PresentationSelectionPaneTransitionPlan transition,

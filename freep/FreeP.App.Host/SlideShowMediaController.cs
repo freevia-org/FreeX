@@ -182,7 +182,7 @@ public sealed partial class SlideShowMediaController
         };
     }
 
-    partial void ObserveMediaClickForTests(SlideShowMediaClickPlan click);
+    partial void ObserveMediaClick(SlideShowMediaClickPlan click);
 
     // ── public API ────────────────────────────────────────────────────────────
 
@@ -397,7 +397,7 @@ public sealed partial class SlideShowMediaController
             canvasY,
             _showMediaControls,
             _showNarration);
-        ObserveMediaClickForTests(click);
+        ObserveMediaClick(click);
         if (!click.IsHandled)
             return false;
 

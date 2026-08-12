@@ -7,7 +7,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Host;
 
-public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly SlideShowCustomShowDialogSession _session;
     private readonly SlideShowCustomShowDialogFormSession<FrameworkElement> _formSession;
@@ -105,28 +105,6 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public int SelectedCustomShowSlideIndex => _formSession.SelectedSlideIndex;
 
     public string ValidationMessage => _validationText.Text;
-
-    public void SelectCustomShowSlideForTests(int index) =>
-        _formSession.SelectSlide(index);
-
-    public void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
-
-    public void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
-
-    public void RemoveSelectedCustomShowSlideForTests() => OnRemoveSelectedSlide();
-
-    public void AddCustomShowSlideOccurrenceForTests(string slideId) => AddSlideOccurrence(slideId);
-
-    public SlideShowCustomShowDragReorderPlan DragReorderCustomShowSlideForTests(
-        int sourceSlideIndex,
-        int targetDropIndex) =>
-        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
-
-    internal void PrepareMissingNameForTests()
-    {
-        _nameBox.Text = string.Empty;
-        OnCreate();
-    }
 
     private UIElement BuildContent()
     {

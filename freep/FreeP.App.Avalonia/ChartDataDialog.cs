@@ -11,7 +11,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class ChartDataDialog : Window
+internal sealed partial class ChartDataDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
     private readonly ChartDataDialogSession _session;
@@ -64,53 +64,6 @@ internal sealed class ChartDataDialog : Window
     internal int RenderedCategoryRowCount => _categoryBoxes.Count;
 
     internal int RenderedValueCellCount => _valueBoxes.Count;
-
-    internal ChartDataDialogCommitPlan BuildCommitPlanForTests()
-    {
-        FlushTextBoxEdits();
-        return _session.BuildCommitPlan();
-    }
-
-    internal void SwitchRowsAndColumnsForTests()
-    {
-        FlushTextBoxEdits();
-        _session.SwitchRowsAndColumns();
-        RebuildTable();
-    }
-
-    internal void SetChartTypeForTests(ChartType chartType)
-    {
-        _session.SetChartType(chartType);
-        _chartTypeCombo.SelectedIndex = _session.SelectedChartTypeIndex;
-    }
-
-    internal void MoveSeriesForTests(int seriesIndex, bool down)
-    {
-        FlushTextBoxEdits();
-        _session.SelectSeries(seriesIndex);
-        MoveActiveSeries(down ? 1 : -1);
-    }
-
-    internal void RemoveSeriesForTests(int seriesIndex)
-    {
-        FlushTextBoxEdits();
-        _session.SelectSeries(seriesIndex);
-        OnRemoveSeries();
-    }
-
-    internal void RemoveCategoryForTests(int categoryIndex)
-    {
-        FlushTextBoxEdits();
-        _session.SelectCategory(categoryIndex);
-        OnRemoveCategory();
-    }
-
-    internal void MoveCategoryForTests(int categoryIndex, bool right)
-    {
-        FlushTextBoxEdits();
-        _session.SelectCategory(categoryIndex);
-        MoveActiveCategory(right ? 1 : -1);
-    }
 
     private Control BuildContent()
     {
@@ -187,16 +140,6 @@ internal sealed class ChartDataDialog : Window
     }
 
     internal string ValidationText => _validationText.Text ?? string.Empty;
-
-    internal bool PrepareInvalidValueForTests()
-    {
-        var first = _valueBoxes.FirstOrDefault();
-        if (first is null)
-            return false;
-        first.TextBox.Text = "not-a-number";
-        first.TextBox.Focus();
-        return !TryFlushTextBoxEdits();
-    }
 
     private void RebuildTable()
     {

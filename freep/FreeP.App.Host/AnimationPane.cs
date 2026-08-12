@@ -34,7 +34,7 @@ namespace FreeP.App.Host;
 /// WPF control that displays and edits the animation list for the current slide.
 /// Host it in MainWindow as a right-side dock (see 16B SEAM regions in MainWindow).
 /// </summary>
-public sealed class AnimationPane : Border
+public sealed partial class AnimationPane : Border
 {
     // ── Colors (mirrors the FreeP orange theme) ───────────────────────────────────
 
@@ -59,33 +59,7 @@ public sealed class AnimationPane : Border
     private readonly StackPanel _listPanel;
     private readonly StackPanel _playbackControlsPanel;
 
-    internal AnimationPaneTimelinePlan CurrentTimelinePlanForTest => BuildTimelinePlan();
-    internal AnimationPaneEffectOptionMutationPlan ApplyAnimationPaneEffectOptionEditForTest(
-        int animationIndex,
-        string optionId)
-        => ApplyEffectOptionMutation(animationIndex, optionId);
-    internal AnimationPaneEasingMutationPlan ApplyAnimationPaneEasingEditForTest(
-        int animationIndex,
-        string? accelerationText,
-        string? decelerationText)
-        => ApplyEasingMutation(animationIndex, accelerationText, decelerationText);
-    internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _session.Playback;
-    internal AnimationPanePlaybackWorkflowEvidencePlan? CurrentPlaybackWorkflowEvidencePlanForTest =>
-        _session.PlaybackWorkflowEvidence;
-    internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
-        BuildTimelinePlan().PlaybackControls;
-    internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
-    internal AnimationPaneWorkflowEvidencePlan CurrentWorkflowEvidencePlanForTest
-    {
-        get
-        {
-            BuildTimelinePlan();
-            return _session.WorkflowEvidence!;
-        }
-    }
-    internal AnimationPaneControlSchemaPlan ControlSchemaForTests => _session.ControlSchema;
-    internal IReadOnlyList<FrameworkElement> AccessibilityItemsForTests =>
-        _listPanel.Children.OfType<FrameworkElement>().ToArray();
+    internal AnimationPaneTimelinePlan CurrentTimelinePlan => BuildTimelinePlan();
 
     // ── Construction ──────────────────────────────────────────────────────────────
 
@@ -240,18 +214,6 @@ public sealed class AnimationPane : Border
 
     private void ExecutePlaybackControl(AnimationPanePlaybackControlDescriptor control)
         => ExecutePlaybackControl(control, invokePreview: true);
-
-    internal AnimationPanePlaybackSessionPlan ExecutePlaybackControlForTest(
-        AnimationPanePlaybackControlKind controlKind)
-    {
-        var control = BuildTimelinePlan()
-            .PlaybackControls
-            .First(candidate => candidate.Kind == controlKind);
-        return ExecutePlaybackControl(control, invokePreview: false);
-    }
-
-    internal AnimationPaneReorderMutationPlan MoveAnimationForTest(int animationIndex, int offset)
-        => ApplyReorderMutation(animationIndex, offset);
 
     private AnimationPanePlaybackSessionPlan ExecutePlaybackControl(
         AnimationPanePlaybackControlDescriptor control,
@@ -718,9 +680,6 @@ public sealed class AnimationPane : Border
     {
         return _session.MoveAnimation(animationIndex, offset);
     }
-
-    internal AnimationPaneRemoveMutationPlan RemoveAnimationForTest(int animationIndex) =>
-        ApplyRemoveMutation(animationIndex);
 
     private AnimationPaneRemoveMutationPlan ApplyRemoveMutation(int animationIndex)
     {

@@ -31,6 +31,21 @@
              Link="Backstage\BackstageView.TestAccess.cs" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\BasicDialogs.TestAccess.cs"
+             Link="BasicDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\ChartOptionsDialogs.TestAccess.cs"
+             Link="ChartOptionsDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\EditingDialogs.TestAccess.cs"
+             Link="EditingDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\PaneAndCustomShow.TestAccess.cs"
+             Link="PaneAndCustomShow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.ExtendedTestAccess.cs"
+             Link="MainWindow.ExtendedTestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.AccessibilityTestAccess.cs"
+             Link="MainWindow.AccessibilityTestAccess.cs" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(FreePSlideShowTestSupport)' == 'true' And '$(FreePHostAccess)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
     <OutputPath>bin\SlideShowTestSupport\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\SlideShowTestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
@@ -49,8 +64,13 @@
 
   <ItemGroup>
     <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico" Link="Resources\FreeP.ico" />
-    <!-- Tests construct the shell window + backstage directly. -->
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
     <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
     <InternalsVisibleTo Include="FreeP.VisualEvidence.Wpf" />
   </ItemGroup>
 

@@ -10,6 +10,8 @@ public sealed class FindReplaceDialogPolicySourceTests
         var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var wpf = ReadSource(repositoryRoot, "FreeP.App.Host");
         var avalonia = ReadSource(repositoryRoot, "FreeP.App.Avalonia");
+        var wpfTestSupport = ReadTestSupport(repositoryRoot, "HostAccess.Wpf");
+        var avaloniaTestSupport = ReadTestSupport(repositoryRoot, "HostAccess.Avalonia");
 
         foreach (var source in new[] { wpf, avalonia })
         {
@@ -22,11 +24,7 @@ public sealed class FindReplaceDialogPolicySourceTests
             source.Should().Contain("_session.SetShowReplace(");
             source.Should().Contain("_session.Dispatch(");
             source.Should().Contain("ApplyWorkflowPlan(");
-            source.Should().Contain("SetInputForTests(");
-            source.Should().Contain("NavigateForTests(");
-            source.Should().Contain("ReplaceAllForTests(");
-            source.Should().Contain("LastWorkflowPlan => _session.LastWorkflowPlan");
-            source.Should().Contain("ShowReplace => _session.ShowReplace");
+            source.Should().NotContain("ForTests");
             source.Should().Contain("AutomationProperties.SetName(");
             source.Should().Contain("AutomationProperties.SetAutomationId(");
 
@@ -52,6 +50,22 @@ public sealed class FindReplaceDialogPolicySourceTests
             source.Should().NotContain("\"No replacements made.\"");
             source.Should().NotContain("replacement(s) made.");
         }
+
+        foreach (var testSupport in new[] { wpfTestSupport, avaloniaTestSupport })
+        {
+            testSupport.Should().Contain("partial class FindReplaceDialog");
+            testSupport.Should().Contain("StatusText => _statusText.Text");
+            testSupport.Should().Contain("SetInputForTests(");
+            testSupport.Should().Contain("NavigateForTests(");
+            testSupport.Should().Contain("ReplaceAllForTests(");
+        }
+
+        wpf.Should().NotContain("LastWorkflowPlan => _session.LastWorkflowPlan");
+        wpf.Should().NotContain("ShowReplace => _session.ShowReplace");
+        wpfTestSupport.Should().Contain("LastWorkflowPlan => _session.LastWorkflowPlan");
+        wpfTestSupport.Should().Contain("ShowReplace => _session.ShowReplace");
+        avalonia.Should().Contain("LastWorkflowPlan => _session.LastWorkflowPlan");
+        avalonia.Should().Contain("ShowReplace => _session.ShowReplace");
     }
 
     [Fact]
@@ -108,4 +122,12 @@ public sealed class FindReplaceDialogPolicySourceTests
             "freep",
             projectName,
             "FindReplaceDialog.cs"));
+
+    private static string ReadTestSupport(string repositoryRoot, string supportDirectory) =>
+        File.ReadAllText(Path.Combine(
+            repositoryRoot,
+            "freep",
+            "TestSupport",
+            supportDirectory,
+            "BasicDialogs.TestAccess.cs"));
 }

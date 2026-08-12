@@ -74,6 +74,32 @@
              Link="Backstage\BackstageView.TestAccess.cs" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\BasicDialogs.TestAccess.cs"
+             Link="BasicDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\ChartOptionsDialogs.TestAccess.cs"
+             Link="ChartOptionsDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\EditingDialogs.TestAccess.cs"
+             Link="EditingDialogs.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\PaneAndCustomShow.TestAccess.cs"
+             Link="PaneAndCustomShow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.ShellTestAccess.cs"
+             Link="MainWindow.ShellTestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.CommandsTestAccess.cs"
+             Link="MainWindow.CommandsTestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.FeaturesTestAccess.cs"
+             Link="MainWindow.FeaturesTestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TailTestAccess.cs"
+             Link="MainWindow.TailTestAccess.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePValidationHost)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.AccessibilityTestAccess.cs"
+             Link="MainWindow.AccessibilityTestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\PaneAccessibility.TestAccess.cs"
+             Link="PaneAccessibility.TestAccess.cs" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(FreePSlideShowTestSupport)' == 'true' Or '$(FreePValidationHost)' == 'true'">
     <Compile Include="..\TestSupport\SlideShow.Avalonia\AvaloniaSlideShowMediaController.TestAccess.cs"
              Link="AvaloniaSlideShowMediaController.TestAccess.cs" />
@@ -131,10 +157,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="FreeP.App.Avalonia.Tests" />
-    <InternalsVisibleTo Include="FreeP.VisualEvidence.Avalonia" />
-    <InternalsVisibleTo Include="FreeP.Validation.Avalonia" />
     <Using Include="FreeP.App.Localization.LocalizedUiText" Alias="UiText" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true'">
+    <InternalsVisibleTo Include="FreeP.App.Avalonia.Tests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
+    <InternalsVisibleTo Include="FreeP.VisualEvidence.Avalonia" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePValidationHost)' == 'true'">
+    <InternalsVisibleTo Include="FreeP.Validation.Avalonia" />
   </ItemGroup>
 
   <ItemGroup>

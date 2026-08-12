@@ -10,7 +10,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class CustomShowDialog : Window
+internal sealed partial class CustomShowDialog : Window
 {
     private const double DragStartThreshold = 4;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
@@ -117,28 +117,6 @@ internal sealed class CustomShowDialog : Window
     internal int SelectedCustomShowSlideIndex => _formSession.SelectedSlideIndex;
 
     internal string ValidationMessage => _validationText.Text ?? string.Empty;
-
-    internal void SelectCustomShowSlideForTests(int index) =>
-        _formSession.SelectSlide(index);
-
-    internal void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
-
-    internal void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
-
-    internal void RemoveSelectedCustomShowSlideForTests() => OnRemoveSelectedSlide();
-
-    internal void AddCustomShowSlideOccurrenceForTests(string slideId) => AddSlideOccurrence(slideId);
-
-    internal SlideShowCustomShowDragReorderPlan DragReorderCustomShowSlideForTests(
-        int sourceSlideIndex,
-        int targetDropIndex) =>
-        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
-
-    internal void PrepareMissingNameForTests()
-    {
-        _nameBox.Text = string.Empty;
-        OnCreate();
-    }
 
     private Control BuildContent()
     {
@@ -478,24 +456,6 @@ internal sealed class CustomShowDialog : Window
             return false;
 
         return ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex).ShouldApplyMutation;
-    }
-
-    internal bool CompleteCustomShowSlideDragForTests(
-        int sourceSlideIndex,
-        int targetDropIndex,
-        bool isInsideList) =>
-        CompleteCustomShowSlideDrag(sourceSlideIndex, targetDropIndex, isInsideList);
-
-    internal bool IsCustomShowSlideDragActiveForTests => _customShowSlideDragActive;
-
-    internal IPointer BeginCustomShowSlideDragForTests(int sourceSlideIndex)
-    {
-        _customShowSlideDragStartPoint = new Point();
-        _customShowSlideDragSourceIndex = sourceSlideIndex;
-        _customShowSlideDragActive = true;
-        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, isPrimary: true);
-        pointer.Capture(this);
-        return pointer;
     }
 
     private SlideShowCustomShowDragReorderPlan ApplyCustomShowSlideDragReorder(

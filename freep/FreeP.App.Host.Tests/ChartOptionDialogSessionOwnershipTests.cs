@@ -10,12 +10,15 @@ public sealed class ChartOptionDialogSessionOwnershipTests
         foreach (var (family, session) in DialogFamilies)
         {
             var source = ReadHostSource($"{family}Dialog.cs");
+            var testSupport = ReadChartOptionsTestSupport();
 
             source.Should().Contain($"new {session}(editor", family);
-            source.Should().Contain("_session.BuildCommitPlan(_session.BuildInput(", family);
             source.Should().Contain("_session.TryCommit(", family);
             source.Should().Contain("ReadInput()", family);
             source.Should().Contain("ChartOptionsDialogChrome.", family);
+            source.Should().NotContain("ForTests", family);
+            testSupport.Should().Contain($"partial class {family}Dialog", family);
+            testSupport.Should().Contain("BuildCommitPlanForTests()", family);
             source.Should().NotContain("private readonly EditingSession", family);
             source.Should().NotContain("private readonly ChartAreaOptionsPlanner", family);
             source.Should().NotContain("private readonly ChartDataTableOptionsPlanner", family);
@@ -41,5 +44,16 @@ public sealed class ChartOptionDialogSessionOwnershipTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         return File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", fileName));
+    }
+
+    private static string ReadChartOptionsTestSupport()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        return File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "TestSupport",
+            "HostAccess.Wpf",
+            "ChartOptionsDialogs.TestAccess.cs"));
     }
 }

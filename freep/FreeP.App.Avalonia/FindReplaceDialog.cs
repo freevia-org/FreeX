@@ -10,7 +10,7 @@ using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class FindReplaceDialog : Window
+internal sealed partial class FindReplaceDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -29,7 +29,6 @@ internal sealed class FindReplaceDialog : Window
     private readonly StackPanel _replaceButtonRow;
     internal FindReplaceWorkflowPlan LastWorkflowPlan => _session.LastWorkflowPlan;
     internal bool ShowReplace => _session.ShowReplace;
-    internal string StatusText => _statusText.Text ?? string.Empty;
 
     public FindReplaceDialog(
         EditingSession editor,
@@ -168,28 +167,6 @@ internal sealed class FindReplaceDialog : Window
     {
         ApplyWorkflowPlan(_session.SetShowReplace(show));
     }
-
-    internal FindReplaceWorkflowPlan SetInputForTests(
-        string? query,
-        string? replacement = null,
-        bool matchCase = false,
-        bool wholeWord = false)
-    {
-        _findBox.Text = query ?? string.Empty;
-        _replaceBox.Text = replacement ?? string.Empty;
-        _matchCaseCheck.IsChecked = matchCase;
-        _wholeWordCheck.IsChecked = wholeWord;
-        return ApplyWorkflowPlan(_session.SetInput(query, replacement, matchCase, wholeWord));
-    }
-
-    internal FindReplaceWorkflowPlan NavigateForTests(int direction) =>
-        ApplyWorkflowPlan(_session.Dispatch(
-            direction < 0
-                ? FindReplaceDialogAction.FindPrevious
-                : FindReplaceDialogAction.FindNext));
-
-    internal FindReplaceWorkflowPlan ReplaceAllForTests() =>
-        ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.ReplaceAll));
 
     private FindReplaceWorkflowPlan ApplyWorkflowPlan(FindReplaceWorkflowPlan plan)
     {

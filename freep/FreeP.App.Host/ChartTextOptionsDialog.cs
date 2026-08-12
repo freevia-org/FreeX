@@ -5,7 +5,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style chart-wide default text formatting dialog.</summary>
-public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartTextOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -25,12 +25,6 @@ public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartTextOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
-
-    internal void SetOptionsForTests(Func<ChartTextOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

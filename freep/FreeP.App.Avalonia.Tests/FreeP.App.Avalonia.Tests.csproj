@@ -11,6 +11,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\ShippingTestHookOwnershipAssertions.cs"
+             Link="TestSupport\ShippingTestHookOwnershipAssertions.cs" />
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="FluentAssertions" />

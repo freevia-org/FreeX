@@ -6,7 +6,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style chart-area and plot-area formatting dialog.</summary>
-public sealed class ChartAreaOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartAreaOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartAreaOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -28,12 +28,6 @@ public sealed class ChartAreaOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartAreaOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()), CultureInfo.CurrentCulture);
-
-    internal void SetOptionsForTests(Func<ChartAreaOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {

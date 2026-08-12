@@ -10,7 +10,7 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Avalonia;
 
-internal sealed class SlideShowSettingsDialog : Window
+internal sealed partial class SlideShowSettingsDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -184,30 +184,6 @@ internal sealed class SlideShowSettingsDialog : Window
             isDefault: plan.IsDefault);
         button.Click += (_, _) => action();
         return button;
-    }
-
-    internal bool ApplyForTests(
-        bool useSlideTimings,
-        bool showWithAnimation,
-        bool loopUntilStopped,
-        PresentationShowType showType = PresentationShowType.PresentedBySpeaker,
-        bool showBrowseScrollbar = true,
-        uint? kioskRestartAfterMilliseconds = null,
-        bool showWithNarration = true,
-        bool showMediaControls = true,
-        bool showMasterShapes = true)
-    {
-        _formSession.ApplyInput(SlideShowSettingsDialogSession.CreateInput(
-            useSlideTimings,
-            !showWithAnimation,
-            loopUntilStopped,
-            SlideShowSettingsDialogSession.ShowTypeIndex(showType),
-            showBrowseScrollbar,
-            SlideShowSettingsDialogSession.FormatRestartMilliseconds(kioskRestartAfterMilliseconds),
-            showWithNarration,
-            showMediaControls,
-            showMasterShapes));
-        return Apply();
     }
 
     private bool Apply()

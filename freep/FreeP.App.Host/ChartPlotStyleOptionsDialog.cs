@@ -5,7 +5,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style Scatter/Radar plot-style dialog.</summary>
-public sealed class ChartPlotStyleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartPlotStyleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartPlotStyleOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -25,12 +25,6 @@ public sealed class ChartPlotStyleOptionsDialog : Free.Shared.Ribbon.Wpf.DialogW
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartPlotStyleOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
-
-    internal void SetOptionsForTests(Func<ChartPlotStyleOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

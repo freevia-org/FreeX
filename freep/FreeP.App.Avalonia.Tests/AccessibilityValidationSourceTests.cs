@@ -23,7 +23,8 @@ public sealed class AccessibilityValidationSourceTests
     public void Accessibility_validation_source_reads_live_control_metadata()
     {
         var source = File.ReadAllText(RepoFile("freep/TestSupport/Validation.Avalonia/AccessibilityValidation.cs"));
-        var adapter = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/MainWindow.ValidationAccessAdapter.cs"));
+        var adapter = File.ReadAllText(RepoFile(
+            "freep/TestSupport/Validation.Avalonia/MainWindow.ValidationAccessAdapter.cs"));
         var program = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/Program.cs"));
 
         source.Should().Contain("CaptureAccessibilityPanes");
@@ -38,6 +39,8 @@ public sealed class AccessibilityValidationSourceTests
         adapter.Should().NotContain("File.Exists");
         program.Should().NotContain("AccessibilityValidationOptions");
         program.Should().NotContain("--accessibility-validation");
+        File.Exists(Path.Combine(Path.GetDirectoryName(RepoFile(
+            "freep/FreeP.App.Avalonia/Program.cs"))!, "MainWindow.ValidationAccessAdapter.cs")).Should().BeFalse();
         File.Exists(Path.Combine(Path.GetDirectoryName(RepoFile(
             "freep/FreeP.App.Avalonia/Program.cs"))!, "AccessibilityValidation.cs")).Should().BeFalse();
     }
@@ -95,5 +98,7 @@ public sealed class AccessibilityValidationSourceTests
     }
 
     private static string RepoFile(string relativePath) =>
-        TestWorkspaceFileLocator.Find(relativePath);
+        TestWorkspaceFileLocator.ResolveFromDirectoryContainingFile(
+            "FreeP.slnx",
+            relativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries));
 }

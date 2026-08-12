@@ -21,7 +21,7 @@ namespace FreeP.App.Host;
 /// The dialog is modeless (Show, not ShowDialog) so the user can interact with
 /// the slide canvas while the dialog is open.
 /// </summary>
-public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly FindReplaceDialogSession _session;
 
@@ -37,10 +37,6 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Button _findPreviousButton;
     private readonly Button _replaceButton;
     private readonly Button _replaceAllButton;
-
-    internal FindReplaceWorkflowPlan LastWorkflowPlan => _session.LastWorkflowPlan;
-    internal bool ShowReplace => _session.ShowReplace;
-    internal string StatusText => _statusText.Text;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -234,28 +230,6 @@ public sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         ApplyWorkflowPlan(_session.SetShowReplace(show));
     }
-
-    internal FindReplaceWorkflowPlan SetInputForTests(
-        string? query,
-        string? replacement = null,
-        bool matchCase = false,
-        bool wholeWord = false)
-    {
-        _findBox.Text = query ?? string.Empty;
-        _replaceBox.Text = replacement ?? string.Empty;
-        _matchCaseBox.IsChecked = matchCase;
-        _wholeWordBox.IsChecked = wholeWord;
-        return ApplyWorkflowPlan(_session.SetInput(query, replacement, matchCase, wholeWord));
-    }
-
-    internal FindReplaceWorkflowPlan NavigateForTests(int direction) =>
-        ApplyWorkflowPlan(_session.Dispatch(
-            direction < 0
-                ? FindReplaceDialogAction.FindPrevious
-                : FindReplaceDialogAction.FindNext));
-
-    internal FindReplaceWorkflowPlan ReplaceAllForTests() =>
-        ApplyWorkflowPlan(_session.Dispatch(FindReplaceDialogAction.ReplaceAll));
 
     private void SetReplaceRowsVisible(bool visible)
     {

@@ -6,7 +6,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style first-slice, doughnut-hole, and OfPie options dialog.</summary>
-public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
+public sealed partial class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly ChartPieOptionsDialogSession _session;
     private readonly ChartOptionsDialogForm _form;
@@ -26,15 +26,6 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         ResizeMode = ResizeMode.NoResize;
         Content = _form.Content;
     }
-
-    internal ChartPieOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()), CultureInfo.CurrentCulture);
-
-    internal void SetOptionsForTests(Func<ChartPieOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
-
-    internal void SetOfPieOptionsForTests(Func<ChartPieOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
-        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

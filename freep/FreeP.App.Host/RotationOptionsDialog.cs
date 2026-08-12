@@ -9,7 +9,7 @@ using FreeP.Core.Model;
 namespace FreeP.App.Host;
 
 /// <summary>PowerPoint-style exact rotation entry for the selected shapes.</summary>
-public sealed class RotationOptionsDialog : DialogWindow
+public sealed partial class RotationOptionsDialog : DialogWindow
 {
     private readonly RotationOptionsDialogSession _session;
     private readonly TextBox _rotationBox;
@@ -62,12 +62,8 @@ public sealed class RotationOptionsDialog : DialogWindow
         Content = panel;
     }
 
-    internal void SetRotationForTests(string text) => _rotationBox.Text = text;
-
     internal bool TryGetRotation(out double degrees) =>
         _session.TryParse(_rotationBox.Text, out degrees);
-
-    internal bool ApplyForTests() => Apply(showValidation: false);
 
     private void OnOk()
     {

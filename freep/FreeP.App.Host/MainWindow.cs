@@ -344,23 +344,6 @@ public sealed partial class MainWindow : Window,
                 PresentationSemanticIdentityCatalog.IsCommentMentionTag(tag))
             .Select(button => $"{button.Tag}:{button.Content}:{button.IsEnabled}")
             .ToArray();
-    internal bool InvokeReviewCommentPaneMentionActionForTests(string tag, string? candidateLabel = null)
-    {
-        var button = EnumerateCommentPaneButtons(_commentListPanel)
-            .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
-        if (button is null)
-            return false;
-
-        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-        var item = button.ContextMenu?.Items.OfType<MenuItem>()
-            .FirstOrDefault(candidate => candidateLabel is null ||
-                string.Equals(candidate.Header as string, candidateLabel, StringComparison.Ordinal));
-        if (item is null)
-            return candidateLabel is null;
-
-        item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-        return true;
-    }
     internal bool IsReadingOrderPaneVisible =>
         _readingOrderPaneHostCoordinator.IsPaneVisible;
     internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
@@ -420,32 +403,6 @@ public sealed partial class MainWindow : Window,
     /// Test-seam: exposes the animation pane host border so tests can inspect visibility
     /// without launching the actual UI.  Internal; only visible to FreeP.App.Host.Tests.
     /// </summary>
-    internal Border? AnimPaneHostForTest => _animPaneHost;
-    internal IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> PaneAccessibilitySnapshotForTests =>
-        _paneAccessibility.BuildSnapshot();
-    internal string PaneAccessibilitySnapshotSerializationForTests =>
-        _paneAccessibility.SerializeSnapshot();
-    internal TextBox NotesPaneForAccessibilityTests => _notesBox;
-    internal Border CommentsPaneForAccessibilityTests => _commentListHost;
-    internal IReadOnlyList<FrameworkElement> CommentsPaneItemsForAccessibilityTests =>
-        _commentListPanel is null
-            ? Array.Empty<FrameworkElement>()
-            : _commentListPanel.Children
-                .OfType<FrameworkElement>()
-                .Where(item => AutomationProperties.GetAutomationId(item)
-                    .StartsWith(
-                        PresentationSemanticIdentityCatalog.CommentsPaneItemAutomationIdPrefix,
-                        StringComparison.Ordinal))
-                .ToArray();
-    internal SelectionPane SelectionPaneForAccessibilityTests => _selectionPane;
-    internal IReadOnlyList<FrameworkElement> SelectionPaneItemsForAccessibilityTests =>
-        _selectionPane?.AccessibilityItemsForTests ?? Array.Empty<FrameworkElement>();
-    internal AnimationPane? AnimationPaneForAccessibilityTests => _animPane;
-    internal IReadOnlyList<FrameworkElement> AnimationPaneItemsForAccessibilityTests =>
-        _animPane?.AccessibilityItemsForTests ?? Array.Empty<FrameworkElement>();
-    internal IReadOnlyList<FrameworkElement> SlidePaneItemsForAccessibilityTests =>
-        (SlidePaneHost.Child as SlidePane)?.AccessibilityItemsForTests
-        ?? Array.Empty<FrameworkElement>();
     // 16B SEAM END
 
     // ── Constructors ──────────────────────────────────────────────────────────────
@@ -802,14 +759,7 @@ public sealed partial class MainWindow : Window,
         return item;
     }
 
-    internal ContextMenu BuildChartContextMenuForTests(ChartSubtargetHit hit) =>
-        BuildDomainContextMenu(_domainContextMenuSession.BuildChart(hit));
 
-    internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
-    {
-        var plan = _domainContextMenuSession.BuildTable(shapeId);
-        return plan is null ? null : BuildDomainContextMenu(plan);
-    }
 
     // ── File load ─────────────────────────────────────────────────────────────────
 
@@ -1079,7 +1029,7 @@ public sealed partial class MainWindow : Window,
         var captionPlan = LastMediaCaptionAuthoringPanePlan;
         var smartArtItemCount = _smartArtTextPaneRowsPanel?.Children.Count ?? 0;
         var selectionPlan = _selectionPane.CurrentPlan;
-        var animationPlan = _animPane?.CurrentTimelinePlanForTest;
+        var animationPlan = _animPane?.CurrentTimelinePlan;
 
         _paneAccessibility.ApplyPane(SlidePaneHost, PresentationPaneAccessibilityPlanner.SlidePaneId, true,
             _presentation.Slides.Count, Editor.CurrentSlideIndex);
@@ -2416,8 +2366,6 @@ public sealed partial class MainWindow : Window,
         RefreshPaneAccessibilityMetadata();
     }
 
-    internal PresentationCommentPanePlan SetSelectedReviewCommentIndexForTests(int? commentIndex)
-        => _reviewWorkflowSession.SetSelectedReviewCommentIndex(commentIndex);
 
     private void SelectReviewComment(int commentIndex)
         => _reviewWorkflowSession.SelectReviewComment(commentIndex);
@@ -2459,28 +2407,8 @@ public sealed partial class MainWindow : Window,
         string? initials = null)
         => _reviewWorkflowSession.ReplyToSelectedComment(text, timestamp, author, initials);
 
-    internal PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForTests(
-        string? query = null,
-        string? currentAuthor = null,
-        string? currentInitials = null)
-        => _reviewWorkflowSession.BuildCommentMentionPickerPlan(query, currentAuthor, currentInitials);
 
-    internal PresentationCommentMentionInsertionPlan InsertCommentMentionForTests(
-        string? text,
-        int caretIndex,
-        PresentationCommentMentionCandidate? candidate)
-        => _reviewWorkflowSession.InsertCommentMention(text, caretIndex, candidate);
 
-    internal PresentationCommentMutationPlan InsertMentionInSelectedCommentForTests(
-        int caretIndex,
-        PresentationCommentMentionCandidate? candidate,
-        string? author = null,
-        string? initials = null)
-        => _reviewWorkflowSession.InsertMentionInSelectedComment(
-            caretIndex,
-            candidate,
-            author,
-            initials);
 
     private string? GetSelectedCommentText() => _reviewWorkflowSession.GetSelectedCommentText();
 
@@ -2721,15 +2649,6 @@ public sealed partial class MainWindow : Window,
         return _smartArtTextPaneSession.ApplyOutline(rows);
     }
 
-    internal SmartArtNodeEditResult? ApplySmartArtTextPanePictureForTests(
-        byte[] imageBytes,
-        string contentType = "image/png",
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _smartArtTextPaneSession.SelectModel(modelId);
-        return ApplySmartArtTextPanePicture(imageBytes, contentType);
-    }
 
     private async Task ReplaceSmartArtTextPanePictureFromFileAsync()
     {
@@ -2748,36 +2667,16 @@ public sealed partial class MainWindow : Window,
     private void ClearSmartArtTextPanePicture()
         => _smartArtTextPaneSession.ClearPicture();
 
-    internal SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistantForTests(string? modelId = null)
-    {
-        if (modelId is not null)
-            _smartArtTextPaneSession.SelectModel(modelId);
-        return ToggleSmartArtTextPaneAssistant();
-    }
 
     private SmartArtNodeEditResult? ToggleSmartArtTextPaneAssistant()
         => _smartArtTextPaneSession.ToggleAssistant();
 
-    internal SmartArtNodeEditResult? ApplySmartArtTextPaneEditForTests(
-        SmartArtNodeEditKind kind,
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _smartArtTextPaneSession.SelectModel(modelId);
-        return ApplySmartArtTextPaneAction(kind);
-    }
 
     private SmartArtNodeEditResult? ApplySmartArtTextPaneAction(SmartArtNodeEditKind kind)
         => _smartArtTextPaneSession.ApplyAction(kind);
 
-    internal SmartArtColorApplyResult ApplySmartArtColorPresetForTests(SmartArtColorPreset preset) =>
-        ApplySmartArtColorPreset(preset);
 
-    internal SmartArtLayoutApplyResult ApplySmartArtLayoutPresetForTests(SmartArtLayoutPreset preset) =>
-        ApplySmartArtLayoutPreset(preset);
 
-    internal SmartArtQuickStyleApplyResult ApplySmartArtQuickStylePresetForTests(SmartArtQuickStylePreset preset) =>
-        ApplySmartArtQuickStylePreset(preset);
 
     private SmartArtLayoutApplyResult ApplySmartArtLayoutPreset(SmartArtLayoutPreset preset)
         => _smartArtTextPaneSession.ApplyLayoutPreset(preset);
@@ -2788,15 +2687,6 @@ public sealed partial class MainWindow : Window,
     private SmartArtColorApplyResult ApplySmartArtColorPreset(SmartArtColorPreset preset)
         => _smartArtTextPaneSession.ApplyColorPreset(preset);
 
-    internal SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRouteForTests(
-        SmartArtTextPaneShortcutKey key,
-        SmartArtTextPaneShortcutModifiers modifiers,
-        string? modelId = null)
-    {
-        if (modelId is not null)
-            _smartArtTextPaneSession.SelectModel(modelId);
-        return ApplySmartArtTextPaneKeyboardRoute(key, modifiers);
-    }
 
     private IReadOnlyList<SmartArtNodeOutlineItem> RefreshSmartArtTextPane()
         => _smartArtTextPaneSession.Refresh().Rows;

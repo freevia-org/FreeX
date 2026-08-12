@@ -14,7 +14,7 @@ namespace FreeP.App.Avalonia;
 /// normalization stay in the portable <see cref="OptionsDialogPlanner"/> so WPF and Avalonia share one
 /// policy, the same way <see cref="SlideSizeDialog"/> shares <c>SlideSizeDialogPlanner</c>.
 /// </summary>
-internal sealed class OptionsDialog : Window
+internal sealed partial class OptionsDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);
 
@@ -26,11 +26,6 @@ internal sealed class OptionsDialog : Window
     private readonly TextBlock _status = new();
 
     public FreePOptions? Result { get; private set; }
-
-    internal TextBox RecentFilesCapForTest => _recentFilesCap;
-    internal ComboBox DefaultFormatForTest => _defaultFormat;
-    internal TextBox UiLanguageForTest => _uiLanguage;
-    internal TextBlock StatusForTest => _status;
 
     public OptionsDialog(FreePOptions options)
     {
@@ -68,8 +63,6 @@ internal sealed class OptionsDialog : Window
 
         Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_recentFilesCap);
     }
-
-    internal void AcceptForTest() => Accept();
 
     private Control BuildContent()
     {
