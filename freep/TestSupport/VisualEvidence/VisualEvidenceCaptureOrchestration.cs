@@ -1,48 +1,10 @@
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
-using System.Threading;
 using Free.Shared.AppServices;
+using Free.ToolsShared;
 
 namespace FreeP.VisualEvidence;
-
-internal sealed class VisualEvidenceRunDirectory : IDisposable
-{
-    private const int MaximumAttempts = 60;
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(50);
-
-    internal VisualEvidenceRunDirectory(string prefix)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
-        if (prefix.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
-            throw new ArgumentException("The temporary-directory prefix must be a valid file-name prefix.", nameof(prefix));
-
-        Path = System.IO.Path.Combine(
-            System.IO.Path.GetTempPath(),
-            string.Concat(prefix, System.IO.Path.GetRandomFileName()));
-        Directory.CreateDirectory(Path);
-    }
-
-    internal string Path { get; }
-
-    public void Dispose()
-    {
-        for (var attempt = 1; attempt <= MaximumAttempts; attempt++)
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                    Directory.Delete(Path, recursive: true);
-                return;
-            }
-            catch (Exception exception) when (
-                (exception is IOException or UnauthorizedAccessException) && attempt < MaximumAttempts)
-            {
-                Thread.Sleep(RetryDelay);
-            }
-        }
-    }
-}
 
 internal enum VisualEvidenceCaptureKind
 {
@@ -83,26 +45,6 @@ internal sealed record VisualEvidenceCaptureRequest(
     internal bool IsValid => IsRequested && Error is null;
 }
 
-internal sealed record VisualEvidenceHostOutputPlan(
-    string HostDirectory,
-    string ManifestPath,
-    string? ProgressPath,
-    string? FullDirectory,
-    string? ClientDirectory,
-    string? TargetsDirectory)
-{
-    internal void EnsureDirectories()
-    {
-        Directory.CreateDirectory(HostDirectory);
-        if (FullDirectory is not null)
-            Directory.CreateDirectory(FullDirectory);
-        if (ClientDirectory is not null)
-            Directory.CreateDirectory(ClientDirectory);
-        if (TargetsDirectory is not null)
-            Directory.CreateDirectory(TargetsDirectory);
-    }
-}
-
 internal sealed record VisualEvidenceScenarioOutputPlan(
     string HostManifestPath,
     string? ImagePath,
@@ -113,16 +55,6 @@ internal sealed record VisualEvidenceScenarioOutputPlan(
     string? FullImageRelativePath,
     string? ClientImagePath,
     string? ClientImageRelativePath);
-
-internal sealed record VisualEvidenceProcessPlan(
-    string Executable,
-    string WorkingDirectory,
-    string Arguments,
-    TimeSpan Timeout,
-    string TimedOutProcessTreeDescription)
-{
-    internal int TimeoutMilliseconds => (int)Timeout.TotalMilliseconds;
-}
 
 internal enum VisualEvidenceScenarioManifestStatus
 {
@@ -136,12 +68,6 @@ internal sealed record VisualEvidenceScenarioManifest<TManifest, TCapture>(
     TManifest? Manifest,
     TCapture? Capture)
     where TManifest : class
-    where TCapture : class;
-
-internal sealed record VisualEvidenceScenarioRun<TScenario, TCapture>(
-    IReadOnlyList<TScenario> Scenarios,
-    IReadOnlyList<TCapture> Captures,
-    IReadOnlyList<string> Limitations)
     where TCapture : class;
 
 internal static class FreePVisualEvidenceCaptureOrchestration
@@ -175,89 +101,6 @@ internal static class FreePVisualEvidenceCaptureOrchestration
             return new(true, outputRoot, scenarioId, route.UnknownScenarioMessagePrefix + scenarioId);
 
         return new(true, outputRoot, scenarioId, null);
-    }
-
-    internal static IReadOnlyList<TScenario> SelectScenarios<TScenario>(
-        IReadOnlyList<TScenario> scenarios,
-        string? scenarioId,
-        Func<TScenario, string> idSelector)
-    {
-        if (scenarioId is null)
-            return scenarios;
-        return new[]
-        {
-            scenarios.Single(scenario => StringComparer.Ordinal.Equals(idSelector(scenario), scenarioId)),
-        };
-    }
-
-    internal static async Task<VisualEvidenceScenarioRun<TScenario, TCapture>> RunScenariosAsync<TScenario, TCapture>(
-        IReadOnlyList<TScenario> catalog,
-        string? scenarioId,
-        Func<TScenario, string> idSelector,
-        VisualEvidenceHostOutputPlan outputPlan,
-        bool logProgress,
-        Func<TScenario, Task<TCapture>> captureScenario,
-        Func<TScenario, Exception, TCapture?> createBlockedCapture,
-        Func<TScenario, Exception, string?> createLimitation,
-        Action<TScenario, Exception>? reportFailure = null)
-        where TCapture : class
-    {
-        ArgumentNullException.ThrowIfNull(catalog);
-        ArgumentNullException.ThrowIfNull(idSelector);
-        ArgumentNullException.ThrowIfNull(outputPlan);
-        ArgumentNullException.ThrowIfNull(captureScenario);
-        ArgumentNullException.ThrowIfNull(createBlockedCapture);
-        ArgumentNullException.ThrowIfNull(createLimitation);
-
-        outputPlan.EnsureDirectories();
-        if (logProgress)
-            ResetProgress(outputPlan);
-
-        var scenarios = SelectScenarios(catalog, scenarioId, idSelector);
-        var captures = new List<TCapture>(scenarios.Count);
-        var limitations = new List<string>();
-        foreach (var scenario in scenarios)
-        {
-            var id = idSelector(scenario);
-            if (logProgress)
-                AppendProgress(outputPlan, $"start {id}");
-
-            try
-            {
-                captures.Add(await captureScenario(scenario));
-                if (logProgress)
-                    AppendProgress(outputPlan, $"complete {id}");
-            }
-            catch (Exception exception)
-            {
-                if (logProgress)
-                    AppendProgress(outputPlan, $"failed {id}: {exception}");
-                if (createBlockedCapture(scenario, exception) is { } blockedCapture)
-                    captures.Add(blockedCapture);
-                if (createLimitation(scenario, exception) is { Length: > 0 } limitation)
-                    limitations.Add(limitation);
-                reportFailure?.Invoke(scenario, exception);
-            }
-        }
-
-        return new(scenarios, captures, limitations);
-    }
-
-    internal static int FinalizeHostRun<TScenario, TCapture, TManifest>(
-        VisualEvidenceHostOutputPlan outputPlan,
-        VisualEvidenceScenarioRun<TScenario, TCapture> run,
-        Func<IReadOnlyList<TCapture>, IReadOnlyList<string>, TManifest> createManifest)
-        where TCapture : class
-    {
-        ArgumentNullException.ThrowIfNull(outputPlan);
-        ArgumentNullException.ThrowIfNull(run);
-        ArgumentNullException.ThrowIfNull(createManifest);
-
-        WriteManifest(
-            outputPlan.ManifestPath,
-            createManifest(run.Captures, run.Limitations),
-            HostManifestJsonOptions);
-        return run.Captures.Count == run.Scenarios.Count ? 0 : 1;
     }
 
     internal static VisualEvidenceHostOutputPlan CreateHostOutputPlan(
@@ -330,10 +173,10 @@ internal static class FreePVisualEvidenceCaptureOrchestration
         string scenarioId,
         TimeSpan timeout,
         string timedOutProcessTreeDescription) =>
-        new(
+        VisualEvidenceProcessPlan.Create(
             executable,
             Path.GetDirectoryName(executable)!,
-            $"{Quote(route.OutputArgument)} {Quote(outputRoot)} {Quote(route.ScenarioArgument)} {Quote(scenarioId)}",
+            [route.OutputArgument, outputRoot, route.ScenarioArgument, scenarioId],
             timeout,
             timedOutProcessTreeDescription);
 
@@ -384,14 +227,6 @@ internal static class FreePVisualEvidenceCaptureOrchestration
     internal static bool IsNonzeroFile(string path) =>
         File.Exists(path) && new FileInfo(path).Length > 0;
 
-    internal static void ResetProgress(VisualEvidenceHostOutputPlan plan)
-        => VisualEvidenceProgressLog.Reset(plan.ProgressPath);
-
-    internal static void AppendProgress(VisualEvidenceHostOutputPlan plan, string message)
-        => VisualEvidenceProgressLog.Append(
-            plan.ProgressPath,
-            new VisualEvidenceProgressRecord(message));
-
     internal static string Sha256(string path) =>
         VisualEvidenceHash.Sha256File(path);
 
@@ -410,6 +245,4 @@ internal static class FreePVisualEvidenceCaptureOrchestration
     private static string Relative(params string[] parts) =>
         Path.Combine(parts).Replace('\\', '/');
 
-    private static string Quote(string value) =>
-        '"' + value.Replace("\"", "\\\"", StringComparison.Ordinal) + '"';
 }

@@ -152,36 +152,21 @@ public sealed record PresentationFileCommandResult
                 path));
 }
 
-public enum PresentationFilePickerStatus
-{
-    Selected,
-    Cancelled,
-    Unavailable,
-    NonLocalSelection,
-}
-
 public sealed record PresentationFilePickerResult
 {
-    private PresentationFilePickerResult(OperationOutcome<string, string, string> operation)
+    private PresentationFilePickerResult(PickerOutcome<string> outcome)
     {
-        Operation = operation;
+        Outcome = outcome;
     }
 
-    public PresentationFilePickerResult(
-        PresentationFilePickerStatus Status,
-        string? Path = null,
-        string? Message = null)
-        : this(PresentationFileOperationOutcomeMapper.MapPicker(Status, Path, Message))
-    {
-    }
-
-    public OperationOutcome<string, string, string> Operation { get; }
-    public PresentationFilePickerStatus Status => PresentationFileOperationOutcomeMapper.MapPicker(Operation);
-    public string? Path => Operation.Path;
-    public string? Message => Operation.Value;
+    public PickerOutcome<string> Outcome { get; }
+    public OperationOutcome<string, string, string> Operation => Outcome.Operation;
+    public OperationStatus Status => Outcome.Status;
+    public string? Path => Outcome.Selection;
+    public string? Message => Outcome.Message;
 
     public void Deconstruct(
-        out PresentationFilePickerStatus status,
+        out OperationStatus status,
         out string? path,
         out string? message)
     {
@@ -191,16 +176,16 @@ public sealed record PresentationFilePickerResult
     }
 
     public static PresentationFilePickerResult Selected(string path) =>
-        new(OperationOutcome<string, string, string>.Completed(path: path));
+        new(PickerOutcome<string>.Selected(path));
 
     public static PresentationFilePickerResult Cancelled { get; } =
-        new(OperationOutcome<string, string, string>.Cancel());
+        new(PickerOutcome<string>.Cancelled);
 
     public static PresentationFilePickerResult Unavailable(string message) =>
-        new(OperationOutcome<string, string, string>.Unavailable(message));
+        new(PickerOutcome<string>.Unavailable(message));
 
     public static PresentationFilePickerResult NonLocal(string message) =>
-        new(OperationOutcome<string, string, string>.ValidationFailure(message, message));
+        new(PickerOutcome<string>.Invalid(message));
 }
 
 internal static class PresentationFileOperationOutcomeMapper
@@ -240,38 +225,6 @@ internal static class PresentationFileOperationOutcomeMapper
                 nameof(operation),
                 operation.Status,
                 "Unsupported shared file command outcome."),
-        };
-
-    internal static OperationOutcome<string, string, string> MapPicker(
-        PresentationFilePickerStatus status,
-        string? path,
-        string? message) => status switch
-    {
-        PresentationFilePickerStatus.Selected =>
-            OperationOutcome<string, string, string>.Completed(message, path),
-        PresentationFilePickerStatus.Cancelled =>
-            OperationOutcome<string, string, string>.Cancel(message, path),
-        PresentationFilePickerStatus.Unavailable =>
-            OperationOutcome<string, string, string>.Unavailable(message, path),
-        PresentationFilePickerStatus.NonLocalSelection =>
-            OperationOutcome<string, string, string>.ValidationFailure(
-                message ?? PresentationFileTextResources.NonLocalSelection,
-                message,
-                path),
-        _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unsupported picker status."),
-    };
-
-    internal static PresentationFilePickerStatus MapPicker(
-        OperationOutcome<string, string, string> operation) => operation.Status switch
-        {
-            OperationStatus.Completed => PresentationFilePickerStatus.Selected,
-            OperationStatus.Cancelled or OperationStatus.Declined => PresentationFilePickerStatus.Cancelled,
-            OperationStatus.Unavailable => PresentationFilePickerStatus.Unavailable,
-            OperationStatus.ValidationFailed => PresentationFilePickerStatus.NonLocalSelection,
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(operation),
-                operation.Status,
-                "Unsupported shared picker outcome."),
         };
 
     private static OperationOutcome<string, string, string> MapValidationFailure(
@@ -546,7 +499,7 @@ public sealed class PresentationFileCommandSession
                 operationResult = pickerResult is null
                     ? null
                     : await CompleteAsync(pickerResult, cancellationToken);
-                return selection.Status == PresentationFilePickerStatus.Selected ? selection.Path : null;
+                return selection.Status == OperationStatus.Completed ? selection.Path : null;
             },
             async path =>
             {
@@ -1113,12 +1066,13 @@ public sealed class PresentationFileCommandSession
         PresentationFilePickerResult selection) =>
         selection.Status switch
         {
-            PresentationFilePickerStatus.Selected => null,
-            PresentationFilePickerStatus.Cancelled => PresentationFileCommandResult.Cancel(command),
-            PresentationFilePickerStatus.Unavailable => PresentationFileCommandResult.Unavailable(
+            OperationStatus.Completed => null,
+            OperationStatus.Cancelled or OperationStatus.Declined =>
+                PresentationFileCommandResult.Cancel(command),
+            OperationStatus.Unavailable => PresentationFileCommandResult.Unavailable(
                 command,
                 selection.Message ?? PresentationFileTextResources.NativePickerUnavailable),
-            PresentationFilePickerStatus.NonLocalSelection => PresentationFileCommandResult.Invalid(
+            OperationStatus.ValidationFailed => PresentationFileCommandResult.Invalid(
                 command,
                 PresentationFileTextResources.ErrorSummary(command),
                 selection.Message ?? PresentationFileTextResources.NonLocalSelection),

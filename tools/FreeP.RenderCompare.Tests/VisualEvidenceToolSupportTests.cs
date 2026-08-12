@@ -1,6 +1,7 @@
 using System.Text.Json;
 using FreeP.App.Compositor;
 using FreeP.VisualEvidence;
+using Free.ToolsShared;
 
 namespace FreeP.RenderCompare.Tests;
 
@@ -206,7 +207,7 @@ public sealed class VisualEvidenceToolSupportTests
         var failures = new List<string>();
         var scenarios = new[] { new RunnerScenario("first"), new RunnerScenario("second"), new RunnerScenario("third") };
 
-        var run = await FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
+        var run = await VisualEvidenceCaptureOrchestrator.RunScenariosAsync(
             scenarios,
             scenarioId: null,
             scenario => scenario.Id,
@@ -240,10 +241,11 @@ public sealed class VisualEvidenceToolSupportTests
         progress.IndexOf("failed second", StringComparison.Ordinal).Should().BeLessThan(
             progress.IndexOf("start third", StringComparison.Ordinal));
 
-        FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+        VisualEvidenceCaptureOrchestrator.FinalizeHostRun(
                 outputPlan,
                 run,
-                (captures, limitations) => new RunnerManifest(captures, limitations))
+                (captures, limitations) => new RunnerManifest(captures, limitations),
+                FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions)
             .Should().Be(0);
         FreePVisualEvidenceCaptureOrchestration.ReadManifest<RunnerManifest>(
                 outputPlan.ManifestPath,
@@ -263,7 +265,7 @@ public sealed class VisualEvidenceToolSupportTests
             FreePVisualEvidenceRoutes.WholeWindow);
         var scenarios = new[] { new RunnerScenario("first"), new RunnerScenario("second") };
 
-        var run = await FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
+        var run = await VisualEvidenceCaptureOrchestrator.RunScenariosAsync(
             scenarios,
             scenarioId: null,
             scenario => scenario.Id,
@@ -278,10 +280,11 @@ public sealed class VisualEvidenceToolSupportTests
         run.Captures.Should().Equal(new RunnerCapture("first", "complete"));
         run.Limitations.Should().Equal("second: expected failure");
         outputPlan.ProgressPath.Should().BeNull();
-        FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+        VisualEvidenceCaptureOrchestrator.FinalizeHostRun(
                 outputPlan,
                 run,
-                (captures, limitations) => new RunnerManifest(captures, limitations))
+                (captures, limitations) => new RunnerManifest(captures, limitations),
+                FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions)
             .Should().Be(1);
     }
 

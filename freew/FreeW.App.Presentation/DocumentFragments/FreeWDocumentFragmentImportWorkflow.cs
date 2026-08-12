@@ -94,36 +94,36 @@ public static class FreeWDocumentFragmentImportPlanner
         };
 }
 
-public enum FreeWDocumentFragmentPickerStatus
-{
-    Selected,
-    Cancelled,
-    Unavailable,
-}
-
 public sealed record FreeWDocumentFragmentImportSelection(
     string Name,
     string LocalPath,
     object Source);
 
-public sealed record FreeWDocumentFragmentPickerResult(
-    FreeWDocumentFragmentPickerStatus Status,
-    FreeWDocumentFragmentImportSelection? Selection = null,
-    string? Message = null)
+public sealed record FreeWDocumentFragmentPickerResult
 {
+    private FreeWDocumentFragmentPickerResult(
+        PickerOutcome<FreeWDocumentFragmentImportSelection> outcome)
+    {
+        Outcome = outcome;
+    }
+
+    public PickerOutcome<FreeWDocumentFragmentImportSelection> Outcome { get; }
+    public OperationStatus Status => Outcome.Status;
+    public FreeWDocumentFragmentImportSelection? Selection => Outcome.Selection;
+    public string? Message => Outcome.Message;
+
     public static FreeWDocumentFragmentPickerResult Selected(
         string name,
         string localPath,
         object source) =>
-        new(
-            FreeWDocumentFragmentPickerStatus.Selected,
-            new FreeWDocumentFragmentImportSelection(name, localPath, source));
+        new(PickerOutcome<FreeWDocumentFragmentImportSelection>.Selected(
+            new FreeWDocumentFragmentImportSelection(name, localPath, source)));
 
     public static FreeWDocumentFragmentPickerResult Cancelled { get; } =
-        new(FreeWDocumentFragmentPickerStatus.Cancelled);
+        new(PickerOutcome<FreeWDocumentFragmentImportSelection>.Cancelled);
 
     public static FreeWDocumentFragmentPickerResult Unavailable(string message) =>
-        new(FreeWDocumentFragmentPickerStatus.Unavailable, Message: message);
+        new(PickerOutcome<FreeWDocumentFragmentImportSelection>.Unavailable(message));
 }
 
 public interface IFreeWDocumentFragmentPickerPort
@@ -308,9 +308,9 @@ public sealed class FreeWDocumentFragmentImportWorkflow
         {
             cancellationToken.ThrowIfCancellationRequested();
             var pickerResult = await _picker.PickAsync(request, cancellationToken);
-            if (pickerResult.Status == FreeWDocumentFragmentPickerStatus.Cancelled)
+            if (pickerResult.Status == OperationStatus.Cancelled)
                 return new FreeWDocumentFragmentImportResult(request, FreeWDocumentFragmentImportStatus.Cancelled);
-            if (pickerResult.Status == FreeWDocumentFragmentPickerStatus.Unavailable)
+            if (pickerResult.Status == OperationStatus.Unavailable)
             {
                 return new FreeWDocumentFragmentImportResult(
                     request,

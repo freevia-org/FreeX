@@ -71,6 +71,8 @@ public sealed class VisualEvidenceOrchestrationSourceTests
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateHostOutputPlan(");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.WriteManifest(");
+            source.Should().Contain("VisualEvidenceCaptureOrchestrator.RunScenariosAsync(");
+            source.Should().Contain("VisualEvidenceCaptureOrchestrator.FinalizeHostRun(");
             source.Should().NotContain("Array.FindIndex(");
             source.Should().NotContain("private static readonly JsonSerializerOptions");
             source.Should().NotContain("private static string Sha256(");
@@ -101,6 +103,7 @@ public sealed class VisualEvidenceOrchestrationSourceTests
         sources.Should().AllSatisfy(source =>
         {
             source.Should().Contain("new VisualEvidenceRunDirectory(");
+            source.Should().Contain("using Free.ToolsShared;");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateScenarioProcessPlan(");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.ReadScenarioManifest<");
             source.Should().Contain("FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(");
@@ -108,5 +111,33 @@ public sealed class VisualEvidenceOrchestrationSourceTests
             source.Should().NotContain("Guid.NewGuid()");
             source.Should().NotContain("JsonSerializer.Deserialize<");
         });
+    }
+
+    [Fact]
+    public void Generic_capture_lifecycle_is_owned_by_tools_shared_and_reused_by_FreeP_and_FreeX()
+    {
+        var shared = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "tools", "Free.ToolsShared", "VisualEvidenceCaptureOrchestrator.cs");
+        var freeP = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "freep", "TestSupport", "VisualEvidence", "VisualEvidenceCaptureOrchestration.cs");
+        var freeX = TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
+            "tools", "FreeX.ParityCompare", "CaptureRunner.cs");
+
+        shared.Should().Contain("public sealed class VisualEvidenceRunDirectory")
+            .And.Contain("public sealed record VisualEvidenceHostOutputPlan(")
+            .And.Contain("public sealed record VisualEvidenceProcessPlan(")
+            .And.Contain("public static async Task<VisualEvidenceScenarioRun")
+            .And.Contain("public static int FinalizeHostRun")
+            .And.NotContain("FreeP")
+            .And.NotContain("FreeX");
+        freeP.Should().Contain("using Free.ToolsShared;")
+            .And.Contain("VisualEvidenceProcessPlan.Create(")
+            .And.NotContain("sealed class VisualEvidenceRunDirectory")
+            .And.NotContain("sealed record VisualEvidenceHostOutputPlan")
+            .And.NotContain("sealed record VisualEvidenceProcessPlan")
+            .And.NotContain("RunScenariosAsync<TScenario")
+            .And.NotContain("FinalizeHostRun<TScenario");
+        freeX.Should().Contain("VisualEvidenceProcessPlan.Create(")
+            .And.Contain("private static void Run(VisualEvidenceProcessPlan plan)");
     }
 }

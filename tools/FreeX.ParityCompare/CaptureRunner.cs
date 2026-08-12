@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Free.ToolsShared;
 
 namespace FreeX.ParityCompare;
 
@@ -33,7 +34,12 @@ public static class CaptureRunner
 
         var exe = FindHostExe(repoRoot);
         Log($"Running WPF capture host -> {winDir}");
-        Run(exe, new[] { "--parity-capture", winDir }, repoRoot);
+        Run(VisualEvidenceProcessPlan.Create(
+            exe,
+            repoRoot,
+            ["--parity-capture", winDir],
+            TimeSpan.FromMinutes(30),
+            "capture process tree"));
 
         EnsureManifest(winDir, "windows");
     }
@@ -169,6 +175,36 @@ public static class CaptureRunner
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
 
+        Run(psi, fileName, timeout, killContainerName, "process tree");
+    }
+
+    private static void Run(VisualEvidenceProcessPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        var psi = new ProcessStartInfo
+        {
+            FileName = plan.Executable,
+            WorkingDirectory = plan.WorkingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
+            Arguments = plan.Arguments,
+        };
+        Run(
+            psi,
+            plan.Executable,
+            plan.Timeout,
+            killContainerName: null,
+            plan.TimedOutProcessTreeDescription);
+    }
+
+    private static void Run(
+        ProcessStartInfo psi,
+        string fileName,
+        TimeSpan? timeout,
+        string? killContainerName,
+        string timedOutProcessTreeDescription)
+    {
         using var proc = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start process '{fileName}'");
 
@@ -181,7 +217,8 @@ public static class CaptureRunner
                 if (killContainerName is not null)
                     TryRemoveContainer(killContainerName);
                 try { proc.Kill(entireProcessTree: true); } catch { /* best effort */ }
-                throw new TimeoutException($"'{fileName}' did not exit within {limit}.");
+                throw new TimeoutException(
+                    $"'{fileName}' did not exit within {limit}; its {timedOutProcessTreeDescription} was stopped.");
             }
         }
         else

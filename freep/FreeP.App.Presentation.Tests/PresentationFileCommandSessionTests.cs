@@ -283,7 +283,7 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
         unavailable.Validation.IsValid.Should().BeTrue();
         unavailable.Error.Should().BeNull();
 
-        nonLocal.Status.Should().Be(PresentationFilePickerStatus.NonLocalSelection);
+        nonLocal.Status.Should().Be(OperationStatus.ValidationFailed);
         nonLocal.Operation.Status.Should().Be(OperationStatus.ValidationFailed);
         nonLocal.Operation.Validation!.Detail.Should().Be("A local path is required");
         nonLocal.Message.Should().Be("A local path is required");

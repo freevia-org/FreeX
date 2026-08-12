@@ -6,6 +6,7 @@ using System.Net;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.VisualEvidence;
+using Free.ToolsShared;
 
 namespace FreeP.RenderCompare;
 

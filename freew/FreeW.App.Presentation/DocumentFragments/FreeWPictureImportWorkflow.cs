@@ -43,28 +43,29 @@ public sealed record FreeWPictureImportRequest(
     FreeWPictureImportPickerPlan PickerPlan,
     FreeWPictureImportSizingPolicy SizingPolicy);
 
-public enum FreeWPictureImportPickerStatus
-{
-    Selected,
-    Cancelled,
-    Unavailable,
-}
-
 public sealed record FreeWPictureImportSelection(string Name, object Source);
 
-public sealed record FreeWPictureImportPickerResult(
-    FreeWPictureImportPickerStatus Status,
-    FreeWPictureImportSelection? Selection = null,
-    string? Message = null)
+public sealed record FreeWPictureImportPickerResult
 {
+    private FreeWPictureImportPickerResult(PickerOutcome<FreeWPictureImportSelection> outcome)
+    {
+        Outcome = outcome;
+    }
+
+    public PickerOutcome<FreeWPictureImportSelection> Outcome { get; }
+    public OperationStatus Status => Outcome.Status;
+    public FreeWPictureImportSelection? Selection => Outcome.Selection;
+    public string? Message => Outcome.Message;
+
     public static FreeWPictureImportPickerResult Selected(string name, object source) =>
-        new(FreeWPictureImportPickerStatus.Selected, new FreeWPictureImportSelection(name, source));
+        new(PickerOutcome<FreeWPictureImportSelection>.Selected(
+            new FreeWPictureImportSelection(name, source)));
 
     public static FreeWPictureImportPickerResult Cancelled { get; } =
-        new(FreeWPictureImportPickerStatus.Cancelled);
+        new(PickerOutcome<FreeWPictureImportSelection>.Cancelled);
 
     public static FreeWPictureImportPickerResult Unavailable(string message) =>
-        new(FreeWPictureImportPickerStatus.Unavailable, Message: message);
+        new(PickerOutcome<FreeWPictureImportSelection>.Unavailable(message));
 }
 
 public interface IFreeWPictureImportPickerPort
@@ -341,9 +342,9 @@ public sealed class FreeWPictureImportWorkflow
         {
             cancellationToken.ThrowIfCancellationRequested();
             var pickerResult = await _picker.PickAsync(request, cancellationToken);
-            if (pickerResult.Status == FreeWPictureImportPickerStatus.Cancelled)
+            if (pickerResult.Status == OperationStatus.Cancelled)
                 return new FreeWPictureImportResult(request, FreeWPictureImportStatus.Cancelled);
-            if (pickerResult.Status == FreeWPictureImportPickerStatus.Unavailable)
+            if (pickerResult.Status == OperationStatus.Unavailable)
             {
                 return new FreeWPictureImportResult(
                     request,

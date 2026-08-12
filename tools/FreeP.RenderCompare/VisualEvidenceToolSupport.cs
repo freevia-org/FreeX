@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using FreeP.VisualEvidence;
+using Free.ToolsShared;
 
 namespace FreeP.RenderCompare;
 

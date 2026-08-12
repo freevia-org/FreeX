@@ -13,6 +13,7 @@ using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.VisualEvidence;
+using Free.ToolsShared;
 
 namespace FreeP.VisualEvidence.Wpf;
 
@@ -74,7 +75,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             outputRoot,
             FreePVisualEvidenceCaptureOrchestration.WpfHost,
             FreePVisualEvidenceRoutes.DialogPane);
-        var run = FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
+        var run = VisualEvidenceCaptureOrchestrator.RunScenariosAsync(
             DialogPaneVisualEvidenceCatalog.All,
             scenarioId,
             scenario => scenario.Id,
@@ -187,7 +188,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
             .GetAwaiter()
             .GetResult();
 
-        return FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+        return VisualEvidenceCaptureOrchestrator.FinalizeHostRun(
             outputPlan,
             run,
             (captures, limitations) => new DialogPaneVisualEvidenceHostManifest(
@@ -199,7 +200,8 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
                 FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
                 captures,
-                limitations));
+                limitations),
+            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
     }
 
     private sealed class WpfDialogPaneVisualEvidenceAdapter(MainWindow owner)

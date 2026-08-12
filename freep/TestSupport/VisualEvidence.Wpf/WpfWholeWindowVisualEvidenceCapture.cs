@@ -9,6 +9,7 @@ using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.VisualEvidence;
+using Free.ToolsShared;
 
 namespace FreeP.VisualEvidence.Wpf;
 
@@ -69,7 +70,7 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             outputRoot,
             FreePVisualEvidenceCaptureOrchestration.WpfHost,
             FreePVisualEvidenceRoutes.WholeWindow);
-        var run = FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
+        var run = VisualEvidenceCaptureOrchestrator.RunScenariosAsync(
             WholeWindowVisualEvidenceCatalog.All,
             scenarioId,
             scenario => scenario.Id,
@@ -152,7 +153,7 @@ internal static class WpfWholeWindowVisualEvidenceCapture
             .GetAwaiter()
             .GetResult();
 
-        return FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+        return VisualEvidenceCaptureOrchestrator.FinalizeHostRun(
             outputPlan,
             run,
             (captures, limitations) => new WholeWindowVisualEvidenceHostManifest(
@@ -164,7 +165,8 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                 WholeWindowVisualEvidenceCatalog.LogicalClientHeight,
                 FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
                 captures,
-                limitations));
+                limitations),
+            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
     }
 
     private static CaptureRaster Capture(

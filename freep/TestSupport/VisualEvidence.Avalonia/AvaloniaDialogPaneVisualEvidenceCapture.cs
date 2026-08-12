@@ -12,6 +12,7 @@ using Free.Shared.Drawing;
 using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.VisualEvidence;
+using Free.ToolsShared;
 
 namespace FreeP.VisualEvidence.Avalonia;
 
@@ -62,7 +63,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         anchor.Position = new PixelPoint(40, 40);
         anchor.Show();
 
-        var run = await FreePVisualEvidenceCaptureOrchestration.RunScenariosAsync(
+        var run = await VisualEvidenceCaptureOrchestrator.RunScenariosAsync(
             DialogPaneVisualEvidenceCatalog.All,
             scenarioId,
             scenario => scenario.Id,
@@ -162,7 +163,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             createLimitation: (_, _) => null);
 
         anchor.Close();
-        return FreePVisualEvidenceCaptureOrchestration.FinalizeHostRun(
+        return VisualEvidenceCaptureOrchestrator.FinalizeHostRun(
             outputPlan,
             run,
             (captures, limitations) => new DialogPaneVisualEvidenceHostManifest(
@@ -174,7 +175,8 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
                 DialogPaneVisualEvidenceCatalog.LogicalShellHeight,
                 FreePVisualEvidenceCaptureOrchestration.UtcTimestamp(),
                 captures,
-                limitations));
+                limitations),
+            FreePVisualEvidenceCaptureOrchestration.HostManifestJsonOptions);
     }
 
     private sealed class AvaloniaDialogPaneVisualEvidenceAdapter(MainWindow owner)

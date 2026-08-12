@@ -27,6 +27,39 @@ public sealed class FileOperationOutcomeOwnershipSourceTests
             .And.NotContain("new(command, PresentationFileCommandStatus.Succeeded");
     }
 
+    [Fact]
+    public void Shared_app_services_owns_picker_state_machines()
+    {
+        var shared = ReadSource("shared", "Free.Shared.AppServices", "PickerOutcome.cs");
+        var freeP = ReadSource(
+            "freep", "FreeP.App.Presentation", "PresentationFileCommandSession.cs");
+        var freeWPicture = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "DocumentFragments",
+            "FreeWPictureImportWorkflow.cs");
+        var freeWFragment = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "DocumentFragments",
+            "FreeWDocumentFragmentImportWorkflow.cs");
+
+        shared.Should().Contain("public sealed record PickerOutcome<TSelection>")
+            .And.Contain("public OperationStatus Status => Operation.Status;")
+            .And.Contain("public static PickerOutcome<TSelection> Cancelled")
+            .And.NotContain("FreeW")
+            .And.NotContain("FreeP");
+        freeP.Should().Contain("public PickerOutcome<string> Outcome { get; }")
+            .And.NotContain("enum PresentationFilePickerStatus")
+            .And.NotContain("MapPicker(");
+        freeWPicture.Should().Contain(
+                "public PickerOutcome<FreeWPictureImportSelection> Outcome { get; }")
+            .And.NotContain("enum FreeWPictureImportPickerStatus");
+        freeWFragment.Should().Contain(
+                "public PickerOutcome<FreeWDocumentFragmentImportSelection> Outcome { get; }")
+            .And.NotContain("enum FreeWDocumentFragmentPickerStatus");
+    }
+
     private static string ReadSource(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");

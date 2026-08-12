@@ -16,6 +16,7 @@
          retains private access without entering the normal shipping assembly. -->
     <Compile Remove="MainWindow.VisualCaptureAdapter.cs" />
     <ProjectReference Include="..\VisualEvidence\FreeP.VisualEvidence.csproj" />
+    <ProjectReference Include="..\..\..\tools\Free.ToolsShared\Free.ToolsShared.csproj" />
     <ProjectReference Include="..\..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
                       AdditionalProperties="FreePVisualEvidenceHost=true" />
   </ItemGroup>

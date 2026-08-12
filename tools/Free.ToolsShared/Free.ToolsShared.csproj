@@ -3,4 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <Import Project="..\ToolProjects.props" />
+  <ItemGroup>
+    <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />
+  </ItemGroup>
 </Project>
