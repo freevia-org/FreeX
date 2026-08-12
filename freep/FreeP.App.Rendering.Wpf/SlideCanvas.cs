@@ -2862,22 +2862,12 @@ public sealed partial class SlideCanvas : FrameworkElement
             var descriptors = OwnerCanvas._canvasAutomation.ProjectShapes(
                 OwnerCanvas.Slide,
                 OwnerCanvas._editingSession?.SelectedShapeIds);
-            var children = new List<AutomationPeer>(descriptors.Length);
-            var liveIds = new HashSet<uint>();
-            foreach (var descriptor in descriptors)
-            {
-                var shapeId = descriptor.ShapeId!.Value;
-                liveIds.Add(shapeId);
-                children.Add(GetOrCreateShapePeer(shapeId));
-            }
-
-            // Evict peers for shapes that no longer exist on the current slide (deleted, or the
-            // slide itself changed) so the cache does not grow without bound across a long
-            // editing session, mirroring GridViewAutomationPeer's viewport eviction.
-            foreach (var staleId in _shapePeers.Keys.Where(id => !liveIds.Contains(id)).ToList())
-                _shapePeers.Remove(staleId);
-
-            return children;
+            return PresentationAutomationPeerCache.Synchronize(
+                    descriptors,
+                    _shapePeers,
+                    shapeId => new SlideShapeAutomationPeer(this, shapeId))
+                .Cast<AutomationPeer>()
+                .ToList();
         }
 
         protected override AutomationControlType GetAutomationControlTypeCore() =>
@@ -2909,14 +2899,10 @@ public sealed partial class SlideCanvas : FrameworkElement
             };
 
         private SlideShapeAutomationPeer GetOrCreateShapePeer(uint shapeId)
-        {
-            if (_shapePeers.TryGetValue(shapeId, out var peer))
-                return peer;
-
-            peer = new SlideShapeAutomationPeer(this, shapeId);
-            _shapePeers[shapeId] = peer;
-            return peer;
-        }
+            => PresentationAutomationPeerCache.GetOrCreate(
+                _shapePeers,
+                shapeId,
+                id => new SlideShapeAutomationPeer(this, id));
 
         internal bool TryGetShape(
             uint shapeId,

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Free.Shared.AppServices;
+using FreeP.App.Localization;
 
 namespace FreeP.App.Compositor;
 
@@ -16,7 +17,10 @@ public sealed class OptionsDialogSession
     private readonly BasicApplicationOptionsDialogSession<FreePOptions> _basicSession;
 
     public static string RecentFilesCapValidationMessage =>
-        $"Enter a whole number between {FreePOptions.MinRecentFilesCap} and {FreePOptions.MaxRecentFilesCap}.";
+        Loc.Format(
+            "Options_RecentFilesCapValidation",
+            FreePOptions.MinRecentFilesCap,
+            FreePOptions.MaxRecentFilesCap);
 
     public OptionsDialogSession(FreePOptions? options, CultureInfo culture)
     {

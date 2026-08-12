@@ -210,4 +210,19 @@
   <data name="Print_Dialog_LastPageBeforeFirstPage" xml:space="preserve"><value>La derni&#232;re page doit &#234;tre au moins &#233;gale &#224; la premi&#232;re.</value></data>
   <data name="Pane_Common_CloseCommand" xml:space="preserve"><value>Fermer</value></data>
   <data name="Pane_Notes_Placeholder" xml:space="preserve"><value>Cliquez pour ajouter des notes</value></data>
+  <data name="Options_Title" xml:space="preserve"><value>Options FreeP</value></data>
+  <data name="Options_RecentFilesLabel" xml:space="preserve"><value>Pr&#233;sentations r&#233;centes &#224; conserver :</value></data>
+  <data name="Options_DefaultSaveFormatLabel" xml:space="preserve"><value>Format d'enregistrement par d&#233;faut :</value></data>
+  <data name="Options_UiLanguageLabel" xml:space="preserve"><value>Langue de l'interface :</value></data>
+  <data name="Options_UiLanguageSystemHint" xml:space="preserve"><value>Laisser vide pour utiliser la langue du syst&#232;me.</value></data>
+  <data name="Options_UiLanguageCurrentHint" xml:space="preserve"><value>Laisser vide pour utiliser la langue du syst&#232;me (actuellement {0}).</value></data>
+  <data name="Options_PresentationFormat" xml:space="preserve"><value>Pr&#233;sentation (*.fxp)</value></data>
+  <data name="Options_RecentFilesCapValidation" xml:space="preserve"><value>Entrez un nombre entier compris entre {0} et {1}.</value></data>
+  <data name="Shell_Command_SlideZoom" xml:space="preserve"><value>Zoom de diapositive</value></data>
+  <data name="Shell_Command_SectionZoom" xml:space="preserve"><value>Zoom de section</value></data>
+  <data name="Shell_Command_SummaryZoom" xml:space="preserve"><value>Zoom de synth&#232;se</value></data>
+  <data name="Shell_Command_ZoomTarget" xml:space="preserve"><value>Cible du zoom</value></data>
+  <data name="Shell_Command_SummaryZoomTargets" xml:space="preserve"><value>Cibles du zoom de synth&#232;se</value></data>
+  <data name="Shell_Command_SlidePane" xml:space="preserve"><value>Volet des diapositives</value></data>
+  <data name="Shell_Command_CustomShow" xml:space="preserve"><value>Diaporama personnalis&#233;</value></data>
 </root>

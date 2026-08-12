@@ -156,6 +156,60 @@ public sealed class PresentationCanvasAutomationSessionTests
     }
 
     [Fact]
+    public void PeerCacheReusesLivePeersAndEvictsShapesMissingFromThePortableProjection()
+    {
+        var retained = new object();
+        var stale = new object();
+        var peers = new Dictionary<uint, object>
+        {
+            [1] = retained,
+            [99] = stale,
+        };
+        var createdIds = new List<uint>();
+        var descriptors = new[]
+        {
+            Descriptor(1),
+            Descriptor(2),
+        };
+
+        var projected = PresentationAutomationPeerCache.Synchronize(
+            descriptors,
+            peers,
+            shapeId =>
+            {
+                createdIds.Add(shapeId);
+                return new object();
+            });
+
+        projected.Should().HaveCount(2);
+        projected[0].Should().BeSameAs(retained);
+        createdIds.Should().Equal(2u);
+        peers.Keys.Should().BeEquivalentTo([1u, 2u]);
+
+        var secondProjection = PresentationAutomationPeerCache.Synchronize(
+            descriptors,
+            peers,
+            _ => throw new InvalidOperationException("No peer should be recreated."));
+        secondProjection.Should().Equal(projected);
+    }
+
+    [Fact]
+    public void PeerCacheRejectsCanvasDescriptorsWithoutMutatingTheExistingCache()
+    {
+        var retained = new object();
+        var peers = new Dictionary<uint, object> { [1] = retained };
+
+        var synchronize = () => PresentationAutomationPeerCache.Synchronize(
+            [Descriptor(null)],
+            peers,
+            _ => new object());
+
+        synchronize.Should().Throw<ArgumentException>()
+            .WithMessage("*must identify a shape*");
+        peers.Should().ContainSingle().Which.Value.Should().BeSameAs(retained);
+    }
+
+    [Fact]
     public void RendererPeersOnlyTranslateSharedAutomationPolicy()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
@@ -179,7 +233,10 @@ public sealed class PresentationCanvasAutomationSessionTests
                 .And.Contain("_canvasAutomation.CanSelectMultiple")
                 .And.Contain("_canvasAutomation.RequestSelectionMutation(")
                 .And.Contain("PresentationCanvasAutomationRole.Image => AutomationControlType.Image")
+                .And.Contain("PresentationAutomationPeerCache.Synchronize(")
                 .And.NotContain("_lastNotifiedSelection")
+                .And.NotContain("var liveIds = new HashSet<uint>()")
+                .And.NotContain("_shapePeers.Keys.Where(")
                 .And.NotContain("SequenceEqual(previous)")
                 .And.NotContain("AlternativeTextTitle")
                 .And.NotContain("ShapeKindToControlType")
@@ -213,6 +270,21 @@ public sealed class PresentationCanvasAutomationSessionTests
             ExtentCxEmu = 30,
             ExtentCyEmu = 40,
         };
+
+    private static PresentationCanvasAutomationDescriptor Descriptor(uint? shapeId) =>
+        new(
+            shapeId,
+            shapeId is null ? string.Empty : $"Shape_{shapeId}",
+            PresentationCanvasAutomationSession.ShapeClassName,
+            shapeId is null ? "Slide canvas" : $"Shape {shapeId}",
+            string.Empty,
+            PresentationCanvasAutomationSession.ShapeLocalizedControlType,
+            shapeId is null
+                ? PresentationCanvasAutomationRole.Canvas
+                : PresentationCanvasAutomationRole.Shape,
+            null,
+            false,
+            false);
 
     private static string Read(string root, params string[] relativeParts) =>
         File.ReadAllText(Path.Combine(new[] { root }.Concat(relativeParts).ToArray()));

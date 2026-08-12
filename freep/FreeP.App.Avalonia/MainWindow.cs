@@ -3166,7 +3166,8 @@ public sealed partial class MainWindow : Window,
         return null;
     }
 
-    internal void OpenSlideZoomDialog() => RunGuarded(OpenSlideZoomDialogAsync, "Slide Zoom");
+    internal void OpenSlideZoomDialog() =>
+        RunGuarded(OpenSlideZoomDialogAsync, UiText.Get("Shell_Command_SlideZoom"));
 
     internal async Task OpenSlideZoomDialogAsync()
     {
@@ -3183,7 +3184,8 @@ public sealed partial class MainWindow : Window,
             _zoomAuthoringSession.ApplySlideInsertion(dialog.SelectedTargetSlideId);
     }
 
-    internal void OpenSectionZoomDialog() => RunGuarded(OpenSectionZoomDialogAsync, "Section Zoom");
+    internal void OpenSectionZoomDialog() =>
+        RunGuarded(OpenSectionZoomDialogAsync, UiText.Get("Shell_Command_SectionZoom"));
 
     internal async Task OpenSectionZoomDialogAsync()
     {
@@ -3200,7 +3202,8 @@ public sealed partial class MainWindow : Window,
             _zoomAuthoringSession.ApplySectionInsertion(dialog.SelectedTargetSectionId);
     }
 
-    internal void OpenSummaryZoomDialog() => RunGuarded(OpenSummaryZoomDialogAsync, "Summary Zoom");
+    internal void OpenSummaryZoomDialog() =>
+        RunGuarded(OpenSummaryZoomDialogAsync, UiText.Get("Shell_Command_SummaryZoom"));
 
     internal async Task OpenSummaryZoomDialogAsync()
     {
@@ -3217,7 +3220,8 @@ public sealed partial class MainWindow : Window,
             _zoomAuthoringSession.ApplySummaryInsertion(dialog.SelectedTargetSectionIds);
     }
 
-    internal void OpenZoomTargetDialog() => RunGuarded(OpenZoomTargetDialogAsync, "Zoom Target");
+    internal void OpenZoomTargetDialog() =>
+        RunGuarded(OpenZoomTargetDialogAsync, UiText.Get("Shell_Command_ZoomTarget"));
 
     internal async Task OpenZoomTargetDialogAsync()
     {
@@ -3246,7 +3250,8 @@ public sealed partial class MainWindow : Window,
             _zoomAuthoringSession.ApplySelectedTarget(request, sectionDialog.SelectedTargetSectionId);
     }
 
-    internal void OpenSummaryZoomTargetsDialog() => RunGuarded(OpenSummaryZoomTargetsDialogAsync, "Summary Zoom Targets");
+    internal void OpenSummaryZoomTargetsDialog() =>
+        RunGuarded(OpenSummaryZoomTargetsDialogAsync, UiText.Get("Shell_Command_SummaryZoomTargets"));
 
     internal async Task OpenSummaryZoomTargetsDialogAsync()
     {
@@ -6703,7 +6708,10 @@ public sealed partial class MainWindow : Window,
         }
         catch (Exception ex)
         {
-            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Slide Pane", ex.Message);
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Shell_Command_SlidePane"),
+                ex.Message);
         }
     }
 
@@ -7940,7 +7948,7 @@ public sealed partial class MainWindow : Window,
     }
 
     internal void OpenCustomShowDialog() =>
-        RunGuarded(OpenCustomShowDialogAsync, "Custom Show");
+        RunGuarded(OpenCustomShowDialogAsync, UiText.Get("Shell_Command_CustomShow"));
 
 
     private async Task OpenCustomShowDialogAsync()

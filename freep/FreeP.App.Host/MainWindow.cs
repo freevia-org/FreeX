@@ -4459,7 +4459,7 @@ public sealed partial class MainWindow : Window,
             definition,
             registry,
             stateStore,
-            FileTabHeader:  "File",
+            FileTabHeader:  UiText.Get("Ribbon_Group_File_Label"),
             FileTabAccent:  FreePBrushes.AccentColor,
             FileTabHover:   FreePBrushes.AccentDarkColor,
             ShowBackstage));
@@ -4484,6 +4484,6 @@ public sealed partial class MainWindow : Window,
             dialog.Result,
             _ => _optionsStore.Save(_options));
         if (!outcome.Persisted)
-            DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeP Options");
+            DialogMessageHelper.ShowError(this, _optionsStore.LastError, OptionsDialogPlanner.Title);
     }
 }

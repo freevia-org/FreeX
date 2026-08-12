@@ -461,8 +461,6 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
             (handle.Name, new Point(handle.ScreenPosition.X, handle.ScreenPosition.Y))));
     }
 
-    // ── Test seeding (InternalsVisibleTo test project) ─────────────────────────
-
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     private static CanvasGesturePoint ToGesturePoint(Point point)

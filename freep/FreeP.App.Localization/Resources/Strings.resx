@@ -3771,4 +3771,19 @@
   <data name="FreeP_Backstage_Options_EditText" xml:space="preserve">
     <value>Edit options…</value>
   </data>
+  <data name="Options_Title" xml:space="preserve"><value>FreeP Options</value></data>
+  <data name="Options_RecentFilesLabel" xml:space="preserve"><value>Recent files to keep:</value></data>
+  <data name="Options_DefaultSaveFormatLabel" xml:space="preserve"><value>Default save format:</value></data>
+  <data name="Options_UiLanguageLabel" xml:space="preserve"><value>UI language:</value></data>
+  <data name="Options_UiLanguageSystemHint" xml:space="preserve"><value>Empty = follow the system culture.</value></data>
+  <data name="Options_UiLanguageCurrentHint" xml:space="preserve"><value>Empty = follow the system culture (currently {0}).</value></data>
+  <data name="Options_PresentationFormat" xml:space="preserve"><value>Presentation (*.fxp)</value></data>
+  <data name="Options_RecentFilesCapValidation" xml:space="preserve"><value>Enter a whole number between {0} and {1}.</value></data>
+  <data name="Shell_Command_SlideZoom" xml:space="preserve"><value>Slide Zoom</value></data>
+  <data name="Shell_Command_SectionZoom" xml:space="preserve"><value>Section Zoom</value></data>
+  <data name="Shell_Command_SummaryZoom" xml:space="preserve"><value>Summary Zoom</value></data>
+  <data name="Shell_Command_ZoomTarget" xml:space="preserve"><value>Zoom Target</value></data>
+  <data name="Shell_Command_SummaryZoomTargets" xml:space="preserve"><value>Summary Zoom Targets</value></data>
+  <data name="Shell_Command_SlidePane" xml:space="preserve"><value>Slide Pane</value></data>
+  <data name="Shell_Command_CustomShow" xml:space="preserve"><value>Custom Show</value></data>
 </root>

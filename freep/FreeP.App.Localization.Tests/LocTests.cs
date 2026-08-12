@@ -105,6 +105,23 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void OptionsAndShellCommandTail_IsLocalizedForBothRenderers()
+    {
+        WithUiCulture("en-US", () => Loc.Get("Options_Title")).Should().Be("FreeP Options");
+        WithUiCulture("fr-FR", () => Loc.Get("Options_Title")).Should().Be("Options FreeP");
+        WithUiCulture("fr-FR", () => Loc.Get("Options_RecentFilesLabel"))
+            .Should().Be("Pr\u00e9sentations r\u00e9centes \u00e0 conserver :");
+        WithUiCulture(
+                "fr-FR",
+                () => Loc.Format("Options_UiLanguageCurrentHint", "fr-FR"))
+            .Should().Contain("fr-FR");
+        WithUiCulture("fr-FR", () => Loc.Get("Shell_Command_SlidePane"))
+            .Should().Be("Volet des diapositives");
+        WithUiCulture("fr-FR", () => Loc.Get("Shell_Command_CustomShow"))
+            .Should().Be("Diaporama personnalis\u00e9");
+    }
+
+    [Fact]
     public void GetNeutralResourceKeys_CoversSharedShellAndBackstageFoundation()
     {
         Loc.GetNeutralResourceKeys().Should().Contain([

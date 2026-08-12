@@ -1,5 +1,6 @@
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
+using FreeP.App.Localization;
 
 namespace FreeP.App.Compositor;
 
@@ -19,10 +20,10 @@ public static class OptionsDialogPlanner
     public const int ActionRowBottomMargin = 12;
     public const int ActionButtonWidth = 84;
 
-    public const string Title = "FreeP Options";
-    public const string RecentFilesLabel = "Recent files to keep:";
-    public const string DefaultSaveFormatLabel = "Default save format:";
-    public const string UiLanguageLabel = "UI language:";
+    public static string Title => Loc.Get("Options_Title");
+    public static string RecentFilesLabel => Loc.Get("Options_RecentFilesLabel");
+    public static string DefaultSaveFormatLabel => Loc.Get("Options_DefaultSaveFormatLabel");
+    public static string UiLanguageLabel => Loc.Get("Options_UiLanguageLabel");
 
     /// <summary>
     /// Parses the recent-files-count text against <see cref="FreePOptions"/>'s valid range. Returns false
@@ -44,8 +45,8 @@ public static class OptionsDialogPlanner
         seed.Normalize();
 
         var languageHint = string.IsNullOrWhiteSpace(systemLanguageLabel)
-            ? "Empty = follow the system culture."
-            : $"Empty = follow the system culture (currently {systemLanguageLabel}).";
+            ? Loc.Get("Options_UiLanguageSystemHint")
+            : Loc.Format("Options_UiLanguageCurrentHint", systemLanguageLabel);
 
         return new OptionsDialogSurfaceSpec(
             Title,
@@ -58,7 +59,7 @@ public static class OptionsDialogPlanner
             seed.RecentFilesCap,
             seed.UiLanguage,
             [
-                new("Presentation (*.fxp)", FreePOptions.FxpDefaultFormat),
+                new(Loc.Get("Options_PresentationFormat"), FreePOptions.FxpDefaultFormat),
             ]);
     }
 
