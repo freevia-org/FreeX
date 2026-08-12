@@ -1069,6 +1069,152 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
             "ink part bytes should survive round-trip");
     }
 
+    // ── R135 GATE FIX: no duplicate zip entries for preserved-object / SmartArt parts ──
+
+    /// <summary>
+    /// R135 GATE FIX root-cause regression test. Before the fix, WriteSlidePreservedObjects wrote
+    /// ppt/ink/ink1.xml explicitly (from shape.PreservedObject.Parts), and then
+    /// CopyPreservedPackageEntries — the pass that re-emits whatever is left over in the raw
+    /// package snapshot that isn't on the writer-owned-prefix allowlist (ppt/ink/ is NOT on that
+    /// allowlist; see WriterOwnedPackagePartPrefixes) — copied the IDENTICAL origPath a second
+    /// time straight out of the snapshot, because it had no way to know the preserved-object pass
+    /// had already written it. That produced two physical zip entries named "ppt/ink/ink1.xml",
+    /// which is malformed OPC (ECMA-376 Part 2 §10.1.2.1: part names are unique within a package)
+    /// and is exactly what WorkbookOpenSizeGuard now correctly rejects on re-read — meaning a user
+    /// who opened a .pptx with ink, edited it, and saved could no longer reopen their own file.
+    /// This reproduces with a SINGLE slide and a SINGLE shape (no multi-slide interaction needed).
+    /// </summary>
+    [Fact]
+    public void InkContentPart_RoundTrips_ExactlyOneZipEntryForInkPart()
+    {
+        const string inkXml = """
+            <p:contentPart xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                           xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                           r:id="rIdInk1">
+              <p:nvContentPartPr>
+                <p:cNvPr id="20" name="Ink 20"/>
+              </p:nvContentPartPr>
+            </p:contentPart>
+            """;
+        var inkBytes = Encoding.UTF8.GetBytes("<inkml><trace>0 0 1 1</trace></inkml>");
+        const string inkRelType = "http://schemas.microsoft.com/office/2016/05/19/relationships/ink";
+
+        var ms1 = BuildPptxWithContentPart(inkXml, inkBytes, inkRelType,
+            inkPartPath: "ppt/ink/ink1.xml", inkRelId: "rIdInk1");
+        var pres1 = PptxPackageReader.Read(ms1);
+
+        using var ms2 = WritePptxToMemory(pres1);
+        using (var zip = new ZipArchive(ms2, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var inkEntries = zip.Entries.Where(e =>
+                string.Equals(e.FullName, "ppt/ink/ink1.xml", StringComparison.OrdinalIgnoreCase)).ToList();
+            inkEntries.Should().HaveCount(1,
+                "the written package must contain exactly one ppt/ink/ink1.xml zip entry — a second " +
+                "entry with the same part name is malformed OPC and would fail to reopen");
+        }
+
+        // Re-reading through the production reader (which runs WorkbookOpenSizeGuard) must not throw.
+        // ZipArchive read-mode moves the underlying stream's position, so rewind before re-reading.
+        ms2.Position = 0;
+        var act = () => PptxPackageReader.Read(ms2);
+        act.Should().NotThrow("a package this writer just produced must always be re-openable");
+    }
+
+    /// <summary>
+    /// R135 GATE FIX sibling check: preserved-object parts shared across THREE slides (the same
+    /// scenario as <see cref="FA1_ThreeSlidesShareOnePath_EveryWrittenPartHasMatchingOverride"/>,
+    /// which only checks Content-Types Overrides) must never produce more than one physical zip
+    /// entry for any single part name. Before the fix, WriteSlidePreservedObjects' writtenPaths
+    /// guard was a fresh HashSet allocated PER SLIDE (i.e. per call), so a second/third slide
+    /// referencing the same origPath had no memory of an earlier slide already having written that
+    /// exact zip entry, and wrote it again under the identical name.
+    /// </summary>
+    [Fact]
+    public void PreservedObject_SharedAcrossThreeSlides_NeverProducesDuplicateZipEntries()
+    {
+        var pres = new Presentation();
+        var glbBytes = new byte[] { 0x67, 0x6C, 0x54, 0x46 };
+
+        pres.Slides.Add(BuildPreservedModel3dSlide(1, glbBytes));
+        pres.Slides.Add(BuildPreservedModel3dSlide(2, glbBytes));
+        pres.Slides.Add(BuildPreservedModel3dSlide(3, glbBytes));
+
+        using var ms = WritePptxToMemory(pres);
+        using var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true);
+
+        var duplicateNames = zip.Entries
+            .GroupBy(e => e.FullName, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        duplicateNames.Should().BeEmpty(
+            "no zip part name may appear more than once in a written package (malformed OPC)");
+    }
+
+    /// <summary>
+    /// R135 GATE FIX sibling check for SmartArt: WriteSlideSmartArt had the identical bug class as
+    /// WriteSlidePreservedObjects — its writtenParts guard was a fresh HashSet allocated PER SLIDE,
+    /// so a diagram part shared by SmartArt shapes on two different slides (e.g. a copy/pasted
+    /// diagram) was written to the zip archive twice under the identical part name. Diagram parts
+    /// ARE on the writer-owned-prefix allowlist (ppt/diagrams/), so this specific case never
+    /// interacted with CopyPreservedPackageEntries — but the direct double
+    /// archive.CreateEntry(samePath) from WriteSlideSmartArt itself was still a real duplicate-zip-
+    /// entry bug, independent of that interaction.
+    /// </summary>
+    [Fact]
+    public void SmartArtDiagramPart_SharedAcrossTwoSlides_NeverProducesDuplicateZipEntries()
+    {
+        var pres = new Presentation();
+        var dataBytes = Encoding.UTF8.GetBytes(
+            "<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\"/>");
+
+        pres.Slides.Add(BuildSmartArtSlide(1, dataBytes));
+        pres.Slides.Add(BuildSmartArtSlide(2, dataBytes));
+
+        using var ms = WritePptxToMemory(pres);
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var duplicateNames = zip.Entries
+                .GroupBy(e => e.FullName, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            duplicateNames.Should().BeEmpty(
+                "no zip part name may appear more than once in a written package (malformed OPC)");
+        }
+
+        // Re-reading through the production reader (which runs WorkbookOpenSizeGuard) must not throw.
+        // ZipArchive read-mode moves the underlying stream's position, so rewind before re-reading.
+        ms.Position = 0;
+        var act = () => PptxPackageReader.Read(ms);
+        act.Should().NotThrow("a package this writer just produced must always be re-openable");
+    }
+
+    private static Slide BuildSmartArtSlide(uint shapeId, byte[] dataBytes)
+    {
+        var smart = new SmartArtShape();
+        smart.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            PartPath    = "ppt/diagrams/data1.xml",
+            Bytes       = dataBytes,
+        };
+        smart.DiagramRelIds["dm"] = "rId2";
+
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = shapeId,
+            Kind        = SlideShapeKind.SmartArt,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            SmartArt    = smart,
+        });
+        return slide;
+    }
+
     // ── 3D model graphicFrame round-trip ──────────────────────────────────────
 
     [Fact]

@@ -13,7 +13,9 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle Chrome =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            ComboBoxHeight = 22,
+            ComboBoxHeight = TableOfAuthoritiesDialogPlanner.VisualMetrics.ComboBoxHeight
+                + TableOfAuthoritiesDialogPlanner.VisualMetrics.AvaloniaComboBoxHeightCompensation,
+            ActionSpacing = TableOfAuthoritiesDialogPlanner.VisualMetrics.ActionSpacing,
             DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush,
         };
     private readonly TableOfAuthoritiesDialogSession _session;
@@ -24,21 +26,28 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
 
     internal TableOfAuthoritiesDialog(ToaOptions options)
     {
+        var metrics = TableOfAuthoritiesDialogPlanner.VisualMetrics;
         _session = TableOfAuthoritiesDialogPlanner.CreateSession(options);
         var state = _session.State;
         Title = TableOfAuthoritiesDialogPlanner.Title;
-        Width = TableOfAuthoritiesDialogPlanner.DialogWidth;
+        Width = metrics.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
 
         _category = Combo(_session.Categories, state.CategoryIndex);
-        _category.Margin = new Thickness(0, 0, 0, 8);
-        _passim = CheckBox(TableOfAuthoritiesDialogPlanner.UsePassimLabel, state.UsePassim, new Thickness(0, 0, 0, 6));
-        _keepFormatting = CheckBox(TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel, state.KeepOriginalFormatting, new Thickness(0, 0, 0, 8));
+        _category.Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin);
+        _passim = CheckBox(
+            TableOfAuthoritiesDialogPlanner.UsePassimLabel,
+            state.UsePassim,
+            new Thickness(0, 0, 0, metrics.PassimBottomMargin));
+        _keepFormatting = CheckBox(
+            TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel,
+            state.KeepOriginalFormatting,
+            new Thickness(0, 0, 0, metrics.KeepFormattingBottomMargin));
         _leader = Combo(_session.TabLeaders, state.TabLeaderIndex);
-        _leader.Margin = new Thickness(0, 0, 0, 8);
+        _leader.Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin);
         _category.SelectionChanged += (_, _) => _session.UpdateCategory(_category.SelectedIndex);
         _passim.IsCheckedChanged += (_, _) => _session.UpdateUsePassim(_passim.IsChecked is true);
         _keepFormatting.IsCheckedChanged += (_, _) =>
@@ -49,23 +58,27 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         var cancel = Button("Cancel", false, true, () => Close(null));
         Content = new StackPanel
         {
-            // WPF's painted client content ends one pixel earlier on the right while its action
-            // row paints one pixel farther down. Preserve that measured authority geometry in the
-            // otherwise shared 16-DIP dialog inset.
             Margin = new Thickness(
-                TableOfAuthoritiesDialogPlanner.OuterMargin,
-                TableOfAuthoritiesDialogPlanner.OuterMargin,
-                TableOfAuthoritiesDialogPlanner.OuterMargin + 1,
-                TableOfAuthoritiesDialogPlanner.OuterMargin),
+                metrics.OuterInset,
+                metrics.OuterInset,
+                metrics.OuterInset + metrics.AvaloniaOuterRightCompensation,
+                metrics.OuterInset),
             Children =
             {
-                new TextBlock { Text = TableOfAuthoritiesDialogPlanner.CategoryLabel, Margin = new Thickness(0, 0, 0, 4) },
+                Label(TableOfAuthoritiesDialogPlanner.CategoryLabel),
                 _category,
                 _passim,
                 _keepFormatting,
-                new TextBlock { Text = TableOfAuthoritiesDialogPlanner.TabLeaderLabel, Margin = new Thickness(0, 0, 0, 4) },
+                Label(TableOfAuthoritiesDialogPlanner.TabLeaderLabel),
                 _leader,
-                AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)),
+                AvaloniaCompactDialogChrome.CreateActionRow(
+                    [ok, cancel],
+                    new Thickness(
+                        0,
+                        metrics.ActionTopMargin + metrics.AvaloniaActionTopCompensation,
+                        0,
+                        0),
+                    Chrome),
             },
         };
         Opened += (_, _) =>
@@ -106,7 +119,9 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         var acceptance = _session.PlanAcceptance();
         if (!acceptance.IsAccepted)
         {
-            FocusValidation(acceptance.Validation?.Field);
+            (acceptance.Validation?.Field == TableOfAuthoritiesDialogField.TabLeader
+                ? _leader
+                : _category).Focus();
             return;
         }
 
@@ -119,14 +134,6 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         _session.UpdateUsePassim(_passim.IsChecked is true);
         _session.UpdateKeepOriginalFormatting(_keepFormatting.IsChecked is true);
         _session.UpdateTabLeader(_leader.SelectedIndex);
-    }
-
-    private void FocusValidation(TableOfAuthoritiesDialogField? field)
-    {
-        var target = field == TableOfAuthoritiesDialogField.TabLeader
-            ? _leader
-            : _category;
-        target.Focus();
     }
 
     private static ComboBox Combo(IEnumerable<object> items, int selectedIndex)
@@ -149,11 +156,21 @@ internal sealed class TableOfAuthoritiesDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyButton(
             button,
             Chrome,
-            TableOfAuthoritiesDialogPlanner.ButtonWidth,
+            TableOfAuthoritiesDialogPlanner.VisualMetrics.ActionButtonWidth,
             isDefault);
         button.Background = Brushes.White;
         button.CornerRadius = new CornerRadius(3);
         button.Click += (_, _) => click();
         return button;
     }
+
+    private static TextBlock Label(string text) => new()
+    {
+        Text = text,
+        Margin = new Thickness(
+            0,
+            0,
+            0,
+            TableOfAuthoritiesDialogPlanner.VisualMetrics.LabelBottomMargin)
+    };
 }

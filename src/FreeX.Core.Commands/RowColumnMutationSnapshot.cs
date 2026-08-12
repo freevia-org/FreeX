@@ -33,6 +33,9 @@ internal sealed class RowColumnMutationSnapshot
     private Dictionary<Guid, string?> ConditionalFormatFormulaTexts { get; } = [];
     private Dictionary<(Guid Id, int Slot), string?> ConditionalFormatThresholdTexts { get; } = [];
     private Dictionary<(Guid Id, int Slot), string?> DataValidationFormulaTexts { get; } = [];
+    private Dictionary<Guid, string?> PromotedConditionalFormatFormulaTexts { get; } = [];
+    private Dictionary<(Guid Id, int Slot), string?> PromotedConditionalFormatThresholdTexts { get; } = [];
+    private Dictionary<(Guid Id, int Slot), string?> PromotedDataValidationFormulaTexts { get; } = [];
 
     private RowColumnMutationSnapshot(Workbook workbook, Sheet sheet)
     {
@@ -86,6 +89,18 @@ internal sealed class RowColumnMutationSnapshot
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(workbook, operation);
     }
 
+    internal void CaptureRulePromotionFormulas(
+        Action<Dictionary<Guid, string?>, Dictionary<(Guid Id, int Slot), string?>, Dictionary<(Guid Id, int Slot), string?>> mutation)
+    {
+        PromotedConditionalFormatFormulaTexts.Clear();
+        PromotedConditionalFormatThresholdTexts.Clear();
+        PromotedDataValidationFormulaTexts.Clear();
+        mutation(
+            PromotedConditionalFormatFormulaTexts,
+            PromotedConditionalFormatThresholdTexts,
+            PromotedDataValidationFormulaTexts);
+    }
+
     internal List<CellAddress> RestoreRewrittenFormulas(Workbook workbook)
     {
         var rewrittenAddresses = FormulaTexts.Keys.ToList();
@@ -98,6 +113,13 @@ internal sealed class RowColumnMutationSnapshot
             DataValidationFormulaTexts);
         return rewrittenAddresses;
     }
+
+    internal void RestoreRulePromotionFormulas(Workbook workbook) =>
+        RowColumnShiftHelpers.RestoreRuleFormulas(
+            workbook,
+            PromotedConditionalFormatFormulaTexts,
+            PromotedConditionalFormatThresholdTexts,
+            PromotedDataValidationFormulaTexts);
 
     internal void RestoreCommonState(Workbook workbook, Sheet sheet, bool restoreRulesInPlace)
     {

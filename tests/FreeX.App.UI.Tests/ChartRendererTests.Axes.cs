@@ -317,6 +317,199 @@ public sealed partial class ChartRendererTests
         model.Axes.Should().NotContain(axis => axis.Key == "SecondaryY");
     }
 
+    // R135-render-chart-secondary-axis-scale: ChartModel.SecondaryAxisMinimum/Maximum
+    // (XlsxChartAxisReader.ApplySecondaryAxisProperties, XlsxChartAxisReader.cs:144-145) round-trips
+    // but was never applied by ApplyAxisBounds -- the Left/Right branch applied the PRIMARY Y axis's
+    // chart.YAxisMinimum/Maximum to every Left/Right axis unconditionally, including the secondary
+    // one, so a combo chart with a primary axis fixed 0-10 and a secondary axis fixed 0-1000 drew the
+    // secondary series against the primary's 0-10 scale, misrepresenting the data.
+    [Fact]
+    public void ColumnRenderer_SecondaryAxisMinMax_UsesOwnBoundsNotPrimarys()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [1],
+            YAxisMinimum = 0,
+            YAxisMaximum = 10,
+            SecondaryAxisMinimum = 0,
+            SecondaryAxisMaximum = 1000
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Units"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "5"),
+                Cell(2, 3, "500"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "8"),
+                Cell(3, 3, "900")
+            ],
+            [],
+            []));
+
+        var primaryAxis = model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Left).Subject;
+        primaryAxis.Maximum.Should().Be(10);
+
+        var secondaryAxis = model.Axes.Should().ContainSingle(a => a.Key == "SecondaryY").Subject;
+        secondaryAxis.Minimum.Should().Be(0);
+        secondaryAxis.Maximum.Should().Be(1000);
+    }
+
+    // Forward half of the R135 log-scale fix: ChartModel.SecondaryAxisLogScale must convert the
+    // secondary axis to a LogarithmicAxis on its own, without the primary axis also requesting log
+    // scale. Before the fix, ApplyAxisBounds's log-axis gate (ShouldUseLogAxis) only ever consulted
+    // chart.YAxisLogScale for any Left/Right axis, so a secondary-only log request had no effect.
+    [Fact]
+    public void ColumnRenderer_SecondaryAxisLogScale_ConvertsSecondaryAxisIndependentlyOfPrimary()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [1],
+            SecondaryAxisLogScale = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Units"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "5"),
+                Cell(2, 3, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "8"),
+                Cell(3, 3, "100")
+            ],
+            [],
+            []));
+
+        model.Axes.Should().ContainSingle(a => a.Key == "SecondaryY" && a.GetType() == typeof(LogarithmicAxis));
+        model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Left && a.GetType() != typeof(LogarithmicAxis));
+    }
+
+    // Reverse/leak half of the R135 log-scale fix: a PRIMARY axis log-scale request must not also
+    // convert the secondary axis -- before the fix, ShouldUseLogAxis(chart, axis-with-Position.Right)
+    // read chart.YAxisLogScale for the secondary axis too (its own SecondaryAxisLogScale was never
+    // consulted at all), so setting only YAxisLogScale silently log-converted the secondary axis as
+    // well.
+    [Fact]
+    public void ColumnRenderer_PrimaryAxisLogScale_DoesNotConvertSecondaryAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [1],
+            YAxisLogScale = true
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Units"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "5"),
+                Cell(2, 3, "10"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "8"),
+                Cell(3, 3, "100")
+            ],
+            [],
+            []));
+
+        var primaryAxis = model.Axes.Should().ContainSingle(a => a.Position == AxisPosition.Left).Subject;
+        primaryAxis.Should().BeOfType<LogarithmicAxis>();
+
+        var secondaryAxis = model.Axes.Should().ContainSingle(a => a.Key == "SecondaryY").Subject;
+        secondaryAxis.Should().NotBeOfType<LogarithmicAxis>();
+    }
+
+    // Forward half of the R135 number-format fix: ChartModel.SecondaryAxisNumberFormat must drive the
+    // secondary axis's tick LabelFormatter on its own. Before the fix, the Left/Right branch always
+    // read chart.YAxisNumberFormat (General by default) for every Left/Right axis, so a
+    // secondary-only Currency request never installed a LabelFormatter and ticks stayed unformatted.
+    [Fact]
+    public void ColumnRenderer_SecondaryAxisNumberFormat_AppliesIndependentlyOfPrimary()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [1],
+            SecondaryAxisNumberFormat = ChartDataLabelNumberFormat.Currency
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Units"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "5"),
+                Cell(2, 3, "1000"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "8"),
+                Cell(3, 3, "2000")
+            ],
+            [],
+            []));
+
+        var secondaryAxis = model.Axes.Should().ContainSingle(a => a.Key == "SecondaryY").Subject;
+        secondaryAxis.FormatValue(1000).Should().Be("$1,000.00");
+    }
+
+    // Reverse/leak half of the R135 number-format fix: a PRIMARY axis Currency format must not also
+    // format the secondary axis's ticks -- before the fix, chart.YAxisNumberFormat was applied to
+    // every Left/Right axis unconditionally, so setting only YAxisNumberFormat silently formatted the
+    // secondary axis's ticks as currency too even though SecondaryAxisNumberFormat stayed General.
+    [Fact]
+    public void ColumnRenderer_PrimaryAxisNumberFormat_DoesNotLeakToSecondaryAxis()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 3)),
+            ShowSecondaryAxis = true,
+            SecondaryAxisSeriesIndexes = [1],
+            YAxisNumberFormat = ChartDataLabelNumberFormat.Currency
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(1, 3, "Units"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "5"),
+                Cell(2, 3, "1000"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "8"),
+                Cell(3, 3, "2000")
+            ],
+            [],
+            []));
+
+        var secondaryAxis = model.Axes.Should().ContainSingle(a => a.Key == "SecondaryY").Subject;
+        secondaryAxis.FormatValue(1000).Should().NotStartWith("$");
+    }
+
     [Fact]
     public void ColumnRenderer_DoesNotApplyLogScaleToCategoryXAxis()
     {
@@ -429,6 +622,76 @@ public sealed partial class ChartRendererTests
 
         var axis = model.Axes.Single(axis => axis.Position == AxisPosition.Bottom);
         axis.FormatValue(10).Should().Be("$10.00");
+    }
+
+    // R135-render-chart-axis-numfmt-parity: chart.YAxisNumberFormat/XAxisNumberFormat is a coarse
+    // enum (ChartDataLabelTextPlanner.FormatAxisValue only knows General/Number/Currency/Percent).
+    // The actual raw OOXML format code is preserved separately on YAxisNumberFormatCode/
+    // XAxisNumberFormatCode (populated from <c:numFmt formatCode="..."/> by
+    // XlsxChartAxisReader.FromXlsxNumberFormatCode, which itself only maps 3 exact literal codes to
+    // a non-General bucket and silently drops every other real-world code -- e.g. a plain thousands
+    // separator like "#,##0" -- to General). Before this fix, the WPF value-axis LabelFormatter only
+    // ever consulted the coarse enum and never looked at the raw code at all, so it rendered plain
+    // "1234" instead of Excel's "1,234" here. The portable/Avalonia layout
+    // (ChartLayoutEngine.BuildValueAxisLayout) already prefers the raw code through the shared
+    // NumberFormatter; this pins the WPF renderer routing through the same formatter for parity.
+    [Fact]
+    public void ColumnRenderer_AppliesRawNumberFormatCodeToYAxis_MatchingAvaloniaFormatting()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Column,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            YAxisNumberFormatCode = "#,##0"
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "Quarter"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "Q1"),
+                Cell(2, 2, "1000"),
+                Cell(3, 1, "Q2"),
+                Cell(3, 2, "3000")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Single(axis => axis.Position == AxisPosition.Left);
+        axis.FormatValue(1234).Should().Be("1,234");
+    }
+
+    // Sibling of ColumnRenderer_AppliesRawNumberFormatCodeToYAxis_MatchingAvaloniaFormatting: the
+    // X-axis block in ChartRenderer.Axes.cs mirrors the Y-axis block line-for-line and carried the
+    // identical gap (it never consulted XAxisNumberFormatCode either) -- covers the X-axis twin so
+    // the fix isn't verified on only one of the two near-duplicated code paths.
+    [Fact]
+    public void ScatterRenderer_AppliesRawNumberFormatCodeToXAxis_MatchingAvaloniaFormatting()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 3, 2)),
+            XAxisNumberFormatCode = "#,##0"
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "1000"),
+                Cell(2, 2, "10"),
+                Cell(3, 1, "3000"),
+                Cell(3, 2, "30")
+            ],
+            [],
+            []));
+
+        var axis = model.Axes.Single(axis => axis.Position == AxisPosition.Bottom);
+        axis.FormatValue(1234).Should().Be("1,234");
     }
 
     // R131-render-chart-date-category-axis: XAxisIsDateAxis was parsed/round-tripped

@@ -132,6 +132,26 @@ public sealed class ChartMediaDialogPlannerTests
     }
 
     [Fact]
+    public void SmartArtPlannerOwnsTheWpfAuthorityGeometry()
+    {
+        SmartArtDialogPlanner.VisualMetrics.Should().Be(new SmartArtDialogVisualMetrics(
+            DialogWidth: 440,
+            MinimumDialogHeight: 360,
+            OuterMargin: 14,
+            LabelBottomMargin: 4,
+            LayoutControlBottomMargin: 10,
+            NodeListHeight: 130,
+            NodeListBottomMargin: 6,
+            EditorBottomMargin: 6,
+            InlineActionSpacing: 6,
+            InlineActionBottomMargin: 10,
+            FooterTopMargin: 4,
+            FooterButtonWidth: 72,
+            InlineButtonHorizontalPadding: 8,
+            ButtonVerticalPadding: 3));
+    }
+
+    [Fact]
     public void IconPickerPlannerFiltersByCategoryAndSearch()
     {
         var entries = new[]

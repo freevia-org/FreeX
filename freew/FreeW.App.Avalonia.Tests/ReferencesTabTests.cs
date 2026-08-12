@@ -1194,6 +1194,27 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Generated_reference_refresh_without_existing_region_uses_WPF_back_matter_placement()
+    {
+        var indexView = ViewWith(new Paragraph("Index body"));
+        indexView.Document.IndexEntries.Add(new IndexEntry("Alpha"));
+
+        indexView.RefreshIndex();
+
+        indexView.Document.Blocks[0].Should().BeOfType<Paragraph>()
+            .Which.PlainText.Should().Be("Index body");
+        DocumentIndex.IsIndexParagraph(indexView.Document.Blocks[^1]).Should().BeTrue();
+
+        var figuresView = ViewWith(Captions.BuildCaption(CaptionLabel.Figure, 1, "Architecture"));
+
+        figuresView.RefreshTableOfFigures();
+
+        figuresView.Document.Blocks[0].Should().BeOfType<Paragraph>()
+            .Which.PlainText.Should().Contain("Architecture");
+        TableOfFigures.IsTableOfFiguresParagraph(figuresView.Document.Blocks[^1]).Should().BeTrue();
+    }
+
+    [Fact]
     public void Index_commands_preserve_subentry_and_cross_reference_semantics()
     {
         var view = ViewWith(new Paragraph("Transport"));

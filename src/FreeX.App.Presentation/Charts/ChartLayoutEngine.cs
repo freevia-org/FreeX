@@ -187,6 +187,31 @@ public static class ChartLayoutEngine
     }
 
     /// <summary>
+    /// R135-render-chart-secondary-axis-scale: the portable (Avalonia in-app + PDF export) twin of the
+    /// WPF renderer's secondary-axis fix in <c>ChartRenderer.Axes.cs</c> (<c>ApplyAxisBounds</c>).
+    /// Builds the secondary value axis (combo charts, e.g. bar-primary + line-secondary) using its OWN
+    /// Minimum/Maximum/major-unit/log-scale fields (<see cref="ChartModel.SecondaryAxisMinimum"/>/
+    /// <see cref="ChartModel.SecondaryAxisMaximum"/>/<see cref="ChartModel.SecondaryAxisMajorUnit"/>/
+    /// <see cref="ChartModel.SecondaryAxisLogScale"/>, round-tripped separately from the primary Y
+    /// axis's fields by <c>XlsxChartAxisReader.ApplySecondaryAxisProperties</c>) -- previously the
+    /// secondary axis was built with <see cref="AxisScale.CreateValueAxis"/> passing only the plotted
+    /// secondary-series data range and no explicit bounds at all, so an authored fixed secondary scale
+    /// (e.g. Excel's Format Axis &gt; secondary value axis Minimum/Maximum) was silently ignored and the
+    /// axis always auto-fit to the data instead, misrepresenting the intended scale.
+    /// </summary>
+    private static AxisScale CreateSecondaryValueAxis(ChartModel chart, double dataMin, double dataMax, PlotRect plot, AxisSide side)
+    {
+        if (chart.SecondaryAxisLogScale == true && ChartTypeSupport.SupportsSecondaryAxis(chart.Type))
+        {
+            return AxisScale.CreateLogValueAxis(dataMin, dataMax, plot, side,
+                chart.SecondaryAxisMinimum, chart.SecondaryAxisMaximum, chart.SecondaryAxisLogBase);
+        }
+
+        return AxisScale.CreateValueAxis(dataMin, dataMax, plot, side,
+            chart.SecondaryAxisMinimum, chart.SecondaryAxisMaximum, chart.SecondaryAxisMajorUnit);
+    }
+
+    /// <summary>
     /// R131-render-chart-date-category-axis: the portable (Avalonia in-app + PDF export) twin of the
     /// WPF renderer's <c>TryBuildDateCategoryAxis</c> (ChartRenderer.Axes.cs). When the category axis
     /// is marked as a date axis (<see cref="ChartModel.XAxisIsDateAxis"/>, OOXML's <c>&lt;c:dateAx&gt;</c>)
@@ -430,7 +455,7 @@ public static class ChartLayoutEngine
         // charts do not split across axes (matching the source renderer).
         var useSecondary = !isStacked && WantsSecondaryAxis(request);
         var secondaryScale = useSecondary
-            ? AxisScale.CreateValueAxis(SecondaryValueRange(request).Min, SecondaryValueRange(request).Max, plot, AxisSide.Right)
+            ? CreateSecondaryValueAxis(chart, SecondaryValueRange(request).Min, SecondaryValueRange(request).Max, plot, AxisSide.Right)
             : null;
 
         var seriesLayouts = new List<SeriesLayout>(request.Series.Count);
@@ -516,9 +541,13 @@ public static class ChartLayoutEngine
             PlotArea = plot.ToRect(),
             CategoryAxis = BuildCategoryAxisLayout(request, categoryScale, categorySide, categoryLine, chart.XAxisLabelAngle, categoryPositions),
             ValueAxis = BuildValueAxisLayout(chart, valueScale, valueSide, valueLine, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
+            // R135-render-chart-secondary-axis-scale: the secondary axis has its OWN number format
+            // (ChartModel.SecondaryAxisNumberFormat/Code) -- previously this passed the PRIMARY Y
+            // axis's chart.YAxisNumberFormat/Code here, so the secondary axis's tick labels silently
+            // inherited the primary axis's format instead of its own.
             SecondaryValueAxis = secondaryScale is null
                 ? null
-                : BuildValueAxisLayout(chart, secondaryScale, secondarySide, secondaryLine, chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisLabelAngle),
+                : BuildValueAxisLayout(chart, secondaryScale, secondarySide, secondaryLine, chart.SecondaryAxisNumberFormat, chart.SecondaryAxisNumberFormatCode, chart.YAxisLabelAngle),
             Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,

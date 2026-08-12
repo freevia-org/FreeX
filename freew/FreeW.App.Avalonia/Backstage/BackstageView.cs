@@ -218,7 +218,6 @@ internal sealed class BackstageView : Window
             Margin = ToThickness(metrics.SearchMargin),
             Padding = ToThickness(metrics.SearchPadding),
             VerticalContentAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Left,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(
             searchBox,
@@ -245,6 +244,7 @@ internal sealed class BackstageView : Window
         var tabs = new TabControl
         {
             Width = metrics.TabsWidth,
+            MinHeight = metrics.TabsMinHeight,
             Margin = ToThickness(metrics.TabsMargin),
             HorizontalAlignment = HorizontalAlignment.Left,
             HorizontalContentAlignment = HorizontalAlignment.Left,
@@ -282,7 +282,7 @@ internal sealed class BackstageView : Window
             Setters =
             {
                 new Setter(Layoutable.MarginProperty, new Thickness(0)),
-                new Setter(ContentPresenter.PaddingProperty, new Thickness(4, 0, 0, 0)),
+                new Setter(ContentPresenter.PaddingProperty, new Thickness(4, 3, 0, 0)),
                 new Setter(ContentPresenter.HorizontalContentAlignmentProperty, HorizontalAlignment.Left),
                 new Setter(ContentPresenter.VerticalContentAlignmentProperty, VerticalAlignment.Top),
             },
@@ -299,7 +299,7 @@ internal sealed class BackstageView : Window
 
             selectedPane.Margin = new Thickness(0);
             selectedPane.HorizontalAlignment = HorizontalAlignment.Stretch;
-            selectedPane.Padding = new Thickness(4, 0, 0, 0);
+            selectedPane.Padding = new Thickness(4, 3, 0, 0);
         }
 
         tabs.AttachedToVisualTree += (_, _) => NormalizeSelectedContentHost();

@@ -30,6 +30,11 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public Thickness ListBoxItemPadding { get; init; } = new(4, 1);
     public double ListBoxItemMinHeight { get; init; } = 24;
     public double ActionSpacing { get; init; } = 8;
+    public CornerRadius ButtonCornerRadius { get; init; } = new(3);
+    public IBrush? ButtonBackgroundBrush { get; init; }
+    public IBrush? ButtonHoverBackgroundBrush { get; init; }
+    public IBrush? ButtonPressedBackgroundBrush { get; init; }
+    public IBrush? ButtonAccentBrush { get; init; }
     public IBrush? InputBorderBrush { get; init; }
     public IBrush? ComboBoxBackgroundBrush { get; init; }
     public IBrush? TextBoxBackgroundBrush { get; init; }
@@ -63,23 +68,45 @@ public static class AvaloniaCompactDialogChrome
     public static IBrush NeutralButtonBorderBrush => ButtonBorderBrush;
     public static IBrush DialogSeparatorBrush => DialogTabPaneBorderBrush;
 
-    private static readonly IBrush ButtonBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(221, 221, 221));
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(200, 200, 200));
-    private static readonly IBrush DefaultButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
-    // WPF TextBox/ComboBox authority border (AB AD B3), rather than Fluent's darker
-    // neutral border. Keeping this in the shared chrome aligns all compact dialogs.
-    private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(171, 173, 179));
+    private static readonly IBrush ButtonAccentBrush = new ImmutableSolidColorBrush(Color.FromRgb(15, 109, 140));
+    private static readonly IBrush ButtonHoverBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(230, 246, 250));
+    private static readonly IBrush ButtonPressedBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 234, 242));
+    // Match the shared WPF DialogFieldBorder authority (#B7BCC2), rather than
+    // Fluent's darker neutral border or the legacy Windows #ABADB3 shade.
+    private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(183, 188, 194));
     private static readonly IBrush ComboBoxBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(240, 240, 240));
     private static readonly IBrush TextSelectionBrush = new ImmutableSolidColorBrush(Color.FromRgb(0, 120, 215));
     private static readonly IBrush SelectedItemBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(204, 232, 255));
     private static readonly IBrush SelectedItemBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(153, 209, 255));
     private static readonly IBrush DialogForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x1f, 0x1f, 0x1f));
-    private static readonly IBrush GroupBoxBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(198, 215, 232));
+    private static readonly IBrush GroupBoxBorderBrush = ButtonBorderBrush;
     private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
+    private static readonly IBrush DisabledButtonForegroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x9a, 0xa0, 0xa6));
+    private static readonly IBrush DisabledButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xe0, 0xe0, 0xe0));
     private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
     private static readonly IBrush DialogInactiveTabBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 160));
     private static readonly IBrush DialogInactiveTabBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(243, 243, 243));
     private static readonly IBrush ReadOnlyDocumentFocusedBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(86, 157, 229));
+
+    private static IBrush ThemeBrush(string resourceKey, IBrush fallback)
+    {
+        var app = Application.Current;
+        return app is not null
+            && app.TryGetResource(resourceKey, ThemeVariant.Default, out var value)
+            && value is IBrush brush
+                ? brush
+                : fallback;
+    }
+
+    private static IBrush ThemeTextBrush(AvaloniaCompactDialogChromeStyle style) =>
+        style.ForegroundBrush ?? ThemeBrush("ThemeNeutralTextBrush", DialogForegroundBrush);
+
+    private static IBrush ThemeWhiteBrush() =>
+        ThemeBrush("ThemeNeutralWhiteBrush", Brushes.White);
+
+    private static IBrush ThemeAccentBrush(AvaloniaCompactDialogChromeStyle style) =>
+        style.ButtonAccentBrush ?? ThemeBrush("ThemeAccentBrush", ButtonAccentBrush);
 
     /// <summary>
     /// Gives a code-built Avalonia dialog the same inherited surface and compact control metrics as the
@@ -97,8 +124,8 @@ public static class AvaloniaCompactDialogChrome
             return;
 
         window.Classes.Add(DialogWindowClass);
-        window.Background = Brushes.White;
-        window.Foreground = style.ForegroundBrush ?? DialogForegroundBrush;
+        window.Background = ThemeWhiteBrush();
+        window.Foreground = ThemeTextBrush(style);
         window.FontFamily = style.FontFamily;
         window.FontSize = style.FontSize;
         // WPF dialog captures use grayscale-compatible text edges. Avalonia's default subpixel
@@ -127,7 +154,7 @@ public static class AvaloniaCompactDialogChrome
                 if (!textBlock.IsSet(TextBlock.FontSizeProperty))
                     textBlock.FontSize = style.FontSize;
                 if (!textBlock.IsSet(TextBlock.ForegroundProperty))
-                    textBlock.Foreground = style.ForegroundBrush ?? DialogForegroundBrush;
+                    textBlock.Foreground = ThemeTextBrush(style);
             }
 
             switch (control)
@@ -180,11 +207,21 @@ public static class AvaloniaCompactDialogChrome
         button.MinHeight = style.ButtonHeight;
         button.MaxHeight = style.ButtonHeight;
         button.Padding = style.ButtonPadding;
-        button.CornerRadius = new CornerRadius(0);
-        button.Background = ButtonBackgroundBrush;
-        button.BorderBrush = isDefault
-            ? style.DefaultButtonBorderBrush ?? DefaultButtonBorderBrush
+        button.CornerRadius = style.ButtonCornerRadius;
+        var restingBackground = style.ButtonBackgroundBrush ?? ThemeWhiteBrush();
+        var accentBrush = ThemeAccentBrush(style);
+        var restingBorder = isDefault
+            ? style.DefaultButtonBorderBrush ?? accentBrush
             : style.ButtonBorderBrush ?? ButtonBorderBrush;
+        button.Styles.Add(new Style(selector => selector.OfType<Button>())
+        {
+            Setters =
+            {
+                new Setter(Button.ForegroundProperty, ThemeTextBrush(style)),
+                new Setter(Button.BackgroundProperty, restingBackground),
+                new Setter(Button.BorderBrushProperty, restingBorder),
+            },
+        });
         button.BorderThickness = new Thickness(1);
         button.FontSize = style.FontSize;
         button.FontFamily = style.FontFamily;
@@ -192,6 +229,34 @@ public static class AvaloniaCompactDialogChrome
             button.IsDefault = true;
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.VerticalContentAlignment = VerticalAlignment.Center;
+        button.Styles.Add(new Style(selector => selector.OfType<Button>().Class(":pointerover"))
+        {
+            Setters =
+            {
+                new Setter(Button.BackgroundProperty, style.ButtonHoverBackgroundBrush
+                    ?? ThemeBrush("ThemeAccentSoftBrush", ButtonHoverBackgroundBrush)),
+                new Setter(Button.BorderBrushProperty, accentBrush),
+            },
+        });
+        button.Styles.Add(new Style(selector => selector.OfType<Button>().Class(":pressed"))
+        {
+            Setters =
+            {
+                new Setter(Button.BackgroundProperty, style.ButtonPressedBackgroundBrush
+                    ?? ThemeBrush("ThemeAccentPressedBrush", ButtonPressedBackgroundBrush)),
+                new Setter(Button.BorderBrushProperty, accentBrush),
+            },
+        });
+        button.Styles.Add(new Style(selector => selector.OfType<Button>().Class(":disabled"))
+        {
+            Setters =
+            {
+                new Setter(Button.ForegroundProperty, DisabledButtonForegroundBrush),
+                new Setter(Button.BackgroundProperty,
+                    ThemeBrush("ThemeNeutralSheetSurfaceBrush", new ImmutableSolidColorBrush(Color.FromRgb(0xf3, 0xf3, 0xf3)))),
+                new Setter(Button.BorderBrushProperty, DisabledButtonBorderBrush),
+            },
+        });
         if (button.Content is string content)
             AvaloniaDialogButtonContent.Apply(button, content);
     }
@@ -213,26 +278,42 @@ public static class AvaloniaCompactDialogChrome
         textBox.FontSize = style.FontSize;
         textBox.FontFamily = style.FontFamily;
         var inputBorder = style.InputBorderBrush ?? InputBorderBrush;
-        textBox.Background = style.TextBoxBackgroundBrush ?? textBox.Background;
+        var textBoxBackground = style.TextBoxBackgroundBrush ?? ThemeWhiteBrush();
+        textBox.Foreground = ThemeTextBrush(style);
+        textBox.Background = textBoxBackground;
         textBox.BorderBrush = inputBorder;
         textBox.BorderThickness = new Thickness(1);
+        textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>())
+        {
+            Setters =
+            {
+                new Setter(TextBox.ForegroundProperty, ThemeTextBrush(style)),
+                new Setter(TextBox.BackgroundProperty, textBoxBackground),
+                new Setter(TextBox.BorderBrushProperty, inputBorder),
+                new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
+            },
+        });
         textBox.SelectionBrush = style.TextSelectionBrush ?? TextSelectionBrush;
         if (style.TextSelectionBrush is not null)
             textBox.SelectionForegroundBrush = Brushes.Black;
         textBox.VerticalContentAlignment = VerticalAlignment.Center;
+        var focusedBorder = style.FocusedInputBorderBrush ?? ThemeAccentBrush(style);
+        textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":focus"))
+        {
+            Setters =
+            {
+                new Setter(TextBox.BorderBrushProperty, focusedBorder),
+                new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
+            },
+        });
+        textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":pointerover"))
+        {
+            Setters = { new Setter(TextBox.BorderBrushProperty, focusedBorder) },
+        });
         if (style.RemoveFocusAdorner)
         {
             textBox.FocusAdorner = null;
-            textBox.Styles.Add(new Style(selector => selector.OfType<TextBox>().Class(":focus"))
-            {
-                Setters =
-                {
-                    new Setter(TextBox.BorderBrushProperty, style.FocusedInputBorderBrush ?? inputBorder),
-                    new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
-                },
-            });
         }
-        var textBoxBackground = style.TextBoxBackgroundBrush ?? Brushes.White;
         textBox.Styles.Add(new Style(selector => selector.OfType<Border>())
         {
             Setters = { new Setter(Border.BackgroundProperty, textBoxBackground) },
@@ -387,7 +468,8 @@ public static class AvaloniaCompactDialogChrome
         comboBox.CornerRadius = new CornerRadius(0);
         comboBox.FontSize = style.FontSize;
         comboBox.FontFamily = style.FontFamily;
-        comboBox.Foreground = DialogForegroundBrush;
+        var foreground = ThemeTextBrush(style);
+        comboBox.Foreground = foreground;
         comboBox.HorizontalAlignment = HorizontalAlignment.Stretch;
         // Fluent's editable ComboBox template hosts the text presenter separately from
         // the arrow. Stretch the content slot so an editable field remains a full-width
@@ -414,7 +496,7 @@ public static class AvaloniaCompactDialogChrome
             Setters =
             {
                 new Setter(ContentPresenter.BackgroundProperty, comboBackground),
-                new Setter(ContentPresenter.ForegroundProperty, DialogForegroundBrush),
+                new Setter(ContentPresenter.ForegroundProperty, foreground),
             },
         });
         // Fluent's default DropDownGlyph is wider and sits inside a padded button slot. The WPF
@@ -424,7 +506,7 @@ public static class AvaloniaCompactDialogChrome
         {
             Setters =
             {
-                new Setter(global::Avalonia.Controls.PathIcon.ForegroundProperty, DialogForegroundBrush),
+                new Setter(global::Avalonia.Controls.PathIcon.ForegroundProperty, foreground),
                 new Setter(Layoutable.WidthProperty, 8d),
                 new Setter(Layoutable.HeightProperty, 5d),
                 new Setter(Layoutable.MarginProperty, new Thickness(0, 0, 4, 0)),
@@ -441,7 +523,7 @@ public static class AvaloniaCompactDialogChrome
                 .Where(path => path.Name == "DropDownGlyph"))
             {
                 glyph.Data = Geometry.Parse("M 0 0 L 4 4 L 8 0 L 8 1 L 4 5 L 0 1 Z");
-                glyph.Foreground = DialogForegroundBrush;
+                glyph.Foreground = foreground;
                 glyph.Width = 8;
                 glyph.Height = 5;
                 glyph.Margin = new Thickness(0, 0, 4, 0);
@@ -505,7 +587,7 @@ public static class AvaloniaCompactDialogChrome
 
         checkBox.FontSize = style.FontSize;
         checkBox.FontFamily = style.FontFamily;
-        checkBox.Foreground = DialogForegroundBrush;
+        checkBox.Foreground = ThemeTextBrush(style);
     }
 
     public static void ApplyCompactCheckBox(
@@ -514,6 +596,8 @@ public static class AvaloniaCompactDialogChrome
         double contentSpacing = 4)
     {
         ApplyCheckBox(checkBox, style);
+        var foreground = ThemeTextBrush(style);
+        var white = ThemeWhiteBrush();
         checkBox.Height = 18;
         checkBox.MinHeight = 18;
         checkBox.Padding = new Thickness(0);
@@ -522,7 +606,7 @@ public static class AvaloniaCompactDialogChrome
             var checkMark = new global::Avalonia.Controls.Shapes.Path
             {
                 Data = Geometry.Parse("M 2 6 L 5 9 L 11 2"),
-                Stroke = DialogForegroundBrush,
+                Stroke = foreground,
                 StrokeThickness = 1.4,
                 Width = 11,
                 Height = 10,
@@ -540,7 +624,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 Width = 13,
                 Height = 13,
-                Background = Brushes.White,
+                Background = white,
                 BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
                 BorderThickness = new Thickness(1),
                 Child = checkMark,
@@ -550,7 +634,7 @@ public static class AvaloniaCompactDialogChrome
                 FontFamily = style.FontFamily,
                 FontSize = style.FontSize,
                 VerticalContentAlignment = VerticalAlignment.Center,
-                Foreground = DialogForegroundBrush,
+                Foreground = foreground,
             };
             content.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = control });
             content.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = control });
@@ -571,18 +655,20 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(style);
 
         ApplyRadioButton(radioButton, style);
+        var foreground = ThemeTextBrush(style);
+        var white = ThemeWhiteBrush();
         radioButton.Height = style.CompactRadioButtonHeight;
         radioButton.MinHeight = style.CompactRadioButtonHeight;
         radioButton.MaxHeight = style.CompactRadioButtonHeight;
         radioButton.Padding = new Thickness(0);
-        radioButton.Foreground = DialogForegroundBrush;
+        radioButton.Foreground = foreground;
         radioButton.Template = new FuncControlTemplate<RadioButton>((control, _) =>
         {
             var dot = new Ellipse
             {
                 Width = 6,
                 Height = 6,
-                Fill = DialogForegroundBrush,
+                Fill = foreground,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
@@ -597,7 +683,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 Width = 13,
                 Height = 13,
-                Background = Brushes.White,
+                Background = white,
                 BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(7),
@@ -627,10 +713,12 @@ public static class AvaloniaCompactDialogChrome
     {
         ArgumentNullException.ThrowIfNull(expander);
         style ??= WindowsStyle;
+        var foreground = ThemeTextBrush(style);
+        var white = ThemeWhiteBrush();
 
         expander.FontFamily = style.FontFamily;
         expander.FontSize = style.FontSize;
-        expander.Foreground = Brushes.Black;
+        expander.Foreground = foreground;
         expander.HorizontalAlignment = HorizontalAlignment.Stretch;
         expander.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         expander.Padding = new Thickness(0);
@@ -642,7 +730,7 @@ public static class AvaloniaCompactDialogChrome
             var arrow = new global::Avalonia.Controls.Shapes.Path
             {
                 Data = Geometry.Parse("M 3 5 L 6 2 L 9 5"),
-                Stroke = DialogForegroundBrush,
+                Stroke = foreground,
                 StrokeThickness = 1,
                 Width = 12,
                 Height = 8,
@@ -653,7 +741,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 Width = 18,
                 Height = 18,
-                Background = Brushes.White,
+                Background = white,
                 BorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(9),
@@ -738,10 +826,11 @@ public static class AvaloniaCompactDialogChrome
     {
         ArgumentNullException.ThrowIfNull(groupBox);
         style ??= WindowsStyle;
+        var accent = ThemeAccentBrush(style);
 
         groupBox.FontFamily = style.FontFamily;
         groupBox.FontSize = style.FontSize;
-        groupBox.Foreground = Brushes.Black;
+        groupBox.Foreground = accent;
         groupBox.BorderBrush = borderBrush ?? GroupBoxBorderBrush;
         groupBox.BorderThickness = new Thickness(1);
         groupBox.HeaderTemplate = new FuncDataTemplate<object>((header, _) => new TextBlock
@@ -749,7 +838,7 @@ public static class AvaloniaCompactDialogChrome
             Text = header?.ToString() ?? string.Empty,
             FontFamily = style.FontFamily,
             FontSize = style.FontSize,
-            Foreground = Brushes.Black,
+            Foreground = accent,
             TextWrapping = TextWrapping.NoWrap,
         });
     }
@@ -761,6 +850,7 @@ public static class AvaloniaCompactDialogChrome
 
         radioButton.FontSize = style.FontSize;
         radioButton.FontFamily = style.FontFamily;
+        radioButton.Foreground = ThemeTextBrush(style);
     }
 
     public static void ApplyValidationStatus(
@@ -771,7 +861,7 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(status);
         ArgumentNullException.ThrowIfNull(style);
 
-        status.Foreground = ValidationStatusBrush;
+        status.Foreground = ThemeBrush("ThemeNeutralDangerBrush", ValidationStatusBrush);
         status.FontSize = 11;
         status.FontFamily = style.FontFamily;
         status.TextWrapping = TextWrapping.Wrap;
@@ -785,7 +875,8 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(style);
 
         listBox.FontSize = style.FontSize;
-        listBox.Background = Brushes.White;
+        listBox.Background = ThemeWhiteBrush();
+        listBox.Foreground = ThemeTextBrush(style);
         listBox.BorderBrush = style.InputBorderBrush ?? InputBorderBrush;
         listBox.BorderThickness = new Thickness(1);
         var itemTemplate = new FuncControlTemplate<ListBoxItem>((item, _) =>

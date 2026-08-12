@@ -1,5 +1,6 @@
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Dialogs;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.Editing;
@@ -481,10 +482,15 @@ public sealed class DocumentTableEditingCoordinator
         DocumentTableCellAddress address,
         char delimiter)
     {
-        if (!TryResolveCell(address, out var table, out _))
+        if (!TryResolveCell(address, out _, out _))
             return DocumentTableEditResult.NoChange(address);
-        var paragraphs = TextTableConvert.TableToText(table, delimiter);
-        _session.Commands.Execute(new ReplaceBlocksCommand(address.BlockIndex, 1, [.. paragraphs]));
+        var plan = DocumentTableConversionMutationPlanner.PlanTableToText(
+            _session.Document,
+            address.BlockIndex,
+            delimiter);
+        if (plan is null)
+            return DocumentTableEditResult.NoChange(address);
+        _session.Commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
         return DocumentTableEditResult.Changed(
             address with { RowIndex = 0, GridColumn = 0 },
             invalidatesNativeSelection: true);

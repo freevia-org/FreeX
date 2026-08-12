@@ -122,6 +122,12 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _findBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Find :
         _replaceBox.IsKeyboardFocusWithin ? FindReplaceDialogOpenMode.Replace : null;
 
+    internal void SetFindTextForTest(string text) => _findBox.Text = text;
+    internal void SetReplaceTextForTest(string text) => _replaceBox.Text = text;
+    internal void ReplaceForTest() => Execute(FindReplaceDialogActionKind.Replace);
+    internal void ReplaceAllForTest() => Execute(FindReplaceDialogActionKind.ReplaceAll);
+    internal string StatusForTest => _status.Text;
+
     // Track which text field was focused last so Special inserts into the right box.
     private TextBox _lastFocusedBox = null!;
 
@@ -282,16 +288,22 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         public bool ReplaceNext(FindReplaceReplaceRequest request)
         {
-            if (!editor.Selection.IsEmpty && FindReplaceDialogPlanner.MatchesExactly(
+            var replaced = !editor.Selection.IsEmpty
+                && FindReplaceDialogPlanner.MatchesExactly(
                     editor.Selection.Text,
                     request.Term,
-                    request.Options))
+                    request.Options)
+                && editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit);
+            var originalMatchText = replaced ? editor.Selection.Text : null;
+            if (replaced)
             {
-                editor.Selection.Text = request.Replacement;
+                editor.InsertText(request.Replacement);
             }
 
             var searchRequest = new FindReplaceSearchRequest(request.Term, request.Options);
-            var start = editor.Selection.IsEmpty ? editor.CaretPosition : editor.Selection.End;
+            var start = editor.Selection.IsEmpty
+                ? editor.CaretPosition
+                : SkipTrackedLeftoverMatch(editor.Selection.End, originalMatchText);
             return SelectFrom(start, searchRequest)
                 || SelectFrom(editor.Document.ContentStart, searchRequest);
         }
@@ -299,6 +311,9 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         public FindReplaceAllExecutionResult ReplaceAll(FindReplaceReplaceRequest request)
         {
             var restrictToSelection = !editor.Selection.IsEmpty;
+            if (!editor.RestrictEditingPolicy.Allows(RestrictEditingOperationKind.BodyTextEdit))
+                return new FindReplaceAllExecutionResult(0, restrictToSelection);
+
             var (from, limit) = restrictToSelection
                 ? (editor.Selection.Start, editor.Selection.End)
                 : (editor.Document.ContentStart, editor.Document.ContentEnd);
@@ -306,18 +321,31 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             var count = 0;
             var pointer = from;
             var searchRequest = new FindReplaceSearchRequest(request.Term, request.Options);
-            while (TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
+            while (count < 100_000 && TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
             {
                 if (restrictToSelection && matchStart.CompareTo(limit) >= 0)
                     break;
 
+                var originalMatchText = new TextRange(matchStart, matchEnd).Text;
                 editor.Selection.Select(matchStart, matchEnd);
-                editor.Selection.Text = request.Replacement;
-                pointer = editor.Selection.End;
+                editor.InsertText(request.Replacement);
+                pointer = SkipTrackedLeftoverMatch(editor.Selection.End, originalMatchText);
                 count++;
             }
 
             return new FindReplaceAllExecutionResult(count, restrictToSelection);
+        }
+
+        private static TextPointer SkipTrackedLeftoverMatch(TextPointer afterReplace, string? originalMatchText)
+        {
+            if (string.IsNullOrEmpty(originalMatchText))
+                return afterReplace;
+            var probeEnd = afterReplace.GetPositionAtOffset(originalMatchText.Length);
+            if (probeEnd is null)
+                return afterReplace;
+            return new TextRange(afterReplace, probeEnd).Text == originalMatchText
+                ? probeEnd
+                : afterReplace;
         }
 
         private bool SelectFrom(TextPointer from, FindReplaceSearchRequest request)

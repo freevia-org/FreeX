@@ -337,13 +337,6 @@ internal static class AvaloniaRibbonComposition
         string? ParentCommandId,
         string MenuPath);
 
-    private static readonly IReadOnlySet<string> StaticDrawUnavailableCommandIds = new HashSet<string>(StringComparer.Ordinal)
-    {
-        "Crop Picture",
-        "Shape Gradient",
-        "Shape Effects",
-    };
-
     /// <summary>The canonical, single-source ribbon definition shared with the WPF app.</summary>
     public static RibbonDefinition BuildDefinition()
     {
@@ -391,8 +384,6 @@ internal static class AvaloniaRibbonComposition
         foreach (var id in EnumerateCommandIds(definition))
             registry.Register(id, EmptyRibbonCommand.Instance);
 
-        RegisterDisabledDrawDefaults(registry, definition);
-
         // Override the representative formatting toggles with the shared, platform-neutral commands so the
         // Avalonia ribbon performs real edits (the same WorkbookSession logic the WPF host runs). Keys are
         // translated to the canonical ids the shared definition emits.
@@ -408,17 +399,6 @@ internal static class AvaloniaRibbonComposition
         // with host callbacks, so the declarative ribbon invokes the same handlers as the native menus.
         ApplyHostCallbacks(registry, callbacks);
         return registry;
-    }
-
-    private static void RegisterDisabledDrawDefaults(RibbonCommandRegistry registry, RibbonDefinition definition)
-    {
-        var drawTab = definition.Tabs.FirstOrDefault(tab => string.Equals(tab.Id, "DrawTab", StringComparison.Ordinal));
-        if (drawTab is null)
-            return;
-
-        foreach (var id in EnumerateCommandIds(drawTab))
-            if (StaticDrawUnavailableCommandIds.Contains(id.Value))
-                registry.Register(id, DisabledNoOpRibbonCommand.Instance);
     }
 
     /// <summary>Registers <paramref name="command"/> under the canonical id for the Avalonia <paramref name="avaloniaId"/>.</summary>

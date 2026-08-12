@@ -740,10 +740,11 @@ public sealed class DocumentViewTrackEditTests
         stateful.GetState().IsChecked.Should().BeFalse();
         ParagraphOf(view).Runs.Count(run => run.Revision == RevisionKind.Inserted).Should().Be(1);
 
-        // Selection marking is a portable document command, so WPF undo removes only the mark.
+        // The WPF authority mutates the model directly, so this selection mark is not a new WPF
+        // undo entry. Existing text and the authority's mark remain intact when Undo is invoked.
         view.Undo();
         ParagraphOf(view).PlainText.Should().Be("Hello world");
-        ParagraphOf(view).Runs.Should().NotContain(run => run.Revision != RevisionKind.None);
+        ParagraphOf(view).Runs.Count(run => run.Revision == RevisionKind.Inserted).Should().Be(1);
     }
 
     [StaFact]
@@ -800,40 +801,412 @@ public sealed class DocumentViewTrackEditTests
         ParagraphOf(rejectView).Runs.Should().OnlyContain(r => r.Revision == RevisionKind.None);
     }
 
-    [StaFact]
-    public void RevisionCommands_UsePortableUndoHistoryFromTheWpfSelectionBoundary()
+    // ── R135: Backspace/Delete at a paragraph boundary must record a tracked paragraph-mark deletion
+    // instead of silently, permanently merging the two paragraphs (bypassing Track Changes entirely). ──
+
+    private static DocumentView BuildTwoParagraphView(string first, string second)
     {
-        var markView = BuildView("abcdef");
-        markView.SetSelectionRangeForTest(0, 2, 0, 4);
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph(first));
+        doc.Blocks.Add(new Paragraph(second));
 
-        markView.MarkSelectionAsRevision(
-            RevisionKind.Inserted,
-            "Ann Reviewer",
-            "2026-08-06T10:20:30Z");
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        return view;
+    }
 
-        var markedParagraph = (Paragraph)markView.Model.Blocks[0];
-        markedParagraph.Runs.Should().Contain(run =>
-            run.Text == "cd"
-            && run.Revision == RevisionKind.Inserted
-            && run.RevisionAuthor == "Ann Reviewer");
-        markView.Commands.Undo().Should().BeTrue();
-        ((Paragraph)markView.Model.Blocks[0]).Runs.Should()
-            .OnlyContain(run => run.Revision == RevisionKind.None);
-        ((Paragraph)markView.Model.Blocks[0]).PlainText.Should().Be("abcdef");
+    [StaFact]
+    public void Backspace_AtParagraphStart_WithTrackChangesOn_MarksBoundaryDeletedWithoutMerging()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.TrackChangesEnabled = true;
+        view.MoveCaretToBlockForTest(1, 0);          // caret at the very start of the second paragraph
 
-        var revised = new TextDocument();
-        var paragraph = new Paragraph();
-        paragraph.Runs.Add(new Run("inserted") { Revision = RevisionKind.Inserted });
-        revised.Blocks.Add(paragraph);
-        var acceptView = new DocumentView();
-        acceptView.LoadModel(revised);
+        view.BackspaceForTest();
+        view.CommitToModel();
 
-        acceptView.AcceptAllRevisions();
-        ((Paragraph)acceptView.Model.Blocks[0]).Runs.Should()
-            .OnlyContain(run => run.Revision == RevisionKind.None);
+        view.Model.Blocks.Should().HaveCount(2, "the two paragraphs must NOT be physically merged while the deletion is only tracked");
+        var first = (Paragraph)view.Model.Blocks[0];
+        var second = (Paragraph)view.Model.Blocks[1];
+        first.MarkRevision.Should().Be(RevisionKind.Deleted, "the first paragraph's own mark records the tracked boundary deletion");
+        first.MarkRevisionAuthor.Should().Be("FreeW User");
+        first.PlainText.Should().Be("First");
+        second.PlainText.Should().Be("Second");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeTrue();
+    }
 
-        acceptView.Commands.Undo().Should().BeTrue();
-        ((Paragraph)acceptView.Model.Blocks[0]).Runs.Should()
-            .Contain(run => run.Revision == RevisionKind.Inserted);
+    [StaFact]
+    public void Backspace_AtParagraphStart_WithTrackChangesOff_MergesParagraphsImmediately()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.MoveCaretToBlockForTest(1, 0);
+
+        view.BackspaceForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(1, "with Track Changes off, Backspace merges the paragraphs as before (regression guard)");
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("FirstSecond");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void DeleteForward_AtParagraphEnd_WithTrackChangesOn_MarksBoundaryDeletedWithoutMerging()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.TrackChangesEnabled = true;
+        view.MoveCaretToBlockForTest(0, 5);           // caret at the very end of the first paragraph ("First")
+
+        view.DeleteForwardForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(2, "the two paragraphs must NOT be physically merged while the deletion is only tracked");
+        var first = (Paragraph)view.Model.Blocks[0];
+        var second = (Paragraph)view.Model.Blocks[1];
+        first.MarkRevision.Should().Be(RevisionKind.Deleted, "forward-Delete marks the SAME paragraph's own mark deleted as Backspace at the next paragraph's start would");
+        first.PlainText.Should().Be("First");
+        second.PlainText.Should().Be("Second");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void DeleteForward_AtParagraphEnd_WithTrackChangesOff_MergesParagraphsImmediately()
+    {
+        // Sibling regression guard: Track-Changes-off behaviour at a paragraph boundary must be unchanged
+        // by this fix (the WPF host's native RichTextBox EditingCommands.Delete merges paragraphs here,
+        // same as before).
+        var view = BuildTwoParagraphView("First", "Second");
+        view.MoveCaretToBlockForTest(0, 5);
+
+        view.DeleteForwardForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(1);
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("FirstSecond");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void AcceptAll_AfterTrackedParagraphBoundaryBackspace_PerformsTheMerge()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.TrackChangesEnabled = true;
+        view.MoveCaretToBlockForTest(1, 0);
+        view.BackspaceForTest();                     // tracked boundary deletion only, no merge yet
+
+        view.AcceptAllRevisions();                    // accept -> the merge actually happens now
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(1, "accepting the tracked paragraph-mark deletion performs the merge");
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("FirstSecond");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void RejectAll_AfterTrackedParagraphBoundaryBackspace_RestoresTwoSeparateParagraphs()
+    {
+        var view = BuildTwoParagraphView("First", "Second");
+        view.TrackChangesEnabled = true;
+        view.MoveCaretToBlockForTest(1, 0);
+        view.BackspaceForTest();
+
+        view.RejectAllRevisions();                    // reject -> the boundary deletion is undone
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(2, "rejecting keeps the two paragraphs separate");
+        ((Paragraph)view.Model.Blocks[0]).MarkRevision.Should().Be(RevisionKind.None, "reject clears the tracked mark-deletion");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    // ── R136: the SIBLINGS of the R135 paragraph-mark fix — structural edits at a boundary that also
+    // bypassed Track Changes entirely. (a) Deleting a table row removed it outright; (b) a selection
+    // spanning two or more paragraphs fell through to native RichTextBox handling, which merged the
+    // paragraphs and discarded the selected text with no revision recorded at all. ──
+
+    private static (DocumentView View, Table Table) BuildTableView()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(3, 2);
+        for (var r = 0; r < 3; r++)
+            for (var c = 0; c < 2; c++)
+                table.Rows[r].Cells[c] = new TableCell($"R{r}C{c}");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        return (view, (Table)view.Model.Blocks[0]);
+    }
+
+    // CommitToModel rebuilds every table block from the FlowDocument, so a reference captured earlier goes
+    // stale the moment anything commits (AcceptAllRevisions/RejectAllRevisions commit first).
+    private static Table TableOf(DocumentView view) => (Table)view.Model.Blocks[0];
+
+    private static DocumentView BuildThreeParagraphView(string first, string second, string third)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph(first));
+        doc.Blocks.Add(new Paragraph(second));
+        doc.Blocks.Add(new Paragraph(third));
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        return view;
+    }
+
+    // DeleteTableRowCommand is shared model code that both shells drive identically (ribbon
+    // "freew.table-delete-row" -> DocumentView.DeleteTableRow -> MutateCaretTable -> this command); these
+    // run it through the WPF host's own command bus and context, which is what supplies the revision author.
+
+    [StaFact]
+    public void DeleteTableRow_WithTrackChangesOn_MarksTheRowDeletedInsteadOfRemovingIt()
+    {
+        var (view, table) = BuildTableView();
+        view.TrackChangesEnabled = true;
+
+        view.Commands.Execute(new DeleteTableRowCommand(0, 1));
+
+        table.Rows.Should().HaveCount(3, "a tracked row deletion leaves the row in place until it is accepted");
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.Deleted);
+        table.Rows[1].RowRevisionAuthor.Should().Be("FreeW User");
+        table.Rows[1].RowRevisionDateXml.Should().NotBeNullOrWhiteSpace();
+        table.Rows[1].Cells[0].PlainText.Should().Be("R1C0", "the row's own content is untouched by the mark");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void DeleteTableRow_WithTrackChangesOff_RemovesTheRowImmediately()
+    {
+        var (view, table) = BuildTableView();
+
+        view.Commands.Execute(new DeleteTableRowCommand(0, 1));
+
+        table.Rows.Should().HaveCount(2, "with Track Changes off the row is removed as before (regression guard)");
+        table.Rows[1].Cells[0].PlainText.Should().Be("R2C0", "the row below shifts up");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void DeleteTableRow_TrackedThenUndone_RestoresTheRowsPreviousUnmarkedState()
+    {
+        var (view, table) = BuildTableView();
+        view.TrackChangesEnabled = true;
+        view.Commands.Execute(new DeleteTableRowCommand(0, 1));
+
+        view.Commands.Undo();
+
+        table.Rows.Should().HaveCount(3);
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.None, "undo clears the mark the tracked delete added");
+        table.Rows[1].RowRevisionAuthor.Should().BeNull();
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void AcceptAll_AfterTrackedTableRowDeletion_ActuallyRemovesTheRow()
+    {
+        var (view, _) = BuildTableView();
+        view.TrackChangesEnabled = true;
+        view.Commands.Execute(new DeleteTableRowCommand(0, 1));
+
+        view.AcceptAllRevisions();
+
+        TableOf(view).Rows.Should().HaveCount(2, "accepting the tracked row deletion performs the removal");
+        TableOf(view).Rows[1].Cells[0].PlainText.Should().Be("R2C0");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void TrackedTableRowDeletion_SurvivesACommitToModelRoundTrip()
+    {
+        // A WPF FlowDocument row has no slot for a row revision and CommitToModel rebuilds every table
+        // from the view, so the mark only survives because WpfTableRowTag carries it (see BuildTable /
+        // ReadTable). Without that side-band the tracked deletion would vanish on the next keystroke.
+        var (view, _) = BuildTableView();
+        view.TrackChangesEnabled = true;
+        view.Commands.Execute(new DeleteTableRowCommand(0, 1));
+
+        view.CommitToModel();
+
+        TableOf(view).Rows.Should().HaveCount(3);
+        TableOf(view).Rows[1].RowRevision.Should().Be(RevisionKind.Deleted);
+        TableOf(view).Rows[1].RowRevisionAuthor.Should().Be("FreeW User");
+        TableOf(view).Rows[1].RowRevisionDateXml.Should().NotBeNullOrWhiteSpace();
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeTrue();
+    }
+
+    [StaFact]
+    public void RejectAll_AfterTrackedTableRowDeletion_KeepsTheRow()
+    {
+        var (view, _) = BuildTableView();
+        view.TrackChangesEnabled = true;
+        view.Commands.Execute(new DeleteTableRowCommand(0, 1));
+
+        view.RejectAllRevisions();
+
+        TableOf(view).Rows.Should().HaveCount(3, "rejecting the tracked row deletion keeps the row");
+        TableOf(view).Rows[1].RowRevision.Should().Be(RevisionKind.None);
+        TableOf(view).Rows[1].Cells[0].PlainText.Should().Be("R1C0");
+    }
+
+    [StaFact]
+    public void DeleteTableRow_WithTrackChangesOn_RemovesTheAuthorsOwnPendingInsertedRowOutright()
+    {
+        var (view, table) = BuildTableView();
+        view.TrackChangesEnabled = true;
+        table.Rows[1].RowRevision = RevisionKind.Inserted;
+        table.Rows[1].RowRevisionAuthor = "FreeW User";
+
+        view.Commands.Execute(new DeleteTableRowCommand(0, 1));
+
+        table.Rows.Should().HaveCount(2, "taking back your own still-pending inserted row removes it outright");
+        table.Rows[1].Cells[0].PlainText.Should().Be("R2C0");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void DeleteTableRow_WithTrackChangesOn_MarksAnotherAuthorsInsertedRowRatherThanRemovingIt()
+    {
+        var (view, table) = BuildTableView();
+        view.TrackChangesEnabled = true;
+        table.Rows[1].RowRevision = RevisionKind.Inserted;
+        table.Rows[1].RowRevisionAuthor = "Someone Else";
+
+        view.Commands.Execute(new DeleteTableRowCommand(0, 1));
+
+        table.Rows.Should().HaveCount(3, "only your OWN pending insertion may be taken back outright");
+        table.Rows[1].RowRevision.Should().Be(RevisionKind.Deleted);
+        table.Rows[1].RowRevisionAuthor.Should().Be("FreeW User");
+    }
+
+    [StaFact]
+    public void Backspace_AcrossParagraphSelection_WithTrackChangesOn_StrikesTextAndMarksBoundariesWithoutMerging()
+    {
+        var view = BuildThreeParagraphView("First", "Second", "Third");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 2, 2, 3);   // "rst" + all of "Second" + "Thi"
+
+        view.BackspaceForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(3, "nothing may be physically merged while the deletion is only tracked");
+        var first = (Paragraph)view.Model.Blocks[0];
+        var second = (Paragraph)view.Model.Blocks[1];
+        var third = (Paragraph)view.Model.Blocks[2];
+
+        first.PlainText.Should().Be("First", "the struck text is kept, not removed");
+        first.Runs.Should().Contain(r => r.Text == "rst" && r.Revision == RevisionKind.Deleted);
+        first.Runs.Should().Contain(r => r.Text == "Fi" && r.Revision == RevisionKind.None);
+        second.Runs.Should().OnlyContain(r => r.Revision == RevisionKind.Deleted);
+        third.Runs.Should().Contain(r => r.Text == "Thi" && r.Revision == RevisionKind.Deleted);
+        third.Runs.Should().Contain(r => r.Text == "rd" && r.Revision == RevisionKind.None);
+
+        first.MarkRevision.Should().Be(RevisionKind.Deleted, "the boundary after the first paragraph is inside the selection");
+        second.MarkRevision.Should().Be(RevisionKind.Deleted, "so is the boundary after the fully covered middle paragraph");
+        third.MarkRevision.Should().Be(RevisionKind.None, "the last paragraph's own mark lies past the selection's end");
+    }
+
+    [StaFact]
+    public void DeleteForward_AcrossParagraphSelection_WithTrackChangesOn_RecordsTheSameRevisions()
+    {
+        var view = BuildThreeParagraphView("First", "Second", "Third");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 2, 2, 3);
+
+        view.DeleteForwardForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(3);
+        ((Paragraph)view.Model.Blocks[0]).MarkRevision.Should().Be(RevisionKind.Deleted);
+        ((Paragraph)view.Model.Blocks[1]).MarkRevision.Should().Be(RevisionKind.Deleted);
+        ((Paragraph)view.Model.Blocks[2]).MarkRevision.Should().Be(RevisionKind.None);
+        ((Paragraph)view.Model.Blocks[1]).Runs.Should().OnlyContain(r => r.Revision == RevisionKind.Deleted);
+    }
+
+    [StaFact]
+    public void TypingOverACrossParagraphSelection_WithTrackChangesOn_MarksOldDeletedAndNewInserted()
+    {
+        var view = BuildThreeParagraphView("First", "Second", "Third");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 2, 2, 3);
+
+        view.InsertText("Z");
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(3);
+        var first = (Paragraph)view.Model.Blocks[0];
+        first.PlainText.Should().Be("FiZrst", "the replacement is inserted at the selection's start, ahead of the struck text");
+        first.Runs.Should().Contain(r => r.Text == "Z" && r.Revision == RevisionKind.Inserted);
+        first.Runs.Should().Contain(r => r.Text == "rst" && r.Revision == RevisionKind.Deleted);
+        first.MarkRevision.Should().Be(RevisionKind.Deleted);
+        ((Paragraph)view.Model.Blocks[1]).MarkRevision.Should().Be(RevisionKind.Deleted);
+    }
+
+    [StaFact]
+    public void Backspace_AcrossParagraphSelection_WithTrackChangesOff_DeletesAndMergesAsBefore()
+    {
+        // Regression guard: this fix only adds a Track-Changes-on branch. With Track Changes off the
+        // native RichTextBox path is untouched.
+        var view = BuildThreeParagraphView("First", "Second", "Third");
+        view.SetSelectionRangeForTest(0, 2, 2, 3);
+
+        view.BackspaceForTest();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(1);
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("Fird");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void AcceptAll_AfterTrackedCrossParagraphDeletion_CollapsesTheSpanIntoOneParagraph()
+    {
+        var view = BuildThreeParagraphView("First", "Second", "Third");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 2, 2, 3);
+        view.BackspaceForTest();
+
+        view.AcceptAllRevisions();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(1, "accepting drops the struck text and performs both paragraph merges");
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("Fird");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void RejectAll_AfterTrackedCrossParagraphDeletion_RestoresTheOriginalThreeParagraphs()
+    {
+        var view = BuildThreeParagraphView("First", "Second", "Third");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 2, 2, 3);
+        view.BackspaceForTest();
+
+        view.RejectAllRevisions();
+        view.CommitToModel();
+
+        view.Model.Blocks.Should().HaveCount(3);
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("First");
+        ((Paragraph)view.Model.Blocks[1]).PlainText.Should().Be("Second");
+        ((Paragraph)view.Model.Blocks[2]).PlainText.Should().Be("Third");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse();
+    }
+
+    [StaFact]
+    public void Undo_AfterTrackedCrossParagraphDeletion_RevertsTheWholeSpanInOneStep()
+    {
+        var view = BuildThreeParagraphView("First", "Second", "Third");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 2, 2, 3);
+        view.BackspaceForTest();
+
+        view.Commands.Undo();
+
+        view.Model.Blocks.Should().HaveCount(3);
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("First");
+        ((Paragraph)view.Model.Blocks[1]).PlainText.Should().Be("Second");
+        ((Paragraph)view.Model.Blocks[2]).PlainText.Should().Be("Third");
+        FreeW.Core.Model.TrackChanges.HasRevisions(view.Model).Should().BeFalse(
+            "the whole cross-paragraph edit is a single undo group");
     }
 }

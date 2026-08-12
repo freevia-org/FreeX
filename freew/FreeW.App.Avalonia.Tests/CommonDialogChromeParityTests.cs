@@ -74,7 +74,7 @@ public sealed class CommonDialogChromeParityTests
         var row = AvaloniaCompactDialogChrome.CreateActionRow([button], style: style);
 
         button.Height.Should().Be(26);
-        button.CornerRadius.Should().Be(new CornerRadius(0));
+        button.CornerRadius.Should().Be(new CornerRadius(3));
         textBox.Height.Should().Be(24);
         textBox.CornerRadius.Should().Be(new CornerRadius(0));
         comboBox.Height.Should().Be(24);
@@ -84,14 +84,24 @@ public sealed class CommonDialogChromeParityTests
         comboBox.FontSize.Should().Be(12);
         comboBox.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Stretch);
         comboBox.HorizontalAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Stretch);
-        ((ISolidColorBrush)button.Background!).Color.Should().Be(Color.FromRgb(221, 221, 221));
-        ((ISolidColorBrush)button.BorderBrush!).Color.Should().Be(Color.FromRgb(0, 120, 215));
+        RestingButtonBrush(button, Button.BackgroundProperty).Color.Should().Be(Colors.White);
+        RestingButtonBrush(button, Button.BorderBrushProperty).Color.Should().Be(Color.FromRgb(15, 109, 140));
         ((ISolidColorBrush)listBox.Background!).Color.Should().Be(Colors.White);
-        ((ISolidColorBrush)listBox.BorderBrush!).Color.Should().Be(Color.FromRgb(171, 173, 179));
+        ((ISolidColorBrush)listBox.BorderBrush!).Color.Should().Be(Color.FromRgb(183, 188, 194));
         listBox.BorderThickness.Should().Be(new Thickness(1));
         ((ISolidColorBrush)comboBox.Background!).Color.Should().Be(Color.FromRgb(240, 240, 240));
         row.Spacing.Should().Be(style.ActionSpacing);
     }
+
+    private static ISolidColorBrush RestingButtonBrush(Button button, AvaloniaProperty property) =>
+        button.Styles
+            .OfType<Style>()
+            .SelectMany(style => style.Setters)
+            .OfType<Setter>()
+            .Where(setter => setter.Property == property)
+            .Select(setter => setter.Value)
+            .OfType<ISolidColorBrush>()
+            .First();
 
     [Fact]
     public void Combo_box_chrome_is_idempotent_for_local_template_state()

@@ -362,20 +362,33 @@ public static class PptxPackageWriter
         // whenever the same OPC part path was referenced from more than 2 occurrences, or from
         // two shapes on the same slide followed by another slide reusing the path).
         //
+        // R135 GATE FIX: writtenPaths is now GLOBAL across the whole package (matching the real
+        // writer below), not reset per slide. A per-slide reset let the SAME origPath (e.g. a
+        // shared ppt/ink/inkN.xml contentPart referenced from two different slides) be written to
+        // the zip archive twice under the identical part name — a genuinely malformed OPC package
+        // (ECMA-376 Part 2 §10.1.2.1 requires unique part names) that WorkbookOpenSizeGuard now
+        // correctly rejects on re-read. Globalizing the guard means the SECOND occurrence of a
+        // previously-written origPath is reindexed to a fresh preserved_{slideIdx}_{n} path
+        // instead of colliding — the same escape hatch this function already used within a single
+        // slide, just applied at the correct (whole-package) scope.
+        //
         // The remap is keyed by (slideIdx, shapeId, origPath) — NOT origPath alone — because the
         // same origPath can legitimately be reindexed to a DIFFERENT written path on each
-        // occurrence (each slide resets its own writtenPaths/partCounter), so a plain
-        // origPath -> path dictionary cannot represent that. BuildContentTypesXml below walks
-        // slides/shapes in the same order and looks up this same (slideIdx, shapeId, origPath) key.
+        // occurrence (first-seen keeps the original path; later occurrences get reindexed), so a
+        // plain origPath -> path dictionary cannot represent that. BuildContentTypesXml below
+        // walks slides/shapes in the same order and looks up this same
+        // (slideIdx, shapeId, origPath) key.
         var prvPartCtRemaps = new Dictionary<(int slideIdx, uint shapeId, string origPath), string>();
         {
+            // Mirrors WriteSlidePreservedObjects: writtenPaths + partCounter are GLOBAL, shared
+            // across every slide in this pre-scan (slideIdx is still folded into the reindexed
+            // filename below, so cross-slide reindexed paths never collide with each other).
+            var preWrittenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int prePartCounter  = 1;
+
             for (int preSlideIdx = 1; preSlideIdx <= presentation.Slides.Count; preSlideIdx++)
             {
                 var slide = presentation.Slides[preSlideIdx - 1];
-
-                // Mirrors WriteSlidePreservedObjects: fresh writtenPaths + partCounter PER SLIDE.
-                var preWrittenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                int prePartCounter  = 1;
 
                 foreach (var shape in AllShapes(slide.Shapes))
                 {
@@ -560,6 +573,21 @@ public static class PptxPackageWriter
         int globalOleIndex = 1; // Round 131: monotonically increasing across all slides (mirrors globalChartIndex)
         var writtenMediaPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         var writtenCaptionPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+        // R135 GATE FIX: GLOBAL (not per-slide) guards against duplicate zip entries for preserved
+        // objects (ink/3D/zoom/unknown) and SmartArt diagram parts. Threaded across the whole
+        // per-slide loop below and then fed into CopyPreservedPackageEntries' exclusion set so the
+        // wholesale leftover-part copy never re-emits a path this loop already wrote explicitly —
+        // see WriteSlidePreservedObjects / WriteSlideSmartArt for the root-cause writeup.
+        var writtenPreservedObjectPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var writtenDiagramParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // R135 GATE FIX: must be GLOBAL (not reset per slide) alongside writtenPreservedObjectPaths
+        // above — the reindexed name is "ppt/media/preserved_{slideIdx}_{n}", and the pre-scan
+        // below computes the SAME reindexed names using its own global preWrittenPaths/
+        // prePartCounter. If this counter were reset per call (per slide) while the pre-scan's
+        // counter stayed global, the two would disagree on `n` for the SAME occurrence — the
+        // pre-scan predicting a different reindexed path than the writer actually produced, which
+        // is exactly the FA1 phantom-Override bug the pre-scan's own doc comment warns about.
+        int preservedPartCounter = 1;
         for (int si = 0; si < presentation.Slides.Count; si++)
         {
             var slide = presentation.Slides[si];
@@ -600,7 +628,7 @@ public static class PptxPackageWriter
                     group => group.Key,
                     group => (IReadOnlyList<MediaCaptionTrackRelationship>)group.Select(track => track.relationship).ToList());
 
-            var (smartArtSlideRels, smartArtRelIdRemap) = WriteSlideSmartArt(archive, slide, usedRelIds);
+            var (smartArtSlideRels, smartArtRelIdRemap) = WriteSlideSmartArt(archive, slide, usedRelIds, writtenDiagramParts);
 
             // Theme 21: Write OLE embedded object binaries + fallback images.
             foreach (var kv in smartArtRelIdRemap)
@@ -611,7 +639,8 @@ public static class PptxPackageWriter
             var (oleEmbRels, oleImgRels) = WriteSlideOleObjects(archive, slide, si + 1, usedRelIds, ref globalOleIndex);
 
             // Wave 25A: preserved modern objects (zoom / ink / 3D / unknown)
-            var (prvRels, _) = WriteSlidePreservedObjects(archive, slide, si + 1, usedRelIds);
+            var (prvRels, _) = WriteSlidePreservedObjects(
+                archive, slide, si + 1, usedRelIds, writtenPreservedObjectPaths, ref preservedPartCounter);
 
             var bulletImageRelIds = WriteSlideBulletImages(archive, slide, si + 1, usedRelIds);
 
@@ -797,10 +826,22 @@ public static class PptxPackageWriter
             WriteEntry(archive, RecordingMediaArtifactsPath, BuildRecordingMediaArtifactsXml(presentation));
         }
 
+        // R135 GATE FIX: also exclude every path this loop already wrote explicitly for preserved
+        // objects (ink/3D/zoom/unknown) and SmartArt diagrams from the wholesale leftover-part
+        // copy below. Without this, any preserved-object path outside the writer-owned prefix
+        // allowlist (ppt/ink/, ppt/models/, … are not writer-owned prefixes — see
+        // WriterOwnedPackagePartPrefixes) gets written once by WriteSlidePreservedObjects above
+        // and then AGAIN here from the raw package snapshot, producing a duplicate zip entry
+        // (malformed OPC; see WriteSlidePreservedObjects doc comment for the full root-cause).
+        var alreadyWrittenPaths = writtenPreservedObjectPaths
+            .Concat(writtenDiagramParts)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         CopyPreservedPackageEntries(
             archive,
             packageSnapshot,
-            preservedChartWorkbookPaths.Concat(preservedChartExPaths).ToHashSet(StringComparer.OrdinalIgnoreCase));
+            preservedChartWorkbookPaths.Concat(preservedChartExPaths).ToHashSet(StringComparer.OrdinalIgnoreCase),
+            alreadyWrittenPaths);
     }
 
     // ── [Content_Types].xml ───────────────────────────────────────────────────────
@@ -2820,6 +2861,7 @@ public static class PptxPackageWriter
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
                 new XAttribute("type", ToLayoutTypeStr(layout.LayoutType)),
                 new XAttribute("preserve", "1"),
+                !layout.ShowMasterShapes ? new XAttribute("showMasterSp", "0") : null,
                 BuildLayoutCSlotEl(layout, scheme),
                 BuildSlideClrMapOvrEl(layout.ColorMapOverride)));
 
@@ -3064,24 +3106,82 @@ public static class PptxPackageWriter
                         ColorSlot("accent6", cs[ThemeColorSlot.Accent6]),
                         ColorSlot("hlink", cs[ThemeColorSlot.HLink]),
                         ColorSlot("folHlink", cs[ThemeColorSlot.FolHLink])),
-                    new XElement(A + "fontScheme", new XAttribute("name", theme.Name),
-                        new XElement(A + "majorFont",
-                            new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MajorLatinFont)),
-                            new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
-                            new XElement(A + "cs", new XAttribute("typeface", string.Empty))),
-                        new XElement(A + "minorFont",
-                            new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MinorLatinFont)),
-                            new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
-                            new XElement(A + "cs", new XAttribute("typeface", string.Empty)))),
-                    new XElement(A + "fmtScheme", new XAttribute("name", "Office"),
-                        new XElement(A + "fillStyleLst",
-                            SolidPhClr(), SolidPhClr(), SolidPhClr()),
-                        new XElement(A + "lnStyleLst",
-                            LnStyle(0.5), LnStyle(1.0), LnStyle(1.5)),
-                        new XElement(A + "effectStyleLst",
-                            EffectStyle(), EffectStyle(), EffectStyle()),
-                        new XElement(A + "bgFillStyleLst",
-                            SolidPhClr(), SolidPhClr(), SolidPhClr())))));
+                    BuildThemeFontSchemeXml(theme),
+                    BuildThemeFormatSchemeXml(theme))));
+    }
+
+    // Round-trip fidelity: when this theme was read from a real .pptx, theme.NativeFontSchemeXml
+    // holds the original <a:fontScheme> (with its East-Asian/complex-script <a:ea>/<a:cs>
+    // typefaces, which PresentationFontScheme does not model). Patch only the major/minor
+    // <a:latin> typeface into that XML and preserve everything else, instead of regenerating a
+    // fresh fontScheme with empty <a:ea>/<a:cs> on every save. Mirrors FreeX's
+    // WorkbookTheme.WithFonts patch-preserve pattern. Falls back to the generated placeholder for
+    // themes created programmatically (no source file to preserve from).
+    private static XElement BuildThemeFontSchemeXml(PresentationTheme theme)
+    {
+        if (TryPatchNativeFontScheme(theme.NativeFontSchemeXml, theme.FontScheme.MajorLatinFont, theme.FontScheme.MinorLatinFont) is { } patched)
+            return patched;
+
+        return new XElement(A + "fontScheme", new XAttribute("name", theme.Name),
+            new XElement(A + "majorFont",
+                new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MajorLatinFont)),
+                new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
+                new XElement(A + "cs", new XAttribute("typeface", string.Empty))),
+            new XElement(A + "minorFont",
+                new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MinorLatinFont)),
+                new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
+                new XElement(A + "cs", new XAttribute("typeface", string.Empty))));
+    }
+
+    private static XElement? TryPatchNativeFontScheme(string? fontSchemeXml, string majorFontName, string minorFontName)
+    {
+        if (string.IsNullOrWhiteSpace(fontSchemeXml))
+            return null;
+
+        XElement fontScheme;
+        try
+        {
+            fontScheme = XElement.Parse(fontSchemeXml);
+        }
+        catch (XmlException)
+        {
+            return null;
+        }
+
+        if (fontScheme.Name != A + "fontScheme")
+            return null;
+
+        fontScheme.Element(A + "majorFont")?.Element(A + "latin")?.SetAttributeValue("typeface", majorFontName);
+        fontScheme.Element(A + "minorFont")?.Element(A + "latin")?.SetAttributeValue("typeface", minorFontName);
+        return fontScheme;
+    }
+
+    // Round-trip fidelity: when this theme was read from a real .pptx, theme.FillStyles /
+    // theme.LineStyles / theme.EffectStyles / theme.BackgroundFillStyles hold the real fmtScheme
+    // style-list entries (e.g. real outer-shadow effect styles) captured by the reader. Reuse them
+    // verbatim (cloned — the same theme instance can back multiple masters/theme parts in one
+    // save, and an XElement can only be parented once) instead of always regenerating the generic
+    // 3-slot placeholder fmtScheme, which silently discarded real effect styles on every save.
+    private static XElement BuildThemeFormatSchemeXml(PresentationTheme theme)
+    {
+        var fillStyleLst = theme.FillStyles.Count > 0
+            ? new XElement(A + "fillStyleLst", theme.FillStyles.Select(el => new XElement(el)))
+            : new XElement(A + "fillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr());
+
+        var lnStyleLst = theme.LineStyles.Count > 0
+            ? new XElement(A + "lnStyleLst", theme.LineStyles.Select(el => new XElement(el)))
+            : new XElement(A + "lnStyleLst", LnStyle(0.5), LnStyle(1.0), LnStyle(1.5));
+
+        var effectStyleLst = theme.EffectStyles.Count > 0
+            ? new XElement(A + "effectStyleLst", theme.EffectStyles.Select(el => new XElement(el)))
+            : new XElement(A + "effectStyleLst", EffectStyle(), EffectStyle(), EffectStyle());
+
+        var bgFillStyleLst = theme.BackgroundFillStyles.Count > 0
+            ? new XElement(A + "bgFillStyleLst", theme.BackgroundFillStyles.Select(el => new XElement(el)))
+            : new XElement(A + "bgFillStyleLst", SolidPhClr(), SolidPhClr(), SolidPhClr());
+
+        return new XElement(A + "fmtScheme", new XAttribute("name", "Office"),
+            fillStyleLst, lnStyleLst, effectStyleLst, bgFillStyleLst);
     }
 
     private static XElement SolidPhClr() =>
@@ -5450,13 +5550,22 @@ public static class PptxPackageWriter
     private static (
         List<(string relId, string relType, string target)> slideRels,
         Dictionary<uint, Dictionary<string, string>> relIdRemap)
-        WriteSlideSmartArt(ZipArchive archive, Slide slide, HashSet<string> usedRelIds)
+        WriteSlideSmartArt(ZipArchive archive, Slide slide, HashSet<string> usedRelIds, HashSet<string> writtenParts)
     {
         var slideRels  = new List<(string, string, string)>();
         var relIdRemap = new Dictionary<uint, Dictionary<string, string>>();
 
-        // Track parts already written (a single part may be referenced by multiple shapes)
-        var writtenParts = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // R135 GATE FIX: writtenParts is now passed in by the caller and shared GLOBALLY across
+        // every slide (was: a fresh HashSet allocated per call, i.e. per slide). A diagram part
+        // can legitimately be referenced by shapes on more than one slide (a duplicated/copied
+        // SmartArt graphic keeps the same ppt/diagrams/dataN.xml part path); with a per-slide-local
+        // set, the second slide's call didn't know the first slide already wrote that exact zip
+        // entry and called archive.CreateEntry with the identical part name again — a duplicate
+        // zip entry, which is malformed OPC (ECMA-376 Part 2 §10.1.2.1) and is now correctly
+        // rejected by WorkbookOpenSizeGuard on re-read. Diagram part paths are already unique per
+        // occurrence in practice (each shape's Parts dict keys are the real, distinct part paths
+        // captured on import), so making the guard global only prevents the genuine collision case
+        // and does not change behavior for the common single-occurrence case.
 
         var relTypeForKey = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -5645,14 +5754,38 @@ public static class PptxPackageWriter
     ///   relIdPatch: unused (patch happens via the collision-free (shapeId, oldRelId) key —
     ///   see BUG EA4: prvRelIdPatch dictionary built by the caller from prvRels)
     /// </summary>
+    /// <param name="writtenPaths">
+    /// R135 GATE FIX: caller-owned, shared GLOBALLY across every slide in the package (was: a
+    /// fresh HashSet allocated locally per call, i.e. reset per slide). Two independent bugs
+    /// followed from the per-slide reset:
+    ///   1. (cross-slide double-write) The SAME origPath referenced by preserved objects on two
+    ///      different slides was written to the zip archive twice under the identical part name,
+    ///      because the second slide's call had no memory of the first slide's write. A duplicate
+    ///      zip entry is malformed OPC (ECMA-376 Part 2 §10.1.2.1: part names are unique within a
+    ///      package) and WorkbookOpenSizeGuard now correctly rejects it on re-read.
+    ///   2. (writer-vs-leftover-copy double-write — the actual root cause of the reported ink
+    ///      failure, reproducible with a SINGLE slide/shape) This function's local writtenPaths
+    ///      was invisible to the caller, so CopyPreservedPackageEntries — which re-emits whatever
+    ///      is left over in the original package snapshot that isn't on the writer-owned prefix
+    ///      allowlist (ppt/ink/, ppt/models/… are NOT writer-owned prefixes) — had no way to know
+    ///      this function had already written e.g. ppt/ink/ink1.xml, and copied the identical
+    ///      origPath from the snapshot a second time. Sharing this set with the caller lets it be
+    ///      folded into CopyPreservedPackageEntries' exclusion set, closing that gap for every
+    ///      preserved-object kind (ink, 3D model, zoom, unknown) in one place.
+    /// A path already in this set on a later occurrence is reindexed to a fresh
+    /// ppt/media/preserved_{slideIdx}_{n} name (the same escape hatch this function already used
+    /// within a single slide), so no legitimate content is dropped — it just gets a distinct part
+    /// name instead of colliding.
+    /// </param>
     private static (
         List<(uint shapeId, string oldRelId, string newRelId, string relType, string targetPath)> prvRels,
         bool unused
-    ) WriteSlidePreservedObjects(ZipArchive archive, Slide slide, int slideIdx, HashSet<string> usedRelIds)
+    ) WriteSlidePreservedObjects(
+        ZipArchive archive, Slide slide, int slideIdx, HashSet<string> usedRelIds, HashSet<string> writtenPaths,
+        ref int partCounter)
     {
         var prvRels    = new List<(uint, string, string, string, string)>();
         var relCounter = 1;
-        var partCounter = 1;
 
         string NextRelId()
         {
@@ -5661,9 +5794,6 @@ public static class PptxPackageWriter
             usedRelIds.Add(id);
             return id;
         }
-
-        // Track written part paths to avoid duplicate zip entries
-        var writtenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
@@ -6281,12 +6411,26 @@ public static class PptxPackageWriter
     private static void CopyPreservedPackageEntries(
         ZipArchive archive,
         PptxPackageSnapshot? packageSnapshot,
-        IReadOnlySet<string>? preservedWriterOwnedPaths = null)
+        IReadOnlySet<string>? preservedWriterOwnedPaths = null,
+        IReadOnlySet<string>? alreadyWrittenPaths = null)
     {
         if (packageSnapshot is null)
             return;
 
-        var copied = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // R135 GATE FIX: seed `copied` with every path some OTHER pass has already physically
+        // written to this archive (preserved-object parts from WriteSlidePreservedObjects,
+        // SmartArt diagram parts from WriteSlideSmartArt, …). Those paths sit OUTSIDE the
+        // writer-owned-prefix allowlist (see WriterOwnedPackagePartPrefixes — ppt/ink/,
+        // ppt/models/ etc. are not on it), so the IsWriterOwnedPath branch below never skips them
+        // on its own; without this seed the loop would re-copy the identical origPath straight
+        // out of the raw package snapshot and produce a duplicate zip entry (malformed OPC; see
+        // WriteSlidePreservedObjects doc comment for the full root-cause writeup). Note this is
+        // deliberately a SEPARATE parameter from preservedWriterOwnedPaths: that one carves a path
+        // back IN despite matching a writer-owned prefix (chart workbook/chartEx sidecars); this
+        // one unconditionally skips a path regardless of prefix.
+        var copied = new HashSet<string>(
+            (IEnumerable<string>?)alreadyWrittenPaths ?? Array.Empty<string>(),
+            StringComparer.OrdinalIgnoreCase);
 
         foreach (var (path, bytes) in packageSnapshot.Entries)
         {

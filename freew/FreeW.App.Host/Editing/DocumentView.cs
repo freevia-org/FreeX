@@ -1020,7 +1020,7 @@ public sealed class DocumentView : RichTextBox
         ArgumentNullException.ThrowIfNull(apply);
 
         CommitToModel();
-        DesignEdits.UpdatePage(apply);
+        DesignEdits.UpdatePage(apply, CurrentPageSettingsSectionIndex());
     }
 
     /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
@@ -1040,7 +1040,7 @@ public sealed class DocumentView : RichTextBox
     public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0)
     {
         CommitToModel();
-        DesignEdits.TogglePageBorder(colorHex, widthPt);
+        DesignEdits.TogglePageBorder(colorHex, widthPt, CurrentPageSettingsSectionIndex());
     }
 
     /// <summary>
@@ -1050,7 +1050,7 @@ public sealed class DocumentView : RichTextBox
     public void SetWatermark(string? text)
     {
         CommitToModel();
-        DesignEdits.SetWatermarkText(text);
+        DesignEdits.SetWatermarkText(text, CurrentPageSettingsSectionIndex());
     }
 
     /// <summary>
@@ -1061,7 +1061,7 @@ public sealed class DocumentView : RichTextBox
     public void SetWatermarkOptions(WatermarkOptions? options)
     {
         CommitToModel();
-        DesignEdits.SetWatermark(options);
+        DesignEdits.SetWatermark(options, CurrentPageSettingsSectionIndex());
     }
 
     /// <summary>
@@ -1073,8 +1073,11 @@ public sealed class DocumentView : RichTextBox
     public void SetPageColor(string? colorHex)
     {
         CommitToModel();
-        DesignEdits.SetPageColor(colorHex);
+        DesignEdits.SetPageColor(colorHex, CurrentPageSettingsSectionIndex());
     }
+
+    private int CurrentPageSettingsSectionIndex() =>
+        PageSettingsSectionResolver.ResolveSectionIndex(_model, CaretBlockIndex());
 
     /// <summary>
     /// Apply a document theme (colour/font scheme) to the model's style catalog and re-render so the
@@ -14272,6 +14275,7 @@ public sealed class DocumentView : RichTextBox
                     ? DocumentBodyDeleteDirection.Backward
                     : DocumentBodyDeleteDirection.Forward,
                 TrackChangesEnabled,
+                mergeForwardBoundary: true,
                 out var result))
         {
             return false;

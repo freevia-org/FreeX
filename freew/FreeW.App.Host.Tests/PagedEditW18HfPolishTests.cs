@@ -332,11 +332,26 @@ public sealed class PagedEditW18HfPolishTests
     }
 
     /// <summary>
-    /// In a two-section document where section 1 has no own headers, section 1 pages must fall
-    /// back to the document-level (section 2) header rather than showing nothing.
+    /// R135, WPF twin of DocumentViewHeaderFooterTests: a LEADING section that defines no header of
+    /// its own renders BLANK -- it must not borrow the final section's header.
+    /// <para>
+    /// This test previously asserted the opposite, describing <c>doc.Header</c> as a "document-level"
+    /// header. It is not one: <see cref="TextDocument.Header"/> is a facade over
+    /// <c>FinalSectionHeadersFooters.Header</c> (TextDocument.cs), i.e. the trailing
+    /// <c>w:sectPr</c> -- the LAST section's own definition. In OOXML a section that omits
+    /// <c>w:headerReference</c> is "linked to previous" and inherits from the nearest PRECEDING
+    /// section; the first section has no predecessor, so Word leaves the slot empty rather than
+    /// reaching forward into a later section. Resolving forward is what made an early section display
+    /// a later section's running header, which is the defect this round fixed.
+    /// </para>
+    /// <para>
+    /// Backward inheritance is untouched and still covered -- see
+    /// <c>HeaderFooterPagePlannerTests.MapPagesToSections_LinkedSectionInheritsNearestPrecedingSectionHeaderNotFinalSection</c>
+    /// and the Avalonia <c>MiddleSection_with_empty_HeadersFooters_inherits_nearest_preceding_section_header</c>.
+    /// </para>
     /// </summary>
     [StaFact]
-    public void MultiSection_Section1NoOwnHeader_FallsBackToDocumentLevel()
+    public void MultiSection_Section1NoOwnHeader_RendersBlankRatherThanBorrowingTheFinalSectionHeader()
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -348,18 +363,22 @@ public sealed class PagedEditW18HfPolishTests
         section1EndPara.SectionBreak = sec1;
         doc.Blocks.Add(section1EndPara);
 
-        // Section 2 (final): document-level header.
+        // Section 2 (final): its OWN header, reached through the doc.Header facade.
         doc.Blocks.Add(new FreeW.Core.Model.Paragraph("Section 2 body"));
-        doc.Header = new HeaderFooter("Document Header");
+        doc.Header = new HeaderFooter("Final Section Header");
 
         var (panel, _) = BuildPanel(doc);
 
-        // Page 1's header must show the document-level header (fallback from empty section 1).
         var box1 = panel.PageBoxes[0];
-        box1.HeaderSubEditor.Should().NotBeNull();
-        var page1Text = GetSubEditorBodyText(box1.HeaderSubEditor!);
-        page1Text.Should().Contain("Document Header",
-            "page 1 must fall back to document-level header when section 1 has no own header");
+        var page1Text = box1.HeaderSubEditor is null ? string.Empty : GetSubEditorBodyText(box1.HeaderSubEditor);
+        page1Text.Should().NotContain("Final Section Header",
+            "section 1 has no preceding section to link to, so its header slot is blank -- borrowing the " +
+            "LAST section's header would print a later section's running header on page 1");
+
+        // The final section still shows its own header: the fix removes forward inheritance only.
+        var box2 = panel.PageBoxes[^1];
+        box2.HeaderSubEditor.Should().NotBeNull("the final section defines its own header");
+        GetSubEditorBodyText(box2.HeaderSubEditor!).Should().Contain("Final Section Header");
     }
 
     /// <summary>

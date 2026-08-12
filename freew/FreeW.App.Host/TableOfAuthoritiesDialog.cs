@@ -28,9 +28,10 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
     private TableOfAuthoritiesDialog(Window? owner, ToaOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        var metrics = TableOfAuthoritiesDialogPlanner.VisualMetrics;
         Owner = owner;
         Title = TableOfAuthoritiesDialogPlanner.Title;
-        Width = TableOfAuthoritiesDialogPlanner.DialogWidth;
+        Width = metrics.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -39,7 +40,11 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
         _session = TableOfAuthoritiesDialogPlanner.CreateSession(options);
         var state = _session.State;
 
-        _categoryCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
+        _categoryCombo = new ComboBox
+        {
+            Height = metrics.ComboBoxHeight,
+            Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin)
+        };
         foreach (var choice in _session.Categories)
             _categoryCombo.Items.Add(choice);
         _categoryCombo.SelectedIndex = state.CategoryIndex;
@@ -48,16 +53,20 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
         {
             Content = TableOfAuthoritiesDialogPlanner.UsePassimLabel,
             IsChecked = state.UsePassim,
-            Margin = new Thickness(0, 0, 0, 6)
+            Margin = new Thickness(0, 0, 0, metrics.PassimBottomMargin)
         };
         _keepFormattingBox = new CheckBox
         {
             Content = TableOfAuthoritiesDialogPlanner.KeepOriginalFormattingLabel,
             IsChecked = state.KeepOriginalFormatting,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, metrics.KeepFormattingBottomMargin)
         };
 
-        _leaderCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
+        _leaderCombo = new ComboBox
+        {
+            Height = metrics.ComboBoxHeight,
+            Margin = new Thickness(0, 0, 0, metrics.ComboBottomMargin)
+        };
         foreach (var choice in _session.TabLeaders)
             _leaderCombo.Items.Add(choice);
         _leaderCombo.SelectedIndex = state.TabLeaderIndex;
@@ -70,10 +79,10 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
 
         var buttons = DialogButtonRowFactory.Create(
             Accept,
-            buttonWidth: TableOfAuthoritiesDialogPlanner.ButtonWidth,
-            rowMargin: new Thickness(0, 12, 0, 0));
+            buttonWidth: metrics.ActionButtonWidth,
+            rowMargin: new Thickness(0, metrics.ActionTopMargin, 0, 0));
 
-        var panel = new StackPanel { Margin = new Thickness(TableOfAuthoritiesDialogPlanner.OuterMargin) };
+        var panel = new StackPanel { Margin = new Thickness(metrics.OuterInset) };
         panel.Children.Add(MakeLabel(TableOfAuthoritiesDialogPlanner.CategoryLabel));
         panel.Children.Add(_categoryCombo);
         panel.Children.Add(_passimBox);
@@ -87,7 +96,15 @@ internal sealed class TableOfAuthoritiesDialog : Free.Shared.Ribbon.Wpf.DialogWi
     }
 
     private static TextBlock MakeLabel(string text) =>
-        new() { Text = text, Margin = new Thickness(0, 0, 0, 4) };
+        new()
+        {
+            Text = text,
+            Margin = new Thickness(
+                0,
+                0,
+                0,
+                TableOfAuthoritiesDialogPlanner.VisualMetrics.LabelBottomMargin)
+        };
 
     private void Accept()
     {

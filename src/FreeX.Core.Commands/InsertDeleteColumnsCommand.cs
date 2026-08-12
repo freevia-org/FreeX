@@ -611,7 +611,9 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         // surviving column's guide is left behind at its stale pre-delete address.
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.CellPhoneticGuides, _startCol, _count);
 
-        RowColumnShiftHelpers.ShiftRuleColumnsDown(sheet, _startCol, _count);
+        _mutationSnapshot!.CaptureRulePromotionFormulas((cfFormulas, cfThresholds, dvFormulas) =>
+            RowColumnShiftHelpers.ShiftRuleColumnsDown(
+                sheet, _startCol, _count, cfFormulas, cfThresholds, dvFormulas));
         RowColumnShiftHelpers.ShiftNamedRangeColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
         _printAreaSnapshot = sheet.PrintAreas.ToList();
         RowColumnShiftHelpers.ShiftPrintAreaColumnsDown(sheet, _startCol, _count);
@@ -780,6 +782,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         // recompute _affectedCells at the end of this method.
         if (_mutationSnapshot is null) return;
         var formulaSnapshotAddressesBeforeRestore = _mutationSnapshot.RestoreRewrittenFormulas(ctx.Workbook);
+        _mutationSnapshot.RestoreRulePromotionFormulas(ctx.Workbook);
 
         // R20-array-dynamic-spill-1: mirror MoveCellsForDelete's spill-relocation fix for undo —
         // capture any live spill rooted at the shifted-left address before clearing it back.

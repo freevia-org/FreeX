@@ -791,6 +791,40 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task Proofing_language_preserves_mixed_content_runs_like_wpf()
+    {
+        Paragraph? result = null;
+        var ran = await OnUiThread(() =>
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Alpha "));
+            paragraph.Runs.Add(new Run(string.Empty) { FieldKind = RunFieldKind.PageNumber });
+            paragraph.Runs.Add(new Run("beta")
+            {
+                HyperlinkUrl = "https://example.com",
+                CommentId = 9,
+            });
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(paragraph);
+            var view = Build(doc);
+
+            view.SetSelectionRangePublic(0, 6, 0, 10);
+            view.SetProofingLanguage("fr-FR");
+            result = (Paragraph)view.Document.Blocks[0];
+        });
+        if (!ran) return;
+
+        result.Should().NotBeNull();
+        result!.PlainText.Should().Be("Alpha beta");
+        result.Runs.Should().ContainSingle(run => run.FieldKind == RunFieldKind.PageNumber);
+        var formatted = result.Runs.Single(run => run.Text == "beta");
+        formatted.Formatting.LanguageTag.Should().Be("fr-FR");
+        formatted.HyperlinkUrl.Should().Be("https://example.com");
+        formatted.CommentId.Should().Be(9);
+    }
+
+    [Fact]
     public async Task Proofing_language_collapsed_caret_applies_to_current_word()
     {
         string? runsDump = null;

@@ -521,7 +521,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
-    public void DrawCommands_DefaultToWindowsStaticDrawEnablement()
+    public void DrawCommands_DefaultToEnabledAndBindThroughTheSharedExtraCommandPath()
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
@@ -530,15 +530,18 @@ public sealed class AvaloniaRibbonHostCallbackTests
         Assert.True(registry.TryGet(new RibbonCommandId("Shape Fill"), out var shapeFill));
         Assert.IsType<EmptyRibbonCommand>(shapeFill);
 
-        Assert.True(registry.TryGet(new RibbonCommandId("Crop Picture"), out var crop));
-        var cropState = Assert.IsAssignableFrom<IRibbonStatefulCommand>(crop);
-        Assert.False(cropState.GetState().IsEnabled);
-        Assert.True(registry.TryGet(new RibbonCommandId("Shape Gradient"), out var gradient));
-        var gradientState = Assert.IsAssignableFrom<IRibbonStatefulCommand>(gradient);
-        Assert.False(gradientState.GetState().IsEnabled);
-        Assert.True(registry.TryGet(new RibbonCommandId("Shape Effects"), out var effects));
-        var effectsState = Assert.IsAssignableFrom<IRibbonStatefulCommand>(effects);
-        Assert.False(effectsState.GetState().IsEnabled);
+        foreach (var commandId in new[] { "Crop Picture", "Shape Gradient", "Shape Effects" })
+        {
+            Assert.True(registry.TryGet(new RibbonCommandId(commandId), out var defaultCommand));
+            Assert.IsType<EmptyRibbonCommand>(defaultCommand);
+
+            var wired = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+            {
+                ExtraCommands = new Dictionary<string, Action> { [commandId] = () => { } },
+            });
+            Assert.True(wired.TryGet(new RibbonCommandId(commandId), out var wiredCommand));
+            Assert.IsType<ActionRibbonCommand>(wiredCommand);
+        }
     }
 
     [Fact]

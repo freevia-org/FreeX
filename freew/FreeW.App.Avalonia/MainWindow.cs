@@ -234,7 +234,7 @@ public sealed partial class MainWindow : Window
                 UntitledDisplayName: FreeWApplicationFrameDescriptor.Title.DefaultDocumentDisplayName,
                 CollapseCleanUntitledTitle: FreeWApplicationFrameDescriptor.Title.CollapseCleanDefaultDocumentTitle),
             maxRecentEntries: () => _options.RecentFilesCap,
-            onChanged: UpdateStatus,
+            onChanged: OnFileWorkflowChanged,
             saveAsync: SaveAsync,
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
@@ -3865,7 +3865,7 @@ public sealed partial class MainWindow : Window
         if (path is null)
             _fileWorkflow.MarkSavedWithoutPath();
         else
-            _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
+            MarkDocumentSavedWithPath(path);
 
         if (document.UpdateFieldsOnOpen)
         {
@@ -3977,6 +3977,15 @@ public sealed partial class MainWindow : Window
             _fileWorkflow.MarkDirty();
 
         RefreshSplitPreviewSnapshot();
+        UpdateStatus();
+    }
+
+    private void MarkDocumentSavedWithPath(string path) =>
+        _fileWorkflow.MarkSavedWithPath(path, suppressRecentFiles: false);
+
+    private void OnFileWorkflowChanged()
+    {
+        _editor.CurrentFileName = _fileWorkflow.CurrentFileName;
         UpdateStatus();
     }
 

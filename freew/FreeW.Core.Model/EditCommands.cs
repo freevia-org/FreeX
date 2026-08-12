@@ -184,6 +184,84 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
 }
 
 /// <summary>
+/// Set (or clear) a paragraph's <see cref="Paragraph.MarkRevision"/> — the tracked insert/delete state of
+/// the paragraph's own end-of-paragraph mark (pilcrow) — snapshotting the previous mark-revision state for
+/// undo. Used by a tracked Backspace/Delete at a paragraph boundary: rather than physically merging the two
+/// paragraphs immediately (which would silently bypass Track Changes), the boundary's owning paragraph is
+/// left in place with its mark flagged <see cref="RevisionKind.Deleted"/>; the two paragraphs only actually
+/// merge when <see cref="TrackChanges.AcceptAll"/> (or a single accept) resolves the mark later. Word's own
+/// convention: a paragraph's formatting is carried by its own trailing mark, so the paragraph whose mark is
+/// deleted is always the EARLIER of the pair — the surviving merged paragraph keeps the later paragraph's
+/// formatting.
+/// </summary>
+public sealed class SetParagraphMarkRevisionCommand(
+    int index, RevisionKind kind, string? author, string? dateXml) : IDocumentCommand
+{
+    private RevisionKind _previousKind;
+    private string? _previousAuthor;
+    private string? _previousDateXml;
+    private bool _applied;
+
+    public string Label => kind == RevisionKind.Deleted ? "Delete Paragraph Mark" : "Insert Paragraph Mark";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (context.Document.Blocks.ElementAtOrDefault(index) is not Paragraph paragraph)
+            return;
+        _previousKind = paragraph.MarkRevision;
+        _previousAuthor = paragraph.MarkRevisionAuthor;
+        _previousDateXml = paragraph.MarkRevisionDateXml;
+        paragraph.MarkRevision = kind;
+        paragraph.MarkRevisionAuthor = author;
+        paragraph.MarkRevisionDateXml = dateXml;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || context.Document.Blocks.ElementAtOrDefault(index) is not Paragraph paragraph)
+            return;
+        paragraph.MarkRevision = _previousKind;
+        paragraph.MarkRevisionAuthor = _previousAuthor;
+        paragraph.MarkRevisionDateXml = _previousDateXml;
+        _applied = false;
+    }
+}
+
+/// <summary>Replace one run's formatting, snapshotting the previous value for undo.</summary>
+public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, RunFormatting formatting) : IDocumentCommand
+{
+    private RunFormatting? _previous;
+    private FormatRevision? _previousRevision;
+
+    public string Label => "Character Formatting";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
+        _previous = run.Formatting;
+        _previousRevision = run.FormatRevision;
+        run.Formatting = formatting;
+        if (TrackedFormattingRevisionFactory.ShouldTrack(context.Document)
+            && formatting != _previous
+            && run.FormatRevision is null)
+        {
+            run.FormatRevision = TrackedFormattingRevisionFactory.ForRun(_previous, context.RevisionAuthor);
+        }
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_previous is not null)
+        {
+            var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
+            run.Formatting = _previous;
+            run.FormatRevision = _previousRevision;
+        }
+    }
+}
+
+/// <summary>
 /// Replace a paragraph's run list wholesale (snapshotting the prior runs and drop-cap intent for
 /// undo). Used by edits that restructure a paragraph's runs — e.g. applying a drop cap, which splits
 /// the first run so the leading letter becomes its own enlarged run. The replacement runs are
@@ -322,7 +400,7 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
         // Compute the total grid width from the first row (or ColumnCount fallback).
         var gridWidth = table.Rows.Count > 0
-            ? TableGridProjection.RowWidth(table.Rows[0])
+            ? TableColumnHelpers.RowGridWidth(table.Rows[0])
             : Math.Max(table.ColumnCount, 1);
 
         var row = new TableRow();
@@ -335,8 +413,8 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
             var mergeState = VerticalMergeState.None;
             if (at > 0 && at < table.Rows.Count)
             {
-                var cellAboveIdx = TableGridProjection.At(table.Rows[at - 1], gc)?.CellIndex ?? -1;
-                var cellBelowIdx = TableGridProjection.At(table.Rows[at], gc)?.CellIndex ?? -1;
+                var cellAboveIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[at - 1], gc);
+                var cellBelowIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[at], gc);
                 if (cellAboveIdx >= 0 && cellBelowIdx >= 0)
                 {
                     var aboveState = table.Rows[at - 1].Cells[cellAboveIdx].VerticalMerge;
@@ -373,6 +451,16 @@ public sealed class InsertTableRowCommand(int blockIndex, int rowIndex) : IDocum
 /// <see cref="VerticalMergeState.Continue"/> to <see cref="VerticalMergeState.Restart"/> so the
 /// vertical merge continues from the next row (matching Word's behaviour). The prior states of any
 /// promoted cells are snapshotted for exact undo restoration.</para>
+/// <para>Track Changes: when <see cref="TextDocument.TrackRevisions"/> is on, the row is NOT removed —
+/// it stays in place with its <see cref="TableRow.RowRevision"/> flagged
+/// <see cref="RevisionKind.Deleted"/>, and only actually disappears when
+/// <see cref="TrackChanges.AcceptAll"/> resolves that mark (the row-level sibling of
+/// <see cref="SetParagraphMarkRevisionCommand"/>; without this the ribbon's "Delete Row" would silently
+/// bypass Track Changes). The one exception is a row that is this same author's own still-pending
+/// tracked INSERTION: deleting that removes it outright, mirroring the run-level rule that deleting your
+/// own unaccepted insertion just takes it back rather than layering a deletion on top of it. Because
+/// nothing is removed in the tracked case, the BF1 vertical-merge promotion above is deliberately skipped
+/// — the merge head is still there.</para>
 /// </summary>
 public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocumentCommand
 {
@@ -380,6 +468,11 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
     private int _removedAt = -1;
     // Snapshot of cells that were promoted (BF1): (rowIndexAfterDeletion, cellListIndex, priorState).
     private (int Row, int CellIdx, VerticalMergeState PriorState)[]? _promoted;
+    // Tracked-deletion path: the row left in place with its RowRevision flagged, plus its prior mark.
+    private TableRow? _marked;
+    private RevisionKind _previousRowRevision;
+    private string? _previousRowRevisionAuthor;
+    private string? _previousRowRevisionDateXml;
 
     public string Label => "Delete Row";
 
@@ -388,6 +481,20 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
         if (table.Rows.Count <= 1 || rowIndex < 0 || rowIndex >= table.Rows.Count)
             return;
+
+        if (context.Document.TrackRevisions && !IsOwnPendingInsertion(table.Rows[rowIndex], context))
+        {
+            var tracked = table.Rows[rowIndex];
+            _marked = tracked;
+            _previousRowRevision = tracked.RowRevision;
+            _previousRowRevisionAuthor = tracked.RowRevisionAuthor;
+            _previousRowRevisionDateXml = tracked.RowRevisionDateXml;
+            tracked.RowRevision = RevisionKind.Deleted;
+            tracked.RowRevisionAuthor = TrackedFormattingRevisionFactory.NormalizeAuthor(context.RevisionAuthor);
+            tracked.RowRevisionDateXml = TrackedFormattingRevisionFactory.CurrentDateXml();
+            return;
+        }
+
         _removedAt = rowIndex;
         _removed = table.Rows[rowIndex];
 
@@ -400,12 +507,16 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
             var promotions = new List<(int, int, VerticalMergeState)>();
             var deletedRow = table.Rows[rowIndex];
             var nextRow = table.Rows[nextRowIndex];
-            foreach (var projected in TableGridProjection.ProjectRow(deletedRow))
+            // Walk each grid column of the deleted row.
+            var gridPos = 0;
+            foreach (var cell in deletedRow.Cells)
             {
-                var cell = projected.Cell;
+                var span = Math.Max(1, cell.GridSpan);
+                // Only the grid column at the START of this cell matters for vertical merge lookup.
+                var gc = gridPos;
                 if (cell.VerticalMerge == VerticalMergeState.Restart)
                 {
-                    var nextCellIdx = TableGridProjection.At(nextRow, projected.StartColumn)?.CellIndex ?? -1;
+                    var nextCellIdx = TableColumnHelpers.GridColumnToCellIndex(nextRow, gc);
                     if (nextCellIdx >= 0 && nextRow.Cells[nextCellIdx].VerticalMerge == VerticalMergeState.Continue)
                     {
                         // The row below deletion index is currently at nextRowIndex, but after the
@@ -414,6 +525,7 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
                         nextRow.Cells[nextCellIdx].VerticalMerge = VerticalMergeState.Restart;
                     }
                 }
+                gridPos += span;
             }
             _promoted = promotions.Count > 0 ? [.. promotions] : null;
         }
@@ -421,8 +533,26 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
         table.Rows.RemoveAt(rowIndex);
     }
 
+    // A row this same author inserted under Track Changes and that nobody has accepted yet: deleting it
+    // takes the insertion back outright instead of stacking a deletion mark on top of it.
+    private static bool IsOwnPendingInsertion(TableRow row, IDocumentCommandContext context) =>
+        row.RowRevision == RevisionKind.Inserted
+        && string.Equals(
+            row.RowRevisionAuthor,
+            TrackedFormattingRevisionFactory.NormalizeAuthor(context.RevisionAuthor),
+            StringComparison.Ordinal);
+
     public void Revert(IDocumentCommandContext context)
     {
+        if (_marked is { } marked)
+        {
+            marked.RowRevision = _previousRowRevision;
+            marked.RowRevisionAuthor = _previousRowRevisionAuthor;
+            marked.RowRevisionDateXml = _previousRowRevisionDateXml;
+            _marked = null;
+            return;
+        }
+
         if (_removed is null || _removedAt < 0)
             return;
         var table = InsertTableRowCommand.TableAt(context, blockIndex);
@@ -445,6 +575,54 @@ public sealed class DeleteTableRowCommand(int blockIndex, int rowIndex) : IDocum
 
         _removed = null;
         _removedAt = -1;
+    }
+}
+
+/// <summary>
+/// Shared grid-column helpers used by column insert/delete/merge commands. These helpers exist because
+/// the cell-list index does NOT equal the grid-column index when any cell in the row has
+/// <see cref="TableCell.GridSpan"/> &gt; 1 (horizontal merge).
+/// </summary>
+internal static class TableColumnHelpers
+{
+    /// <summary>
+    /// Maps a target GRID-column index to the <see cref="TableRow.Cells"/> list index for
+    /// <paramref name="row"/>, accounting for each preceding cell's <see cref="TableCell.GridSpan"/>.
+    /// Returns the index of the first cell whose cumulative grid span covers the target column, or -1
+    /// if the target is beyond the row's total grid width.
+    /// </summary>
+    internal static int GridColumnToCellIndex(TableRow row, int targetGridColumn)
+    {
+        var gridPos = 0;
+        for (var i = 0; i < row.Cells.Count; i++)
+        {
+            var span = Math.Max(1, row.Cells[i].GridSpan);
+            if (targetGridColumn < gridPos + span)
+                return i;
+            gridPos += span;
+        }
+        return -1; // target grid column is beyond the row's extent
+    }
+
+    /// <summary>
+    /// Returns the total number of grid columns for <paramref name="row"/> (sum of all cell GridSpans).
+    /// </summary>
+    internal static int RowGridWidth(TableRow row) =>
+        row.Cells.Sum(c => Math.Max(1, c.GridSpan));
+
+    /// <summary>
+    /// Maps a <see cref="TableRow.Cells"/> list index to the GRID-column index it occupies (i.e. the
+    /// sum of GridSpans of all preceding cells).  Returns -1 if <paramref name="cellIndex"/> is out of
+    /// range.
+    /// </summary>
+    internal static int CellIndexToGridColumn(TableRow row, int cellIndex)
+    {
+        if (cellIndex < 0 || cellIndex >= row.Cells.Count)
+            return -1;
+        var gridPos = 0;
+        for (var i = 0; i < cellIndex; i++)
+            gridPos += Math.Max(1, row.Cells[i].GridSpan);
+        return gridPos;
     }
 }
 
@@ -473,22 +651,33 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
         var actions = new List<(TableRow, TableCell, bool)>(table.Rows.Count);
         foreach (var row in table.Rows)
         {
-            var projected = TableGridProjection.At(row, _appliedAt);
-            if (projected is { } target)
+            // Walk the row to find the cell covering _appliedAt and whether we're at its boundary.
+            var gridPos = 0;
+            var handled = false;
+            for (var i = 0; i < row.Cells.Count; i++)
             {
-                if (_appliedAt > target.StartColumn)
+                var span = Math.Max(1, row.Cells[i].GridSpan);
+                if (_appliedAt >= gridPos && _appliedAt < gridPos + span)
                 {
-                    target.Cell.GridSpan = target.Span + 1;
-                    actions.Add((row, target.Cell, true));
+                    if (_appliedAt > gridPos)
+                    {
+                        // BF3: Target falls STRICTLY inside this cell's span — widen it.
+                        row.Cells[i].GridSpan = span + 1;
+                        actions.Add((row, row.Cells[i], true));
+                    }
+                    else
+                    {
+                        // Target is at the START of this cell (a cell boundary) — insert a new cell.
+                        var cell = new TableCell(string.Empty);
+                        row.Cells.Insert(i, cell);
+                        actions.Add((row, cell, false));
+                    }
+                    handled = true;
+                    break;
                 }
-                else
-                {
-                    var cell = new TableCell(string.Empty);
-                    row.Cells.Insert(target.CellIndex, cell);
-                    actions.Add((row, cell, false));
-                }
+                gridPos += span;
             }
-            else
+            if (!handled)
             {
                 // _appliedAt is beyond the row's current grid extent — append a new cell.
                 var cell = new TableCell(string.Empty);
@@ -514,7 +703,7 @@ public sealed class InsertTableColumnCommand(int blockIndex, int columnIndex) : 
         foreach (var (row, cell, wasSpanIncrement) in _actions)
         {
             if (wasSpanIncrement)
-                cell.GridSpan = TableGridProjection.NormalizeSpan(cell.GridSpan - 1);  // restore widened span
+                cell.GridSpan = Math.Max(1, cell.GridSpan - 1);  // restore widened span
             else
                 row.Cells.Remove(cell);  // remove the inserted cell by reference
         }
@@ -551,27 +740,37 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
         if (columnIndex < 0)
             return;
         // Compute total grid width from row 0 (or any row); bail if only one grid column remains.
-        var totalGridCols = table.Rows.Count > 0 ? TableGridProjection.RowWidth(table.Rows[0]) : 0;
+        var totalGridCols = table.Rows.Count > 0 ? TableColumnHelpers.RowGridWidth(table.Rows[0]) : 0;
         if (totalGridCols <= 1)
             return;
 
         var removed = new List<(int, TableCell, bool)>();
         for (var r = 0; r < table.Rows.Count; r++)
         {
-            var row = table.Rows[r];
-            var projected = TableGridProjection.At(row, columnIndex);
-            if (projected is { } target)
+            var cells = table.Rows[r].Cells;
+            // Map target grid column → cell list index for this row.
+            var gridPos = 0;
+            for (var i = 0; i < cells.Count; i++)
             {
-                if (target.Span > 1)
+                var span = Math.Max(1, cells[i].GridSpan);
+                if (columnIndex >= gridPos && columnIndex < gridPos + span)
                 {
-                    target.Cell.GridSpan = target.Span - 1;
-                    removed.Add((r, target.Cell, true));
+                    if (span > 1)
+                    {
+                        // The target grid column falls inside a spanning cell — decrement its span
+                        // rather than removing the whole cell.
+                        cells[i].GridSpan = span - 1;
+                        removed.Add((r, cells[i], true));
+                    }
+                    else
+                    {
+                        // Normal single-grid-column cell: remove it.
+                        removed.Add((r, cells[i], false));
+                        cells.RemoveAt(i);
+                    }
+                    break;
                 }
-                else
-                {
-                    removed.Add((r, target.Cell, false));
-                    row.Cells.RemoveAt(target.CellIndex);
-                }
+                gridPos += span;
             }
         }
         _removed = removed.Count > 0 ? removed : null;
@@ -601,7 +800,17 @@ public sealed class DeleteTableColumnCommand(int blockIndex, int columnIndex) : 
             else
             {
                 // Re-insert the removed cell at the correct grid position.
-                var insertAt = TableGridProjection.InsertionIndex(table.Rows[rowIndex], columnIndex);
+                var gridPos = 0;
+                var insertAt = cells.Count; // default: end of row
+                for (var i = 0; i < cells.Count; i++)
+                {
+                    if (gridPos >= columnIndex)
+                    {
+                        insertAt = i;
+                        break;
+                    }
+                    gridPos += Math.Max(1, cells[i].GridSpan);
+                }
                 cells.Insert(insertAt, cell);
             }
         }
@@ -651,10 +860,9 @@ public sealed class MergeCellsHorizontalCommand(int blockIndex, int rowIndex, in
         var survivor = cells[first];
         _survivorSpan = survivor.GridSpan;
 
-        var totalSpan = TableGridProjection.ProjectRow(table.Rows[rowIndex])
-            .Skip(first)
-            .Take(last - first + 1)
-            .Sum(cell => cell.Span);
+        var totalSpan = 0;
+        for (var c = first; c <= last; c++)
+            totalSpan += Math.Max(1, cells[c].GridSpan);
         survivor.GridSpan = totalSpan;
 
         for (var c = last; c > first; c--)
@@ -704,7 +912,7 @@ public sealed class MergeCellsVerticalCommand(int blockIndex, int columnIndex, i
         {
             // H6 fix: map the target GRID column to the correct cell-list index for this row.
             // A direct cells[columnIndex] lookup is wrong when preceding cells have GridSpan > 1.
-            var cellIdx = TableGridProjection.At(table.Rows[r], columnIndex)?.CellIndex ?? -1;
+            var cellIdx = TableColumnHelpers.GridColumnToCellIndex(table.Rows[r], columnIndex);
             if (cellIdx < 0)
                 return;
             snapshot.Add((r, cellIdx, table.Rows[r].Cells[cellIdx].VerticalMerge));
@@ -800,14 +1008,14 @@ public sealed class SplitCellCommand(
             // BH4 fix: derive the GRID column from the head row's cell-list index so that lower rows
             // with a different cell-list layout (e.g. a preceding horizontal merge) are resolved
             // correctly.  Mirrors the GridColumnToCellIndex mapping used by MergeCellsVerticalCommand.
-            var gridColumn = TableGridProjection.StartColumn(table.Rows[rowIndex], columnIndex);
+            var gridColumn = TableColumnHelpers.CellIndexToGridColumn(table.Rows[rowIndex], columnIndex);
             var snapshot = new List<(int, int, VerticalMergeState)> { (rowIndex, columnIndex, VerticalMergeState.Restart) };
             cell.VerticalMerge = VerticalMergeState.None;
             for (var r = rowIndex + 1; r < table.Rows.Count; r++)
             {
                 var belowRow = table.Rows[r];
                 var belowIdx = gridColumn >= 0
-                    ? TableGridProjection.At(belowRow, gridColumn)?.CellIndex ?? -1
+                    ? TableColumnHelpers.GridColumnToCellIndex(belowRow, gridColumn)
                     : columnIndex; // fallback: grid col unavailable, use raw index (head row has no preceding cells)
                 if (belowIdx < 0 || belowIdx >= belowRow.Cells.Count
                     || belowRow.Cells[belowIdx].VerticalMerge != VerticalMergeState.Continue)
@@ -856,12 +1064,12 @@ public sealed class SplitCellCommand(
     private void ApplySubdivision(Table table, TableCell cell, int requestedRows, int requestedColumns)
     {
         var sourceRow = table.Rows[rowIndex];
-        var gridColumn = TableGridProjection.StartColumn(sourceRow, columnIndex);
-        var gridWidth = TableGridProjection.RowWidth(sourceRow);
+        var gridColumn = TableColumnHelpers.CellIndexToGridColumn(sourceRow, columnIndex);
+        var gridWidth = TableColumnHelpers.RowGridWidth(sourceRow);
         if (gridColumn < 0
             || cell.GridSpan != 1
             || sourceRow.Cells.Any(candidate => candidate.VerticalMerge != VerticalMergeState.None)
-            || table.Rows.Any(row => TableGridProjection.RowWidth(row) != gridWidth))
+            || table.Rows.Any(row => TableColumnHelpers.RowGridWidth(row) != gridWidth))
             return;
 
         var expanded = new List<(TableCell, int)>();
@@ -870,7 +1078,7 @@ public sealed class SplitCellCommand(
             if (ReferenceEquals(row, sourceRow))
                 continue;
 
-            var ownerIndex = TableGridProjection.At(row, gridColumn)?.CellIndex ?? -1;
+            var ownerIndex = TableColumnHelpers.GridColumnToCellIndex(row, gridColumn);
             if (ownerIndex < 0)
                 return;
             var owner = row.Cells[ownerIndex];
@@ -2027,6 +2235,76 @@ public enum ZOrderOperation
 }
 
 /// <summary>
+/// Switches a drawing object's wrapping between <see cref="ImageWrapping.Inline"/> and a floating
+/// mode (<see cref="ImageWrapping.Square"/> by default), applying to <see cref="InlineImage"/>,
+/// <see cref="Shape"/>, <see cref="Chart"/>, <see cref="SmartArt"/> and <see cref="WordArt"/>.
+/// When converting Inline to floating, the wrapping is set to <paramref name="floatingWrapping"/>
+/// (Square if omitted) and <see cref="FloatingPlacement"/> is created/populated. When converting
+/// floating to Inline, the wrapping is set to Inline (placement fields are preserved so a
+/// subsequent float-again restores the last position). Undoable.
+/// </summary>
+public sealed class ToggleObjectWrappingCommand(
+    int paragraphIndex,
+    int runIndex,
+    ImageWrapping floatingWrapping = ImageWrapping.Square) : IDocumentCommand
+{
+    private ImageWrapping _previousWrapping;
+    private bool _applied;
+
+    public string Label => "Set Wrap";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        ApplyTo(context, floatingWrapping);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied) return;
+        ApplyTo(context, _previousWrapping);
+        _applied = false;
+    }
+
+    private void ApplyTo(IDocumentCommandContext context, ImageWrapping targetWrapping)
+    {
+        if (context.Document.Blocks[paragraphIndex] is not Paragraph p) return;
+        if (runIndex < 0 || runIndex >= p.Runs.Count) return;
+        var run = p.Runs[runIndex];
+
+        if (run.Image is { } img)
+        {
+            _previousWrapping = img.Wrapping;
+            img.Wrapping = targetWrapping;
+        }
+        else if (run.Shape is { } shape)
+        {
+            shape.Placement ??= new FloatingPlacement();
+            _previousWrapping = shape.Placement.Wrapping;
+            shape.Placement.Wrapping = targetWrapping;
+        }
+        else if (run.Chart is { } chart)
+        {
+            chart.Placement ??= new FloatingPlacement();
+            _previousWrapping = chart.Placement.Wrapping;
+            chart.Placement.Wrapping = targetWrapping;
+        }
+        else if (run.SmartArt is { } smartArt)
+        {
+            smartArt.Placement ??= new FloatingPlacement();
+            _previousWrapping = smartArt.Placement.Wrapping;
+            smartArt.Placement.Wrapping = targetWrapping;
+        }
+        else if (run.WordArt is { } wordArt)
+        {
+            wordArt.Placement ??= new FloatingPlacement();
+            _previousWrapping = wordArt.Placement.Wrapping;
+            wordArt.Placement.Wrapping = targetWrapping;
+        }
+    }
+}
+
+/// <summary>
 /// Apply a formatting transform to every run in a paragraph (e.g. toggle bold), snapshotting
 /// each run's prior formatting. The building block the ribbon will call for selection-wide format.
 /// </summary>
@@ -2082,26 +2360,20 @@ internal static class TrackedFormattingRevisionFactory
     public static ParagraphFormatRevision ForParagraph(ParagraphFormatting previous, string? author) =>
         new(previous, NormalizeAuthor(author), CurrentDateXml());
 
-    private static string NormalizeAuthor(string? author) =>
+    internal static string NormalizeAuthor(string? author) =>
         string.IsNullOrWhiteSpace(author) ? DefaultAuthor : author.Trim();
 
-    private static string CurrentDateXml() =>
+    internal static string CurrentDateXml() =>
         DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
 }
 
 /// <summary>
 /// Replace the document's bibliography source list, snapshotting the previous list for undo.
 /// </summary>
-public sealed class ReplaceSourcesCommand : IDocumentCommand
+public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocumentCommand
 {
     private Source[]? _previous;
-    private readonly Source[] _replacement;
-
-    public ReplaceSourcesCommand(IReadOnlyList<Source> sources)
-    {
-        ArgumentNullException.ThrowIfNull(sources);
-        _replacement = CloneSources(sources);
-    }
+    private readonly Source[] _replacement = sources.ToArray();
 
     public string Label => "Manage Sources";
 
@@ -2109,9 +2381,9 @@ public sealed class ReplaceSourcesCommand : IDocumentCommand
 
     public void Apply(IDocumentCommandContext context)
     {
-        _previous ??= CloneSources(context.Document.Sources);
+        _previous = context.Document.Sources.ToArray();
         context.Document.Sources.Clear();
-        context.Document.Sources.AddRange(CloneSources(_replacement));
+        context.Document.Sources.AddRange(_replacement);
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -2119,11 +2391,8 @@ public sealed class ReplaceSourcesCommand : IDocumentCommand
         if (_previous is null)
             return;
         context.Document.Sources.Clear();
-        context.Document.Sources.AddRange(CloneSources(_previous));
+        context.Document.Sources.AddRange(_previous);
     }
-
-    private static Source[] CloneSources(IEnumerable<Source> sources) =>
-        sources.Select(source => source.Clone()).ToArray();
 }
 
 // ── Shape / Drawing commands (Drawing Format contextual tab) ──────────────────────────────────────
@@ -2558,14 +2827,42 @@ public sealed class InsertShapeTextParagraphBreakCommand(
         var source = paragraphs[paragraphIndex];
         var fullOffset = source.Runs.Take(runIndex).Sum(run => run.Text.Length)
             + Math.Clamp(runOffset, 0, source.Runs[runIndex].Text.Length);
-        var prefix = DocumentModelCloner.CloneParagraphTextRange(
-            source, 0, fullOffset, RevisionClonePolicy.Preserve);
-        var suffix = DocumentModelCloner.CloneParagraphTextRange(
-            source, fullOffset, source.PlainText.Length, RevisionClonePolicy.Preserve);
+        var prefix = CloneParagraphWithTextRange(source, 0, fullOffset);
+        var suffix = CloneParagraphWithTextRange(source, fullOffset, source.PlainText.Length);
         var result = paragraphs.ToList();
         result.RemoveAt(paragraphIndex);
         result.InsertRange(paragraphIndex, [prefix, suffix]);
         return result;
+    }
+
+    private static Paragraph CloneParagraphWithTextRange(Paragraph source, int start, int end)
+    {
+        var clone = (Paragraph)DocumentMerge.CloneBlock(source);
+        clone.Runs.Clear();
+
+        var position = 0;
+        foreach (var run in source.Runs)
+        {
+            var runStart = position;
+            var runEnd = position + run.Text.Length;
+            position = runEnd;
+            var overlapStart = Math.Max(start, runStart);
+            var overlapEnd = Math.Min(end, runEnd);
+            if (overlapEnd > overlapStart)
+            {
+                clone.Runs.Add(RevisionEditPlanner.CloneRunWithText(
+                    run,
+                    run.Text[(overlapStart - runStart)..(overlapEnd - runStart)]));
+            }
+        }
+
+        if (clone.Runs.Count == 0)
+        {
+            var formatting = source.Runs.FirstOrDefault()?.Formatting ?? RunFormatting.Default;
+            clone.Runs.Add(new Run(string.Empty, formatting));
+        }
+
+        return clone;
     }
 }
 
@@ -2644,6 +2941,72 @@ public sealed class MergeShapeTextParagraphWithPreviousCommand(
         result.RemoveAt(paragraphIndex);
         return result;
     }
+}
+
+/// <summary>
+/// Set the rotation angle and flip flags on the inline shape at the given paragraph/run indices,
+/// snapshotting prior values for undo. Mirrors <see cref="SetImageRotationCommand"/> for shapes.
+/// </summary>
+public sealed class SetShapeRotationCommand(int paragraphIndex, int runIndex, double angleDeg, bool flipH, bool flipV) : IDocumentCommand
+{
+    private double _prevAngle;
+    private bool _prevFlipH, _prevFlipV;
+    private bool _applied;
+
+    public string Label => "Rotate/Flip Shape";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        _prevAngle = shape.RotationAngle; _prevFlipH = shape.FlipH; _prevFlipV = shape.FlipV;
+        shape.RotationAngle = angleDeg; shape.FlipH = flipH; shape.FlipV = flipV;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        shape.RotationAngle = _prevAngle; shape.FlipH = _prevFlipH; shape.FlipV = _prevFlipV;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
+}
+
+/// <summary>
+/// Set the floating wrapping mode on the inline shape at the given paragraph/run indices,
+/// snapshotting the prior value for undo. Mirrors <see cref="SetImagePositionCommand"/> for shapes.
+/// </summary>
+public sealed class SetShapeWrappingCommand(int paragraphIndex, int runIndex, ImageWrapping wrapping) : IDocumentCommand
+{
+    private ImageWrapping _previous;
+    private bool _applied;
+
+    public string Label => "Shape Wrap Text";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ShapeAt(context) is not { } shape) return;
+        // Ensure a FloatingPlacement exists before writing wrapping.
+        shape.Placement ??= new FloatingPlacement();
+        _previous = shape.Placement.Wrapping;
+        shape.Placement.Wrapping = wrapping;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || ShapeAt(context) is not { } shape) return;
+        if (shape.Placement is not null)
+            shape.Placement.Wrapping = _previous;
+        _applied = false;
+    }
+
+    private Shape? ShapeAt(IDocumentCommandContext context) =>
+        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
+            ? p.Runs[runIndex].Shape : null;
 }
 
 /// <summary>

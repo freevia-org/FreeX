@@ -81,6 +81,28 @@ public sealed class EditingReferenceParityTests
     }
 
     [Fact]
+    public void TextToTable_MixedSpanMatchesWpfAndReplacesInterleavedBlocksInOneUndoStep()
+    {
+        var interleavedTable = Table.Create(1, 1);
+        interleavedTable.Rows[0].Cells[0] = new TableCell("old table");
+        var view = ViewWith(new Paragraph("A;B"), interleavedTable, new Paragraph("C"));
+        view.SetSelectionRangePublic(0, 0, 2, 1);
+
+        view.ConvertSelectedParagraphsToTable(';');
+
+        var converted = view.Document.Blocks.Should().ContainSingle().Which.Should().BeOfType<Table>().Subject;
+        converted.Rows.Should().HaveCount(2);
+        converted.Rows[0].Cells.Select(cell => cell.PlainText).Should().Equal("A", "B");
+        converted.Rows[1].Cells.Select(cell => cell.PlainText).Should().Equal("C", "");
+
+        view.Undo();
+        view.Document.Blocks.Should().HaveCount(3);
+        view.Document.Blocks[0].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("A;B");
+        view.Document.Blocks[1].Should().BeSameAs(interleavedTable);
+        view.Document.Blocks[2].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("C");
+    }
+
+    [Fact]
     public void BookmarkManagerDelete_IsUndoable()
     {
         var paragraph = new Paragraph("target");

@@ -222,11 +222,42 @@ public sealed record SmartArtDialogText(
     string NewItemLabel,
     string EmptyNodesValidationMessage);
 
+public readonly record struct SmartArtDialogVisualMetrics(
+    double DialogWidth,
+    double MinimumDialogHeight,
+    double OuterMargin,
+    double LabelBottomMargin,
+    double LayoutControlBottomMargin,
+    double NodeListHeight,
+    double NodeListBottomMargin,
+    double EditorBottomMargin,
+    double InlineActionSpacing,
+    double InlineActionBottomMargin,
+    double FooterTopMargin,
+    double FooterButtonWidth,
+    double InlineButtonHorizontalPadding,
+    double ButtonVerticalPadding);
+
 public static class SmartArtDialogPlanner
 {
     public const string EmptyNodesValidationMessage = "Enter at least one node text.";
     public const string NodeTextLabel = "Diagram text (one item per node - use Add/Remove to manage):";
     public static readonly IReadOnlyList<string> DefaultNodeTexts = ["First", "Second", "Third"];
+    public static SmartArtDialogVisualMetrics VisualMetrics { get; } = new(
+        DialogWidth: 440,
+        MinimumDialogHeight: 360,
+        OuterMargin: 14,
+        LabelBottomMargin: 4,
+        LayoutControlBottomMargin: 10,
+        NodeListHeight: 130,
+        NodeListBottomMargin: 6,
+        EditorBottomMargin: 6,
+        InlineActionSpacing: 6,
+        InlineActionBottomMargin: 10,
+        FooterTopMargin: 4,
+        FooterButtonWidth: 72,
+        InlineButtonHorizontalPadding: 8,
+        ButtonVerticalPadding: 3);
 
     private static readonly ResourceTextDescriptor[] Texts =
     [

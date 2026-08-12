@@ -255,18 +255,13 @@ public sealed class DocumentEditingSession
     {
         ArgumentNullException.ThrowIfNull(blockIndices);
         var targets = ResolveParagraphIndices(blockIndices).Order().ToArray();
-        if (targets.Length == 0)
+        var plan = DocumentTableConversionMutationPlanner.PlanTextToTable(Document, targets, delimiter);
+        if (plan is null)
             return -1;
-        var first = targets[0];
-        var last = targets[^1];
-        var paragraphs = targets
-            .Select(index => (Paragraph)Document.Blocks[index])
-            .ToArray();
-        var table = TextTableConvert.TextToTable(paragraphs, delimiter);
-        if (showBorders)
+        if (showBorders && plan.Replacement.SingleOrDefault() is Table table)
             table.Formatting = table.Formatting with { Borders = true };
-        _commands.Execute(new ReplaceBlocksCommand(first, last - first + 1, [table]));
-        return first;
+        _commands.Execute(new ReplaceBlocksCommand(plan.StartIndex, plan.RemoveCount, plan.Replacement));
+        return plan.StartIndex;
     }
 
     /// <summary>Removes a named bookmark through the shared undo history.</summary>
@@ -858,6 +853,33 @@ public sealed class DocumentEditingSession
         result = new DocumentParagraphEditResult(
             new DocumentTextPosition(blockIndex, caretOffset),
             ReplacedBlockCount: 2);
+        return true;
+    }
+
+    /// <summary>
+    /// Records deletion of the paragraph mark that owns a body-paragraph boundary, leaving both
+    /// paragraphs intact until the revision is accepted.
+    /// </summary>
+    public bool TryDeleteBodyParagraphBoundaryAsRevision(
+        int owningParagraphIndex,
+        DocumentTextPosition caret,
+        out DocumentParagraphEditResult result)
+    {
+        result = default;
+        if (owningParagraphIndex < 0
+            || owningParagraphIndex + 1 >= Document.Blocks.Count
+            || Document.Blocks[owningParagraphIndex] is not Paragraph
+            || Document.Blocks[owningParagraphIndex + 1] is not Paragraph)
+        {
+            return false;
+        }
+
+        _commands.Execute(new SetParagraphMarkRevisionCommand(
+            owningParagraphIndex,
+            RevisionKind.Deleted,
+            ResolveRevisionAuthor(),
+            _revisionDateXml()));
+        result = new DocumentParagraphEditResult(caret, ReplacedBlockCount: 0);
         return true;
     }
 

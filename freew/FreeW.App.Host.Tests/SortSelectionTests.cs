@@ -123,6 +123,26 @@ public sealed class SortSelectionTests
         resultTable.Rows.Select(r => r.Cells[0].PlainText).Should().Equal("1", "2", "3");
     }
 
+    [StaFact]
+    public void SortCaretTableRows_UsesModelCellIndexAfterMergedCell()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(0, 0);
+        table.Rows.Add(MergedTableRowOf("3", "Cherry"));
+        table.Rows.Add(MergedTableRowOf("1", "Apple"));
+        table.Rows.Add(MergedTableRowOf("2", "Banana"));
+        doc.Blocks.Add(table);
+
+        var view = ViewWith(doc);
+        view.CaretPosition = FirstTableSecondColumnStart(view);
+        view.SortCaretTableRows(SortKind.Text, ascending: true, caseSensitive: false, hasHeaderRow: false);
+
+        var resultTable = view.Model.Blocks.OfType<Table>().Single();
+        resultTable.Rows.Select(r => r.Cells[1].PlainText).Should().Equal("Apple", "Banana", "Cherry");
+        resultTable.Rows.Select(r => r.Cells[0].PlainText).Should().Equal("1", "2", "3");
+    }
+
     // The content start of the second cell of the first rendered table row, so the caret's column is 1.
     private static System.Windows.Documents.TextPointer FirstTableSecondColumnStart(DocumentView view)
     {
@@ -136,6 +156,14 @@ public sealed class SortSelectionTests
         var row = new TableRow();
         foreach (var text in cells)
             row.Cells.Add(new TableCell(text));
+        return row;
+    }
+
+    private static TableRow MergedTableRowOf(string rank, string value)
+    {
+        var row = new TableRow();
+        row.Cells.Add(new TableCell(rank) { GridSpan = 2 });
+        row.Cells.Add(new TableCell(value));
         return row;
     }
 }

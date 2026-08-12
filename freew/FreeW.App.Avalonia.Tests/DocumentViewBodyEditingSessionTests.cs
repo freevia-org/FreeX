@@ -87,7 +87,7 @@ public sealed class DocumentViewBodyEditingSessionTests
     }
 
     [Fact]
-    public async Task BackspaceAndDeleteAtParagraphBoundaries_JoinThroughPortableSession()
+    public async Task BackspaceJoinsAndForwardDeletePreservesAvaloniaBoundaryBehavior()
     {
         IReadOnlyList<string> backwardEdited = [];
         IReadOnlyList<string> backwardUndone = [];
@@ -113,7 +113,7 @@ public sealed class DocumentViewBodyEditingSessionTests
 
         backwardEdited.Should().Equal("onetwo");
         backwardUndone.Should().Equal("one", "two");
-        forwardEdited.Should().Equal("onetwo");
+        forwardEdited.Should().Equal("one", "two");
         forwardUndone.Should().Equal("one", "two");
     }
 

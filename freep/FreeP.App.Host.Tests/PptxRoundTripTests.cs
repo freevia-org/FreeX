@@ -1249,6 +1249,138 @@ public sealed class PptxRoundTripTests : IDisposable
         reloaded.Theme.FontScheme.MinorLatinFont.Should().Be("Georgia");
     }
 
+    [Fact]
+    public void RoundTrip_ThemeResave_PreservesRealEffectStylesAndEastAsianFontsOnUnrelatedEdit()
+    {
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var pres = new Presentation();
+        pres.Slides.Add(new Slide());
+        var basePath = WriteToPptx(pres);
+
+        // Simulate a real-world .pptx (e.g. authored in PowerPoint) whose theme1.xml carries
+        // real ea/cs typefaces and a real outer-shadow effect style — content FreeP's own writer
+        // cannot yet author, but that a round-tripped file legitimately has.
+        using var withRichTheme = RewriteThemeXml(basePath, themeXml =>
+        {
+            var fontScheme = themeXml.Descendants(a + "fontScheme").Single();
+            fontScheme.Element(a + "majorFont")!.Element(a + "ea")!.SetAttributeValue("typeface", "MS Mincho");
+            fontScheme.Element(a + "majorFont")!.Element(a + "cs")!.SetAttributeValue("typeface", "Arial");
+            fontScheme.Element(a + "minorFont")!.Element(a + "ea")!.SetAttributeValue("typeface", "MS Gothic");
+            fontScheme.Element(a + "minorFont")!.Element(a + "cs")!.SetAttributeValue("typeface", "Arial");
+
+            var effectStyleLst = themeXml.Descendants(a + "effectStyleLst").Single();
+            effectStyleLst.RemoveNodes();
+            effectStyleLst.Add(
+                new XElement(a + "effectStyle", new XElement(a + "effectLst")),
+                new XElement(a + "effectStyle", new XElement(a + "effectLst")),
+                new XElement(a + "effectStyle",
+                    new XElement(a + "effectLst",
+                        new XElement(a + "outerShdw",
+                            new XAttribute("blurRad", "40000"),
+                            new XAttribute("dist", "23000"),
+                            new XAttribute("dir", "5400000"),
+                            new XAttribute("rotWithShape", "0"),
+                            new XElement(a + "srgbClr",
+                                new XAttribute("val", "000000"),
+                                new XElement(a + "alpha", new XAttribute("val", "35000")))))));
+
+            return themeXml;
+        });
+
+        var reloaded = PptxPackageReader.Read(withRichTheme);
+        reloaded.Theme.EffectStyles.Should().HaveCount(3, "the reader must capture the real fmtScheme effectStyleLst");
+
+        // Unrelated edit: touch a core property, not the theme at all.
+        reloaded.Properties.Subject = "Resaved by FreeP";
+
+        var resavedPath = WriteToPptx(reloaded);
+        var themeAfterResave = ReadZipEntryXml(resavedPath, "ppt/theme/theme1.xml");
+
+        var majorFont = themeAfterResave.Descendants(a + "majorFont").Single();
+        majorFont.Element(a + "ea")!.Attribute("typeface")!.Value.Should().Be("MS Mincho");
+        majorFont.Element(a + "cs")!.Attribute("typeface")!.Value.Should().Be("Arial");
+        var minorFont = themeAfterResave.Descendants(a + "minorFont").Single();
+        minorFont.Element(a + "ea")!.Attribute("typeface")!.Value.Should().Be("MS Gothic");
+
+        var outerShadow = themeAfterResave.Descendants(a + "outerShdw").SingleOrDefault();
+        outerShadow.Should().NotBeNull("the real outer-shadow effect style must survive an unrelated resave");
+        outerShadow!.Attribute("blurRad")!.Value.Should().Be("40000");
+    }
+
+    [Fact]
+    public void RoundTrip_ThemeFontEdit_PatchesLatinTypefaceWithoutDisturbingPreservedEaCs()
+    {
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        var pres = new Presentation();
+        pres.Slides.Add(new Slide());
+        var basePath = WriteToPptx(pres);
+
+        using var withRichTheme = RewriteThemeXml(basePath, themeXml =>
+        {
+            var fontScheme = themeXml.Descendants(a + "fontScheme").Single();
+            fontScheme.Element(a + "majorFont")!.Element(a + "ea")!.SetAttributeValue("typeface", "MS Mincho");
+            fontScheme.Element(a + "minorFont")!.Element(a + "ea")!.SetAttributeValue("typeface", "MS Gothic");
+            return themeXml;
+        });
+
+        var reloaded = PptxPackageReader.Read(withRichTheme);
+
+        // Edit the theme fonts themselves this time (not an unrelated field).
+        reloaded.Theme.FontScheme.MajorLatinFont = "Consolas";
+        reloaded.Theme.FontScheme.MinorLatinFont = "Verdana";
+
+        var resavedPath = WriteToPptx(reloaded);
+        var themeAfterResave = ReadZipEntryXml(resavedPath, "ppt/theme/theme1.xml");
+
+        var majorFont = themeAfterResave.Descendants(a + "majorFont").Single();
+        majorFont.Element(a + "latin")!.Attribute("typeface")!.Value.Should().Be("Consolas");
+        majorFont.Element(a + "ea")!.Attribute("typeface")!.Value.Should().Be("MS Mincho", "editing the latin font must not clobber the preserved ea typeface");
+
+        var minorFont = themeAfterResave.Descendants(a + "minorFont").Single();
+        minorFont.Element(a + "latin")!.Attribute("typeface")!.Value.Should().Be("Verdana");
+        minorFont.Element(a + "ea")!.Attribute("typeface")!.Value.Should().Be("MS Gothic");
+    }
+
+    private static MemoryStream RewriteThemeXml(
+        string path,
+        Func<XDocument, XDocument> rewrite)
+    {
+        var destination = new MemoryStream();
+        using (var sourceZip = ZipFile.OpenRead(path))
+        using (var destinationZip = new ZipArchive(destination, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var entry in sourceZip.Entries)
+            {
+                var destinationEntry = destinationZip.CreateEntry(entry.FullName, CompressionLevel.Fastest);
+                using var source = entry.Open();
+                using var target = destinationEntry.Open();
+
+                if (entry.FullName == "ppt/theme/theme1.xml")
+                {
+                    var themeXml = XDocument.Load(source);
+                    rewrite(themeXml).Save(target, SaveOptions.DisableFormatting);
+                }
+                else
+                {
+                    source.CopyTo(target);
+                }
+            }
+        }
+
+        destination.Position = 0;
+        return destination;
+    }
+
+    private static XDocument ReadZipEntryXml(string path, string entryName)
+    {
+        using var zip = ZipFile.OpenRead(path);
+        var entry = zip.GetEntry(entryName) ?? throw new InvalidOperationException($"Missing entry {entryName}");
+        using var stream = entry.Open();
+        return XDocument.Load(stream);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // 8. Core properties round-trip
     // ─────────────────────────────────────────────────────────────────────────────

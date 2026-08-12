@@ -74,6 +74,7 @@ public sealed class DocumentBodyEditingCoordinator
         DocumentTextRange selection,
         DocumentBodyDeleteDirection direction,
         bool trackChanges,
+        bool mergeForwardBoundary,
         out DocumentBodyEditorActionResult result)
     {
         result = default;
@@ -143,6 +144,30 @@ public sealed class DocumentBodyEditingCoordinator
                 DocumentBodyEditorTransition.OutdentListItem);
             return true;
         }
+
+        if (trackChanges)
+        {
+            var owningParagraphIndex = direction == DocumentBodyDeleteDirection.Backward
+                ? caret.BlockIndex - 1
+                : caret.BlockIndex;
+            if (!_session.TryDeleteBodyParagraphBoundaryAsRevision(
+                    owningParagraphIndex,
+                    caret,
+                    out var trackedResult))
+            {
+                return false;
+            }
+
+            result = new DocumentBodyEditorActionResult(
+                trackedResult.Caret,
+                direction == DocumentBodyDeleteDirection.Backward
+                    ? DocumentBodyEditorTransition.MergeWithPreviousParagraph
+                    : DocumentBodyEditorTransition.MergeWithNextParagraph);
+            return true;
+        }
+
+        if (direction == DocumentBodyDeleteDirection.Forward && !mergeForwardBoundary)
+            return false;
 
         var merged = direction == DocumentBodyDeleteDirection.Backward
             ? _session.TryMergeBodyParagraphWithPrevious(caret.BlockIndex, out var paragraphResult)

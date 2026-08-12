@@ -162,7 +162,7 @@ public sealed class SisterAvaloniaProgramRunnerTests
         }
 
         freeXProgram.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(")
-            .And.Contain("RegisterUnhandledExceptionHandlers: diagnostics.RegisterUnhandledExceptionHandlers")
+            .And.Contain("RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers()")
             .And.Contain("RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)")
             .And.Contain("CompletedExitCode = 0")
             .And.NotContain("RibbonCommandFaultReporter.Handler");

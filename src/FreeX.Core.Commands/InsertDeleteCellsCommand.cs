@@ -1757,7 +1757,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.ReplaceMergedRegions(AdjustMergesDeleteLeft(sheet.MergedRegions, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width));
 
             // Snapshot and adjust CF/DV rule ranges that are fully inside the band
-            RowColumnShiftHelpers.AdjustRulesDeleteShiftLeft(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width);
+            _mutationSnapshot!.CaptureRulePromotionFormulas((cfFormulas, cfThresholds, dvFormulas) =>
+                RowColumnShiftHelpers.AdjustRulesDeleteShiftLeft(
+                    sheet, _range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col, width,
+                    cfFormulas, cfThresholds, dvFormulas));
 
             // R21-defined-name-management-1/-3: named ranges fully inside the band's row span are
             // shifted left (surviving portion) or removed (fully inside the deleted columns — see
@@ -1838,7 +1841,10 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.ReplaceMergedRegions(AdjustMergesDeleteUp(sheet.MergedRegions, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height));
 
             // Snapshot and adjust CF/DV rule ranges that are fully inside the band
-            RowColumnShiftHelpers.AdjustRulesDeleteShiftUp(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
+            _mutationSnapshot!.CaptureRulePromotionFormulas((cfFormulas, cfThresholds, dvFormulas) =>
+                RowColumnShiftHelpers.AdjustRulesDeleteShiftUp(
+                    sheet, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height,
+                    cfFormulas, cfThresholds, dvFormulas));
 
             // R21-defined-name-management-1/-3: see the Delete-Shift-Left branch above.
             InsertCellsCommand.DeleteNamedRangesInBandUp(ctx.Workbook, _sheetId, _range.Start.Col, _range.End.Col, _range.Start.Row, _range.End.Row, height);
@@ -1897,6 +1903,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         if (_mutationSnapshot is null) return;
         var formulaSnapshotAddressesBeforeRestore = _mutationSnapshot.RestoreRewrittenFormulas(ctx.Workbook);
+        _mutationSnapshot.RestoreRulePromotionFormulas(ctx.Workbook);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));
         _snapshot = null;

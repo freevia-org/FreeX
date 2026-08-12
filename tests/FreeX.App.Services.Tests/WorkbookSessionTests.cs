@@ -2599,6 +2599,130 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void CopySelectedRangeText_InternalClipboardPasteOmitsFilterHiddenRows()
+    {
+        // Excel (and the WPF host's MainWindow.ClipboardCommands.ExecuteCopy) implicitly restrict
+        // copying a FILTERED range to its VISIBLE rows only: a row hidden by AutoFilter is never
+        // reproduced at the paste destination. The Avalonia shell's WorkbookSession used to walk
+        // range.AllCells() unconditionally when capturing the same-instance ("internal") clipboard,
+        // so a filter-hidden row's value was silently resurrected at the paste destination and every
+        // later row misaligned by one. Row 2 here is hidden by AutoFilter (FilterHiddenRows, not a
+        // plain manual hide) between two visible rows 1 and 3.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetCell(a2, new NumberValue(2));
+        sheet.SetCell(a3, new NumberValue(3));
+        sheet.FilterHiddenRows.Add(2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, a3));
+
+        var clipboardText = session.CopySelectedRangeText();
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var c2 = new CellAddress(sheet.Id, 2, 3);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        session.SelectCell(c1);
+
+        // Same clipboard text just produced by CopySelectedRangeText() short-circuits through
+        // ClipboardPastePlanner into PasteInternalClipboardAtActiveCell, which pastes from the
+        // captured InternalClipboard.Cells list (the code path this test targets) rather than
+        // re-parsing the plain-text payload.
+        var result = session.PasteClipboardTextAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(c1)!.Value.Should().Be(new NumberValue(1));
+        // The filter-hidden source row's value must never land at the paste destination -- the
+        // destination cell for that relative offset must stay untouched (a "gap", exactly like the
+        // gap between disjoint multi-area copy areas), not silently become 2.
+        sheet.GetCell(c2).Should().BeNull();
+        sheet.GetCell(c3)!.Value.Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void CopySelectedRangeText_InternalClipboardPasteKeepsManuallyHiddenRows()
+    {
+        // Sibling/no-regression case for the fix above: real Excel (and the WPF host, whose comment
+        // this mirrors) restricts ONLY AutoFilter-hidden rows on copy/paste -- a row hidden by a plain
+        // manual Format > Hide Rows (HiddenRows, not FilterHiddenRows) is still copied and pasted like
+        // any other visible row. Row 2 here is manually hidden, not filter-hidden.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetCell(a2, new NumberValue(2));
+        sheet.SetCell(a3, new NumberValue(3));
+        sheet.HiddenRows.Add(2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, a3));
+
+        var clipboardText = session.CopySelectedRangeText();
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var c2 = new CellAddress(sheet.Id, 2, 3);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        session.SelectCell(c1);
+
+        var result = session.PasteClipboardTextAtActiveCell(clipboardText);
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(c1)!.Value.Should().Be(new NumberValue(1));
+        sheet.GetCell(c2)!.Value.Should().Be(new NumberValue(2));
+        sheet.GetCell(c3)!.Value.Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
+    public void PasteSpecialClipboardAtActiveCell_CutInternalClipboardOmitsFilterHiddenRows()
+    {
+        // Cut (TryCutSelectedRangeText) shares CaptureInternalClipboard with Copy. A Paste Special
+        // variant that keeps source column widths forces the copy-and-clear path (through
+        // CreateInternalPasteCommand off clipboard.Cells) instead of the plain-Cut MoveRangeCommand
+        // shortcut, so this exercises the fixed capture on the Cut side too.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        var a3 = new CellAddress(sheet.Id, 3, 1);
+        sheet.SetCell(a1, new NumberValue(1));
+        sheet.SetCell(a2, new NumberValue(2));
+        sheet.SetCell(a3, new NumberValue(3));
+        sheet.FilterHiddenRows.Add(2);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectRange(new GridRange(a1, a3));
+        session.CutSelectedRangeText();
+        var c1 = new CellAddress(sheet.Id, 1, 3);
+        var c2 = new CellAddress(sheet.Id, 2, 3);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        session.SelectCell(c1);
+
+        var result = session.PasteSpecialClipboardAtActiveCell(
+            text: null,
+            PasteCellsMode.All,
+            default,
+            keepSourceColumnWidths: true);
+
+        result.Success.Should().BeTrue();
+        sheet.GetCell(c1)!.Value.Should().Be(new NumberValue(1));
+        sheet.GetCell(c2).Should().BeNull();
+        sheet.GetCell(c3)!.Value.Should().Be(new NumberValue(3));
+    }
+
+    [Fact]
     public void PasteClipboardTextAtActiveCell_TilesInternalClipboardAcrossLargerSelectedRange()
     {
         var workbook = CreateWorkbook();

@@ -224,6 +224,79 @@ public static class RevisionEditPlanner
         return marked;
     }
 
+    /// <summary>
+    /// Applies character formatting to the exact plain-text range while preserving every non-text run
+    /// payload and remapping bookmark boundaries across any run splits.
+    /// </summary>
+    public static bool ApplyFormattingRange(
+        Paragraph paragraph,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, RunFormatting> transform,
+        TextDocument? document = null,
+        string? revisionAuthor = null,
+        string? revisionDateXml = null)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        ArgumentNullException.ThrowIfNull(transform);
+
+        var textLength = paragraph.PlainText.Length;
+        var lo = Math.Clamp(Math.Min(startOffset, endOffset), 0, textLength);
+        var hi = Math.Clamp(Math.Max(startOffset, endOffset), 0, textLength);
+        if (hi <= lo)
+            return false;
+
+        var bookmarkPositions = BookmarkBoundaryMapper.Capture(paragraph);
+        var rebuilt = new List<Run>();
+        var position = 0;
+        var changed = false;
+
+        foreach (var source in paragraph.Runs)
+        {
+            var length = source.Text.Length;
+            var runStart = position;
+            var runEnd = runStart + length;
+            position = runEnd;
+
+            if (length == 0 || runEnd <= lo || runStart >= hi)
+            {
+                rebuilt.Add(CloneRunWithText(source, source.Text));
+                continue;
+            }
+
+            var localStart = Math.Max(lo, runStart) - runStart;
+            var localEnd = Math.Min(hi, runEnd) - runStart;
+
+            if (localStart > 0)
+                rebuilt.Add(CloneRunWithText(source, source.Text[..localStart]));
+
+            var covered = CloneRunWithText(source, source.Text[localStart..localEnd]);
+            var formatting = transform(source.Formatting);
+            covered.Formatting = formatting;
+            if (formatting != source.Formatting)
+            {
+                changed = true;
+                if (document is { TrackRevisions: true, DoNotTrackFormatting: false }
+                    && covered.FormatRevision is null)
+                {
+                    covered.FormatRevision = new FormatRevision(
+                        source.Formatting,
+                        string.IsNullOrWhiteSpace(revisionAuthor) ? "FreeW User" : revisionAuthor.Trim(),
+                        revisionDateXml);
+                }
+            }
+            rebuilt.Add(covered);
+
+            if (localEnd < length)
+                rebuilt.Add(CloneRunWithText(source, source.Text[localEnd..]));
+        }
+
+        paragraph.Runs.Clear();
+        paragraph.Runs.AddRange(rebuilt);
+        BookmarkBoundaryMapper.Restore(paragraph, bookmarkPositions);
+        return changed;
+    }
+
     public static Run CloneRunWithText(Run source, string text) => new(text, source.Formatting)
     {
         Image = source.Image,

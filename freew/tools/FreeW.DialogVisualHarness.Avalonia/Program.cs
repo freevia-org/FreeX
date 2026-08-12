@@ -12,6 +12,8 @@ using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
@@ -33,6 +35,7 @@ static async Task<int> Main(string[] args)
     var inventoryPath = Required(args, "--inventory");
     var output = Path.GetFullPath(Required(args, "--output"));
     var scenarioFilter = Optional(args, "--scenario");
+    var routeFilter = Optional(args, "--route");
     var wpfAuthorityPath = Optional(args, "--wpf-authority");
     var inventory = JsonSerializer.Deserialize<RouteInventory>(File.ReadAllText(inventoryPath), JsonOptions())
         ?? throw new InvalidOperationException("Invalid inventory.");
@@ -46,7 +49,9 @@ static async Task<int> Main(string[] args)
     File.WriteAllText(progressPath, string.Empty);
     var session = HeadlessUnitTestSession.GetOrStartForAssembly(typeof(HarnessApp).Assembly);
     var captures = new List<Capture>();
-    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "avalonia" && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))))
+    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "avalonia"
+        && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))
+        && (routeFilter is null || s.RouteId.Equals(routeFilter, StringComparison.OrdinalIgnoreCase))))
     {
         File.AppendAllText(progressPath, $"start {scenario.Id}{Environment.NewLine}");
         Capture? result = null;
@@ -381,7 +386,14 @@ static JsonSerializerOptions JsonOptions() => new() { PropertyNamingPolicy = Jso
 
 sealed class HarnessApp : Application
 {
-    public override void Initialize() => Styles.Add(new FluentTheme());
+    public override void Initialize()
+    {
+        Styles.Add(new FluentTheme());
+        // Keep the capture host aligned with FreeW.App.Avalonia.App. Shared controls may
+        // resolve brand-neutral and accent aliases even when their immediate chrome uses
+        // literal fallbacks, so the harness must expose the production resource contract.
+        AvaloniaThemeApplier.Apply(this, BrandThemes.FreeW, "FreeW");
+    }
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<HarnessApp>()
         .UseSkia()
         .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false });

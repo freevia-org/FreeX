@@ -194,6 +194,40 @@ public class DocumentInspectorTests
         DocumentInspector.Inspect(doc).IsClean.Should().BeTrue();
     }
 
+    [Fact]
+    public void RemoveSelected_RemovesOnlyChosenCategoriesAndReportsDifference()
+    {
+        var doc = BuildDocument();
+
+        var result = DocumentInspector.RemoveSelected(
+            doc,
+            new InspectionRemovalSelection(
+                Comments: true,
+                Revisions: false,
+                Properties: false,
+                Bookmarks: true));
+
+        result.Before.Should().Be(new InspectionResult(2, 2, 4, 2));
+        result.After.Should().Be(new InspectionResult(0, 2, 4, 0));
+        result.Removed.Should().Be(new InspectionResult(2, 0, 0, 2));
+        result.After.HasRevisions.Should().BeTrue();
+        result.After.HasProperties.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RemoveSelected_WithNoCategories_IsNonMutatingAndReportsNoDifference()
+    {
+        var doc = BuildDocument();
+        var selection = new InspectionRemovalSelection(false, false, false, false);
+
+        var result = DocumentInspector.RemoveSelected(doc, selection);
+
+        selection.Any.Should().BeFalse();
+        result.Before.Should().Be(new InspectionResult(2, 2, 4, 2));
+        result.After.Should().Be(result.Before);
+        result.Removed.Should().Be(new InspectionResult(0, 0, 0, 0));
+    }
+
     // --- Metadata living inside a table nested in a table cell (tc/w:tbl) ---
 
     private static TextDocument BuildDocumentWithNestedTableMetadata()

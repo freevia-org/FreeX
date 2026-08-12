@@ -77,6 +77,95 @@ public sealed class ComboAndTrendlineLayoutTests
         layout.SecondaryValueAxis.Should().BeNull();
     }
 
+    // R135-render-chart-secondary-axis-scale (Avalonia/PDF twin of the WPF fix in
+    // ChartRenderer.Axes.cs): ChartModel.SecondaryAxisMinimum/Maximum previously had no effect here --
+    // the secondary axis scale was built purely from the plotted secondary-series data range
+    // (SecondaryValueRange), with no explicit bounds argument at all, so an authored fixed secondary
+    // scale (e.g. Excel's Format Axis > secondary value axis Minimum/Maximum) was silently ignored.
+    // Sibling: Secondary_axis_scale_is_driven_by_the_secondary_series_range above proves the
+    // auto-fit-to-data behavior is unchanged when no explicit bounds are set.
+    [Fact]
+    public void Secondary_axis_uses_its_own_explicit_minimum_and_maximum_not_the_auto_fit_data_range()
+    {
+        var chart = Chart(ChartType.Column, c =>
+        {
+            c.ShowSecondaryAxis = true;
+            c.SecondaryAxisSeriesIndexes = [1];
+            c.SecondaryAxisMinimum = 0;
+            c.SecondaryAxisMaximum = 1000;
+        });
+        // Secondary series data only spans [1, 5] -- if the axis auto-fit to the data (the pre-fix
+        // behavior) its Maximum would land near 5, not the authored 1000.
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "Primary", 10, 20), Series(1, "Secondary", 1, 5)]));
+
+        layout.SecondaryValueAxis.Should().NotBeNull();
+        layout.SecondaryValueAxis!.Scale.Minimum.Should().Be(0);
+        layout.SecondaryValueAxis!.Scale.Maximum.Should().Be(1000);
+    }
+
+    // R135-render-chart-secondary-axis-scale: ChartModel.SecondaryAxisLogScale previously had no
+    // effect on the portable layout -- the secondary axis was always built with the plain linear
+    // AxisScale.CreateValueAxis, never the logarithmic variant, regardless of this flag.
+    [Fact]
+    public void Secondary_axis_log_scale_applies_independently_of_primary_axis()
+    {
+        var chart = Chart(ChartType.Column, c =>
+        {
+            c.ShowSecondaryAxis = true;
+            c.SecondaryAxisSeriesIndexes = [1];
+            c.SecondaryAxisLogScale = true;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "Primary", 10, 20), Series(1, "Secondary", 1, 100)]));
+
+        layout.SecondaryValueAxis.Should().NotBeNull();
+        layout.SecondaryValueAxis!.Scale.IsLogarithmic.Should().BeTrue();
+        layout.ValueAxis!.Scale.IsLogarithmic.Should().BeFalse();
+    }
+
+    // Forward half of the R135 number-format fix: ChartModel.SecondaryAxisNumberFormat must drive the
+    // secondary axis's own tick labels. Before the fix, the layout always passed the PRIMARY axis's
+    // chart.YAxisNumberFormat/Code into BuildValueAxisLayout for the secondary axis too, so a
+    // secondary-only Currency request had no effect on its ticks.
+    [Fact]
+    public void Secondary_axis_number_format_applies_independently_of_primary_axis()
+    {
+        var chart = Chart(ChartType.Column, c =>
+        {
+            c.ShowSecondaryAxis = true;
+            c.SecondaryAxisSeriesIndexes = [1];
+            c.SecondaryAxisNumberFormat = ChartDataLabelNumberFormat.Currency;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "Primary", 10, 20), Series(1, "Secondary", 1, 5)]));
+
+        layout.SecondaryValueAxis.Should().NotBeNull();
+        layout.SecondaryValueAxis!.Ticks.Should().Contain(t => t.Label.StartsWith('$'));
+    }
+
+    // Reverse/leak half of the R135 number-format fix: a PRIMARY axis Currency format must not also
+    // format the secondary axis's ticks -- before the fix, chart.YAxisNumberFormat was passed
+    // unconditionally as the secondary axis's number format too, so setting only YAxisNumberFormat
+    // silently formatted the secondary axis's ticks as currency even though SecondaryAxisNumberFormat
+    // stayed at its General default.
+    [Fact]
+    public void Primary_axis_number_format_does_not_leak_onto_secondary_axis()
+    {
+        var chart = Chart(ChartType.Column, c =>
+        {
+            c.ShowSecondaryAxis = true;
+            c.SecondaryAxisSeriesIndexes = [1];
+            c.YAxisNumberFormat = ChartDataLabelNumberFormat.Currency;
+        });
+        var layout = ChartLayoutEngine.Layout(Request(chart, ["A", "B"],
+            [Series(0, "Primary", 10, 20), Series(1, "Secondary", 1, 5)]));
+
+        layout.SecondaryValueAxis.Should().NotBeNull();
+        layout.SecondaryValueAxis!.Ticks.Should().NotContain(t => t.Label.StartsWith('$'));
+        layout.ValueAxis!.Ticks.Should().Contain(t => t.Label.StartsWith('$'));
+    }
+
     // ---- Trendline overlay ----------------------------------------------------------------
 
     [Fact]

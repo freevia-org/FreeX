@@ -9,6 +9,8 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Wpf;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Options;
@@ -25,10 +27,17 @@ static int Main(string[] args)
     var inventory = JsonSerializer.Deserialize<RouteInventory>(File.ReadAllText(inventoryPath), JsonOptions())
         ?? throw new InvalidOperationException("Invalid inventory.");
     var scenarioFilter = Optional(args, "--scenario");
+    var routeFilter = Optional(args, "--route");
     Directory.CreateDirectory(output);
     var application = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+    // Capture the same resource graph as the production WPF bootstrap. DialogResources.xaml
+    // consumes the prefix-free theme aliases, so omitting this step silently falls back to
+    // legacy system chrome and makes that fallback the visual "authority".
+    WpfThemeApplier.Apply(application, BrandThemes.FreeW, "FreeW");
     var captures = new List<Capture>();
-    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "wpf" && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))))
+    foreach (var scenario in inventory.Scenarios.Where(s => s.Host == "wpf"
+        && (scenarioFilter is null || s.Id.Equals(scenarioFilter, StringComparison.OrdinalIgnoreCase))
+        && (routeFilter is null || s.RouteId.Equals(routeFilter, StringComparison.OrdinalIgnoreCase))))
     {
         if (!TryCapture(scenario, output, out var capture))
             capture = Unsupported(scenario, FreeWDialogEvidenceCatalog.CreateCapturePlan(

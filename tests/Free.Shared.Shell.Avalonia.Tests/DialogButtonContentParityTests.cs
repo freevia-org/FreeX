@@ -1,7 +1,9 @@
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Shell.Avalonia;
@@ -44,7 +46,11 @@ public sealed class DialogButtonContentParityTests
                 var buttons = row.Children.OfType<Button>().ToArray();
                 buttons.Should().HaveCount(3);
                 foreach (var button in buttons)
+                {
                     button.Content.Should().BeOfType<AccessText>();
+                    button.Background.Should().Be(Brushes.White);
+                    button.CornerRadius.Should().Be(new CornerRadius(3));
+                }
 
                 var okText = (AccessText)buttons[0].Content!;
                 var cancelText = (AccessText)buttons[1].Content!;
@@ -72,6 +78,7 @@ public sealed class DialogButtonContentParityTests
                 var directText = direct.Content.Should().BeOfType<AccessText>().Subject;
                 directText.Should().NotBeNull();
                 directText!.Text.Should().Be("_Direct");
+                direct.CornerRadius.Should().Be(new CornerRadius(3));
                 AutomationProperties.GetName(direct).Should().Be("Direct");
                 AutomationProperties.GetAccessKey(direct).Should().Be("Alt+D");
             }

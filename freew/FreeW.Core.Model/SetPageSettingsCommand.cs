@@ -17,25 +17,40 @@ namespace FreeW.Core.Model;
 /// changes as well as the Page Setup dialog's geometry changes.
 /// </para>
 /// </summary>
-public sealed class SetPageSettingsCommand(PageSettings settings, string label = "Page Setup") : IDocumentCommand
+public sealed class SetPageSettingsCommand : IDocumentCommand
 {
+    private readonly PageSettings _settings;
+    private readonly int _sectionIndex;
+    private readonly string _label;
     private PageSettings? _previous;
 
-    public string Label => label;
+    public SetPageSettingsCommand(PageSettings settings, string label = "Page Setup")
+        : this(settings, -1, label)
+    {
+    }
+
+    public SetPageSettingsCommand(PageSettings settings, int sectionIndex, string label = "Page Setup")
+    {
+        _settings = settings;
+        _sectionIndex = sectionIndex;
+        _label = label;
+    }
+
+    public string Label => _label;
 
     public void Apply(IDocumentCommandContext context)
     {
-        var page = context.Document.Page;
+        var page = PageSettingsSectionResolver.Resolve(context.Document, _sectionIndex);
         // Snapshot for undo on first Apply.
         _previous ??= page.Clone();
-        CopyTo(settings, page);
+        CopyTo(_settings, page);
     }
 
     public void Revert(IDocumentCommandContext context)
     {
         if (_previous is null)
             return;
-        CopyTo(_previous, context.Document.Page);
+        CopyTo(_previous, PageSettingsSectionResolver.Resolve(context.Document, _sectionIndex));
         _previous = null;
     }
 

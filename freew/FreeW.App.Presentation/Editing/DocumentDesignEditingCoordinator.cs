@@ -24,23 +24,25 @@ public sealed class DocumentDesignEditingCoordinator
 
     public DocumentDesignEditResult UpdatePage(
         Action<PageSettings> mutation,
+        int sectionIndex = -1,
         string label = "Page Setup")
     {
         ArgumentNullException.ThrowIfNull(mutation);
         ArgumentException.ThrowIfNullOrWhiteSpace(label);
 
-        var settings = _session.Document.Page.Clone();
+        var settings = PageSettingsSectionResolver.Resolve(_session.Document, sectionIndex).Clone();
         mutation(settings);
-        return SetPageSettings(settings, label);
+        return SetPageSettings(settings, sectionIndex, label);
     }
 
     public DocumentDesignEditResult SetPageSettings(
         PageSettings settings,
+        int sectionIndex = -1,
         string label = "Page Setup")
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentException.ThrowIfNullOrWhiteSpace(label);
-        return Execute(new SetPageSettingsCommand(settings.Clone(), label));
+        return Execute(new SetPageSettingsCommand(settings.Clone(), sectionIndex, label));
     }
 
     public DocumentDesignEditResult ApplyTheme(DocumentTheme theme) =>
@@ -64,36 +66,40 @@ public sealed class DocumentDesignEditingCoordinator
     public DocumentDesignEditResult ApplyEffectSet(DocumentEffectSet effectSet) =>
         ApplyCatalog("Theme Effects", effectSet, static (document, value) => DocumentEffectSet.Apply(document, value));
 
-    public DocumentDesignEditResult SetPageColor(string? colorHex) =>
+    public DocumentDesignEditResult SetPageColor(string? colorHex, int sectionIndex = -1) =>
         UpdatePage(
             page => page.BackgroundColorHex = NormalizePageColor(colorHex),
+            sectionIndex,
             "Page Color");
 
-    public DocumentDesignEditResult SetPageBorder(PageBorder? border) =>
-        UpdatePage(page => page.PageBorder = border, "Page Border");
+    public DocumentDesignEditResult SetPageBorder(PageBorder? border, int sectionIndex = -1) =>
+        UpdatePage(page => page.PageBorder = border, sectionIndex, "Page Border");
 
     public DocumentDesignEditResult TogglePageBorder(
         string colorHex = "#000000",
-        double widthPt = 1.0) =>
+        double widthPt = 1.0,
+        int sectionIndex = -1) =>
         UpdatePage(
             page => page.PageBorder = page.PageBorder is null
                 ? new PageBorder(colorHex, widthPt)
                 : null,
+            sectionIndex,
             "Page Border");
 
-    public DocumentDesignEditResult SetWatermark(WatermarkOptions? options) =>
+    public DocumentDesignEditResult SetWatermark(WatermarkOptions? options, int sectionIndex = -1) =>
         UpdatePage(
             page =>
             {
                 page.WatermarkOptions = options;
                 page.Watermark = null;
             },
+            sectionIndex,
             "Watermark");
 
-    public DocumentDesignEditResult SetWatermarkText(string? text) =>
+    public DocumentDesignEditResult SetWatermarkText(string? text, int sectionIndex = -1) =>
         SetWatermark(string.IsNullOrWhiteSpace(text)
             ? null
-            : new WatermarkOptions(text.Trim()));
+            : new WatermarkOptions(text.Trim()), sectionIndex);
 
     public static string? NormalizePageColor(string? colorHex)
     {

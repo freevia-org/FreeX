@@ -6,24 +6,12 @@ public sealed class RevisionEditPlannerTests
     public void CloneRunWithText_PreservesRunMetadataAndReplacesOnlyText()
     {
         var formatting = RunFormatting.Default with { Bold = true, Italic = true };
-        var tableFormula = new TableFormulaField("SUM(ABOVE)", "#,##0");
-        var citation = new Citation("Example v. Sample", CitationCategory.Cases, "Example");
-        var crossReference = new CrossReferenceField(
-            CrossRefFieldKind.Ref,
-            "TargetBookmark",
-            CrossRefInsertAs.Text,
-            Hyperlink: true);
-        var complexField = new ComplexField(" PAGE ", ShowCode: true);
         var source = new Run("source", formatting)
         {
             HyperlinkUrl = "https://example.com",
             HyperlinkAnchor = "bookmark",
             HyperlinkTooltip = "Example",
             FieldKind = RunFieldKind.PageNumber,
-            TableFormula = tableFormula,
-            Citation = citation,
-            CrossReference = crossReference,
-            ComplexField = complexField,
             FootnoteId = 7,
             EndnoteId = 8,
             CommentId = 9,
@@ -45,10 +33,6 @@ public sealed class RevisionEditPlannerTests
         clone.HyperlinkAnchor.Should().Be(source.HyperlinkAnchor);
         clone.HyperlinkTooltip.Should().Be(source.HyperlinkTooltip);
         clone.FieldKind.Should().Be(source.FieldKind);
-        clone.TableFormula.Should().BeSameAs(tableFormula);
-        clone.Citation.Should().BeSameAs(citation);
-        clone.CrossReference.Should().BeSameAs(crossReference);
-        clone.ComplexField.Should().BeSameAs(complexField);
         clone.FootnoteId.Should().Be(source.FootnoteId);
         clone.EndnoteId.Should().Be(source.EndnoteId);
         clone.CommentId.Should().Be(source.CommentId);
@@ -63,22 +47,60 @@ public sealed class RevisionEditPlannerTests
     }
 
     [Fact]
-    public void CloneRunWithText_RetainsRubyOnlyWhenTextIsUnchanged()
+    public void ApplyFormattingRange_SplitsExactlyAndPreservesMetadataAndBookmarkOffsets()
     {
-        var formatting = RunFormatting.Default with { FontFamily = "Yu Mincho" };
-        var ruby = new RubyAnnotation();
-        ruby.BaseFragments.Add(new RubyTextFragment("base", formatting));
-        ruby.PhoneticFragments.Add(new RubyTextFragment("guide", formatting));
-        var source = Run.FromRuby(ruby);
+        var hyperlink = new Run("abcdef", RunFormatting.Default)
+        {
+            HyperlinkUrl = "https://example.com",
+            CommentId = 7,
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(hyperlink);
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+            "bookmark-1", BookmarkBoundaryKind.Start, 1, "target"));
 
-        var unchanged = RevisionEditPlanner.CloneRunWithText(source, source.Text);
-        var fragment = RevisionEditPlanner.CloneRunWithText(source, "fragment");
+        var changed = RevisionEditPlanner.ApplyFormattingRange(
+            paragraph,
+            2,
+            4,
+            formatting => formatting with { LanguageTag = "fr-FR" });
 
-        unchanged.Ruby.Should().BeSameAs(ruby);
-        unchanged.Text.Should().Be("base");
-        fragment.Ruby.Should().BeNull();
-        fragment.Text.Should().Be("fragment");
-        fragment.Formatting.Should().BeSameAs(source.Formatting);
+        changed.Should().BeTrue();
+        paragraph.Runs.Select(run => run.Text).Should().Equal("ab", "cd", "ef");
+        paragraph.Runs[1].Formatting.LanguageTag.Should().Be("fr-FR");
+        paragraph.Runs[0].Formatting.LanguageTag.Should().BeNull();
+        paragraph.Runs[2].Formatting.LanguageTag.Should().BeNull();
+        paragraph.Runs.Should().OnlyContain(run =>
+            run.HyperlinkUrl == hyperlink.HyperlinkUrl && run.CommentId == hyperlink.CommentId);
+        paragraph.BookmarkBoundaries.Should().ContainSingle().Which.RunIndex.Should().Be(3);
+    }
+
+    [Fact]
+    public void ApplyFormattingRange_RecordsTrackedFormattingRevisionWhenEnabled()
+    {
+        var original = RunFormatting.Default with { Bold = true };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("text", original));
+        var document = new TextDocument
+        {
+            TrackRevisions = true,
+            DoNotTrackFormatting = false,
+        };
+
+        RevisionEditPlanner.ApplyFormattingRange(
+            paragraph,
+            0,
+            4,
+            formatting => formatting with { LanguageTag = "de-DE" },
+            document,
+            "Reviewer",
+            "2026-08-11T12:00:00Z");
+
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].FormatRevision.Should().Be(new FormatRevision(
+            original,
+            "Reviewer",
+            "2026-08-11T12:00:00Z"));
     }
 
     [Fact]

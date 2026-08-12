@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -55,7 +56,7 @@ public enum FloatHandle
 /// addressing is (block index, character offset within the block's text). Tables render as grids with
 /// modal cell text editing; non-text runs render read-only for now; plain paragraphs are fully editable.
 /// </summary>
-public sealed class DocumentView : Control
+public sealed partial class DocumentView : Control
 {
     private const double PxPerPoint = 96.0 / 72.0;
     // Print-layout chrome: grey "desk" gap above (and below) the white page surface.
@@ -351,6 +352,7 @@ public sealed class DocumentView : Control
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         _editingSession.Changed += OnModelChanged;
         CaretMoved += RaiseAutomationSelectionChanged;
+        FloatingSelectionChanged += RaiseAutomationSelectionChanged;
         DocumentChanged += RaiseAutomationValueChanged;
     }
 
@@ -485,6 +487,7 @@ public sealed class DocumentView : Control
     }
 
     public TextDocument Document => _doc;
+    public string? CurrentFileName { get; set; }
     public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
 
     /// <summary>Whether WPF-compatible AutoCorrect and AutoFormat-As-You-Type rules run during text input.</summary>
@@ -844,8 +847,12 @@ public sealed class DocumentView : Control
     {
         if (string.IsNullOrEmpty(query))
             return false;
-        if (string.Equals(SelectedText, query, StringComparison.OrdinalIgnoreCase))
+        if (!IsEditingLocked && string.Equals(SelectedText, query, StringComparison.OrdinalIgnoreCase))
+        {
+            var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
+            SkipTrackedLeftoverMatch(originalMatchText);
+        }
         return FindNext(query);
     }
 
@@ -857,8 +864,12 @@ public sealed class DocumentView : Control
         if (string.IsNullOrEmpty(query))
             return false;
 
-        if (FindReplaceDialogPlanner.MatchesExactly(SelectedText, query, options))
+        if (!IsEditingLocked && FindReplaceDialogPlanner.MatchesExactly(SelectedText, query, options))
+        {
+            var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
+            SkipTrackedLeftoverMatch(originalMatchText);
+        }
 
         return FindNext(query, options);
     }
@@ -866,15 +877,20 @@ public sealed class DocumentView : Control
     /// <summary>Replace every occurrence of <paramref name="query"/> from the document start. Returns the count.</summary>
     public int ReplaceAll(string query, string replacement)
     {
-        if (string.IsNullOrEmpty(query))
+        if (string.IsNullOrEmpty(query) || IsEditingLocked)
             return 0;
 
         _caret = new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = _caret;
         var count = 0;
-        while (count < 10000 && FindNext(query))
+        while (count < 10000)
         {
+            var searchFrom = _caret;
+            if (!FindNext(query) || HasWrappedAround(searchFrom))
+                break;
+            var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
+            SkipTrackedLeftoverMatch(originalMatchText);
             count++;
         }
 
@@ -887,15 +903,20 @@ public sealed class DocumentView : Control
         string replacement,
         FindReplaceSearchOptions options)
     {
-        if (string.IsNullOrEmpty(query))
+        if (string.IsNullOrEmpty(query) || IsEditingLocked)
             return 0;
 
         _caret = new DocPosition(FirstEditableBlock(), 0);
         _selectionAnchor = _caret;
         var count = 0;
-        while (count < 10000 && FindNext(query, options))
+        while (count < 10000)
         {
+            var searchFrom = _caret;
+            if (!FindNext(query, options) || HasWrappedAround(searchFrom))
+                break;
+            var originalMatchText = SelectedText;
             ReplaceSelectionWith(replacement);
+            SkipTrackedLeftoverMatch(originalMatchText);
             count++;
         }
 
@@ -903,33 +924,45 @@ public sealed class DocumentView : Control
         return count;
     }
 
+    private bool HasWrappedAround(DocPosition searchFrom)
+    {
+        if (_selectionAnchor is not { } anchor)
+            return false;
+        return anchor.Block < searchFrom.Block
+            || (anchor.Block == searchFrom.Block && anchor.Offset < searchFrom.Offset);
+    }
+
     private void ReplaceSelectionWith(string replacement)
     {
         if (NormalizedSelection() is not { } sel || sel.Start.Block != sel.End.Block)
             return;
-        var block = sel.Start.Block;
-        if (_doc.Blocks[block] is not Paragraph p0 || !IsEditable(p0))
+        if (_doc.Blocks[sel.Start.Block] is not Paragraph paragraph || !IsEditable(paragraph))
             return;
 
-        var a = sel.Start.Offset;
-        var b = sel.End.Offset;
-        var existing = ParaCells(p0);
-        var fmt = existing.Count == 0
-            ? RunFormatting.Default
-            : existing[Math.Clamp(a > 0 ? a - 1 : 0, 0, existing.Count - 1)].Fmt;
+        _selectionAnchor = sel.Start;
+        _caret = sel.End;
+        InsertText(replacement);
+    }
 
-        _bus.Execute(new ReplaceParagraphRunsCommand(block, p =>
+    private void SkipTrackedLeftoverMatch(string originalMatchText)
+    {
+        if (string.IsNullOrEmpty(originalMatchText)
+            || _doc.Blocks[_caret.Block] is not Paragraph paragraph)
         {
-            var cells = ParaCells(p);
-            var lo = Math.Clamp(a, 0, cells.Count);
-            var hi = Math.Clamp(b, 0, cells.Count);
-            cells.RemoveRange(lo, Math.Max(0, hi - lo));
-            for (var i = 0; i < replacement.Length; i++)
-                cells.Insert(lo + i, new Cell(replacement[i], fmt));
-            SetRuns(p, cells);
-        }));
+            return;
+        }
 
-        _caret = new DocPosition(block, a + replacement.Length);
+        var cells = ParaCells(paragraph);
+        var start = _caret.Offset;
+        if (start + originalMatchText.Length > cells.Count)
+            return;
+        for (var index = 0; index < originalMatchText.Length; index++)
+        {
+            if (cells[start + index].Ch != originalMatchText[index])
+                return;
+        }
+
+        _caret = _caret with { Offset = start + originalMatchText.Length };
         _selectionAnchor = _caret;
     }
 
@@ -948,6 +981,8 @@ public sealed class DocumentView : Control
         _automationPeer = new DocumentViewAutomationPeer(this);
         _lastAutomationValue = PlainText;
         _lastAutomationSelectionStatus = AutomationSelectionStatus();
+        AutomationProperties.SetName(this, "Document editor");
+        AutomationProperties.SetHelpText(this, _lastAutomationSelectionStatus);
         return _automationPeer;
     }
 
@@ -955,13 +990,33 @@ public sealed class DocumentView : Control
 
     internal string AutomationSelectionStatus()
     {
-        var caretDescription = CellCaretInfo is { } cell
-            ? $"Table {cell.TableBlock} row {cell.Row} col {cell.Col} para {cell.ParaIdx} offset {cell.Offset}"
-            : $"Block {_caret.Block} offset {_caret.Offset}";
-        var selected = SelectedText;
-        return selected.Length > 0
-            ? $"{caretDescription}; Selected: {selected}"
-            : caretDescription;
+        if (SelectedCellRange is { } cellRange)
+        {
+            return AccessibleDocumentSnapshotPlanner.BuildTableSelectionStatus(
+                _doc,
+                cellRange.TableBlock,
+                cellRange.MinRow,
+                cellRange.MinCol,
+                cellRange.MaxRow,
+                cellRange.MaxCol);
+        }
+        if (_shapeCaret is not null)
+            return AutomationSnapshot().Status;
+        if (_selectedFloatingObjects.Count > 1)
+            return $"{_selectedFloatingObjects.Count} drawing objects selected";
+        if (_selectedFloating is { } selected)
+        {
+            var selectedPath = _selectedFloatingGroupChild?.ChildPath;
+            var node = AutomationSemanticTree().ById.Values.FirstOrDefault(candidate =>
+                candidate.BlockIndex == selected.BlockIndex
+                && candidate.RunIndex == selected.RunIndex
+                && IsAutomationDrawingNode(candidate.Kind)
+                && (selectedPath is null
+                    ? candidate.ObjectPath is null
+                    : candidate.ObjectPath is not null && candidate.ObjectPath.SequenceEqual(selectedPath)));
+            return node is null ? $"Selected {selected.Kind}" : $"Selected {node.Kind}: {node.Name}";
+        }
+        return AutomationSnapshot().Status;
     }
 
     private void RaiseAutomationValueChanged()
@@ -970,12 +1025,14 @@ public sealed class DocumentView : Control
             return;
 
         var newValue = PlainText;
-        if (string.Equals(_lastAutomationValue, newValue, StringComparison.Ordinal))
-            return;
-
-        var oldValue = _lastAutomationValue;
-        _lastAutomationValue = newValue;
-        _automationPeer.NotifyValueChanged(oldValue, newValue);
+        if (!string.Equals(_lastAutomationValue, newValue, StringComparison.Ordinal))
+        {
+            var oldValue = _lastAutomationValue;
+            _lastAutomationValue = newValue;
+            _automationPeer.NotifyValueChanged(oldValue, newValue);
+        }
+        _automationPeer.NotifySemanticDocumentChanged();
+        RaiseAutomationSelectionChanged();
     }
 
     private void RaiseAutomationSelectionChanged()
@@ -983,12 +1040,14 @@ public sealed class DocumentView : Control
         if (_automationPeer is null)
             return;
 
+        _automationPeer.NotifyObjectSelectionChanged();
         var status = AutomationSelectionStatus();
         if (string.Equals(_lastAutomationSelectionStatus, status, StringComparison.Ordinal))
             return;
 
         var oldStatus = _lastAutomationSelectionStatus;
         _lastAutomationSelectionStatus = status;
+        AutomationProperties.SetHelpText(this, status);
         _automationPeer.NotifySelectionChanged(oldStatus, status);
     }
 
@@ -17464,7 +17523,21 @@ public sealed class DocumentView : Control
             else if (cc.ParaIdx > 0)
             {
                 // At start of a non-first paragraph in a cell → merge with previous paragraph.
-                CellMergeWithPreviousParagraph(cc);
+                if (TrackChangesEnabled)
+                {
+                    _bus.Execute(new SetCellParagraphMarkRevisionCommand(
+                        cc.TableBlock,
+                        cc.Row,
+                        cc.Col,
+                        cc.ParaIdx - 1,
+                        RevisionKind.Deleted,
+                        RevisionAuthor,
+                        _editingSession.RevisionDateXmlForEdit()));
+                }
+                else
+                {
+                    CellMergeWithPreviousParagraph(cc);
+                }
             }
             // else: at start of first paragraph in cell → do nothing (can't go back past cell boundary)
             return;
@@ -17474,6 +17547,7 @@ public sealed class DocumentView : Control
                 CurrentBodyTextRange(),
                 DocumentBodyDeleteDirection.Backward,
                 TrackChangesEnabled,
+                mergeForwardBoundary: false,
                 out var bodyResult))
         {
             _caret = new DocPosition(bodyResult.Caret.BlockIndex, bodyResult.Caret.Offset);
@@ -17579,6 +17653,19 @@ public sealed class DocumentView : Control
                 var cellModel = GetCellModel(cc.TableBlock, cc.Row, cc.Col);
                 if (cellModel != null && cc.ParaIdx < cellModel.Paragraphs.Count - 1)
                 {
+                    if (TrackChangesEnabled)
+                    {
+                        _bus.Execute(new SetCellParagraphMarkRevisionCommand(
+                            cc.TableBlock,
+                            cc.Row,
+                            cc.Col,
+                            cc.ParaIdx,
+                            RevisionKind.Deleted,
+                            RevisionAuthor,
+                            _editingSession.RevisionDateXmlForEdit()));
+                        return;
+                    }
+
                     // Merge current para + next para in cell.
                     var curPara = cellModel.Paragraphs[cc.ParaIdx];
                     var nextPara = cellModel.Paragraphs[cc.ParaIdx + 1];
@@ -17596,6 +17683,7 @@ public sealed class DocumentView : Control
                 CurrentBodyTextRange(),
                 DocumentBodyDeleteDirection.Forward,
                 TrackChangesEnabled,
+                mergeForwardBoundary: false,
                 out var bodyResult))
         {
             _caret = new DocPosition(bodyResult.Caret.BlockIndex, bodyResult.Caret.Offset);
@@ -18123,6 +18211,7 @@ public sealed class DocumentView : Control
                 bodyRange,
                 DocumentBodyDeleteDirection.Backward,
                 TrackChangesEnabled,
+                mergeForwardBoundary: false,
                 out var sharedResult))
         {
             _caret = new DocPosition(sharedResult.Caret.BlockIndex, sharedResult.Caret.Offset);
@@ -18242,6 +18331,9 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetProofingLanguage(string? languageTag)
     {
+        if (IsEditingLocked)
+            return;
+
         var sel = NormalizedSelection();
         int[] selectedBlocks;
         int startOffset;
@@ -18278,10 +18370,8 @@ public sealed class DocumentView : Control
         ApplyProofingLanguagePlan(plan);
     }
 
-    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan)
-        => _editingSession.TryApplyProofingLanguage(
-            plan,
-            (_, paragraph) => IsEditable(paragraph));
+    private void ApplyProofingLanguagePlan(ProofingLanguageApplyPlan plan) =>
+        _editingSession.TryApplyProofingLanguage(plan);
 
     public bool ToggleSpellCheck()
     {
@@ -19454,7 +19544,7 @@ public sealed class DocumentView : Control
     public void SetPageSettings(PageSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        DesignEdits.SetPageSettings(settings);
+        DesignEdits.SetPageSettings(settings, CurrentPageSettingsSectionIndex());
     }
 
     /// <summary>
@@ -19465,9 +19555,7 @@ public sealed class DocumentView : Control
     {
         ArgumentNullException.ThrowIfNull(apply);
 
-        var settings = _doc.Page.Clone();
-        apply(settings);
-        SetPageSettings(settings);
+        DesignEdits.UpdatePage(apply, CurrentPageSettingsSectionIndex());
     }
 
     /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
@@ -19596,12 +19684,9 @@ public sealed class DocumentView : Control
         var indices = SelectedParagraphIndices();
         if (indices.Count == 0)
             return;
-        var first = indices[0];
-        var last = indices[^1];
-        if (indices.Count != last - first + 1)
+        var first = _editingSession.ConvertParagraphsToTable(indices, delimiter, showBorders: true);
+        if (first < 0)
             return;
-
-        _editingSession.ConvertParagraphsToTable(indices, delimiter, showBorders: true);
         _cellCaret = (first, 0, 0, 0, 0);
         _hfCaret = null;
         _selectionAnchor = _caret = new DocPosition(first, 0);
@@ -21914,21 +21999,21 @@ public sealed class DocumentView : Control
     /// page sheet recolours immediately and round-trips through <c>w:background</c> on save.
     /// </summary>
     public void SetPageColor(string? colorHex) =>
-        DesignEdits.SetPageColor(colorHex);
+        DesignEdits.SetPageColor(colorHex, CurrentPageSettingsSectionIndex());
 
     /// <summary>
     /// AV-DESIGN: set (or clear) the page border (Design &gt; Page Borders). Pass null to remove it.
     /// Undoable; the border draws around the page immediately and round-trips through <c>w:pgBorders</c>.
     /// </summary>
     public void SetPageBorder(PageBorder? border) =>
-        DesignEdits.SetPageBorder(border);
+        DesignEdits.SetPageBorder(border, CurrentPageSettingsSectionIndex());
 
     /// <summary>
     /// AV-DESIGN: toggle the page border on/off with the given colour/width (Design &gt; Page Borders quick
     /// action). When no border is set one is added; otherwise it is cleared. Undoable.
     /// </summary>
     public void TogglePageBorder(string colorHex = "#000000", double widthPt = 1.0) =>
-        DesignEdits.TogglePageBorder(colorHex, widthPt);
+        DesignEdits.TogglePageBorder(colorHex, widthPt, CurrentPageSettingsSectionIndex());
 
     /// <summary>
     /// AV-DESIGN: set (or clear) the page watermark with full options (text, font, colour, layout,
@@ -21936,14 +22021,17 @@ public sealed class DocumentView : Control
     /// round-trips on save.
     /// </summary>
     public void SetWatermark(WatermarkOptions? options) =>
-        DesignEdits.SetWatermark(options);
+        DesignEdits.SetWatermark(options, CurrentPageSettingsSectionIndex());
 
     /// <summary>
     /// AV-DESIGN: convenience to set a plain-text watermark with sensible defaults (Word's preset
     /// watermarks like CONFIDENTIAL / DRAFT). A null/empty value removes the watermark.
     /// </summary>
     public void SetWatermarkText(string? text) =>
-        DesignEdits.SetWatermarkText(text);
+        DesignEdits.SetWatermarkText(text, CurrentPageSettingsSectionIndex());
+
+    private int CurrentPageSettingsSectionIndex() =>
+        PageSettingsSectionResolver.ResolveSectionIndex(_doc, _caret.Block);
 
     /// <summary>
     /// AV-STYLES: clear any named paragraph style from the spanned paragraphs (revert to the document

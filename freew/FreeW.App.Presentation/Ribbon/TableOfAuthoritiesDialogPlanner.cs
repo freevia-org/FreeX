@@ -41,6 +41,21 @@ public sealed record TableOfAuthoritiesDialogAcceptance(
     public bool IsAccepted => Options is not null && Validation is null;
 }
 
+public readonly record struct TableOfAuthoritiesDialogVisualMetrics(
+    double DialogWidth,
+    double OuterInset,
+    double LabelBottomMargin,
+    double ComboBoxHeight,
+    double ComboBottomMargin,
+    double PassimBottomMargin,
+    double KeepFormattingBottomMargin,
+    double ActionTopMargin,
+    double ActionButtonWidth,
+    double ActionSpacing,
+    double AvaloniaComboBoxHeightCompensation,
+    double AvaloniaOuterRightCompensation,
+    double AvaloniaActionTopCompensation);
+
 public static class TableOfAuthoritiesDialogPlanner
 {
     public const string Title = "Table of Authorities";
@@ -52,6 +67,20 @@ public static class TableOfAuthoritiesDialogPlanner
     public const string KeepOriginalFormattingLabel = "Keep original formatting";
     public const string TabLeaderLabel = "Tab leader:";
     public const string AllCategoriesLabel = "(All)";
+    public static TableOfAuthoritiesDialogVisualMetrics VisualMetrics { get; } = new(
+        DialogWidth: 380,
+        OuterInset: 16,
+        LabelBottomMargin: 4,
+        ComboBoxHeight: 24,
+        ComboBottomMargin: 8,
+        PassimBottomMargin: 6,
+        KeepFormattingBottomMargin: 8,
+        ActionTopMargin: 12,
+        ActionButtonWidth: 80,
+        ActionSpacing: 14,
+        AvaloniaComboBoxHeightCompensation: -2,
+        AvaloniaOuterRightCompensation: 1,
+        AvaloniaActionTopCompensation: 1);
     public const string MissingCategoryMessage = "Select a category.";
     public const string MissingTabLeaderMessage = "Select a tab leader.";
 

@@ -460,10 +460,27 @@ public sealed class DocumentViewHeaderFooterTests
             "even though that page is not document page 0 (AE2 fix)");
     }
 
-    // ── Test 10 (AE3): section with no own header falls back to document-level header ─────────────────
-
+    // ── Test 10 (AE3, corrected): a LEADING section with no own header and no earlier section to
+    // link to renders BLANK, not the LATER final section's header ───────────────────────────────────
+    //
+    // The original AE3 test asserted the opposite: that a leading section with an empty
+    // HeadersFooters should pull in `doc.FinalSectionHeadersFooters` ("DOC HEADER"). That was pinning
+    // a bug, not real Word behavior. `FinalSectionHeadersFooters` is not a document-wide default —
+    // per TextDocument.Sections (FreeW.Core.Model/TextDocument.cs), it is simply the header/footer set
+    // of the document's trailing w:sectPr, i.e. the LAST section's own definition. In OOXML, a section
+    // that omits w:headerReference/w:footerReference for a slot is "linked to previous" and inherits
+    // from the nearest PRECEDING section's definition of that slot. A section has no "previous" for
+    // the very first section in the document, so Word renders that slot blank — it never reaches
+    // FORWARD into a later section (here, the final one) merely because that section happens to define
+    // something. Reaching forward would make an early, otherwise-blank section display whatever the
+    // end of the document says, which is not what Word shows and not what round-trips through DOCX
+    // (the leading section's sectPr has no headerReference at all, so nothing links it to the final
+    // section). HeaderFooterPagePlannerTests.MapPagesToSections_EmptyLeadingSectionRendersBlankNotDocumentLevelStore
+    // (and its footer twin, MapPagesToSections_EmptyLeadingSectionFooterAlsoRendersBlankNotDocumentLevelStore)
+    // pin this at the planner-unit level; these two tests confirm the same thing through the actual
+    // DocumentView render path that AE3 originally exercised.
     [Fact]
-    public async Task Section_with_empty_HeadersFooters_inherits_document_level_header()
+    public async Task Section_with_empty_HeadersFooters_renders_blank_not_final_section_header()
     {
         IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
         var ran = await OnUiThread(() =>
@@ -471,7 +488,8 @@ public sealed class DocumentViewHeaderFooterTests
             var doc = TextDocument.CreateEmpty();
             doc.Blocks.Clear();
 
-            // Section 1: exists but has an EMPTY SectionHeadersFooters (no own header/footer).
+            // Section 1: exists but has an EMPTY SectionHeadersFooters (no own header/footer) and is
+            // the very first section, so it has no earlier section to link to.
             var sec1Page = new PageSettings();
             var sec1 = new Section(sec1Page, SectionBreakKind.NextPage);
             // sec1.HeadersFooters is left as a new SectionHeadersFooters() — all nulls → IsEmpty == true
@@ -479,8 +497,13 @@ public sealed class DocumentViewHeaderFooterTests
             sec1Marker.SectionBreak = sec1;
             doc.Blocks.Add(sec1Marker);
 
-            // Document-level (final section) header — should be inherited by section 1.
-            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("DOC HEADER");
+            // Final section needs its own body content so it actually lays out a (second) page —
+            // otherwise there is nothing for its header to appear on.
+            doc.Blocks.Add(new Paragraph("Final section body."));
+
+            // Final section defines its OWN header. It must render on the final section's page only —
+            // never on section 1's page, since section 1 cannot link forward to it.
+            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("FINAL SECTION HEADER");
 
             var view = new DocumentView();
             view.LoadDocument(doc);
@@ -491,9 +514,122 @@ public sealed class DocumentViewHeaderFooterTests
         if (!ran) return;
         items.Should().NotBeNull();
 
-        // The document header must appear even on a page whose section has no own header (AE3 fix).
-        items!.Should().Contain(i => i.Text == "DOC HEADER",
-            "a section with empty HeadersFooters must inherit the document-level header (AE3 fallback)");
+        // Section 1 is a single page (page index 0). Its header band is
+        // [pageTop, pageTop + marginTopDip) = [24, 120) — see the geometry comments on
+        // Header_items_appear_in_top_margin_band_for_simple_header_doc above. No item may land there,
+        // because section 1 defines nothing and has nothing earlier to inherit from.
+        const double section1HeaderBandEnd = 24.0 + 96.0; // pageTop (24) + marginTopDip (96) = 120
+        items!.Should().NotContain(i => i.Y < section1HeaderBandEnd,
+            "section 1 has an empty HeadersFooters and no earlier section to link to, so it must render " +
+            "blank rather than reaching forward into the final section's header");
+
+        // The final section's own header must still appear (on its own, later page) — the fix must not
+        // have deleted the final section's ability to show its own header, only stopped an EARLIER
+        // section from borrowing it.
+        items!.Should().Contain(i => i.Text == "FINAL SECTION HEADER" && i.Y >= section1HeaderBandEnd,
+            "the final section still owns and must still render its own header on its own page");
+    }
+
+    [Fact]
+    public async Task Section_with_empty_HeadersFooters_renders_blank_footer_not_final_section_footer()
+    {
+        // Footer twin of the header case above: an empty-HeadersFooters leading section must not
+        // borrow the final section's footer either.
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            var sec1Page = new PageSettings();
+            var sec1 = new Section(sec1Page, SectionBreakKind.NextPage);
+            var sec1Marker = new Paragraph("Section 1 body.");
+            sec1Marker.SectionBreak = sec1;
+            doc.Blocks.Add(sec1Marker);
+
+            // Final section needs its own body content so it actually lays out a (second) page —
+            // otherwise there is nothing for its footer to appear on.
+            doc.Blocks.Add(new Paragraph("Final section body."));
+
+            doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("FINAL SECTION FOOTER");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        items.Should().NotBeNull();
+
+        // Section 1's footer band starts at pageBottom - marginBottomDip = 1080 - 96 = 984 (page index
+        // 0 — see the geometry comments on Footer_items_appear_in_bottom_margin_band above). No item
+        // may land at or after that Y on page 1, because section 1 defines no footer of its own and has
+        // nothing earlier to inherit from. The next page's footer band starts far beyond page 1's
+        // bottom edge (~1080), so filtering to Y < 1080 isolates page 1.
+        const double page1BottomEdge = 24.0 + 792.0 * (96.0 / 72.0); // pageBottom for page index 0 ≈ 1080
+        items!.Should().NotContain(i => i.Y < page1BottomEdge,
+            "section 1 has an empty HeadersFooters and no earlier section to link to, so its footer must " +
+            "render blank rather than reaching forward into the final section's footer");
+
+        items!.Should().Contain(i => i.Text == "FINAL SECTION FOOTER" && i.Y >= page1BottomEdge,
+            "the final section still owns and must still render its own footer on its own page");
+    }
+
+    // ── Test 10b: a MIDDLE section with empty HeadersFooters still legitimately inherits from the
+    // nearest PRECEDING section (real "link to previous"), as opposed to the forward-reaching fallback
+    // the fix above removes. This guards against the fix overcorrecting into "empty HeadersFooters
+    // never inherits anything." ───────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task MiddleSection_with_empty_HeadersFooters_inherits_nearest_preceding_section_header()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+
+            // Section 1 defines its own header and is exactly one page.
+            var sec1Page = new PageSettings();
+            var sec1Hf = new SectionHeadersFooters { Header = new HeaderFooter("PRECEDING HEADER") };
+            var sec1 = new Section(sec1Page, SectionBreakKind.NextPage) { HeadersFooters = sec1Hf };
+            var sec1Marker = new Paragraph("Section 1 body.");
+            sec1Marker.SectionBreak = sec1;
+            doc.Blocks.Add(sec1Marker);
+
+            // Section 2 defines nothing of its own (link to previous) and is exactly one page — it
+            // must inherit "PRECEDING HEADER" from section 1, not "FINAL HEADER" from the final section.
+            var sec2Page = new PageSettings();
+            var sec2 = new Section(sec2Page, SectionBreakKind.NextPage);
+            var sec2Marker = new Paragraph("Section 2 body.");
+            sec2Marker.SectionBreak = sec2;
+            doc.Blocks.Add(sec2Marker);
+
+            // Final section needs its own body content so it actually lays out a (third) page.
+            doc.Blocks.Add(new Paragraph("Final section body."));
+
+            // Final section defines its own, different header.
+            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("FINAL HEADER");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        items.Should().NotBeNull();
+
+        // "PRECEDING HEADER" must appear twice: once on section 1's own page, once on section 2's page
+        // (inherited via link-to-previous). "FINAL HEADER" must appear exactly once, on the final
+        // section's own page — section 2 must not skip past its immediate predecessor to reach it.
+        items!.Count(i => i.Text == "PRECEDING HEADER").Should().Be(2,
+            "section 1's header must render on its own page AND be inherited onto section 2's page " +
+            "(section 2 has an empty HeadersFooters and links to the nearest preceding definer)");
+        items!.Count(i => i.Text == "FINAL HEADER").Should().Be(1,
+            "the final section's header must render only on its own page, not be borrowed by section 2 " +
+            "which has a nearer preceding definer (section 1) to link to instead");
     }
 
     [Fact]

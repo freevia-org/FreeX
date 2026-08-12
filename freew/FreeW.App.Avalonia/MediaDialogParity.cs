@@ -22,14 +22,12 @@ internal sealed class ImageAdjustDialog : FreeWDialogWindow
 
     private ImageAdjustDialog(double brightness, double contrast, double saturation, double transparency)
     {
-        var surface = ImageAdjustDialogPlanner.CompactSurface;
-        Title = surface.Title;
+        Title = "Picture Corrections";
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageAdjustDialogPlanner.BuildInitialState(
             brightness, contrast, saturation, transparency, CultureInfo.CurrentCulture);
@@ -37,18 +35,13 @@ internal sealed class ImageAdjustDialog : FreeWDialogWindow
         _contrast = Box(state.ContrastText);
         _saturation = Box(state.SaturationText);
         _transparency = Box(state.TransparencyText);
-        ImageChartDialogSurfaceSemantics.Apply(_brightness, surface.Field(ImageAdjustDialogField.Brightness));
-        ImageChartDialogSurfaceSemantics.Apply(_contrast, surface.Field(ImageAdjustDialogField.Contrast));
-        ImageChartDialogSurfaceSemantics.Apply(_saturation, surface.Field(ImageAdjustDialogField.Saturation));
-        ImageChartDialogSurfaceSemantics.Apply(_transparency, surface.Field(ImageAdjustDialogField.Transparency));
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
-        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
         var grid = Chrome.CreateGrid(5);
-        Chrome.AddField(grid, surface.Field(ImageAdjustDialogField.Brightness).Label, _brightness, 0);
-        Chrome.AddField(grid, surface.Field(ImageAdjustDialogField.Contrast).Label, _contrast, 1);
-        Chrome.AddField(grid, surface.Field(ImageAdjustDialogField.Saturation).Label, _saturation, 2);
-        Chrome.AddField(grid, surface.Field(ImageAdjustDialogField.Transparency).Label, _transparency, 3);
+        Chrome.AddField(grid, "Brightness (-100 to 100):", _brightness, 0);
+        Chrome.AddField(grid, "Contrast (-100 to 100):", _contrast, 1);
+        Chrome.AddField(grid, "Saturation (0 to 400):", _saturation, 2);
+        Chrome.AddField(grid, "Transparency (0 to 100):", _transparency, 3);
         Grid.SetRow(_status, 4);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
@@ -121,14 +114,12 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         string title,
         bool isGroupLocal)
     {
-        var surface = ImagePositionDialogPlanner.Surface;
         Title = title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface with { AutomationName = title });
 
         var state = ImagePositionDialogPlanner.BuildInitialState(
             horizontalOffset, verticalOffset, horizontalAnchor, verticalAnchor, CultureInfo.CurrentCulture);
@@ -142,18 +133,13 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
             state.VerticalAnchorIndex);
         _horizontalAnchor.IsEnabled = !isGroupLocal;
         _verticalAnchor.IsEnabled = !isGroupLocal;
-        ImageChartDialogSurfaceSemantics.Apply(_horizontal, surface.Field(ImagePositionDialogField.HorizontalOffset));
-        ImageChartDialogSurfaceSemantics.Apply(_horizontalAnchor, surface.Field(ImagePositionDialogField.HorizontalAnchor));
-        ImageChartDialogSurfaceSemantics.Apply(_vertical, surface.Field(ImagePositionDialogField.VerticalOffset));
-        ImageChartDialogSurfaceSemantics.Apply(_verticalAnchor, surface.Field(ImagePositionDialogField.VerticalAnchor));
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
-        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
         var grid = Chrome.CreateGrid(7);
-        Chrome.AddField(grid, surface.Field(ImagePositionDialogField.HorizontalOffset).Label, _horizontal, 0);
-        Chrome.AddField(grid, surface.Field(ImagePositionDialogField.HorizontalAnchor).Label, _horizontalAnchor, 1);
-        Chrome.AddField(grid, surface.Field(ImagePositionDialogField.VerticalOffset).Label, _vertical, 2);
-        Chrome.AddField(grid, surface.Field(ImagePositionDialogField.VerticalAnchor).Label, _verticalAnchor, 3);
+        Chrome.AddField(grid, "Horizontal offset (pt):", _horizontal, 0);
+        Chrome.AddField(grid, "Relative to:", _horizontalAnchor, 1);
+        Chrome.AddField(grid, "Vertical offset (pt):", _vertical, 2);
+        Chrome.AddField(grid, "Relative to:", _verticalAnchor, 3);
         Grid.SetRow(_status, 4);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
@@ -171,7 +157,7 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         double verticalOffset,
         HorizontalAnchor horizontalAnchor,
         VerticalAnchor verticalAnchor,
-        string title = ImagePositionDialogPlanner.DefaultTitle,
+        string title = "Picture Position",
         bool isGroupLocal = false) =>
         new ImagePositionDialog(
             horizontalOffset,
@@ -206,19 +192,16 @@ internal sealed class ChartTitleDialog : FreeWDialogWindow
 
     private ChartTitleDialog(string? currentTitle)
     {
-        var surface = ChartTitleDialogPlanner.Surface;
-        Title = surface.Title;
+        Title = "Chart Title";
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
         _title = Chrome.TextBox(currentTitle ?? string.Empty, 220);
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
-        ImageChartDialogSurfaceSemantics.Apply(_title, surface.Field(ChartTitleDialogField.Title));
 
         var grid = Chrome.CreateGrid(2);
-        Chrome.AddField(grid, surface.Field(ChartTitleDialogField.Title).Label, _title, 0);
+        Chrome.AddField(grid, "Title:", _title, 0);
         Chrome.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 1, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
         Opened += (_, _) => Chrome.FocusAndSelect(_title);
@@ -238,8 +221,7 @@ internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
 
     private ChartAxisTitlesDialog(string? categoryTitle, string? valueTitle)
     {
-        var surface = ChartAxisTitlesDialogPlanner.Surface;
-        Title = surface.Title;
+        Title = "Axis Titles";
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -247,13 +229,10 @@ internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
         ShowInTaskbar = false;
         _category = Chrome.TextBox(categoryTitle ?? string.Empty, 220);
         _value = Chrome.TextBox(valueTitle ?? string.Empty, 220);
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
-        ImageChartDialogSurfaceSemantics.Apply(_category, surface.Field(ChartAxisTitlesDialogField.Category));
-        ImageChartDialogSurfaceSemantics.Apply(_value, surface.Field(ChartAxisTitlesDialogField.Value));
 
         var grid = Chrome.CreateGrid(3);
-        Chrome.AddField(grid, surface.Field(ChartAxisTitlesDialogField.Category).Label, _category, 0);
-        Chrome.AddField(grid, surface.Field(ChartAxisTitlesDialogField.Value).Label, _value, 1);
+        Chrome.AddField(grid, "Category axis:", _category, 0);
+        Chrome.AddField(grid, "Value axis:", _value, 1);
         Chrome.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 2, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
         Opened += (_, _) => Chrome.FocusAndSelect(_category);
@@ -277,25 +256,20 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
 
     private ChartSizeDialog(double widthPt, double heightPt)
     {
-        var surface = ChartSizeDialogPlanner.Surface;
-        Title = surface.Title;
+        Title = "Chart Size";
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
         var state = ChartSizeDialogPlanner.BuildInitialState(widthPt, heightPt, CultureInfo.CurrentCulture);
         _width = Chrome.TextBox(state.WidthText, 120);
         _height = Chrome.TextBox(state.HeightText, 120);
-        ImageChartDialogSurfaceSemantics.Apply(_width, surface.Field(ChartSizeDialogField.Width));
-        ImageChartDialogSurfaceSemantics.Apply(_height, surface.Field(ChartSizeDialogField.Height));
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
-        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
         var grid = Chrome.CreateGrid(4);
-        Chrome.AddField(grid, surface.Field(ChartSizeDialogField.Width).Label, _width, 0);
-        Chrome.AddField(grid, surface.Field(ChartSizeDialogField.Height).Label, _height, 1);
+        Chrome.AddField(grid, "Width (pt):", _width, 0);
+        Chrome.AddField(grid, "Height (pt):", _height, 1);
         Grid.SetRow(_status, 2);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
@@ -327,6 +301,10 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
 
 internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 {
+    // Avalonia's compact TextBox/button templates paint three pixels less vertical chrome between
+    // the editor and inline actions than WPF. Keep the shared semantic margins authoritative and
+    // compensate only this host template so the action and footer baselines remain aligned.
+    internal const double InlineActionTemplateTopCompensation = 3;
     private readonly ComboBox _kind;
     private readonly ListBox _nodes;
     private readonly TextBox _edit;
@@ -335,20 +313,34 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 
     private InsertSmartArtDialog(SmartArt? seed)
     {
-        var dialogText = SmartArtDialogPlanner.ResolveText(UiText.Get);
-        Title = seed is null ? dialogText.InsertTitle : dialogText.EditTitle;
-        Width = 460;
+        var metrics = SmartArtDialogPlanner.VisualMetrics;
+        Title = seed is null ? "Insert SmartArt" : "Edit SmartArt Text";
+        Width = metrics.DialogWidth;
+        MinHeight = metrics.MinimumDialogHeight;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
         var state = SmartArtDialogPlanner.BuildInitialState(seed);
-        _kind = new ComboBox { ItemsSource = Enum.GetValues<SmartArtKind>(), SelectedItem = state.Kind, MinWidth = 180 };
-        _nodes = new ListBox { MinHeight = 130, MaxHeight = 220 };
+        _kind = new ComboBox
+        {
+            ItemsSource = Enum.GetValues<SmartArtKind>(),
+            SelectedItem = state.Kind,
+            MinWidth = 180,
+            Margin = new Thickness(0, 0, 0, metrics.LayoutControlBottomMargin),
+        };
+        _nodes = new ListBox
+        {
+            Height = metrics.NodeListHeight,
+            MinHeight = metrics.NodeListHeight,
+            MaxHeight = metrics.NodeListHeight,
+            Margin = new Thickness(0, 0, 0, metrics.NodeListBottomMargin),
+        };
         foreach (var text in state.NodeTexts)
             _nodes.Items.Add(text);
         _nodes.SelectedIndex = 0;
         _edit = Chrome.TextBox(state.NodeTexts[0], 300);
+        _edit.Margin = new Thickness(0, 0, 0, metrics.EditorBottomMargin);
         _nodes.SelectionChanged += (_, _) =>
         {
             if (_updating || _nodes.SelectedItem is not string text)
@@ -365,24 +357,39 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
         };
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
-        var add = Chrome.Button(dialogText.AddShapeLabel, AddNode);
-        var remove = Chrome.Button(dialogText.RemoveShapeLabel, RemoveNode);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 6, 0, 0) };
+        var add = Chrome.Button("Add Shape", AddNode, minWidth: 0);
+        var remove = Chrome.Button("Remove Shape", RemoveNode, minWidth: 0);
+        add.Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding);
+        remove.Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding);
+        var actions = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = metrics.InlineActionSpacing,
+            Margin = new Thickness(
+                0,
+                InlineActionTemplateTopCompensation,
+                0,
+                metrics.InlineActionBottomMargin),
+        };
         actions.Children.Add(add);
         actions.Children.Add(remove);
+        var ok = Chrome.Button("OK", Accept, isDefault: true, minWidth: metrics.FooterButtonWidth);
+        var cancel = Chrome.Button("Cancel", () => Close(null), isCancel: true, minWidth: metrics.FooterButtonWidth);
         Content = new StackPanel
         {
-            Margin = new Thickness(14),
+            Margin = new Thickness(metrics.OuterMargin),
             Children =
             {
-                new TextBlock { Text = dialogText.LayoutLabel, Margin = new Thickness(0, 0, 0, 4) },
+                new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) },
                 _kind,
-                new TextBlock { Text = dialogText.NodeTextLabel, Margin = new Thickness(0, 10, 0, 4) },
+                new TextBlock { Text = SmartArtDialogPlanner.NodeTextLabel, Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) },
                 _nodes,
                 _edit,
                 actions,
                 _status,
-                Chrome.ActionRow(Accept, () => Close(null)),
+                AvaloniaCompactDialogChrome.CreateActionRow(
+                    [ok, cancel],
+                    new Thickness(0, metrics.FooterTopMargin, 0, 0)),
             },
         };
         Opened += (_, _) => Chrome.FocusAndSelect(_edit);
@@ -394,7 +401,7 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
 
     private void AddNode()
     {
-        _nodes.Items.Add(SmartArtDialogPlanner.ResolveText(UiText.Get).NewItemLabel);
+        _nodes.Items.Add("New Item");
         _nodes.SelectedIndex = _nodes.Items.Count - 1;
         Chrome.FocusAndSelect(_edit);
     }
@@ -412,12 +419,12 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
     {
         var kind = _kind.SelectedItem is SmartArtKind selected ? selected : SmartArtKind.Process;
         if (SmartArtDialogPlanner.TryBuildResult(
-                kind, _nodes.Items.Cast<string>(), out var result, out var errorMessage, UiText.Get))
+                kind, _nodes.Items.Cast<string>(), out var result, out var errorMessage))
         {
             Close(result);
             return;
         }
-        _status.Text = errorMessage ?? SmartArtDialogPlanner.ResolveText(UiText.Get).EmptyNodesValidationMessage;
+        _status.Text = errorMessage ?? SmartArtDialogPlanner.EmptyNodesValidationMessage;
     }
 }
 
@@ -439,15 +446,13 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
 
     private InsertChartDialog(Chart? seed)
     {
-        var surface = InsertChartDialogPlanner.Surface;
-        Title = surface.Title;
+        Title = "Insert Chart";
         Width = 500;
         MinHeight = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
         var state = InsertChartDialogPlanner.BuildInitialState(seed, CultureInfo.CurrentCulture);
         _seriesNames = state.SeriesNames;
         _kind = new ComboBox
@@ -459,11 +464,7 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyComboBox(_kind, Chrome.Style);
         _title = Chrome.TextBox(state.Title, 0);
         _title.HorizontalAlignment = HorizontalAlignment.Stretch;
-        ImageChartDialogSurfaceSemantics.Apply(_kind, surface.Field(InsertChartDialogField.ChartType));
-        ImageChartDialogSurfaceSemantics.Apply(_title, surface.Field(InsertChartDialogField.Title));
-        ImageChartDialogSurfaceSemantics.Apply(_rowsPanel, surface.Field(InsertChartDialogField.Data));
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
-        ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
         BuildTableHeader();
         foreach (var row in state.Rows)
             AddRow(row.Category, row.SeriesValues);
@@ -485,11 +486,11 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         };
 
         var panel = new StackPanel();
-        AddLabeledControl(panel, surface.Field(InsertChartDialogField.ChartType).Label, _kind);
-        AddLabeledControl(panel, surface.Field(InsertChartDialogField.Title).Label, _title);
+        AddLabeledControl(panel, "Chart type:", _kind);
+        AddLabeledControl(panel, "Title (optional):", _title);
         panel.Children.Add(new TextBlock
         {
-            Text = surface.Field(InsertChartDialogField.Data).Label,
+            Text = "Chart data  (first column = category labels, remaining columns = series values):",
             Margin = new Thickness(0, 3, 0, 4),
             TextWrapping = TextWrapping.Wrap,
         });
@@ -526,7 +527,7 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
         for (var i = 0; i < _seriesNames.Count; i++)
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = SeriesColumnWidth() });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        AddHeaderCell(header, InsertChartDialogPlanner.CategoryColumnHeader, 0);
+        AddHeaderCell(header, "Category", 0);
         for (var i = 0; i < _seriesNames.Count; i++)
             AddHeaderCell(header, _seriesNames[i], i + 1);
         _rowsPanel.Children.Add(header);

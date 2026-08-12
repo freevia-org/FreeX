@@ -353,7 +353,7 @@ public class RibbonAndDocumentTests
     {
         var source = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "ProofingDialogs.cs"));
 
-        source.Should().Contain("ProofingLanguageDialogPlanner.Build(currentTag)");
+        source.Should().Contain("ProofingLanguageDialogPlanner.Build(currentTag, UiText.Get)");
         source.Should().Contain("choice.DisplayText");
         source.Should().NotContain("ProofingLanguageCatalog.CommonLanguages.Select");
     }

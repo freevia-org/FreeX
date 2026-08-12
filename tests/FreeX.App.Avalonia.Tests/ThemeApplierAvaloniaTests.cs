@@ -10,6 +10,20 @@ namespace FreeX.App.Avalonia.Tests;
 /// </summary>
 public sealed class ThemeApplierAvaloniaTests
 {
+    private static readonly (string Alias, string Prefixed)[] SharedAliases =
+    [
+        ("ThemeNeutralTextBrush", "TextBrush"),
+        ("ThemeNeutralMutedTextBrush", "MutedTextBrush"),
+        ("ThemeNeutralWhiteBrush", "WhiteBrush"),
+        ("ThemeNeutralDangerBrush", "DangerBrush"),
+        ("ThemeNeutralSheetSurfaceBrush", "SheetSurfaceBrush"),
+        ("ThemeAccentBrush", "AccentBrush"),
+        ("ThemeAccentDarkBrush", "AccentDarkBrush"),
+        ("ThemeAccentSoftBrush", "AccentSoftBrush"),
+        ("ThemeAccentPressedBrush", "AccentPressedBrush"),
+        ("ThemeRibbonButtonHoverBrush", "RibbonButtonHoverBrush"),
+    ];
+
     [Fact]
     public void AvaloniaApplier_FreeXAccentBrush_MatchesPalette()
     {
@@ -69,5 +83,45 @@ public sealed class ThemeApplierAvaloniaTests
         var midnightColor = ((ImmutableSolidColorBrush)midnightDict["FreeXStatusSurfaceBrush"]!).Color;
         midnightColor.Should().NotBe(defaultColor,
             because: "FreeXMidnight has a near-black status surface, not the default navy");
+    }
+
+    [Theory]
+    [InlineData("FreeX")]
+    [InlineData("FreeW")]
+    [InlineData("FreeP")]
+    public void AvaloniaApplier_EmitsWpfCompatibleSharedAliases(string product)
+    {
+        var theme = product switch
+        {
+            "FreeW" => BrandThemes.FreeW,
+            "FreeP" => BrandThemes.FreeP,
+            _ => BrandThemes.FreeX,
+        };
+        var dict = AvaloniaThemeApplier.BuildResources(theme, product);
+
+        foreach (var (alias, prefixed) in SharedAliases)
+        {
+            var aliasBrush = dict[alias].Should().BeOfType<ImmutableSolidColorBrush>().Subject;
+            var productBrush = dict[product + prefixed].Should().BeOfType<ImmutableSolidColorBrush>().Subject;
+            aliasBrush.Color.Should().Be(productBrush.Color);
+        }
+    }
+
+    [Fact]
+    public void AvaloniaApplier_ApplyMergesGeneratedResourcesLast()
+    {
+        var target = new global::Avalonia.Controls.ResourceDictionary();
+        var existing = new global::Avalonia.Controls.ResourceDictionary
+        {
+            ["ThemeAccentBrush"] = Brushes.Black,
+        };
+        target.MergedDictionaries.Add(existing);
+
+        AvaloniaThemeApplier.Apply(target, BrandThemes.FreeX, "FreeX");
+
+        target.MergedDictionaries.Should().HaveCount(2);
+        var applied = (global::Avalonia.Controls.ResourceDictionary)target.MergedDictionaries[1];
+        ((ImmutableSolidColorBrush)applied["ThemeAccentBrush"]!).Color
+            .Should().Be(AvaloniaThemeApplier.ToColor(BrandThemes.FreeX.Colors.Accent));
     }
 }

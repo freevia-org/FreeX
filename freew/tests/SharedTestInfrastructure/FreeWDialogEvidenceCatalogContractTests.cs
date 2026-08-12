@@ -16,11 +16,11 @@ public sealed class FreeWDialogEvidenceCatalogContractTests
     public void Catalog_has_unique_valid_routes_and_every_Wpf_route_is_paired()
     {
         Catalog.Validate().Should().BeEmpty();
-        Catalog.Routes.Should().HaveCount(99);
+        Catalog.Routes.Should().HaveCount(98);
         Catalog.Routes.Select(route => route.RouteId.ToUpperInvariant())
             .Should().OnlyHaveUniqueItems();
         Catalog.Routes.Count(route => route.Coverage == RouteCoverage.Paired).Should().Be(64);
-        Catalog.Routes.Count(route => route.Coverage == RouteCoverage.AvaloniaExtension).Should().Be(35);
+        Catalog.Routes.Count(route => route.Coverage == RouteCoverage.AvaloniaExtension).Should().Be(34);
         Catalog.Routes.Where(route => route.Wpf is not null)
             .Should().OnlyContain(route => route.Avalonia != null);
     }

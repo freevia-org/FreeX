@@ -83,6 +83,8 @@ public static class PptxPackageReader
         ms.Position = 0;
 
         using var archive = new ZipArchive(ms, ZipArchiveMode.Read, leaveOpen: false);
+        // Reject zip-bomb / oversized packages before any decompression-heavy reads (same guard xlsx uses).
+        WorkbookOpenSizeGuard.EnsureArchiveWithinLimits(archive);
         var snapshot = CapturePackageSnapshot(archive);
         var presentation = ReadArchive(archive);
         presentation.PackageSnapshot = snapshot;
@@ -198,11 +200,12 @@ public static class PptxPackageReader
             var masterRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(masterPath));
 
             // Use this master's own theme (or fall back to presentation.Theme) for layout parsing.
-            var masterColorScheme = (master.Theme ?? presentation.Theme).ColorScheme;
+            var masterEffectiveTheme = master.Theme ?? presentation.Theme;
+            var masterColorScheme = masterEffectiveTheme.ColorScheme;
             foreach (var (layoutId, _, layoutTarget) in masterRels.Where(r => r.Type == SlideLayoutRelType))
             {
                 var layoutPath = ResolveRelativeZipPath(masterDir, layoutTarget);
-                var layout = ReadSlideLayout(archive, layoutPath, layoutId, master.Id, masterColorScheme);
+                var layout = ReadSlideLayout(archive, layoutPath, layoutId, master.Id, masterColorScheme, masterEffectiveTheme);
                 presentation.Layouts.Add(layout);
             }
         }
@@ -231,7 +234,7 @@ public static class PptxPackageReader
                     var spTree = notesMasterRoot.Element(P + "cSld")?.Element(P + "spTree");
                     if (spTree is not null)
                     {
-                        foreach (var shape in ReadShapesFromTree(spTree, archive, notesMasterPath, notesMasterScheme))
+                        foreach (var shape in ReadShapesFromTree(spTree, archive, notesMasterPath, notesMasterScheme, theme: presentation.Theme))
                             presentation.NotesMasterPlaceholders.Add(shape);
                     }
 
@@ -291,7 +294,7 @@ public static class PptxPackageReader
             Slide slide;
             try
             {
-                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId);
+                slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId, presentation.Theme);
                 slide.NumericId = allSlides[si].NumericId;
             }
             catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
@@ -865,6 +868,39 @@ public static class PptxPackageReader
 
         theme.FontScheme.MajorLatinFont = sharedTheme.FontScheme.MajorLatinTypeface ?? theme.FontScheme.MajorLatinFont;
         theme.FontScheme.MinorLatinFont = sharedTheme.FontScheme.MinorLatinTypeface ?? theme.FontScheme.MinorLatinFont;
+
+        // Preserve the original a:fontScheme XML (majorFont/minorFont ea/cs typefaces that
+        // PresentationFontScheme does not model) so the writer can patch just the latin typeface
+        // back in on save instead of discarding ea/cs entirely. Mirrors FreeX's
+        // WorkbookTheme.WithFonts patch-preserve pattern.
+        theme.NativeFontSchemeXml = sharedTheme.NativeFontSchemeXml;
+
+        // a:fmtScheme (fillStyleLst / lnStyleLst / bgFillStyleLst / effectStyleLst) — needed to
+        // resolve p:style/a:fillRef, a:lnRef and a:effectRef on shapes (PowerPoint's Shape Styles
+        // gallery) AND so the writer can round-trip the real style lists (e.g. outer shadows)
+        // instead of regenerating a generic placeholder fmtScheme on every save.
+        if (!string.IsNullOrWhiteSpace(sharedTheme.NativeFormatSchemeXml))
+        {
+            try
+            {
+                var fmtScheme = XElement.Parse(sharedTheme.NativeFormatSchemeXml);
+                theme.FillStyles = fmtScheme.Element(A + "fillStyleLst")?.Elements().ToList()
+                    ?? new List<XElement>();
+                theme.LineStyles = fmtScheme.Element(A + "lnStyleLst")?.Elements(A + "ln").ToList()
+                    ?? new List<XElement>();
+                theme.BackgroundFillStyles = fmtScheme.Element(A + "bgFillStyleLst")?.Elements().ToList()
+                    ?? new List<XElement>();
+                theme.EffectStyles = fmtScheme.Element(A + "effectStyleLst")?.Elements(A + "effectStyle").ToList()
+                    ?? new List<XElement>();
+            }
+            catch (System.Xml.XmlException)
+            {
+                // Malformed fmtScheme in a hand-edited or third-party file — leave the style
+                // lists empty. ApplyShapeStyleReferences degrades gracefully (fillRef/effectRef
+                // become no-ops) rather than failing the whole import.
+            }
+        }
+
         return theme;
     }
 
@@ -905,7 +941,7 @@ public static class PptxPackageReader
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
         {
-            foreach (var shape in ReadShapesFromTree(spTree, archive, masterPath, scheme))
+            foreach (var shape in ReadShapesFromTree(spTree, archive, masterPath, scheme, theme: theme))
                 master.Placeholders.Add(shape);
         }
 
@@ -1057,7 +1093,8 @@ public static class PptxPackageReader
     // ── Slide Layout ─────────────────────────────────────────────────────────────
 
     private static SlideLayout ReadSlideLayout(
-        ZipArchive archive, string layoutPath, string layoutId, string masterId, PresentationColorScheme scheme)
+        ZipArchive archive, string layoutPath, string layoutId, string masterId, PresentationColorScheme scheme,
+        PresentationTheme? theme = null)
     {
         var layout = new SlideLayout { Id = layoutId, MasterId = masterId, PartPath = layoutPath };
 
@@ -1073,13 +1110,18 @@ public static class PptxPackageReader
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
         {
-            foreach (var shape in ReadShapesFromTree(spTree, archive, layoutPath, scheme))
+            foreach (var shape in ReadShapesFromTree(spTree, archive, layoutPath, scheme, theme: theme))
                 layout.Placeholders.Add(shape);
         }
 
         // p:clrMapOvr — per-layout color map override (same shape as the per-slide one:
         // <a:overrideClrMapping .../> → explicit override, <a:masterClrMapping/> or absent → inherit).
         layout.ColorMapOverride = ReadColorMapOverride(xml.Root);
+
+        // p:sldLayout/@showMasterSp — per-layout master decoration visibility ("Hide Background
+        // Graphics" authored against the layout in Slide Master view). OOXML defaults to true;
+        // only an explicit "0"/"false" turns it off.
+        layout.ShowMasterShapes = ReadBooleanOrDefault(xml.Root.Attribute("showMasterSp")?.Value, defaultValue: true);
 
         return layout;
     }
@@ -1111,7 +1153,8 @@ public static class PptxPackageReader
         PresentationColorScheme scheme, List<SlideLayout> layouts,
         Dictionary<string, TableStyleData>? tableStyles = null,
         List<Slide>? allSlides = null,
-        IReadOnlyDictionary<string, string>? slidePartPathToId = null)
+        IReadOnlyDictionary<string, string>? slidePartPathToId = null,
+        PresentationTheme? theme = null)
     {
         var slide = new Slide { Id = slideId };
 
@@ -1138,7 +1181,7 @@ public static class PptxPackageReader
         var spTree = xml.Root.Element(P + "cSld")?.Element(P + "spTree");
         if (spTree is not null)
         {
-            foreach (var shape in ReadShapesFromTree(spTree, archive, slidePath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId))
+            foreach (var shape in ReadShapesFromTree(spTree, archive, slidePath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, theme: theme))
                 slide.Shapes.Add(shape);
         }
 
@@ -1275,7 +1318,8 @@ public static class PptxPackageReader
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
-        int groupDepth = 0)
+        int groupDepth = 0,
+        PresentationTheme? theme = null)
     {
         if (groupDepth > MaxShapeGroupNestingDepth)
             yield break;
@@ -1306,11 +1350,11 @@ public static class PptxPackageReader
 
             SlideShape? shape = effectiveEl.Name.LocalName switch
             {
-                "sp"           => ReadSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
+                "sp"           => ReadSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath, theme),
                 "pic"          => ReadPic(effectiveEl, archive, partPath, scheme,
                                       slideRels, allSlides, slideDir, slidePartPathToId),
-                "cxnSp"        => ReadCxnSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath),
-                "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, groupDepth),
+                "cxnSp"        => ReadCxnSp(effectiveEl, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath, theme),
+                "grpSp"        => ReadGrpSp(effectiveEl, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, groupDepth, theme),
                 // EA3: pass mcChoiceEl so ReadGraphicFrame can capture the Requires token
                 "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
                                       slideRels, allSlides, slideDir, slidePartPathToId,
@@ -4724,7 +4768,8 @@ public static class PptxPackageReader
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
         ZipArchive? archive = null,
-        string? partPath = null)
+        string? partPath = null,
+        PresentationTheme? theme = null)
     {
         var cNvPr = sp.Element(P + "nvSpPr")?.Element(P + "cNvPr");
         var nvPr = sp.Element(P + "nvSpPr")?.Element(P + "nvPr");
@@ -4761,7 +4806,7 @@ public static class PptxPackageReader
         var txBody = sp.Element(P + "txBody");
         if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath);
 
-        ApplyShapeStyleReferences(sp.Element(P + "style"), shape, scheme);
+        ApplyShapeStyleReferences(sp.Element(P + "style"), shape, scheme, theme);
 
         return shape;
     }
@@ -5146,7 +5191,8 @@ public static class PptxPackageReader
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
         ZipArchive? archive = null,
-        string? partPath = null)
+        string? partPath = null,
+        PresentationTheme? theme = null)
     {
         var cNvPr = cxnSp.Element(P + "nvCxnSpPr")?.Element(P + "cNvPr");
 
@@ -5196,6 +5242,11 @@ public static class PptxPackageReader
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
         shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
 
+        // Connectors carry the same p:style element as p:sp (CT_Connector shares CT_ShapeStyle),
+        // so a connector styled from the gallery needs the same fillRef/lnRef/effectRef/fontRef
+        // resolution as a shape.
+        ApplyShapeStyleReferences(cxnSp.Element(P + "style"), shape, scheme, theme);
+
         return shape;
     }
 
@@ -5207,7 +5258,8 @@ public static class PptxPackageReader
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
-        int groupDepth = 0)
+        int groupDepth = 0,
+        PresentationTheme? theme = null)
     {
         var cNvPr = grpSp.Element(P + "nvGrpSpPr")?.Element(P + "cNvPr");
 
@@ -5230,7 +5282,7 @@ public static class PptxPackageReader
 
         // groupDepth + 1: descending into this group's children costs one more stack level, and the
         // tree reader stops once the nesting exceeds MaxShapeGroupNestingDepth.
-        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, groupDepth + 1))
+        foreach (var child in ReadShapesFromTree(grpSp, archive, partPath, scheme, tableStyles, slideRels, allSlides, slideDir, slidePartPathToId, groupDepth + 1, theme))
             shape.Children.Add(child);
 
         return shape;
@@ -5319,7 +5371,8 @@ public static class PptxPackageReader
     private static void ApplyShapeStyleReferences(
         XElement? style,
         SlideShape shape,
-        PresentationColorScheme scheme)
+        PresentationColorScheme scheme,
+        PresentationTheme? theme)
     {
         if (style is null) return;
 
@@ -5347,6 +5400,28 @@ public static class PptxPackageReader
             }
         }
 
+        // p:style/a:fillRef: PowerPoint's built-in Shape Styles gallery encodes a shape's fill
+        // purely as a fillStyleLst/bgFillStyleLst reference with a phClr placeholder color — the
+        // shape's own spPr carries no explicit fill at all, so without this the shape renders
+        // blank. Only materialize it when the shape did not author an explicit override.
+        if (shape.Fill is null && theme is not null)
+        {
+            var fillReference = style.Element(A + "fillRef");
+            var resolvedFill = ResolveStyleMatrixFill(fillReference, theme, scheme);
+            if (resolvedFill is not null)
+                shape.Fill = resolvedFill;
+        }
+
+        // p:style/a:effectRef: same story for the shadow/glow/soft-edge effects a gallery style
+        // carries (effectStyleLst), which likewise have no explicit spPr effectLst counterpart.
+        if (shape.Effects is null && theme is not null)
+        {
+            var effectReference = style.Element(A + "effectRef");
+            var resolvedEffects = ResolveStyleMatrixEffects(effectReference, theme, scheme);
+            if (resolvedEffects is not null)
+                shape.Effects = resolvedEffects;
+        }
+
         if (shape.TextBody is null) return;
 
         var fontColor = PptxColorReader.TryReadColor(style.Element(A + "fontRef"), scheme);
@@ -5355,6 +5430,101 @@ public static class PptxPackageReader
         foreach (var paragraph in shape.TextBody.Paragraphs)
         foreach (var run in paragraph.Runs.Where(run => run.Color is null))
             run.Color = fontColor;
+    }
+
+    /// <summary>
+    /// Resolves a <c>p:style/a:fillRef</c> against the theme's format scheme
+    /// (<see cref="PresentationTheme.FillStyles"/> / <see cref="PresentationTheme.BackgroundFillStyles"/>),
+    /// substituting the reference's actual color for the style entry's <c>phClr</c> placeholder.
+    /// Per ECMA-376, an <c>idx</c> of 1000 or greater refers to the background fill style list
+    /// using (idx - 1000) as the 1-based index; anything below that indexes the plain fill style
+    /// list. Returns null when there is no reference, no matching entry, or the entry has no
+    /// fill color FreeP understands (e.g. a:noFill, or an unresolvable color).
+    /// </summary>
+    private static ShapeFill? ResolveStyleMatrixFill(
+        XElement? fillReference, PresentationTheme theme, PresentationColorScheme scheme)
+    {
+        if (fillReference is null) return null;
+        if (!int.TryParse(fillReference.Attribute("idx")?.Value, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var idx) || idx <= 0)
+            return null;
+
+        var useBackgroundList = idx >= 1000;
+        var list = useBackgroundList ? theme.BackgroundFillStyles : theme.FillStyles;
+        var oneBasedIndex = useBackgroundList ? idx - 1000 : idx;
+        if (oneBasedIndex < 1 || oneBasedIndex > list.Count) return null;
+
+        var styleEntry = list[oneBasedIndex - 1];
+        var refColorEl = fillReference.Elements().FirstOrDefault();
+        var substituted = SubstitutePlaceholderColor(styleEntry, refColorEl);
+
+        // PptxColorReader.TryReadFill expects a parent element that directly contains the fill
+        // child (a:solidFill/a:gradFill/...); the format-scheme entry IS that child, so wrap it.
+        var wrapper = new XElement("styleFillWrapper", substituted);
+        return PptxColorReader.TryReadFill(wrapper, scheme);
+    }
+
+    /// <summary>
+    /// Resolves a <c>p:style/a:effectRef</c> against the theme's <see cref="PresentationTheme.EffectStyles"/>
+    /// (<c>a:effectStyleLst</c>), substituting the reference's actual color for any <c>phClr</c>
+    /// placeholder inside the referenced <c>a:effectStyle</c>. Returns null when there is no
+    /// reference, no matching entry, or the entry carries no effects FreeP understands.
+    /// </summary>
+    private static ShapeEffects? ResolveStyleMatrixEffects(
+        XElement? effectReference, PresentationTheme theme, PresentationColorScheme scheme)
+    {
+        if (effectReference is null) return null;
+        if (!int.TryParse(effectReference.Attribute("idx")?.Value, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var idx) || idx <= 0 || idx > theme.EffectStyles.Count)
+            return null;
+
+        var effectStyle = theme.EffectStyles[idx - 1];
+        var refColorEl = effectReference.Elements().FirstOrDefault();
+        var substituted = SubstitutePlaceholderColor(effectStyle, refColorEl);
+
+        var effectLst = substituted.Element(A + "effectLst");
+        var fx = effectLst is not null ? ReadEffectLst(effectLst, scheme) : null;
+
+        var sp3d = substituted.Element(A + "sp3d");
+        var scene3d = substituted.Element(A + "scene3d");
+        if (sp3d is not null || scene3d is not null)
+        {
+            fx ??= new ShapeEffects();
+            if (sp3d is not null) ReadSp3d(sp3d, fx, scheme);
+            if (scene3d is not null) ReadScene3d(scene3d, fx);
+        }
+
+        return fx;
+    }
+
+    /// <summary>
+    /// Clones <paramref name="source"/>, replacing every <c>a:schemeClr[@val='phClr']</c>
+    /// placeholder with the color element referenced from <paramref name="refColorEl"/>. Theme
+    /// format-scheme entries (fillStyleLst/bgFillStyleLst/effectStyleLst) author their colors
+    /// generically against this "parent color" placeholder; fillRef/lnRef/effectRef supply the
+    /// actual color to substitute. The style entry's own modifiers on the placeholder
+    /// (lumMod/lumOff/tint/shade/satMod/...) are preserved, and any modifiers present directly on
+    /// the reference color itself are appended on top (rare, but valid per the schema).
+    /// No-op (returns an unmodified clone) when <paramref name="refColorEl"/> is null or no
+    /// placeholder is found.
+    /// </summary>
+    private static XElement SubstitutePlaceholderColor(XElement source, XElement? refColorEl)
+    {
+        var clone = new XElement(source);
+        if (refColorEl is null) return clone;
+
+        foreach (var placeholder in clone.Descendants(A + "schemeClr")
+                     .Where(e => string.Equals(e.Attribute("val")?.Value, "phClr", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var replacement = new XElement(refColorEl.Name,
+                refColorEl.Attributes().Where(a => !a.IsNamespaceDeclaration));
+            replacement.Add(placeholder.Elements());
+            replacement.Add(refColorEl.Elements());
+            placeholder.ReplaceWith(replacement);
+        }
+
+        return clone;
     }
 
     // ── Blip resolver ─────────────────────────────────────────────────────────

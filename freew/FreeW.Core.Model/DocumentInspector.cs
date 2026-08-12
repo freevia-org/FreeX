@@ -32,6 +32,26 @@ public sealed record InspectionResult(
     public bool IsClean => Comments == 0 && Revisions == 0 && NonEmptyProperties == 0 && Bookmarks == 0;
 }
 
+/// <summary>Categories selected for removal by the Document Inspector.</summary>
+public sealed record InspectionRemovalSelection(
+    bool Comments,
+    bool Revisions,
+    bool Properties,
+    bool Bookmarks)
+{
+    public bool Any => Comments || Revisions || Properties || Bookmarks;
+}
+
+/// <summary>Inspection snapshots immediately before and after a selected removal operation.</summary>
+public sealed record InspectionRemovalResult(InspectionResult Before, InspectionResult After)
+{
+    public InspectionResult Removed => new(
+        Math.Max(0, Before.Comments - After.Comments),
+        Math.Max(0, Before.Revisions - After.Revisions),
+        Math.Max(0, Before.NonEmptyProperties - After.NonEmptyProperties),
+        Math.Max(0, Before.Bookmarks - After.Bookmarks));
+}
+
 /// <summary>
 /// Pure, WPF-free "Document Inspector": reports — and optionally removes — the metadata a document
 /// accumulates that a user may want to strip before sharing (review comments, tracked revisions,
@@ -66,6 +86,29 @@ public static class DocumentInspector
             .Sum(p => p.BookmarkNames.Count(n => !string.IsNullOrEmpty(n)));
 
         return new InspectionResult(comments, revisions, properties, bookmarks);
+    }
+
+    /// <summary>
+    /// Applies exactly the categories selected by the inspector dialog and returns before/after evidence.
+    /// This is the canonical renderer-independent execution path; unselected categories remain untouched.
+    /// </summary>
+    public static InspectionRemovalResult RemoveSelected(
+        TextDocument document,
+        InspectionRemovalSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(selection);
+
+        var before = Inspect(document);
+        if (selection.Comments)
+            RemoveComments(document);
+        if (selection.Revisions)
+            RemoveRevisions(document);
+        if (selection.Properties)
+            RemoveProperties(document);
+        if (selection.Bookmarks)
+            RemoveBookmarks(document);
+        return new InspectionRemovalResult(before, Inspect(document));
     }
 
     /// <summary>
