@@ -296,15 +296,8 @@ public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostVie
     private bool _restoreSlidePaneFocusAfterRefresh;
     private sealed record SlidePaneSectionHeaderTag(string SectionId, int SectionIndex);
 
-    // ── Smoke surface ──────────────────────────────────────────────────────────
-
-    /// <summary>True once the ribbon has been built. Read by the launch-smoke coordinator.</summary>
-    internal bool HasToolbar { get; private set; }
-
-    /// <summary>Current slide count — read by the launch-smoke coordinator.</summary>
+    internal bool HasToolbar => _ribbonControl is not null;
     internal int SlideCount => _presentation.Slides.Count;
-
-    /// <summary>Current slide index (0-based) — read by the launch-smoke coordinator.</summary>
     internal int CurrentSlideIndex => Editor?.CurrentSlideIndex ?? -1;
     internal bool RibbonKeyTipsVisibleForTests => _ribbonKeyTipsVisible;
     internal bool RibbonKeyTipMenuOpenForTests => _ribbonKeyTipMenuItems is not null;
@@ -2458,7 +2451,6 @@ public sealed partial class MainWindow : Window, IPresentationAltTextPaneHostVie
             onFileTabSelected: ShowBackstage,
             stateStore: _ribbonStateStore);
 
-        HasToolbar = true;
         return new Border
         {
             Height          = FreePShellVisualMetrics.RibbonHeight,

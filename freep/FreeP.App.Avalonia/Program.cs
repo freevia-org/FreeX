@@ -1,8 +1,6 @@
 using Avalonia;
 using Avalonia.Fonts.Inter;
-using FreeP.App.Avalonia.Smoke;
 using FreeP.App.Compositor;
-using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 
 namespace FreeP.App.Avalonia;
@@ -58,21 +56,9 @@ internal static class Program
 
     private static SisterAvaloniaLaunchPreparation PrepareLaunch(string[] args)
     {
-        // Headless engine smoke (no display): exercise the model + .pptx round-trip and exit.
-        if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))
-            return SisterAvaloniaLaunchPreparation.Exit(packagingExit);
-
-        // Parse the platform-neutral --launch-smoke contract (shared with the FreeX/FreeW Linux lanes).
-        if (!LaunchSmokeOptions.TryParse(args, out var launchSmoke, out var startupArguments, out var error))
-        {
-            Console.Error.WriteLine(error);
-            return SisterAvaloniaLaunchPreparation.Exit(1);
-        }
-
-        App.StartupArguments = startupArguments;
+        App.StartupArguments = args;
         App.EnableStartupDirtyTrace = false;
-        App.LaunchSmokeOptions = launchSmoke;
-        return SisterAvaloniaLaunchPreparation.Continue(startupArguments);
+        return SisterAvaloniaLaunchPreparation.Continue(args);
     }
 
     public static AppBuilder BuildAvaloniaApp() =>

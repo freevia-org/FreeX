@@ -82,8 +82,10 @@ $config = switch ($App) {
         @{
             WpfProject = "freep\FreeP.App.Host\FreeP.App.Host.csproj"
             AvaloniaProject = "freep\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
+            AvaloniaValidationProject = "freep\TestSupport\Validation.Avalonia\FreeP.Validation.Avalonia.csproj"
             WpfHost = "FreeP.App.Host"
             AvaloniaHost = "FreeP"
+            AvaloniaValidationHost = "FreeP.Validation.Avalonia"
         }
     }
 }
@@ -165,6 +167,42 @@ foreach ($runtime in $Runtimes) {
         throw "Publish output missing expected apphost '$expectedAppHost'."
     }
     $expectedExe = (Resolve-Path -LiteralPath $expectedAppHost).Path
+    $smokeExecutable = $expectedExe
+
+    if (-not $isWindowsRuntime -and $App -in @("FreeW", "FreeP")) {
+        $validationPublishDir = Join-Path $OutputDir "validation\$App-$runtime"
+        if (Test-Path -LiteralPath $validationPublishDir) {
+            Remove-Item -LiteralPath $validationPublishDir -Recurse -Force
+        }
+        New-Item -ItemType Directory -Force -Path $validationPublishDir | Out-Null
+
+        $validationProject = Join-Path $repoRoot $config.AvaloniaValidationProject
+        $validationPublishArgs = @(
+            "publish", $validationProject,
+            "--configuration", $Configuration,
+            "--framework", "net10.0",
+            "--runtime", $runtime,
+            "--self-contained", "true",
+            "-p:UseAppHost=true",
+            "-p:PublishSingleFile=false",
+            "-p:Version=$Version",
+            "-p:InformationalVersion=$Version+$shortSha",
+            "--output", $validationPublishDir
+        )
+        if ($App -eq "FreeP") {
+            $validationPublishArgs += "-p:FreePWindowsBuild=false"
+        }
+        & dotnet @validationPublishArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "dotnet publish failed for $App $runtime validation host with exit code $LASTEXITCODE."
+        }
+
+        $smokeExecutable = Join-Path $validationPublishDir $config.AvaloniaValidationHost
+        if (-not (Test-Path -LiteralPath $smokeExecutable)) {
+            throw "Validation publish output missing expected apphost '$smokeExecutable'."
+        }
+        $smokeExecutable = (Resolve-Path -LiteralPath $smokeExecutable).Path
+    }
 
     $smokeRan = $false
     if ($isWindowsRuntime -and $App -eq "FreeX") {
@@ -203,32 +241,6 @@ foreach ($runtime in $Runtimes) {
         $smokeRan = $true
         $smokeArguments = @("--packaging-smoke")
         $smokeReportPath = $null
-        $smokeExecutable = $expectedExe
-        if ($App -eq "FreeW") {
-            $validationPublishDir = Join-Path $OutputDir "validation\$App-$runtime"
-            if (Test-Path -LiteralPath $validationPublishDir) {
-                Remove-Item -LiteralPath $validationPublishDir -Recurse -Force
-            }
-            New-Item -ItemType Directory -Force -Path $validationPublishDir | Out-Null
-            $validationProject = Join-Path $repoRoot $config.AvaloniaValidationProject
-            & dotnet publish $validationProject `
-                --configuration $Configuration `
-                --framework net10.0 `
-                --runtime $runtime `
-                --self-contained true `
-                -p:UseAppHost=true `
-                -p:PublishSingleFile=false `
-                -p:Version=$Version `
-                -p:InformationalVersion=$Version+$shortSha `
-                --output $validationPublishDir
-            if ($LASTEXITCODE -ne 0) {
-                throw "dotnet publish failed for $App $runtime validation host with exit code $LASTEXITCODE."
-            }
-            $smokeExecutable = Join-Path $validationPublishDir $config.AvaloniaValidationHost
-            if (-not (Test-Path -LiteralPath $smokeExecutable)) {
-                throw "Validation publish output missing expected apphost '$smokeExecutable'."
-            }
-        }
         if ($App -eq "FreeP") {
             $smokeReportPath = Join-Path $OutputDir "$App-$runtime-packaging-smoke.txt"
             $smokeArguments += $smokeReportPath

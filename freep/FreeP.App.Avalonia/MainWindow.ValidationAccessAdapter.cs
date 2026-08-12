@@ -37,7 +37,9 @@ public sealed partial class MainWindow
         internal string Title => _owner.Title ?? string.Empty;
         internal bool IsDirty => _owner.IsDirty;
         internal int DirtyGeneration => _owner.DirtyGeneration;
+        internal bool HasToolbar => _owner.HasToolbar;
         internal int SlideCount => _owner.SlideCount;
+        internal int CurrentSlideIndex => _owner.CurrentSlideIndex;
         internal Presentation Presentation => _owner._presentation;
         internal EditingSession Editor => _owner.Editor;
         internal IReadOnlyList<StartupDirtyTraceEntry> StartupDirtyTrace => _owner.StartupDirtyTraceForTests;

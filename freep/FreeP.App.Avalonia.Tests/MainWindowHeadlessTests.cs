@@ -22,11 +22,11 @@ using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
-using FreeP.App.Avalonia.Smoke;
 using FreeP.App.Recording;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
+using FreeP.Validation.Avalonia;
 
 [assembly: AvaloniaTestApplication(typeof(FreeP.App.Avalonia.Tests.FreePHeadlessApp))]
 
@@ -9083,7 +9083,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var report = Path.Combine(TempDirectory, "packaging-smoke.txt");
         {
             var args = new[] { "--packaging-smoke", report };
-            var result = PackagingSmoke.TryRun(
+            var result = PackagingSmokeCommand.TryRun(
                 args, TextWriter.Null, TextWriter.Null, out var exit);
             result.Should().BeTrue("--packaging-smoke must be handled");
             exit.Should().Be(0, "packaging smoke must pass on an empty presentation");

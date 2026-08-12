@@ -3,7 +3,6 @@ using Free.Shared.AppServices;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
 using Free.Shared.Shell.Avalonia;
-using FreeP.App.Avalonia.Smoke;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Avalonia;
@@ -11,7 +10,6 @@ namespace FreeP.App.Avalonia;
 public sealed class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
-    internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
     internal static bool EnableStartupDirtyTrace { get; set; }
     internal static Action<MainWindow>? ExternalStartupCoordinator { get; set; }
     internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeP;
@@ -52,8 +50,6 @@ public sealed class App : Application
                         externalStartupCoordinator(mainWindow);
                         return;
                     }
-                    if (LaunchSmokeOptions is { } options)
-                        LaunchSmokeCoordinator.Start(mainWindow, options);
                 }));
 
         base.OnFrameworkInitializationCompleted();
