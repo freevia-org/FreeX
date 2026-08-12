@@ -1060,7 +1060,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 OpenConsolidate = Consolidate,
                 InsertTable = () => _ = InsertTableFromSelectionAsync(),
                 ConditionalFormatting = () => _ = ShowConditionalFormatNewRuleDialogAsync(),
-                QuickAnalysis = () => _ = ShowQuickAnalysisDialogAsync(),
                 InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
                 InsertPicture = () => _ = InsertPictureFromFileAsync(),
                 InsertShape = InsertShapeAtActiveCell,
@@ -1089,93 +1088,72 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 SetNumberFormat = ApplyRibbonNumberFormat,
                 ExtraCommands = new Dictionary<string, Action>(StringComparer.Ordinal)
                 {
-                    // Number Format dropdown items.
-                    ["home.fmtGeneral"] = () => ApplySelectedRangeNumberFormat(GeneralNumberFormat, "Applied General format to", "Number format failed."),
-                    ["home.fmtNumber"] = () => ApplySelectedRangeNumberFormat("0.00", "Applied Number format to", "Number format failed."),
-                    ["home.fmtCurrency"] = ApplySelectedRangeCurrencyFormat,
-                    ["home.fmtDate"] = () => ApplySelectedRangeNumberFormat("m/d/yyyy", "Applied Date format to", "Number format failed."),
-                    ["home.fmtPercent"] = ApplySelectedRangePercentFormat,
-                    // Fill Color dropdown items.
-                    ["home.fillNone"] = ClearSelectedRangeFill,
-                    ["home.fillYellow"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
-                    ["home.fillGreen"] = () => ApplySelectedRangeFillColor(new CellColor(198, 239, 206)),
                     // Borders dropdown items.
-                    ["home.bordersAll"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
-                    ["home.bordersOutside"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Outside),
-                    ["home.bordersNone"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
+                    ["All Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["Outside Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.Outside),
+                    ["No Border"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder),
                     // Paste split-button menu items.
-                    ["home.pasteValues"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
-                    ["home.pasteFormat"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
+                    ["Paste Values"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values"),
+                    ["Paste Formatting"] = () => _ = PasteSpecialClipboardTextAsync(PasteCellsMode.Formats, default, "Formatting"),
                     // Formulas tab.
-                    ["formulas.insertFunction"] = InsertFunction,
-                    ["formulas.autoSum"] = () => InsertAutoSumFormula("SUM"),
-                    ["formulas.nameManager"] = NameManager,
-                    ["formulas.defineName"] = DefineName,
-                    ["formulas.createFromSelection"] = CreateNamesFromSelection,
+                    ["AutoSum#FormulasAutoSumPickerBtn_Click"] = () => InsertAutoSumFormula("SUM"),
+                    ["Name Manager"] = NameManager,
+                    ["Define Name"] = DefineName,
+                    ["Create from Selection"] = CreateNamesFromSelection,
                     ["Use in Formula"] = PasteNames,
                     // Review tab.
-                    ["review.spelling"] = () => _ = ShowSpellingDialogAsync(),
-                    ["review.checkAccessibility"] = () => _ = ShowAccessibilityCheckerDialogAsync(),
-                    ["review.protectSheet"] = () => _ = ShowProtectSheetDialogAsync(),
-                    ["review.protectWorkbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
+                    ["Spelling"] = () => _ = ShowSpellingDialogAsync(),
+                    ["Check Accessibility"] = () => _ = ShowAccessibilityCheckerDialogAsync(),
+                    ["Protect Sheet#ProtectSheetBtn_Click"] = () => _ = ShowProtectSheetDialogAsync(),
+                    ["Protect Workbook"] = () => _ = ShowProtectWorkbookDialogAsync(),
                     ["Allow Users to Edit Ranges"] = AllowEditRanges,
                     // View tab.
                     ["Custom Views"] = () => RunGuarded(OpenCustomViewsDialogAsync),
-                    ["view.gridlines"] = ToggleShowGridlines,
-                    ["view.headings"] = ToggleShowHeadings,
-                    ["view.zoom"] = () => _ = ShowZoomDialogAsync(),
-                    ["view.zoom100"] = ZoomTo100Percent,
-                    ["view.zoomToSelection"] = ZoomToSelection,
-                    ["view.freezePanes"] = FreezePanesAtActiveCell,
-                    ["view.pageBreakPreview"] = TogglePageBreakPreview,
-                    ["view.formulaBar"] = ToggleFormulaBarVisibility,
-                    ["view.pageLayoutView"] = SetPageLayoutView,
+                    ["Gridlines"] = ToggleShowGridlines,
+                    ["Headings"] = ToggleShowHeadings,
+                    ["Zoom"] = () => _ = ShowZoomDialogAsync(),
+                    ["100%#Zoom100Btn_Click"] = ZoomTo100Percent,
+                    ["Zoom to Selection"] = ZoomToSelection,
+                    ["Freeze Panes#FreezePanesPickerBtn_Click"] = FreezePanesAtActiveCell,
+                    ["Page Break Preview"] = TogglePageBreakPreview,
+                    ["Formula Bar"] = ToggleFormulaBarVisibility,
+                    ["Page Layout"] = SetPageLayoutView,
                     // Home tab merge variants + Paste Special.
-                    ["home.mergeCells"] = () => _ = MergeSelectedRangeAsync(),
-                    ["home.mergeAcross"] = () => _ = MergeAcrossSelectedRangeAsync(),
-                    ["home.unmerge"] = UnmergeSelectedRange,
-                    ["home.pasteSpecial"] = () => _ = ShowPasteSpecialDialogAsync(),
-                    // Home tab "More Colors..." pickers.
-                    ["home.fillMore"] = ShowMoreFillColorDialog,
-                    ["home.fontColorMore"] = ShowMoreFontColorDialog,
+                    ["Merge Cells"] = () => _ = MergeSelectedRangeAsync(),
+                    ["Merge Across"] = () => _ = MergeAcrossSelectedRangeAsync(),
+                    ["Unmerge Cells"] = UnmergeSelectedRange,
+                    ["Paste Special"] = () => _ = ShowPasteSpecialDialogAsync(),
                     // Data tab tools.
-                    ["data.reapply"] = ReapplyCurrentFilterSort,
-                    ["data.circleInvalid"] = CircleInvalidData,
-                    ["data.clearCircles"] = ClearValidationCircles,
-                    ["data.getData"] = GetDataFromText,
+                    ["Reapply"] = ReapplyCurrentFilterSort,
+                    ["Circle Invalid Data"] = CircleInvalidData,
+                    ["Clear Validation Circles"] = ClearValidationCircles,
+                    ["Get Data"] = GetDataFromText,
                     // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
                     // no remembered source there is nothing to refresh (no external DB/web connection engine).
-                    ["data.refresh"] = RefreshImportedData,
+                    ["Refresh All"] = RefreshImportedData,
                     // Review ▸ Show Notes toggles all legacy note boxes, matching the WPF host.
-                    ["review.showNotes"] = ToggleAllNotesVisibility,
                     // Insert ▸ PivotChart (charts the active pivot's result range).
-                    ["insert.pivotChart"] = InsertPivotChart,
                     // View ▸ Window group (multi-window).
-                    ["view.newWindow"] = NewWindow,
-                    ["view.arrangeAll"] = ArrangeAllWindows,
+                    ["New Window"] = NewWindow,
+                    ["Arrange All"] = ArrangeAllWindows,
                     // View ▸ Window ▸ Arrange All submenu (canonical menu ids from the shared ribbon
                     // definition). Each positions every visible window via the shared layout planner.
                     ["Tiled"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Tiled),
                     ["Horizontal#ArrangeAllMenuItem_Click"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Horizontal),
                     ["Vertical"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Vertical),
                     ["Cascade"] = () => ArrangeAllWindows(WorkbookWindowArrangement.Cascade),
-                    ["view.hide"] = HideActiveWindow,
+                    ["Hide"] = HideActiveWindow,
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling.
                     ["View Side by Side"] = ToggleViewSideBySide,
                     ["Synchronous Scrolling"] = ToggleSynchronousScrolling,
-                    // Review proofing (built-in thesaurus / offline-honest translate) + Insert equation/object.
-                    ["review.thesaurus"] = () => _ = ShowThesaurusDialogAsync(),
-                    ["review.translate"] = () => _ = ShowTranslateDialogAsync(),
-                    ["insert.equation"] = () => _ = ShowEquationDialogAsync(),
-                    ["insert.object"] = () => _ = ShowInsertObjectDialogAsync(),
                     // Home tab (Editing group).
-                    ["home.autoSum"] = () => InsertAutoSumFormula("SUM"),
-                    ["home.fillDown"] = () => FillSelectedRange(FillCellsDirection.Down),
-                    ["home.clear"] = ClearSelectedRangeContents,
-                    ["home.findSelect"] = () => _ = ShowFindDialogAsync(),
+                    ["AutoSum"] = () => InsertAutoSumFormula("SUM"),
+                    ["Fill"] = () => FillSelectedRange(FillCellsDirection.Down),
+                    ["Clear"] = ClearSelectedRangeContents,
+                    ["Find & Select"] = () => _ = ShowFindDialogAsync(),
                     // Home ▸ Editing ▸ Fill dropdown items (canonical menu ids from HomeRibbonMenus.Fill).
-                    // The split-button face is wired above (home.fillDown); these are its menu entries, which
-                    // otherwise stay on the NoOp seed. "Flash Fill" shares its canonical id with data.flashFill
+                    // The split-button face is wired above; these are its menu entries, which otherwise stay
+                    // on the NoOp seed. "Flash Fill" shares its canonical id with the Data-tab command
                     // (already wired), so it is not repeated here.
                     ["Down"] = () => FillSelectedRange(FillCellsDirection.Down),
                     ["Right"] = () => FillSelectedRange(FillCellsDirection.Right),
@@ -1260,101 +1238,94 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Greater Than"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.HighlightGreaterThan),
                     ["Top 10 Items"] = () => ApplyConditionalFormatPreset(ConditionalFormatPreset.Top10),
                     // Insert tab (Links / Text groups).
-                    ["insert.hyperlink"] = () => _ = ShowInsertHyperlinkDialogAsync(),
+                    ["Insert Link"] = () => _ = ShowInsertHyperlinkDialogAsync(),
                     // Home Font group (added buttons).
-                    ["home.strikethrough"] = ToggleSelectedRangeStrikethrough,
-                    ["home.increaseFont"] = IncreaseSelectedRangeFontSize,
-                    ["home.decreaseFont"] = DecreaseSelectedRangeFontSize,
-                    ["home.fontColorAuto"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
-                    ["home.fontColorRed"] = () => ApplySelectedRangeFontColor(new CellColor(255, 0, 0)),
-                    ["home.fontColorGreen"] = () => ApplySelectedRangeFontColor(new CellColor(0, 128, 0)),
-                    ["home.fontColorBlue"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 255)),
+                    ["Strikethrough"] = ToggleSelectedRangeStrikethrough,
+                    ["Increase Font Size"] = IncreaseSelectedRangeFontSize,
+                    ["Decrease Font Size"] = DecreaseSelectedRangeFontSize,
                     // Home Alignment group (added buttons).
-                    ["home.alignTop"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Top),
-                    ["home.alignMiddle"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Center),
-                    ["home.alignBottom"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom),
-                    ["home.increaseIndent"] = IncreaseSelectedRangeIndent,
-                    ["home.decreaseIndent"] = DecreaseSelectedRangeIndent,
+                    ["Top Align"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Top),
+                    ["Middle Align"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Center),
+                    ["Bottom Align"] = () => ApplySelectedRangeVerticalAlignment(CellVAlign.Bottom),
+                    ["Increase Indent"] = IncreaseSelectedRangeIndent,
+                    ["Decrease Indent"] = DecreaseSelectedRangeIndent,
                     // Home Number group (added buttons).
-                    ["home.increaseDecimal"] = IncreaseSelectedRangeDecimalPlaces,
-                    ["home.decreaseDecimal"] = DecreaseSelectedRangeDecimalPlaces,
+                    ["Increase Decimal Places"] = IncreaseSelectedRangeDecimalPlaces,
+                    ["Decrease Decimal Places"] = DecreaseSelectedRangeDecimalPlaces,
                     // Home Alignment Orientation + Cells Format → existing handlers.
-                    ["home.orientation"] = () => ApplySelectedRangeTextRotation(45, "Rotated text for", "Orientation failed."),
-                    ["home.formatCells"] = () => _ = ShowFormatCellsDialogAsync(),
+                    ["Orientation"] = () => ApplySelectedRangeTextRotation(45, "Rotated text for", "Orientation failed."),
+                    ["Format"] = () => _ = ShowFormatCellsDialogAsync(),
                     // View tab (Window group) + Formulas tab.
-                    ["view.unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
-                    ["formulas.showFormulas"] = ToggleShowFormulas,
+                    ["Unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
+                    ["Show Formulas"] = ToggleShowFormulas,
                     // Formulas Function Library category buttons open the function picker.
-                    ["formulas.lookupReference"] = InsertFunction,
-                    ["formulas.mathTrig"] = InsertFunction,
-                    ["formulas.moreFunctions"] = InsertFunction,
-                    ["formulas.recentlyUsed"] = InsertFunction,
+                    ["Lookup & Reference"] = InsertFunction,
+                    ["Math & Trig"] = InsertFunction,
+                    ["More Functions#FormulaMoreBtn_Click"] = InsertFunction,
+                    ["Recently Used"] = InsertFunction,
                     // Data tab (Sort & Filter / Tools / Forecast / Outline groups).
-                    ["data.advancedFilter"] = () => _ = ShowAdvancedFilterDialogAsync(),
-                    ["data.flashFill"] = FlashFillSelectedRange,
-                    ["data.removeDuplicates"] = () => _ = ShowRemoveDuplicatesDialogAsync(),
-                    ["data.whatIf"] = () => _ = ShowGoalSeekDialogAsync(),
-                    ["data.forecastSheet"] = () => _ = ShowForecastSheetDialogAsync(),
-                    ["data.subtotal"] = () => _ = ShowSubtotalDialogAsync(),
+                    ["Advanced"] = () => _ = ShowAdvancedFilterDialogAsync(),
+                    ["Flash Fill"] = FlashFillSelectedRange,
+                    ["Remove Duplicates#RemoveDuplicatesBtn_Click"] = () => _ = ShowRemoveDuplicatesDialogAsync(),
+                    ["What-If Analysis"] = () => _ = ShowGoalSeekDialogAsync(),
+                    ["Forecast Sheet"] = () => _ = ShowForecastSheetDialogAsync(),
+                    ["Subtotal"] = () => _ = ShowSubtotalDialogAsync(),
                     // --- Parity pass: wire remaining no-op ribbon buttons to existing handlers ---
                     // Formula Library category buttons open the function picker (like the others).
-                    ["formulas.financial"] = InsertFunction,
-                    ["formulas.logical"] = InsertFunction,
-                    ["formulas.text"] = InsertFunction,
-                    ["formulas.dateTime"] = InsertFunction,
+                    ["Financial"] = InsertFunction,
+                    ["Logical Functions"] = InsertFunction,
+                    ["Text Functions"] = InsertFunction,
+                    ["Date & Time"] = InsertFunction,
                     // Dropdown parent buttons apply a sensible default (their menu items remain individually wired).
-                    ["home.borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
-                    ["home.accounting"] = ApplySelectedRangeCurrencyFormat,
+                    ["Borders"] = () => ApplySelectedRangeBorderPreset(CellBorderPreset.All),
+                    ["Accounting Number Format"] = ApplySelectedRangeCurrencyFormat,
                     ["Accounting Number Format US Dollar"] = () => ApplySelectedRangeAccountingFormat("$"),
                     ["Accounting Number Format Euro"] = () => ApplySelectedRangeAccountingFormat("\u20AC"),
                     ["Accounting Number Format British Pound"] = () => ApplySelectedRangeAccountingFormat("\u00A3"),
                     ["Accounting Number Format Japanese Yen"] = () => ApplySelectedRangeAccountingFormat("\u00A5"),
-                    ["home.fontColor"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
-                    ["home.fillColor"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
+                    ["Font Color"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
+                    ["Fill Color"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
                     // Review: New Note / New Comment on the active cell.
-                    ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
-                    ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    ["New Note"] = () => _ = ShowNewNoteDialogAsync(),
+                    ["New Comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
                     // Insert: Sparklines — open the insert dialog (or edit, when the active cell already
                     // anchors a sparkline) with the chosen kind preselected.
-                    ["insert.sparklineLine"] = () => InsertOrEditSparkline(SparklineKind.Line),
-                    ["insert.sparklineColumn"] = () => InsertOrEditSparkline(SparklineKind.Column),
-                    ["insert.sparklineWinLoss"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
+                    ["Line Sparkline"] = () => InsertOrEditSparkline(SparklineKind.Line),
+                    ["Column Sparkline"] = () => InsertOrEditSparkline(SparklineKind.Column),
+                    ["Win/Loss Sparkline"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
                     // Data: Outline Group / Ungroup.
-                    ["data.group"] = GroupSelectedRows,
-                    ["data.ungroup"] = UngroupSelection,
+                    ["Group#GroupRowsBtn_Click"] = GroupSelectedRows,
+                    ["Ungroup#UngroupRowsBtn_Click"] = UngroupSelection,
                     // Home ▸ Cells: Insert / Delete Cells (with shift-direction prompt).
-                    ["home.insertCells"] = () => _ = ShowInsertCellsDialogAsync(),
-                    ["home.deleteCells"] = () => _ = ShowDeleteCellsDialogAsync(),
+                    ["Insert"] = () => _ = ShowInsertCellsDialogAsync(),
+                    ["Delete"] = () => _ = ShowDeleteCellsDialogAsync(),
                     // Home ▸ Styles: Cell Styles gallery.
-                    ["home.cellStyles"] = () => _ = ShowCellStylesGalleryAsync(),
+                    ["Cell Styles"] = () => _ = ShowCellStylesGalleryAsync(),
                     // Review ▸ Delete Comment; View ▸ Split / Normal.
-                    ["review.deleteComment"] = DeleteActiveCellThreadedComment,
-                    ["view.split"] = SplitPanesAtActiveCell,
-                    ["view.normal"] = SetNormalView,
+                    ["Delete Comment"] = DeleteActiveCellThreadedComment,
+                    ["Split"] = SplitPanesAtActiveCell,
+                    ["Normal#NormalViewBtn_Click"] = SetNormalView,
                     // Insert ▸ Comment (reuse New Comment); Insert ▸ Header & Footer (Page Setup).
-                    ["insert.comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
-                    ["insert.headerFooter"] = () => _ = ShowPageSetupDialogAsync(),
+                    ["Comment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
+                    ["Header & Footer"] = () => _ = ShowPageSetupDialogAsync(),
                     // Page Layout ▸ Themes (Office / Colorful / Grayscale picker).
-                    ["pageLayout.themes"] = () => _ = ShowThemesGalleryAsync(),
-                    ["pageLayout.themeColors"] = () => _ = ShowThemeColorsGalleryAsync(),
-                    ["pageLayout.themeFonts"] = () => _ = ShowThemeFontsGalleryAsync(),
-                    ["pageLayout.themeEffects"] = () => _ = ShowThemeEffectsGalleryAsync(),
+                    ["Themes"] = () => _ = ShowThemesGalleryAsync(),
+                    ["Theme Colors"] = () => _ = ShowThemeColorsGalleryAsync(),
+                    ["Theme Fonts"] = () => _ = ShowThemeFontsGalleryAsync(),
+                    ["Theme Effects"] = () => _ = ShowThemeEffectsGalleryAsync(),
                     // Insert ▸ Symbol.
-                    ["insert.symbol"] = () => _ = ShowSymbolPickerAsync(),
-                    // Insert ▸ Slicer / Timeline (field picker → AddSlicerCommand / AddTimelineCommand).
-                    ["insert.slicer"] = InsertSlicer,
-                    ["insert.timeline"] = InsertTimeline,
+                    ["Symbol"] = () => _ = ShowSymbolPickerAsync(),
                     // Formulas ▸ Error Checking.
-                    ["formulas.errorChecking"] = () => _ = CheckFormulaErrorsAsync(),
+                    ["Error Checking"] = () => _ = CheckFormulaErrorsAsync(),
                     // Formulas ▸ Evaluate Formula (read-only diagnostics dialog).
-                    ["formulas.evaluateFormula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
+                    ["Evaluate Formula"] = () => _ = ShowEvaluateFormulaDialogAsync(),
                     // Formulas ▸ Formula Auditing trace arrows.
-                    ["formulas.tracePrecedents"] = TraceFormulaPrecedents,
-                    ["formulas.traceDependents"] = TraceFormulaDependents,
-                    ["formulas.removeArrows"] = RemoveFormulaTraceArrows,
+                    ["Trace Precedents"] = TraceFormulaPrecedents,
+                    ["Trace Dependents"] = TraceFormulaDependents,
+                    ["Remove Arrows#RemoveArrowsBtn_Click"] = RemoveFormulaTraceArrows,
                     // Formulas ▸ Calculation group.
-                    ["formulas.calcOptions"] = ToggleCalculationMode,
-                    ["formulas.calcNow"] = CalculateNow,
+                    ["Calculation Options"] = ToggleCalculationMode,
+                    ["Calculate Now"] = CalculateNow,
 
                     // ─────────────────────────────────────────────────────────────────────────────
                     // Ribbon dropdown / split-button menu items that were inert (canonical ids never
@@ -1549,7 +1520,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Sort & Filter"] = ToggleAutoFilter,
 
                     // Review ▸ Notes ▸ Next / Previous Note.
-                    ["review.convertNotesToComments"] = ConvertNotesToComments,
+                    ["Convert to Comments"] = ConvertNotesToComments,
                     ["Next Note"] = () => NavigateReviewNote(previous: false),
                     ["Previous Note"] = () => NavigateReviewNote(previous: true),
 
@@ -1560,44 +1531,44 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
                 ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>(StringComparer.Ordinal)
                 {
-                    ["view.gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
-                    ["view.headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
+                    ["Gridlines"] = () => new RibbonCommandState(IsChecked: _session.IsShowingGridlines),
+                    ["Headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
-                    ["view.formulaBar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
-                    ["pageLayout.width"] = () => new RibbonCommandState(
+                    ["Formula Bar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
+                    ["Scale Width"] = () => new RibbonCommandState(
                         Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesWide)),
-                    ["pageLayout.height"] = () => new RibbonCommandState(
+                    ["Scale Height"] = () => new RibbonCommandState(
                         Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesTall)),
-                    ["pageLayout.scale"] = () => new RibbonCommandState(
+                    ["Scale Percent"] = () => new RibbonCommandState(
                         Value: PageLayoutInputParser.FormatScalePercent(_session.ActiveSheet.ScaleToFit.ScalePercent)),
-                    ["pictureFormat.crop"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
-                    ["shapeFormat.shapeGradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
-                    ["shapeFormat.shapeEffects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),
+                    ["Crop Picture"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
+                    ["Shape Gradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
+                    ["Shape Effects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),
                     // View ▸ Window ▸ Side by Side + Synchronous Scrolling toggle states.
                     ["View Side by Side"] = GetSideBySideRibbonState,
                     ["Synchronous Scrolling"] = GetSynchronousScrollingRibbonState,
                     // Table Design ▸ Style Options toggle checked-state (mirrors the WPF host's
                     // _ribbonState.SetChecked calls in RefreshTableContextualTab): each toggle reports
                     // whether the active cell's table currently has that flag on.
-                    ["tableDesign.totalRow"] = () => GetTableStyleOptionRibbonState(t => t.TotalsRowShown),
-                    ["tableDesign.firstColumn"] = () => GetTableStyleOptionRibbonState(t => t.ShowFirstColumn),
-                    ["tableDesign.lastColumn"] = () => GetTableStyleOptionRibbonState(t => t.ShowLastColumn),
-                    ["tableDesign.bandedRows"] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
-                    ["tableDesign.bandedColumns"] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
-                    ["tableDesign.filterButton"] = () => GetTableStyleOptionRibbonState(t => t.HasAutoFilter),
+                    ["Total Row"] = () => GetTableStyleOptionRibbonState(t => t.TotalsRowShown),
+                    ["First Column"] = () => GetTableStyleOptionRibbonState(t => t.ShowFirstColumn),
+                    ["Last Column"] = () => GetTableStyleOptionRibbonState(t => t.ShowLastColumn),
+                    ["Banded Rows#TableDesignBandedRowsBtn_Click"] = () => GetTableStyleOptionRibbonState(t => t.ShowRowStripes),
+                    ["Banded Columns#TableDesignBandedColumnsBtn_Click"] = () => GetTableStyleOptionRibbonState(t => t.ShowColumnStripes),
+                    ["Filter Button"] = () => GetTableStyleOptionRibbonState(t => t.HasAutoFilter),
                     // Review ▸ Comments/Notes enablement (mirrors WPF's RefreshReviewCommentNoteCommandStates):
                     // Delete/navigation/Convert commands grey out when the active cell or sheet has nothing
                     // to act on, instead of staying permanently clickable.
-                    ["review.newComment"] = GetReviewNewCommentRibbonState,
-                    ["review.deleteComment"] = GetReviewDeleteCommentRibbonState,
+                    ["New Comment"] = GetReviewNewCommentRibbonState,
+                    ["Delete Comment"] = GetReviewDeleteCommentRibbonState,
                     ["Next Comment"] = GetReviewNavigateCommentRibbonState,
                     ["Previous Comment"] = GetReviewNavigateCommentRibbonState,
-                    ["review.newNote"] = GetReviewNewNoteRibbonState,
+                    ["New Note"] = GetReviewNewNoteRibbonState,
                     ["Edit Note"] = GetReviewNoteAtSelectionRibbonState,
                     ["Delete Note"] = GetReviewNoteAtSelectionRibbonState,
                     ["Next Note"] = GetReviewNavigateNoteRibbonState,
                     ["Previous Note"] = GetReviewNavigateNoteRibbonState,
-                    ["review.convertNotesToComments"] = GetReviewConvertNotesToCommentsRibbonState,
+                    ["Convert to Comments"] = GetReviewConvertNotesToCommentsRibbonState,
                 },
             };
 

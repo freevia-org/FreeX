@@ -21,14 +21,13 @@ public sealed class CellShiftDialogTests
         CellShiftDialogChoice choice,
         KeyboardInsertDeleteDialogChoice expected)
     {
-        CellShiftDialog.ToKeyboardChoice(mode, choice).Should().Be(expected);
         CellShiftDialogPlanner.ToKeyboardChoice(mode, choice).Should().Be(expected);
     }
 
     [Fact]
     public void GetAvailableChoices_UsesExcelInsertLabels()
     {
-        var choices = CellShiftDialog.GetAvailableChoices(CellShiftDialogMode.Insert);
+        var choices = CellShiftDialogPlanner.GetAvailableChoices(CellShiftDialogMode.Insert);
 
         choices.Select(choice => UiText.Get(choice.LabelKey)).Should().Equal(
             UiText.Get("CellShift_Insert_ShiftCellsRight"),
@@ -40,7 +39,7 @@ public sealed class CellShiftDialogTests
     [Fact]
     public void GetAvailableChoices_UsesExcelDeleteLabels()
     {
-        var choices = CellShiftDialog.GetAvailableChoices(CellShiftDialogMode.Delete);
+        var choices = CellShiftDialogPlanner.GetAvailableChoices(CellShiftDialogMode.Delete);
 
         choices.Select(choice => UiText.Get(choice.LabelKey)).Should().Equal(
             UiText.Get("CellShift_Delete_ShiftCellsLeft"),

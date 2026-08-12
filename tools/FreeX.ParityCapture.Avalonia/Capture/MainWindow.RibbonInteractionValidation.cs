@@ -13,7 +13,6 @@ public sealed partial class MainWindow
 {
     private const string RibbonCommandBehaviorCategory = "ribbon-command-behavior";
     private const string RibbonPlacementBehaviorCategory = "ribbon-placement-behavior";
-    private const string RibbonOrphanBehaviorCategory = "ribbon-orphan-command-behavior";
     private const string RibbonValidationStatusSentinel = "__ribbon_validation_before__";
     internal static int InteractiveValidationRibbonCommandCount => AvaloniaRibbonComposition
         .EnumerateSurfaceRows(AvaloniaRibbonComposition.BuildDefinition())
@@ -82,8 +81,6 @@ public sealed partial class MainWindow
                 Note: $"Command evidence: ribbon-command-behavior/{EscapeResultId(placement.CommandId.Value)}. {evidence.Note}"));
         }
 
-        if (commandStart == 0)
-            AddOrphanCommandResults(results);
     }
 
     private IReadOnlyDictionary<RibbonCommandId, RibbonCommandBehaviorEvidence> BuildRibbonCommandBehaviorEvidence(
@@ -520,38 +517,14 @@ public sealed partial class MainWindow
         }
     }
 
-    private void AddOrphanCommandResults(List<InteractionValidationResult> results)
-    {
-        foreach (var orphanId in FreeXRibbonCommandIdentityCatalog.OrphanAvaloniaIds.OrderBy(id => id, StringComparer.Ordinal))
-        {
-            var commandId = new RibbonCommandId(orphanId);
-            IRibbonCommand? command = null;
-            var resolved = _ribbonCommandRegistry is not null &&
-                _ribbonCommandRegistry.TryGet(commandId, out command) &&
-                command is not null &&
-                command is not EmptyRibbonCommand;
-            results.Add(new InteractionValidationResult(
-                Id: $"ribbon-orphan-command-behavior/{EscapeResultId(orphanId)}",
-                Category: RibbonOrphanBehaviorCategory,
-                Status: "skipped",
-                EvidenceLevel: resolved ? "registered-orphan-unreachable" : "missing-orphan-route",
-                Evidence: resolved
-                    ? $"{orphanId} | {command!.GetType().Name} | visible placements=0"
-                    : $"{orphanId} | unresolved | visible placements=0",
-                Note: resolved
-                    ? "The historical Avalonia command is registered but has no visible control in the shared ribbon definition, so registration alone receives no interaction credit."
-                    : "The documented orphan id has neither a visible placement nor a concrete production command."));
-        }
-    }
-
     private static string GetDeterministicSelectedValue(RibbonCommandId commandId)
     {
         var id = commandId.Value;
-        if (string.Equals(id, FreeXRibbonCommandIdentityCatalog.ToCanonical("home.fontName"), StringComparison.Ordinal))
+        if (string.Equals(id, "Font", StringComparison.Ordinal))
             return "Arial";
-        if (string.Equals(id, FreeXRibbonCommandIdentityCatalog.ToCanonical("home.fontSize"), StringComparison.Ordinal))
+        if (string.Equals(id, "Font Size", StringComparison.Ordinal))
             return "11";
-        if (string.Equals(id, FreeXRibbonCommandIdentityCatalog.ToCanonical("home.numberFormat"), StringComparison.Ordinal))
+        if (string.Equals(id, "Number Format", StringComparison.Ordinal))
             return HomeNumberFormatDropdownPlanner.Options[0].Label;
         return "1";
     }

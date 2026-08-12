@@ -564,7 +564,7 @@ public partial class MainWindow
             return false;
         }
 
-        choice = CellShiftDialog.ToKeyboardChoice(mode, dialog.SelectedChoice);
+        choice = CellShiftDialogPlanner.ToKeyboardChoice(mode, dialog.SelectedChoice);
         return true;
     }
 

@@ -16,7 +16,7 @@ public sealed partial class AutoFilterDialogTests
             new AutoFilterDialogItem("(Blanks)", "", true)
         };
 
-        var result = AutoFilterDialog.BuildResult(
+        var result = AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.Descending,
             items,
             "a",
@@ -39,13 +39,13 @@ public sealed partial class AutoFilterDialogTests
             new AutoFilterDialogItem("Banana", "Banana", true)
         };
 
-        var searchOnly = AutoFilterDialog.BuildResult(
+        var searchOnly = AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.None,
             items,
             "ap",
             "",
             addCurrentSelectionToFilter: false);
-        var addCurrentSelection = AutoFilterDialog.BuildResult(
+        var addCurrentSelection = AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.None,
             items,
             "ap",
@@ -63,7 +63,7 @@ public sealed partial class AutoFilterDialogTests
     {
         var color = new CellColor(33, 115, 70);
 
-        var result = AutoFilterDialog.BuildResult(
+        var result = AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.None,
             [new AutoFilterDialogItem("Apple", "Apple", true)],
             "",
@@ -78,7 +78,7 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void BuildResult_DistinguishesNoFillColorFilterFromNoColorSelection()
     {
-        var result = AutoFilterDialog.BuildResult(
+        var result = AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.None,
             [new AutoFilterDialogItem("Apple", "Apple", true)],
             "",
@@ -98,7 +98,7 @@ public sealed partial class AutoFilterDialogTests
             new AutoFilterDialogItem("Beta", "Beta", false)
         };
 
-        var result = AutoFilterDialog.BuildResult(
+        var result = AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.None,
             items,
             "",
@@ -111,7 +111,7 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void CreateClearFilterResult_RequestsExplicitClearAction()
     {
-        AutoFilterDialog.CreateClearFilterResult()
+        AutoFilterDialogCriteriaPlanner.CreateClearFilterResult()
             .Should()
             .Be(new AutoFilterDialogResult(
                 AutoFilterSortDirection.None,

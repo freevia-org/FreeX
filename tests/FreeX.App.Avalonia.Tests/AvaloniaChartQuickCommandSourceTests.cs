@@ -72,14 +72,14 @@ public sealed class AvaloniaChartQuickCommandSourceTests
     {
         var contextualSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"));
         var quickSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartFormatTextTabs.cs"));
-        var adapterSource = File.ReadAllText(RepoFile(
-            "src", "FreeX.App.Presentation", "Ribbon", "FreeXRibbonCommandIdentityCatalog.cs"));
+        var definitionSource = File.ReadAllText(RepoFile(
+            "src", "FreeX.Ribbon.Definitions", "FreeXRibbonDefinition.cs"));
 
-        contextualSource.Should().Contain("[\"chartDesign.secondaryAxisSeries\"] = CycleChartSecondaryAxisSeries");
+        contextualSource.Should().Contain("[\"Secondary Axis Series\"] = CycleChartSecondaryAxisSeries");
         quickSource.Should().Contain("private void CycleChartSecondaryAxisSeries()");
         quickSource.Should().Contain("ChartQuickCommandCatalog.SecondaryAxisSeries");
         quickSource.Should().Contain("MainWindowMessage_ChartSecondaryAxisUnsupported");
-        adapterSource.Should().Contain("[\"chartDesign.secondaryAxisSeries\"] = \"Secondary Axis Series\"");
+        definitionSource.Should().Contain(".Medium(\"Secondary Axis Series\", \"Secondary Axis Series\"");
     }
 
     private static string RepoFile(params string[] parts) =>

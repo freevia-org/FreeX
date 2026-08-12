@@ -20,7 +20,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 2, 2),
             new CellAddress(sheetId, 8, 5));
 
-        var oneVariableParsed = DataTableDialog.TryParse(
+        var oneVariableParsed = DataTableInputParser.TryParse(
             sheetId,
             range,
             rowInputCellText: "",
@@ -35,7 +35,7 @@ public sealed partial class DataToolDialogTests
         oneVariable.RowInputCell.Should().BeNull();
         oneVariable.ColumnInputCell.Should().Be(new CellAddress(sheetId, 1, 3));
 
-        var rowInputParsed = DataTableDialog.TryParse(
+        var rowInputParsed = DataTableInputParser.TryParse(
             sheetId,
             range,
             rowInputCellText: "A1",
@@ -48,7 +48,7 @@ public sealed partial class DataToolDialogTests
         rowInput.Orientation.Should().Be(DataTableInputOrientation.Row);
         rowInput.FormulaCell.Should().Be(new CellAddress(sheetId, 3, 2));
 
-        var twoVariableParsed = DataTableDialog.TryParse(
+        var twoVariableParsed = DataTableInputParser.TryParse(
             sheetId,
             range,
             rowInputCellText: "A1",
@@ -72,7 +72,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 2, 2),
             new CellAddress(sheetId, 8, 5));
 
-        var parsed = DataTableDialog.TryParse(
+        var parsed = DataTableInputParser.TryParse(
             sheetId,
             range,
             rowInputCellText: "$A$1",
@@ -93,7 +93,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 2, 2),
             new CellAddress(sheetId, 8, 5));
 
-        var parsed = DataTableDialog.TryParse(
+        var parsed = DataTableInputParser.TryParse(
             sheetId,
             range,
             rowInputCellText: "",
@@ -114,7 +114,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 2, 2),
             new CellAddress(sheetId, 8, 5));
 
-        var parsed = DataTableDialog.TryParse(
+        var parsed = DataTableInputParser.TryParse(
             sheetId,
             range,
             rowInputCellText: "",
@@ -141,7 +141,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 2, 2),
             new CellAddress(sheetId, 8, 5));
 
-        var parsed = DataTableDialog.TryParse(
+        var parsed = DataTableInputParser.TryParse(
             sheetId,
             range,
             rowInputCellText,
@@ -162,7 +162,7 @@ public sealed partial class DataToolDialogTests
             new CellAddress(sheetId, 2, 2),
             new CellAddress(sheetId, 8, 5));
 
-        var parsed = DataTableDialog.TryParse(
+        var parsed = DataTableInputParser.TryParse(
             sheetId,
             range,
             rowInputCellText: "A1",
@@ -194,7 +194,7 @@ public sealed partial class DataToolDialogTests
         source.Should().Contain("Target = textBox");
         source.Should().NotContain("Substitute values in the selected data table using worksheet input cells.");
         source.Should().NotContain("Header = \"Inputs\"");
-        source.Should().Contain("SharedDataTableInputParser.TryParse(");
+        source.Should().Contain("DataTableInputParser.TryParse(");
         File.Exists(Path.Combine(
                 WorkspaceFileLocator.FindWorkspaceRoot(),
                 "src",
@@ -262,7 +262,7 @@ public sealed partial class DataToolDialogTests
 
         source.Should().Contain("FocusInvalidInput(issue);");
         source.Should().Contain("private void FocusInvalidInput(DataTableInputParseIssue issue)");
-        source.Should().Contain("SharedDataTableInputParser.GetErrorFocusTarget(issue)");
+        source.Should().Contain("DataTableInputParser.GetErrorFocusTarget(issue)");
         source.Should().Contain("DialogFocus.FocusAndSelect(GetInputBox(target));");
         source.Should().NotContain("StringComparison.Ordinal");
     }
@@ -283,7 +283,7 @@ public sealed partial class DataToolDialogTests
     [Fact]
     public void DataTableDialogRangeSelectionRequest_TrimsCurrentTextAndCollapsesDialog()
     {
-        DataTableDialog.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
+        DataTableInputParser.CreateRangeSelectionRequest(DataTableRangeSelectionTarget.ColumnInputCell, " $C$1 ")
             .Should()
             .Be(new DataTableRangeSelectionRequest(
                 DataTableRangeSelectionTarget.ColumnInputCell,

@@ -24,7 +24,7 @@ public sealed partial class AutoFilterDialog
     {
         _allItems.Clear();
         _allItems.AddRange(items);
-        ReplaceItems(FilterItems(_allItems, _searchBox.Text));
+        ReplaceItems(AutoFilterDialogCriteriaPlanner.FilterItems(_allItems, _searchBox.Text));
     }
 
     private void UpdateCriteriaTextFromTypedControls()
@@ -42,9 +42,9 @@ public sealed partial class AutoFilterDialog
         var firstCriteria = BuildPrimaryCriteriaText(option);
         var secondCriteria = _criteriaOperatorBox2.SelectedItem is AutoFilterCriteriaOption option2 &&
             (!option2.RequiresValue || !string.IsNullOrWhiteSpace(_criteriaValueBox2.Text))
-                ? BuildCriteriaText(option2, _criteriaValueBox2.Text)
+                ? AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option2, _criteriaValueBox2.Text)
                 : string.Empty;
-        _criteriaBox.Text = BuildCompositeCriteriaText(
+        _criteriaBox.Text = AutoFilterDialogCriteriaPlanner.BuildCompositeCriteriaText(
             firstCriteria,
             _criteriaConnectorBox.SelectedValue as string,
             secondCriteria);
@@ -55,13 +55,13 @@ public sealed partial class AutoFilterDialog
 
     private string BuildPrimaryCriteriaText(AutoFilterCriteriaOption option)
     {
-        if (IsBetweenOption(option))
-            return BuildBetweenCriteriaText(option, _betweenMinBox.Text, _betweenMaxBox.Text);
+        if (AutoFilterDialogCriteriaPlanner.IsBetweenOption(option))
+            return AutoFilterDialogCriteriaPlanner.BuildBetweenCriteriaText(option, _betweenMinBox.Text, _betweenMaxBox.Text);
 
-        if (IsTopBottomOption(option))
-            return BuildTopBottomCriteriaText(option, _topBottomCountBox.Text);
+        if (AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option))
+            return AutoFilterDialogCriteriaPlanner.BuildTopBottomCriteriaText(option, _topBottomCountBox.Text);
 
-        return BuildCriteriaText(option, _criteriaValueBox.Text);
+        return AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option, _criteriaValueBox.Text);
     }
 
     private bool ValidateTypedCriteriaInputs()
@@ -75,7 +75,7 @@ public sealed partial class AutoFilterDialog
         if (SelectedDatePresetCriteria() is { Length: > 0 })
             return true;
 
-        if (IsBetweenOption(option))
+        if (AutoFilterDialogCriteriaPlanner.IsBetweenOption(option))
         {
             if (string.IsNullOrWhiteSpace(_betweenMinBox.Text))
                 return ShowInvalidCriteriaWarning(UiText.Get("AutoFilter_EnterFirstBetweenValue"), _betweenMinBox);
@@ -86,9 +86,14 @@ public sealed partial class AutoFilterDialog
             return true;
         }
 
-        if (IsTopBottomOption(option))
+        if (AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option))
         {
-            if (!FilterInputParser.TryParseTopBottom(BuildTopBottomCriteriaText(option, _topBottomCountBox.Text), out _, out _, out _, out _))
+            if (!FilterInputParser.TryParseTopBottom(
+                    AutoFilterDialogCriteriaPlanner.BuildTopBottomCriteriaText(option, _topBottomCountBox.Text),
+                    out _,
+                    out _,
+                    out _,
+                    out _))
                 return ShowInvalidCriteriaWarning(UiText.Get("AutoFilter_EnterValidTopOrBottomCount"), _topBottomCountBox);
 
             return true;
@@ -118,13 +123,13 @@ public sealed partial class AutoFilterDialog
             : null;
         return string.IsNullOrWhiteSpace(preset) || preset == "Custom"
             ? string.Empty
-            : BuildDatePresetCriteriaText(preset, DateTime.Today);
+            : AutoFilterDialogCriteriaPlanner.BuildDatePresetCriteriaText(preset, DateTime.Today);
     }
 
     private void RefreshSpecialCriteriaPanels(AutoFilterCriteriaOption option)
     {
-        var isBetween = IsBetweenOption(option);
-        var isTopBottom = IsTopBottomOption(option);
+        var isBetween = AutoFilterDialogCriteriaPlanner.IsBetweenOption(option);
+        var isTopBottom = AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option);
         _criteriaValueBox.IsEnabled = option.RequiresValue && !isBetween && !isTopBottom;
         _criteriaValueBox.Visibility = option.RequiresValue && !isBetween && !isTopBottom
             ? Visibility.Visible
@@ -135,10 +140,4 @@ public sealed partial class AutoFilterDialog
             ? UiText.Get("AutoFilter_Percent")
             : UiText.Get("AutoFilter_Items");
     }
-
-    private static bool IsBetweenOption(AutoFilterCriteriaOption option) =>
-        AutoFilterDialogCriteriaPlanner.IsBetweenOption(option);
-
-    private static bool IsTopBottomOption(AutoFilterCriteriaOption option) =>
-        AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option);
 }

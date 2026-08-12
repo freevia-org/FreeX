@@ -623,7 +623,7 @@ public sealed class MainWindowWorksheetContextMenuKeyboardTests
 
         public void ApplyAllowedValuesFilter(GridRange range, params string[] allowedValues)
         {
-            var result = AutoFilterDialog.BuildResult(
+            var result = AutoFilterDialogCriteriaPlanner.BuildResult(
                 AutoFilterSortDirection.None,
                 allowedValues.Select(value => new AutoFilterDialogItem(value, value, true)),
                 "",

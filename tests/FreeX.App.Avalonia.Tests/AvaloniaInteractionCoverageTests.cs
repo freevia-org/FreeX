@@ -1,6 +1,7 @@
 using Avalonia.Headless;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -385,8 +386,8 @@ public sealed class AvaloniaInteractionCoverageTests
                 Assert.IsNotType<DisabledNoOpRibbonCommand>(drawCommand);
                 Assert.IsAssignableFrom<IRibbonStatefulCommand>(drawCommand);
             }
-            var unresolved = AvaloniaRibbonComposition
-                .EnumerateCommandIds(AvaloniaRibbonComposition.BuildDefinition())
+            var unresolved = FreeXRibbonCommandCatalog
+                .Enumerate(AvaloniaRibbonComposition.BuildDefinition())
                 .Distinct()
                 .Where(id => !registry.TryGet(id, out var command) || command is EmptyRibbonCommand)
                 .Select(id => id.Value)

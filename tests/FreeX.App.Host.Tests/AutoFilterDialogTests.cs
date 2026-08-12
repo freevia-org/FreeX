@@ -11,7 +11,6 @@ public sealed partial class AutoFilterDialogTests
         var hostSources = DialogSourceTestSupport.ReadHostSources(
             "AutoFilterDialog.cs",
             "AutoFilterDialog.Controls.cs",
-            "AutoFilterDialog.Criteria.cs",
             "AutoFilterDialog.State.cs");
 
         // The pure criteria planner and the dialog/menu model types moved to the portable

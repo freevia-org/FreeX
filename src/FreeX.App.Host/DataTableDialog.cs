@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.DataTools;
 using FreeX.Core.Model;
-using SharedDataTableInputParser = FreeX.App.Presentation.DataTools.DataTableInputParser;
 
 namespace FreeX.App.Host;
 
@@ -64,26 +63,6 @@ public sealed class DataTableDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static bool TryParse(
-        SheetId currentSheetId,
-        GridRange range,
-        string? rowInputCellText,
-        string? columnInputCellText,
-        out DataTableDialogResult result,
-        out DataTableInputParseIssue issue) =>
-        SharedDataTableInputParser.TryParse(
-            currentSheetId,
-            range,
-            rowInputCellText,
-            columnInputCellText,
-            out result,
-            out issue);
-
-    public static DataTableRangeSelectionRequest CreateRangeSelectionRequest(
-        DataTableRangeSelectionTarget target,
-        string currentText) =>
-        SharedDataTableInputParser.CreateRangeSelectionRequest(target, currentText);
-
     private DockPanel CreateReferenceEditor(
         TextBox textBox,
         string automationName,
@@ -125,7 +104,7 @@ public sealed class DataTableDialog : Window
 
     private void RequestRangeSelection(DataTableRangeSelectionTarget target, DialogReferencePickerRequest request)
     {
-        RangeSelectionRequest = CreateRangeSelectionRequest(target, request.CurrentText);
+        RangeSelectionRequest = DataTableInputParser.CreateRangeSelectionRequest(target, request.CurrentText);
         _requestRangeSelection?.Invoke(RangeSelectionRequest);
         FocusRangeSelectionInput(request.Target);
     }
@@ -154,13 +133,19 @@ public sealed class DataTableDialog : Window
 
     private void FocusInvalidInput(DataTableInputParseIssue issue)
     {
-        var target = SharedDataTableInputParser.GetErrorFocusTarget(issue);
+        var target = DataTableInputParser.GetErrorFocusTarget(issue);
         DialogFocus.FocusAndSelect(GetInputBox(target));
     }
 
     private void Accept()
     {
-        if (!TryParse(_sheetId, _range, _rowInputBox.Text, _columnInputBox.Text, out var result, out var issue))
+        if (!DataTableInputParser.TryParse(
+                _sheetId,
+                _range,
+                _rowInputBox.Text,
+                _columnInputBox.Text,
+                out var result,
+                out var issue))
         {
             var error = DescribeIssue(issue);
             DialogMessageHelper.ShowWarning(this, error ?? UiText.Get("DataTable_InvalidCellsMessage"), Title);

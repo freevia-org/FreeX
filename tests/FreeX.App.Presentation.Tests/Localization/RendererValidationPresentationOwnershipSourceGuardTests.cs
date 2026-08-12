@@ -10,7 +10,7 @@ public sealed class RendererValidationPresentationOwnershipSourceGuardTests
         var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
         var rendererSources = new[]
         {
-            Read(repoRoot, "src", "FreeX.App.Host", "GoalSeekInputParser.cs"),
+            Read(repoRoot, "src", "FreeX.App.Host", "GoalSeekDialog.xaml.cs"),
             Read(repoRoot, "src", "FreeX.App.Host", "HyperlinkDialog.cs"),
             Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.PivotApplicationSession.cs"),
             Read(repoRoot, "src", "FreeX.App.Host", "ChartAxisFormatDialog.cs"),
@@ -28,6 +28,8 @@ public sealed class RendererValidationPresentationOwnershipSourceGuardTests
         combined.Should().NotContain("RefocusInvalidInputAfterWarning");
         combined.Should().Contain("DescribeValidationError");
         combined.Should().Contain("ChartValidationPresentationPlanner.Describe");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Host", "GoalSeekInputParser.cs"))
+            .Should().BeFalse("the WPF dialog should consume the shared parser and presentation planner directly");
     }
 
     [Fact]

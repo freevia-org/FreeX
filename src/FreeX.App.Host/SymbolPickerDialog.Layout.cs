@@ -70,7 +70,7 @@ public sealed partial class SymbolPickerDialog
         void SelectSymbolText(string value, string? name = null, string? subset = null, string? codeText = null)
         {
             var selection = SymbolPickerCatalogPlanner.CreateSelection(value);
-            var entry = CreateSymbolEntry(selection.Symbol, subset ?? "");
+            var entry = SymbolPickerCatalogPlanner.CreateSymbolEntry(selection.Symbol, subset ?? "");
             ApplySelection(selection);
             preview.Text = CreateVisibleSymbolText(selection.Symbol);
             selectedCode.Text = string.IsNullOrEmpty(codeText) ? selection.CodeText : codeText;
@@ -88,7 +88,9 @@ public sealed partial class SymbolPickerDialog
         {
             recentItems.Clear();
             foreach (var symbol in recentSymbols)
-                recentItems.Add(CreateSymbolEntry(symbol, UiText.Get("SymbolPicker_RecentlyUsedSymbols")));
+                recentItems.Add(SymbolPickerCatalogPlanner.CreateSymbolEntry(
+                    symbol,
+                    UiText.Get("SymbolPicker_RecentlyUsedSymbols")));
         }
 
         void AcceptSelectedSymbol()
@@ -96,7 +98,10 @@ public sealed partial class SymbolPickerDialog
             if (string.IsNullOrEmpty(SelectedSymbol))
                 return;
 
-            recentSymbols = PromoteRecentSymbol(recentSymbols, SelectedSymbol, 12).ToList();
+            recentSymbols = SymbolPickerCatalogPlanner.PromoteRecentSymbol(
+                recentSymbols,
+                SelectedSymbol,
+                12).ToList();
             PopulateRecent();
             DialogResult = true;
         }
@@ -344,7 +349,7 @@ public sealed partial class SymbolPickerDialog
     {
         var specialList = new ListView
         {
-            ItemsSource = GetSpecialCharacters(),
+            ItemsSource = SymbolPickerCatalogPlanner.GetSpecialCharacters(),
             SelectionMode = SelectionMode.Single,
             ItemContainerStyle = CreateSpecialCharacterItemStyle()
         };
@@ -460,9 +465,9 @@ public sealed partial class SymbolPickerDialog
         AutomationProperties.SetHelpText(codeSelect, UiText.Get("SymbolPicker_GoToCharacterCodeHelpText"));
         codeSelect.Click += (_, _) =>
         {
-            if (TryParseCharacterCode(selectedCode.Text, out var symbol))
+            if (SymbolPickerCatalogPlanner.TryParseCharacterCode(selectedCode.Text, out var symbol))
             {
-                var entry = CreateSymbolEntry(symbol, "");
+                var entry = SymbolPickerCatalogPlanner.CreateSymbolEntry(symbol, "");
                 selectSymbolText(entry.Symbol, entry.Name, entry.Subset, entry.CodeText);
             }
             else

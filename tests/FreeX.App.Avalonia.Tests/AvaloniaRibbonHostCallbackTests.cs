@@ -15,44 +15,40 @@ namespace FreeX.App.Avalonia.Tests;
 
 /// <summary>
 /// Verifies the Avalonia ribbon registry binds the shell's host callbacks to the right command ids, so the
-/// declarative ribbon invokes the same handlers as the native menus (charts/CF/table/quick-analysis/etc.).
+/// declarative ribbon invokes the same handlers as the native menus (charts/CF/table/etc.).
 /// The ribbon definition is now the single-source shared <see cref="FreeXRibbon"/>; the shell registers
-/// handlers under its historical dotted ids, which are re-keyed to the canonical ids the shared definition
-/// emits via <see cref="FreeXRibbonCommandIdentityCatalog"/>. Tests therefore resolve through the catalog. Pure
-/// registry assertions — no running shell or UI thread required.
+/// handlers directly under canonical ids obtained from <see cref="FreeXRibbonCommandCatalog"/>. Pure registry
+/// assertions — no running shell or UI thread required.
 /// </summary>
 public sealed class AvaloniaRibbonHostCallbackTests
 {
     private static readonly RibbonCommandContext EmptyContext =
         new(new Dictionary<string, object?>());
 
-    private static RibbonCommandId Canonical(string avaloniaId) =>
-        new(FreeXRibbonCommandIdentityCatalog.ToCanonical(avaloniaId));
+    private static RibbonCommandId Canonical(string canonicalId) =>
+        FreeXRibbonCommandCatalog.GetRequired(canonicalId);
 
     [Theory]
-    [InlineData("data.textToColumns")]
-    [InlineData("data.consolidate")]
-    [InlineData("insert.table")]
-    [InlineData("home.formatAsTable")]
-    [InlineData("home.conditional")]
-    [InlineData("data.quickAnalysis")]
-    [InlineData("data.sortAsc")]
-    [InlineData("data.sortDesc")]
-    [InlineData("data.filter")]
-    [InlineData("data.validation")]
-    [InlineData("data.validationDialog")]
-    [InlineData("home.cut")]
-    [InlineData("home.copy")]
-    [InlineData("home.paste")]
-    [InlineData("home.alignLeft")]
-    [InlineData("home.alignCenter")]
-    [InlineData("home.alignRight")]
-    [InlineData("home.wrapText")]
-    [InlineData("home.merge")]
-    [InlineData("home.mergeCenter")]
-    [InlineData("home.currency")]
-    [InlineData("home.percent")]
-    [InlineData("home.comma")]
+    [InlineData("Text to Columns")]
+    [InlineData("Consolidate")]
+    [InlineData("Table")]
+    [InlineData("Format as Table")]
+    [InlineData("Conditional Formatting")]
+    [InlineData("Sort A to Z#SortAscButton_Click")]
+    [InlineData("Sort Z to A#SortDescButton_Click")]
+    [InlineData("Filter#FilterButton_Click")]
+    [InlineData("Data Validation#ValidationButton_Click")]
+    [InlineData("Cut")]
+    [InlineData("Copy")]
+    [InlineData("Paste")]
+    [InlineData("Align Left")]
+    [InlineData("Center")]
+    [InlineData("Align Right")]
+    [InlineData("Wrap Text")]
+    [InlineData("Merge & Center")]
+    [InlineData("Accounting Number Format")]
+    [InlineData("Percent Style")]
+    [InlineData("Comma Style")]
     public void BuildRegistry_WithCallbacks_BindsRealCommand(string commandId)
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, AllWired());
@@ -62,9 +58,9 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Theory]
-    [InlineData("insert.table")]
-    [InlineData("home.conditional")]
-    [InlineData("data.sortAsc")]
+    [InlineData("Table")]
+    [InlineData("Conditional Formatting")]
+    [InlineData("Sort A to Z#SortAscButton_Click")]
     public void BuildRegistry_WithoutCallbacks_LeavesNoOp(string commandId)
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
@@ -83,7 +79,6 @@ public sealed class AvaloniaRibbonHostCallbackTests
             OpenConsolidate = () => fired.Add("consolidate"),
             InsertTable = () => fired.Add("table"),
             ConditionalFormatting = () => fired.Add("conditional"),
-            QuickAnalysis = () => fired.Add("quickAnalysis"),
             SortAscending = () => fired.Add("sortAsc"),
             SortDescending = () => fired.Add("sortDesc"),
             DataValidation = () => fired.Add("validation"),
@@ -93,15 +88,13 @@ public sealed class AvaloniaRibbonHostCallbackTests
         };
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, callbacks);
 
-        Execute(registry, "data.quickAnalysis");
-        Execute(registry, "insert.table");
-        Execute(registry, "home.conditional");
-        Execute(registry, "data.sortDesc");
-        Execute(registry, "home.copy");
-        Execute(registry, "home.alignCenter");
-        Execute(registry, "home.percent");
+        Execute(registry, "Table");
+        Execute(registry, "Conditional Formatting");
+        Execute(registry, "Sort Z to A#SortDescButton_Click");
+        Execute(registry, "Copy");
+        Execute(registry, "Center");
+        Execute(registry, "Percent Style");
 
-        Assert.Contains("quickAnalysis", fired);
         Assert.Contains("table", fired);
         Assert.Contains("conditional", fired);
         Assert.Contains("sortDesc", fired);
@@ -111,34 +104,29 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
-    public void ExtraCommands_BindParameterizedMenuItems_AndExecute()
+    public void ExtraCommands_BindCanonicalMenuItems_AndExecute()
     {
-        // ExtraCommands keys that have a canonical mapping route to the shared definition's ids; the menu/swatch
-        // items without a canonical equivalent pass through unchanged (and are registered under that raw id).
+        // ExtraCommands accepts only canonical ids emitted by the shared definition.
         var fired = new List<string>();
         var callbacks = new AvaloniaRibbonHostCallbacks
         {
             ExtraCommands = new Dictionary<string, Action>
             {
-                ["home.fmtGeneral"] = () => fired.Add("general"),
-                ["home.fmtDate"] = () => fired.Add("date"),
-                ["home.fillYellow"] = () => fired.Add("yellow"),
-                ["home.bordersAll"] = () => fired.Add("bordersAll"),
-                ["home.pasteValues"] = () => fired.Add("pasteValues"),
+                ["All Borders"] = () => fired.Add("bordersAll"),
+                ["Paste Values"] = () => fired.Add("pasteValues"),
+                ["Clear Contents"] = () => fired.Add("clearContents"),
             },
         };
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, callbacks);
 
-        Assert.True(registry.TryGet(Canonical("home.bordersAll"), out var c));
+        Assert.True(registry.TryGet(Canonical("All Borders"), out var c));
         Assert.IsType<ActionRibbonCommand>(c);
 
-        Execute(registry, "home.fmtGeneral");
-        Execute(registry, "home.fmtDate");
-        Execute(registry, "home.fillYellow");
-        Execute(registry, "home.bordersAll");
-        Execute(registry, "home.pasteValues");
+        Execute(registry, "All Borders");
+        Execute(registry, "Paste Values");
+        Execute(registry, "Clear Contents");
 
-        Assert.Equal(new[] { "general", "date", "yellow", "bordersAll", "pasteValues" }, fired);
+        Assert.Equal(new[] { "bordersAll", "pasteValues", "clearContents" }, fired);
     }
 
     [Fact]
@@ -228,33 +216,33 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Theory]
-    [InlineData("formulas.insertFunction")]
-    [InlineData("formulas.nameManager")]
-    [InlineData("formulas.autoSum")]
-    [InlineData("review.protectSheet")]
-    [InlineData("review.checkAccessibility")]
-    [InlineData("review.convertNotesToComments")]
-    [InlineData("help.copyDiagnostics")]
-    [InlineData("help.legalNotices")]
-    [InlineData("view.gridlines")]
-    [InlineData("view.freezePanes")]
-    [InlineData("view.zoom100")]
-    [InlineData("pageLayout.margins")]
-    [InlineData("home.strikethrough")]
-    [InlineData("home.increaseFont")]
-    [InlineData("home.alignTop")]
-    [InlineData("home.increaseIndent")]
-    [InlineData("home.increaseDecimal")]
-    [InlineData("data.flashFill")]
-    [InlineData("data.removeDuplicates")]
-    [InlineData("data.advancedFilter")]
-    [InlineData("data.whatIf")]
-    [InlineData("view.unhide")]
-    [InlineData("view.split")]
-    [InlineData("pageLayout.printTitles")]
-    [InlineData("formulas.mathTrig")]
-    [InlineData("formulas.lookupReference")]
-    [InlineData("home.formatCells")]
+    [InlineData("More Functions#FormulaMoreBtn_Click")]
+    [InlineData("Name Manager")]
+    [InlineData("AutoSum#FormulasAutoSumPickerBtn_Click")]
+    [InlineData("Protect Sheet#ProtectSheetBtn_Click")]
+    [InlineData("Check Accessibility")]
+    [InlineData("Convert to Comments")]
+    [InlineData("Copy Diagnostics#CopyDiagnosticsBtn_Click")]
+    [InlineData("Legal Notices#LegalNoticesBtn_Click")]
+    [InlineData("Gridlines")]
+    [InlineData("Freeze Panes#FreezePanesPickerBtn_Click")]
+    [InlineData("100%#Zoom100Btn_Click")]
+    [InlineData("Margins")]
+    [InlineData("Strikethrough")]
+    [InlineData("Increase Font Size")]
+    [InlineData("Top Align")]
+    [InlineData("Increase Indent")]
+    [InlineData("Increase Decimal Places")]
+    [InlineData("Flash Fill")]
+    [InlineData("Remove Duplicates#RemoveDuplicatesBtn_Click")]
+    [InlineData("Advanced")]
+    [InlineData("What-If Analysis")]
+    [InlineData("Unhide")]
+    [InlineData("Split")]
+    [InlineData("Print Titles")]
+    [InlineData("Math & Trig")]
+    [InlineData("Lookup & Reference")]
+    [InlineData("Format")]
     // Home ▸ Editing ▸ Fill / Clear dropdown items are wired under their raw canonical menu ids.
     [InlineData("Down")]
     [InlineData("Right")]
@@ -327,11 +315,11 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
-    public void ConditionalFormatPopupCatalogRows_AreRealRawCommandIds_AndBindViaExtraCommands()
+    public void ConditionalFormatPopupCatalogRows_AreCanonicalCommandIds_AndBindViaExtraCommands()
     {
         foreach (var item in ConditionalFormatPresetGalleryPlanner.PopupItems)
         {
-            Assert.Contains(item.CommandId, FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds);
+            Assert.True(FreeXRibbonCommandCatalog.TryGet(item.CommandId, out _));
 
             var defaults = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
             Assert.True(defaults.TryGet(Canonical(item.CommandId), out var noOp), $"Conditional-format popup id '{item.CommandId}' is not in the shared definition.");
@@ -417,7 +405,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(
             () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontSize = v => applied = v });
 
-        Assert.True(registry.TryGet(Canonical("home.fontSize"), out var command));
+        Assert.True(registry.TryGet(Canonical("Font Size"), out var command));
         Assert.IsType<ValueRibbonCommand>(command);
 
         command!.Execute(RibbonCommandContext.ForSelectedValue("14"));
@@ -429,7 +417,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
-        Assert.True(registry.TryGet(Canonical("home.fontSize"), out var command));
+        Assert.True(registry.TryGet(Canonical("Font Size"), out var command));
         Assert.IsType<EmptyRibbonCommand>(command);
     }
 
@@ -440,7 +428,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(
             () => null, _ => { }, new AvaloniaRibbonHostCallbacks { SetFontName = v => applied = v });
 
-        Assert.True(registry.TryGet(Canonical("home.fontName"), out var command));
+        Assert.True(registry.TryGet(Canonical("Font"), out var command));
         Assert.IsType<ValueRibbonCommand>(command);
 
         command!.Execute(RibbonCommandContext.ForSelectedValue("Arial"));
@@ -452,14 +440,14 @@ public sealed class AvaloniaRibbonHostCallbackTests
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
 
-        Assert.True(registry.TryGet(Canonical("home.fontName"), out var command));
+        Assert.True(registry.TryGet(Canonical("Font"), out var command));
         Assert.IsType<EmptyRibbonCommand>(command);
     }
 
     [Theory]
-    [InlineData("pageLayout.width", "2 pages")]
-    [InlineData("pageLayout.height", "3 pages")]
-    [InlineData("pageLayout.scale", "85%")]
+    [InlineData("Scale Width", "2 pages")]
+    [InlineData("Scale Height", "3 pages")]
+    [InlineData("Scale Percent", "85%")]
     public void PageLayoutScaleCombos_PassSelectedValueToValueAwareCallbacks(
         string commandId,
         string selectedValue)
@@ -475,9 +463,9 @@ public sealed class AvaloniaRibbonHostCallbackTests
                 {
                     [commandId] = () => openedPageSetup = true,
                 },
-                SetPageLayoutScaleWidth = commandId == "pageLayout.width" ? value => applied = value : null,
-                SetPageLayoutScaleHeight = commandId == "pageLayout.height" ? value => applied = value : null,
-                SetPageLayoutScalePercent = commandId == "pageLayout.scale" ? value => applied = value : null,
+                SetPageLayoutScaleWidth = commandId == "Scale Width" ? value => applied = value : null,
+                SetPageLayoutScaleHeight = commandId == "Scale Height" ? value => applied = value : null,
+                SetPageLayoutScalePercent = commandId == "Scale Percent" ? value => applied = value : null,
             });
 
         Assert.True(registry.TryGet(Canonical(commandId), out var command));
@@ -494,9 +482,9 @@ public sealed class AvaloniaRibbonHostCallbackTests
     {
         var states = new Dictionary<string, Func<RibbonCommandState>>
         {
-            ["pageLayout.width"] = () => new RibbonCommandState(Value: "4 pages"),
-            ["pageLayout.height"] = () => new RibbonCommandState(Value: "Automatic"),
-            ["pageLayout.scale"] = () => new RibbonCommandState(Value: "125%"),
+            ["Scale Width"] = () => new RibbonCommandState(Value: "4 pages"),
+            ["Scale Height"] = () => new RibbonCommandState(Value: "Automatic"),
+            ["Scale Percent"] = () => new RibbonCommandState(Value: "125%"),
         };
         var registry = AvaloniaRibbonComposition.BuildRegistry(
             () => null,
@@ -509,9 +497,9 @@ public sealed class AvaloniaRibbonHostCallbackTests
                 ExtraCommandStates = states,
             });
 
-        AssertStateValue(registry, "pageLayout.width", "4 pages");
-        AssertStateValue(registry, "pageLayout.height", "Automatic");
-        AssertStateValue(registry, "pageLayout.scale", "125%");
+        AssertStateValue(registry, "Scale Width", "4 pages");
+        AssertStateValue(registry, "Scale Height", "Automatic");
+        AssertStateValue(registry, "Scale Percent", "125%");
 
         static void AssertStateValue(IRibbonCommandRegistry registry, string commandId, string expected)
         {
@@ -551,15 +539,15 @@ public sealed class AvaloniaRibbonHostCallbackTests
         {
             ExtraCommands = new Dictionary<string, Action>
             {
-                ["view.gridlines"] = () => { },
+                ["Gridlines"] = () => { },
             },
             ExtraCommandStates = new Dictionary<string, Func<RibbonCommandState>>
             {
-                ["view.gridlines"] = () => new RibbonCommandState(IsChecked: true),
+                ["Gridlines"] = () => new RibbonCommandState(IsChecked: true),
             },
         });
 
-        Assert.True(registry.TryGet(Canonical("view.gridlines"), out var command));
+        Assert.True(registry.TryGet(Canonical("Gridlines"), out var command));
         var stateful = Assert.IsAssignableFrom<IRibbonStatefulCommand>(command);
         Assert.True(stateful.GetState().IsChecked);
     }
@@ -573,8 +561,8 @@ public sealed class AvaloniaRibbonHostCallbackTests
             InsertShape = _ => { },
         });
 
-        Assert.True(registry.TryGet(Canonical("insert.picture"), out var picture));
-        Assert.True(registry.TryGet(Canonical("insert.shapes"), out var shapes));
+        Assert.True(registry.TryGet(Canonical("Pictures"), out var picture));
+        Assert.True(registry.TryGet(Canonical("Shapes"), out var shapes));
         Assert.IsType<ActionRibbonCommand>(picture);
         Assert.IsType<ActionRibbonCommand>(shapes);
     }
@@ -587,13 +575,13 @@ public sealed class AvaloniaRibbonHostCallbackTests
         {
             ExtraCommands = new Dictionary<string, Action>
             {
-                ["shapeFormat.rotate"] = () => fired.Add("rotate"),
-                ["shapeFormat.size"] = () => fired.Add("size"),
+                ["Rotate Object"] = () => fired.Add("rotate"),
+                ["Object Size"] = () => fired.Add("size"),
             },
         });
 
-        Execute(registry, "shapeFormat.rotate");
-        Execute(registry, "shapeFormat.size");
+        Execute(registry, "Rotate Object");
+        Execute(registry, "Object Size");
 
         Assert.Equal(new[] { "rotate", "size" }, fired);
 
@@ -616,79 +604,49 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(
             () => null, _ => { }, new AvaloniaRibbonHostCallbacks { InsertTable = () => count++ });
 
-        Execute(registry, "insert.table");
-        Execute(registry, "home.formatAsTable");
+        Execute(registry, "Table");
+        Execute(registry, "Format as Table");
 
         Assert.Equal(2, count);
     }
 
-    /// <summary>
-    /// The keystone single-source guarantee: every Avalonia handler id the adapter knows maps to a canonical
-    /// id that the shared <see cref="FreeXRibbon.Build"/> definition actually emits, so each handler binds to a
-    /// real control/menu item the renderer queries.
-    /// </summary>
     [Fact]
-    public void EveryAvaloniaHandlerId_MapsToACanonicalIdPresentInTheSharedDefinition()
+    public void CanonicalCatalog_IsDerivedFromTheSharedDefinition()
     {
-        var canonicalIds = AvaloniaRibbonComposition
-            .EnumerateCommandIds(FreeXRibbon.Build())
+        var definitionIds = FreeXRibbonCommandCatalog
+            .Enumerate(FreeXRibbon.Build())
             .Select(id => id.Value)
-            .ToHashSet(StringComparer.Ordinal);
-
-        var unmapped = FreeXRibbonCommandIdentityCatalog.AvaloniaIds
-            .Where(avaloniaId => !canonicalIds.Contains(FreeXRibbonCommandIdentityCatalog.ToCanonical(avaloniaId)))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+        var catalogIds = FreeXRibbonCommandCatalog.All
+            .Select(id => id.Value)
             .OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
 
-        Assert.True(unmapped.Length == 0,
-            "Avalonia handler ids whose canonical mapping is absent from FreeXRibbon.Build(): "
-                + string.Join(", ", unmapped));
+        Assert.Equal(definitionIds, catalogIds);
     }
 
-    /// <summary>
-    /// The documented orphans (features with no canonical control in the shared definition) pass through
-    /// <see cref="FreeXRibbonCommandIdentityCatalog.ToCanonical"/> unchanged and are intentionally NOT present in the
-    /// shared definition — so their handler registration is harmless dead weight, never a hijack of an
-    /// unrelated canonical control.
-    /// </summary>
     [Fact]
-    public void OrphanAvaloniaIds_AreAbsentFromTheSharedDefinition_AndPassThroughUnchanged()
+    public void UnknownExtraCommandId_IsRejectedInsteadOfCreatingAnUnreachableRegistration()
     {
-        var canonicalIds = AvaloniaRibbonComposition
-            .EnumerateCommandIds(FreeXRibbon.Build())
-            .Select(id => id.Value)
-            .ToHashSet(StringComparer.Ordinal);
-
-        foreach (var orphan in FreeXRibbonCommandIdentityCatalog.OrphanAvaloniaIds)
+        var callbacks = new AvaloniaRibbonHostCallbacks
         {
-            Assert.Equal(orphan, FreeXRibbonCommandIdentityCatalog.ToCanonical(orphan));
-            Assert.DoesNotContain(orphan, canonicalIds);
-            Assert.False(FreeXRibbonCommandIdentityCatalog.IsKnownAvaloniaId(orphan),
-                $"Orphan '{orphan}' must not also have a canonical mapping.");
-        }
+            ExtraCommands = new Dictionary<string, Action>
+            {
+                ["legacy.unreachable"] = () => { },
+            },
+        };
+
+        Assert.Throws<ArgumentException>(() =>
+            AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, callbacks));
     }
-
-    [Fact]
-    public void ToCanonical_And_ToAvalonia_RoundTripForPrimaryIds()
-    {
-        // ToAvalonia maps a canonical id back to its primary Avalonia id; for ids that are not aliased, the
-        // round-trip is stable.
-        Assert.Equal("Bold", FreeXRibbonCommandIdentityCatalog.ToCanonical("home.bold"));
-        Assert.Equal("home.bold", FreeXRibbonCommandIdentityCatalog.ToAvalonia("Bold"));
-        Assert.Equal("Change Chart Type#ChangeChartTypeBtn_Click", FreeXRibbonCommandIdentityCatalog.ToCanonical("chartDesign.changeType"));
-
-        // Unknown ids pass through unchanged.
-        Assert.Equal("not.a.real.id", FreeXRibbonCommandIdentityCatalog.ToCanonical("not.a.real.id"));
-        Assert.Equal("Not A Real Canonical", FreeXRibbonCommandIdentityCatalog.ToAvalonia("Not A Real Canonical"));
-    }
-
     private static AvaloniaRibbonHostCallbacks AllWired() => new()
     {
         OpenTextToColumns = () => { },
         OpenConsolidate = () => { },
         InsertTable = () => { },
         ConditionalFormatting = () => { },
-        QuickAnalysis = () => { },
         SortAscending = () => { },
         SortDescending = () => { },
         ToggleFilter = () => { },

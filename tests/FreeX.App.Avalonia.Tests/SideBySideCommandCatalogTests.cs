@@ -1,6 +1,5 @@
-using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Avalonia.Tests.Parity;
-using FreeX.App.Presentation.Ribbon;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -12,17 +11,17 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class SideBySideCommandCatalogTests
 {
     [Fact]
-    public void ViewSideBySide_IsInRawCanonical()
+    public void ViewSideBySide_IsCanonicalAndBound()
     {
-        FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds.Should().Contain("View Side by Side",
-            "the command must be registered in the Avalonia extra-command catalog so the parity matrix counts it");
+        FreeXRibbonCommandCatalog.TryGet("View Side by Side", out _).Should().BeTrue();
+        SurfaceCatalog.AvaloniaBoundCanonicalIds.Should().Contain("View Side by Side");
     }
 
     [Fact]
-    public void SynchronousScrolling_IsInRawCanonical()
+    public void SynchronousScrolling_IsCanonicalAndBound()
     {
-        FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds.Should().Contain("Synchronous Scrolling",
-            "the command must be registered in the Avalonia extra-command catalog so the parity matrix counts it");
+        FreeXRibbonCommandCatalog.TryGet("Synchronous Scrolling", out _).Should().BeTrue();
+        SurfaceCatalog.AvaloniaBoundCanonicalIds.Should().Contain("Synchronous Scrolling");
     }
 
     [Fact]
@@ -49,10 +48,10 @@ public sealed class SideBySideCommandCatalogTests
     [Theory]
     [InlineData("B4 (JIS)")]
     [InlineData("B5 (JIS)")]
-    public void JisPaperSize_IsInRawCanonical(string commandId)
+    public void JisPaperSize_IsCanonicalAndBound(string commandId)
     {
-        FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds.Should().Contain(commandId,
-            "the Avalonia extra-command catalog must use the shared suffixed paper-size ids");
+        FreeXRibbonCommandCatalog.TryGet(commandId, out _).Should().BeTrue();
+        SurfaceCatalog.AvaloniaBoundCanonicalIds.Should().Contain(commandId);
     }
 
     [Theory]

@@ -12,8 +12,8 @@ namespace FreeX.App.Host.Tests;
 /// the latter guard exists specifically because <see cref="GoalSeekCommand"/>.Apply unconditionally
 /// overwrites the changing cell with a plain <see cref="NumberValue"/>, with no formula check of its
 /// own, so skipping the guard silently destroys whatever formula was there. The WPF host's own
-/// <c>GoalSeekBtn_Click</c> (MainWindow.DataCommands.cs) drove <c>GoalSeekInputParser</c> ->
-/// <c>GoalSeekRequestParser</c>, which validates only cell-reference SYNTAX and that Set/Changing
+/// <c>GoalSeekBtn_Click</c> (MainWindow.DataCommands.cs) drives <c>GoalSeekRequestParser</c>, which
+/// validates only cell-reference SYNTAX and that Set/Changing
 /// differ -- never what the two cells actually contain -- so neither guard existed on this
 /// platform. These tests drive the WPF window's shared <see cref="WorkbookSession"/> directly so
 /// content validation remains portable and testable without showing either modal dialog.

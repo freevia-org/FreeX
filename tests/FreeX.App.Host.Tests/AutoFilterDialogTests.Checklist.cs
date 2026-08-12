@@ -15,7 +15,7 @@ public sealed partial class AutoFilterDialogTests
             new AutoFilterDialogItem("(Blanks)", "", true)
         };
 
-        var filtered = AutoFilterDialog.FilterItems(items, "app");
+        var filtered = AutoFilterDialogCriteriaPlanner.FilterItems(items, "app");
 
         filtered.Should().Equal(new AutoFilterDialogItem("Apple", "Apple", true));
         items.Should().Contain(new AutoFilterDialogItem("Banana", "Banana", false));
@@ -30,8 +30,8 @@ public sealed partial class AutoFilterDialogTests
             new AutoFilterDialogItem("Banana", "Banana", true)
         };
 
-        AutoFilterDialog.SelectAll(items).Should().OnlyContain(item => item.IsSelected);
-        AutoFilterDialog.ClearAll(items).Should().OnlyContain(item => !item.IsSelected);
+        AutoFilterDialogCriteriaPlanner.SelectAll(items).Should().OnlyContain(item => item.IsSelected);
+        AutoFilterDialogCriteriaPlanner.ClearAll(items).Should().OnlyContain(item => !item.IsSelected);
     }
 
     [Fact]
@@ -44,7 +44,7 @@ public sealed partial class AutoFilterDialogTests
             new AutoFilterDialogItem("Banana", "Banana", true)
         };
 
-        var updated = AutoFilterDialog.SetSelectionForSearch(items, "ap", isSelected: true);
+        var updated = AutoFilterDialogCriteriaPlanner.SetSelectionForSearch(items, "ap", isSelected: true);
 
         updated.Should().Equal(
             new AutoFilterDialogItem("Apple", "Apple", true),
@@ -59,7 +59,7 @@ public sealed partial class AutoFilterDialogTests
 
         item.IsSelected = false;
 
-        AutoFilterDialog.BuildResult(AutoFilterSortDirection.None, [item], "", "")
+        AutoFilterDialogCriteriaPlanner.BuildResult(AutoFilterSortDirection.None, [item], "", "")
             .SelectedValues.Should().BeEmpty();
     }
 }

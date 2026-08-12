@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Ribbon;
 using FreeX.Ribbon.Definitions;
 using Free.Shared.Ribbon;
@@ -18,9 +21,8 @@ namespace FreeX.App.Avalonia.Tests.Parity;
 ///
 /// "Handled by the WPF shell" is sourced from the generated WPF handler map snapshot
 /// (<c>docs/parity/wpf-handler-ids.txt</c>, kept in lock-step with <c>FreeXRibbonHandlerMap</c> by a guard
-/// test in the App.Host.Tests lane). "Bound by the Avalonia shell" is sourced from
-/// <see cref="FreeXRibbonCommandIdentityCatalog"/> — the documented single-source map of every Avalonia handler id to
-/// its canonical control, which the keystone test already proves maps only to real shared-definition ids.
+/// test in the App.Host.Tests lane). Avalonia coverage is derived from its endpoint dictionaries and
+/// callback registrations, with every key validated against the shared definition.
 /// </summary>
 public static class SurfaceCatalog
 {
@@ -48,26 +50,14 @@ public static class SurfaceCatalog
         .ToArray();
 
     /// <summary>
-    /// The complete set of canonical ids the Avalonia shell binds a handler for. The shell wires commands
-    /// through three statically-enumerable sources, all unioned here:
-    /// <list type="bullet">
-    ///   <item>the dotted handler ids in <see cref="FreeXRibbonCommandIdentityCatalog"/>, projected to canonical;</item>
-    ///   <item>the raw-canonical <c>ExtraCommands</c> menu/gallery wirings (<see cref="FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds"/>);</item>
-    ///   <item>the Home ▸ Styles ▸ Cell Styles gallery presets, whose display name IS the canonical id.</item>
-    /// </list>
-    /// This mirrors exactly how <c>MainWindow</c> assembles its ribbon callbacks, so the parity matrix counts
-    /// the real Avalonia binding surface rather than the adapter subset alone.
+    /// The complete set of canonical ids the Avalonia shell binds, derived from its actual endpoint
+    /// dictionaries and callback registrations rather than a parallel command inventory.
     /// </summary>
     public static IReadOnlySet<string> AvaloniaBoundCanonicalIds { get; } = BuildAvaloniaBoundIds();
 
     private static IReadOnlySet<string> BuildAvaloniaBoundIds()
     {
-        var ids = FreeXRibbonCommandIdentityCatalog.AvaloniaIds
-            .Select(FreeXRibbonCommandIdentityCatalog.ToCanonical)
-            .ToHashSet(StringComparer.Ordinal);
-
-        foreach (var raw in FreeXRibbonCommandIdentityCatalog.RawCanonicalAvaloniaIds)
-            ids.Add(raw);
+        var ids = ExtractLiteralEndpointIds();
 
         foreach (var preset in Enum.GetValues<FreeX.App.Services.CellStylePreset>())
             ids.Add(FreeX.App.Services.CellStyleDiffPlanner.GetCellStylePresetDisplayName(preset));
@@ -77,6 +67,43 @@ public static class SurfaceCatalog
         foreach (var id in CanonicalCommandIds)
             if (FreeX.App.Presentation.Charts.Editing.ChartCommandWorkflowPlanner.ChartTypeForRibbonCommand(id) is not null)
                 ids.Add(id);
+
+        return ids;
+    }
+
+    private static HashSet<string> ExtractLiteralEndpointIds()
+    {
+        var root = FunctionalParityMatrix.RepoRoot();
+        var files = new[]
+        {
+            Path.Combine(root, "src", "FreeX.App.Avalonia", "MainWindow.cs"),
+            Path.Combine(root, "src", "FreeX.App.Avalonia", "MainWindow.ContextualTabs.cs"),
+            Path.Combine(root, "src", "FreeX.App.Avalonia", "MainWindow.HomeBorders.cs"),
+            Path.Combine(root, "src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaRibbonHost.cs"),
+        };
+        var patterns = new[]
+        {
+            new Regex("^\\s*(?:commands)?\\[\\\"(?<key>(?:[^\\\"\\\\]|\\\\.)*)\\\"\\]\\s*=", RegexOptions.Compiled),
+            new Regex("^\\s*Bind\\(\\\"(?<key>(?:[^\\\"\\\\]|\\\\.)*)\\\"", RegexOptions.Compiled),
+            new Regex("^\\s*Register\\(registry,\\s*\\\"(?<key>(?:[^\\\"\\\\]|\\\\.)*)\\\"", RegexOptions.Compiled),
+        };
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var file in files)
+        foreach (var line in File.ReadLines(file))
+        foreach (var pattern in patterns)
+        {
+            var match = pattern.Match(line);
+            if (!match.Success)
+                continue;
+
+            var value = Regex.Unescape(match.Groups["key"].Value);
+            ids.Add(FreeXRibbonCommandCatalog.GetRequired(value).Value);
+            break;
+        }
+
+        foreach (var descriptor in PageLayoutRibbonActionPlanner.RibbonActionDescriptors)
+            ids.Add(FreeXRibbonCommandCatalog.GetRequired(descriptor.CommandId).Value);
 
         return ids;
     }

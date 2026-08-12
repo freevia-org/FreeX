@@ -109,7 +109,7 @@ public static class AutoFilterDropdownMenuPlanner
     private static AutoFilterMenuEntry CreateSeparator() =>
         new(string.Empty, AutoFilterMenuEntryKind.Separator, isEnabled: false);
 
-    private static (string Ascending, string Descending) GetSortLabels(
+    public static (string Ascending, string Descending) GetSortLabels(
         AutoFilterMenuFilterKind filterKind,
         IAutoFilterMenuTextProvider textProvider) =>
         filterKind switch

@@ -262,7 +262,7 @@ public sealed partial class AutoFilterDialog
 
     private void ApplySortCommand(AutoFilterSortDirection direction)
     {
-        CommitResult(BuildResult(
+        CommitResult(AutoFilterDialogCriteriaPlanner.BuildResult(
             direction,
             _allItems,
             string.Empty,
@@ -270,14 +270,6 @@ public sealed partial class AutoFilterDialog
             null,
             addCurrentSelectionToFilter: false));
     }
-
-    public static (string Ascending, string Descending) GetSortLabels(AutoFilterMenuFilterKind filterKind) =>
-        filterKind switch
-        {
-            AutoFilterMenuFilterKind.Number => (UiText.Get("AutoFilter_SortSmallestToLargest"), UiText.Get("AutoFilter_SortLargestToSmallest")),
-            AutoFilterMenuFilterKind.Date => (UiText.Get("AutoFilter_SortOldestToNewest"), UiText.Get("AutoFilter_SortNewestToOldest")),
-            _ => (UiText.Get("AutoFilter_SortAToZ"), UiText.Get("AutoFilter_SortZToA"))
-        };
 
     private void SetSortLabels(AutoFilterMenuPlan menuPlan)
     {
@@ -295,7 +287,9 @@ public sealed partial class AutoFilterDialog
 
     private void SetSortLabels(AutoFilterMenuFilterKind filterKind)
     {
-        var labels = GetSortLabels(filterKind);
+        var labels = AutoFilterDropdownMenuPlanner.GetSortLabels(
+            filterKind,
+            AutoFilterMenuResources.TextProvider);
         SetMenuCommandButtonContent(_sortAscendingButton, labels.Ascending, RibbonCommandIconKind.SortAscending);
         SetMenuCommandButtonContent(_sortDescendingButton, labels.Descending, RibbonCommandIconKind.SortDescending);
     }
@@ -472,7 +466,7 @@ public sealed partial class AutoFilterDialog
     private void ApplyColorChoice(AutoFilterColorFilter colorFilter)
     {
         _selectedColorFilter = colorFilter;
-        CommitResult(BuildResult(
+        CommitResult(AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.None,
             _allItems,
             _searchBox.Text,
@@ -540,7 +534,7 @@ public sealed partial class AutoFilterDialog
     }
 
     private void ApplySortByColorChoice(AutoFilterColorFilter colorFilter) =>
-        CommitResult(BuildSortByColorResult(colorFilter));
+        CommitResult(AutoFilterDialogCriteriaPlanner.BuildSortByColorResult(colorFilter));
 
     private void ApplySearchTextChange()
     {
@@ -560,7 +554,7 @@ public sealed partial class AutoFilterDialog
         if (_updatingSelectAllBox)
             return;
 
-        ReplaceAllItems(SetSelectionForSearch(_allItems, _searchBox.Text, isSelected));
+        ReplaceAllItems(AutoFilterDialogCriteriaPlanner.SetSelectionForSearch(_allItems, _searchBox.Text, isSelected));
     }
 
     private void UpdateSelectAllBoxState()

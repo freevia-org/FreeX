@@ -311,7 +311,7 @@ public sealed class FunctionalParityMatrixTests
         sb.Append("Each row is a canonical command id the shared ribbon definition (`FreeXRibbon.Build()`) emits. ");
         sb.Append("`WPF` = the WPF host binds a Click handler for the id (`FreeXRibbonHandlerMap`). ");
         sb.Append("`Avalonia` = the Avalonia shell binds a ribbon-command-registry handler for the id ");
-        sb.Append("(`FreeXRibbonCommandIdentityCatalog` + the shell's raw-canonical `ExtraCommands`, cell-style gallery, ");
+        sb.Append("(the shared ribbon definition + the shell's canonical endpoint dictionaries, cell-style gallery, ");
         sb.Append("and chart factory).\n\n");
         sb.Append("> Caveat: coverage is measured at the *command-binding* layer of each shell. Non-parity rows ");
         sb.Append("are classified in `functional-parity-classification.md/json` so command-binding inventory noise ");

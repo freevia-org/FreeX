@@ -116,6 +116,8 @@ public static class DrawingInsertionPlanner
     public static IEnumerable<DrawingShapeGalleryItem> ShapeItems =>
         ShapeGroups.SelectMany(group => group.Items);
 
+    public static string GetRibbonCommandId(DrawingShapeKind kind) => $"insert.shape.{kind}";
+
     public static AddDrawingShapeCommand BuildShapeCommand(
         SheetId sheetId,
         CellAddress anchor,

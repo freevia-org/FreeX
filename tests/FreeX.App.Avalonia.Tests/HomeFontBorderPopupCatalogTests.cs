@@ -1,5 +1,6 @@
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Ribbon;
+using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -53,9 +54,9 @@ public sealed class HomeFontBorderPopupCatalogTests
     [Fact]
     public void CatalogRows_DoNotRequirePlaceholderAvaloniaHandlersForEveryPopupChoice()
     {
-        FreeXRibbonCommandIdentityCatalog.ToCanonical("home.fontColor").Should().Be("Font Color");
-        FreeXRibbonCommandIdentityCatalog.ToCanonical("home.borders").Should().Be("Borders");
-        FreeXRibbonCommandIdentityCatalog.ToCanonical("home.bordersAll").Should().Be("All Borders");
+        FreeXRibbonCommandCatalog.GetRequired("Font Color").Value.Should().Be("Font Color");
+        FreeXRibbonCommandCatalog.GetRequired("Borders").Value.Should().Be("Borders");
+        FreeXRibbonCommandCatalog.GetRequired("All Borders").Value.Should().Be("All Borders");
 
         HomeFontBorderPopupCatalogPlanner.FontColorSwatches
             .Where(swatch => swatch.BoundCommandId is not null)

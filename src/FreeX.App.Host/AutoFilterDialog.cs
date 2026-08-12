@@ -115,7 +115,7 @@ public sealed partial class AutoFilterDialog : Window
         _clearFilterButton.IsEnabled = FindClearFilterEntry(menuPlan)?.IsEnabled ?? true;
         SetSortLabels(menuPlan);
         ShowFilterFamilyButton(menuPlan.FilterKind);
-        var criteriaSuggestions = GetCriteriaSuggestions(menuPlan);
+        var criteriaSuggestions = AutoFilterDialogCriteriaPlanner.GetCriteriaSuggestions(menuPlan);
         if (criteriaSuggestions.Count > 0)
         {
             _criteriaSuggestionBox.ItemsSource = criteriaSuggestions;
@@ -124,20 +124,24 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaSuggestionLabel.Visibility = Visibility.Visible;
         }
 
-        var criteriaOptions = GetCriteriaOptions(menuPlan.FilterKind);
+        var criteriaOptions = AutoFilterMenuPlanner.CreateCriteriaOptions(menuPlan.FilterKind, AutoFilterMenuResources.TextProvider);
         if (criteriaOptions.Count > 0)
         {
             _criteriaOperatorBox.ItemsSource = criteriaOptions;
             _criteriaOperatorBox.Visibility = Visibility.Visible;
             _criteriaOperatorBox.SelectedIndex = 0;
-            _criteriaOperatorBox.ToolTip = UiText.Format("AutoFilter_FilterFamilyOperatorToolTip", GetFilterFamilyHeader(menuPlan.FilterKind));
+            _criteriaOperatorBox.ToolTip = UiText.Format(
+                "AutoFilter_FilterFamilyOperatorToolTip",
+                AutoFilterMenuPlanner.GetFilterFamilyHeader(menuPlan.FilterKind, AutoFilterMenuResources.TextProvider));
             _criteriaValueBox.Visibility = Visibility.Visible;
             _criteriaValueBox.ToolTip = UiText.Get("AutoFilter_ValueForTheSelectedTypedFilter");
             _criteriaConnectorBox.Visibility = Visibility.Visible;
-            _criteriaOperatorBox2.ItemsSource = GetSecondRowCriteriaOptions(criteriaOptions);
+            _criteriaOperatorBox2.ItemsSource = AutoFilterDialogCriteriaPlanner.GetSecondRowCriteriaOptions(criteriaOptions);
             _criteriaOperatorBox2.Visibility = Visibility.Visible;
             _criteriaOperatorBox2.SelectedIndex = 0;
-            _criteriaOperatorBox2.ToolTip = UiText.Format("AutoFilter_SecondFilterFamilyOperatorToolTip", GetFilterFamilyHeader(menuPlan.FilterKind));
+            _criteriaOperatorBox2.ToolTip = UiText.Format(
+                "AutoFilter_SecondFilterFamilyOperatorToolTip",
+                AutoFilterMenuPlanner.GetFilterFamilyHeader(menuPlan.FilterKind, AutoFilterMenuResources.TextProvider));
             _criteriaValueBox2.Visibility = Visibility.Visible;
             _criteriaValueBox2.ToolTip = UiText.Get("AutoFilter_ValueForTheSecondTypedFilter");
             _criteriaBox.ToolTip = UiText.Get("AutoFilter_GeneratedCriterionThatWillBeApplied");
@@ -148,13 +152,13 @@ public sealed partial class AutoFilterDialog : Window
             _datePresetBox.Visibility = Visibility.Visible;
 
         var colorOptions = menuPlan.ColorOptions ?? [];
-        if (colorOptions.Count > 0 && HasFilterByColorEntry(menuPlan))
+        if (colorOptions.Count > 0 && AutoFilterDialogCriteriaPlanner.HasFilterByColorEntry(menuPlan))
             PopulateColorChoices(colorOptions);
 
         // R76-render-autofilter-dropdown-4-2: "No Fill" has no single color to sort toward (see
         // AutoFilterDropdownMenuPlanner.CreateSortByColorCommand), so only actual colors are offered.
         var sortColorOptions = colorOptions.Where(option => option.Color is not null).ToList();
-        if (sortColorOptions.Count > 0 && HasSortByColorEntry(menuPlan))
+        if (sortColorOptions.Count > 0 && AutoFilterDialogCriteriaPlanner.HasSortByColorEntry(menuPlan))
             PopulateSortByColorChoices(sortColorOptions);
     }
 
@@ -173,7 +177,11 @@ public sealed partial class AutoFilterDialog : Window
     {
         _allItems = items.ToList();
         _items = new ObservableCollection<AutoFilterDialogItem>(_allItems);
-        Result = BuildResult(AutoFilterSortDirection.None, _allItems, string.Empty, string.Empty);
+        Result = AutoFilterDialogCriteriaPlanner.BuildResult(
+            AutoFilterSortDirection.None,
+            _allItems,
+            string.Empty,
+            string.Empty);
 
         Title = UiText.Get("AutoFilter_AutoFilter");
         Width = 312;
@@ -197,7 +205,7 @@ public sealed partial class AutoFilterDialog : Window
             if (!ValidateTypedCriteriaInputs())
                 return;
 
-            CommitResult(BuildResult(
+            CommitResult(AutoFilterDialogCriteriaPlanner.BuildResult(
                 AutoFilterSortDirection.None,
                 _allItems,
                 _searchBox.Text,
@@ -233,8 +241,8 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaBox.Clear();
             _criteriaValueBox.Clear();
             _searchBox.Clear();
-            ReplaceAllItems(SelectAll(_allItems));
-            CommitResult(CreateClearFilterResult());
+            ReplaceAllItems(AutoFilterDialogCriteriaPlanner.SelectAll(_allItems));
+            CommitResult(AutoFilterDialogCriteriaPlanner.CreateClearFilterResult());
         };
         stack.Children.Add(_clearFilterButton);
         _filterByColorGroup.Content = _filterByColorPanel;

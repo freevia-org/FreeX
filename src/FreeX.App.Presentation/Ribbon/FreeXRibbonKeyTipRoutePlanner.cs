@@ -183,7 +183,7 @@ public static class FreeXRibbonKeyTipRoutePlanner
             "dynamic-menu:shape.rectangle",
             FreeXRibbonKeyTipRouteKind.RibbonCommand,
             CommandId: new RibbonCommandId(
-                FreeXRibbonCommandIdentityCatalog.ShapeCommandId(DrawingShapeKind.Rectangle))));
+                DrawingInsertionPlanner.GetRibbonCommandId(DrawingShapeKind.Rectangle))));
 
         return new FreeXRibbonKeyTipRouteCatalog(
             routes.Values.OrderBy(route => route.Input, StringComparer.Ordinal).ToArray());

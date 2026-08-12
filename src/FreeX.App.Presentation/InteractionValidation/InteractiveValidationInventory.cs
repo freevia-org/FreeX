@@ -228,8 +228,8 @@ public static class InteractiveValidationInventory
         RangeTarget("range.page-setup.rows-to-repeat", "Page Setup", "PageSetupDialogModel", "Rows to repeat at top", "Selects the full rows repeated at the top of each printed page.", ["Print titles rows"]),
         RangeTarget("range.page-setup.columns-to-repeat", "Page Setup", "PageSetupDialogModel", "Columns to repeat at left", "Selects the full columns repeated at the left of each printed page.", ["Print titles columns"]),
 
-        RangeTarget("range.goal-seek.set-cell", "Goal Seek", "GoalSeekInputParser", "Set cell", "Selects the single formula cell whose result should reach the target value."),
-        RangeTarget("range.goal-seek.changing-cell", "Goal Seek", "GoalSeekInputParser", "By changing cell", "Selects the single input cell Goal Seek may vary.", ["Changing cell"]),
+        RangeTarget("range.goal-seek.set-cell", "Goal Seek", "GoalSeekRequestParser", "Set cell", "Selects the single formula cell whose result should reach the target value."),
+        RangeTarget("range.goal-seek.changing-cell", "Goal Seek", "GoalSeekRequestParser", "By changing cell", "Selects the single input cell Goal Seek may vary.", ["Changing cell"]),
 
         RangeTarget("range.named-ranges.selected-refers-to", "Named Ranges", "NamedRangeDialogPlanner", "Selected name Refers to", "Replaces the selected name's reference from a worksheet selection.", ["Name Manager Refers to"]),
         RangeTarget("range.named-ranges.definition-refers-to", "Named Ranges", "NamedRangeDialogPlanner", "Name definition Refers to", "Populates the new or edited name definition from a worksheet selection.", ["New Name Refers to", "Edit Name Refers to"]),

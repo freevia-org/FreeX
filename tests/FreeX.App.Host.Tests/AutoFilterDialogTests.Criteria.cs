@@ -13,7 +13,8 @@ public sealed partial class AutoFilterDialogTests
     [InlineData(AutoFilterMenuFilterKind.Date, "AutoFilter_FilterFamily_Date")]
     public void GetFilterFamilyHeader_ReturnsExcelTypedFilterAffordance(AutoFilterMenuFilterKind filterKind, string expectedKey)
     {
-        AutoFilterDialog.GetFilterFamilyHeader(filterKind).Should().Be(UiText.Get(expectedKey));
+        AutoFilterMenuPlanner.GetFilterFamilyHeader(filterKind, InvariantAutoFilterMenuTextProvider.Instance)
+            .Should().Be(UiText.Get(expectedKey));
     }
 
     [Theory]
@@ -25,7 +26,7 @@ public sealed partial class AutoFilterDialogTests
         string expectedAscending,
         string expectedDescending)
     {
-        AutoFilterDialog.GetSortLabels(filterKind)
+        AutoFilterDropdownMenuPlanner.GetSortLabels(filterKind, InvariantAutoFilterMenuTextProvider.Instance)
             .Should()
             .Be((expectedAscending, expectedDescending));
     }
@@ -42,7 +43,7 @@ public sealed partial class AutoFilterDialogTests
                 new AutoFilterMenuEntry(new AutoFilterChecklistItem("Apple", "Apple"))
             ]);
 
-        AutoFilterDialog.GetCriteriaSuggestions(menuPlan)
+        AutoFilterDialogCriteriaPlanner.GetCriteriaSuggestions(menuPlan)
             .Should()
             .Equal("contains:", "blank");
     }
@@ -56,7 +57,7 @@ public sealed partial class AutoFilterDialogTests
         string optionLabelKey,
         string expected)
     {
-        var option = AutoFilterDialog.GetCriteriaOptions(filterKind)
+        var option = AutoFilterMenuPlanner.CreateCriteriaOptions(filterKind, InvariantAutoFilterMenuTextProvider.Instance)
             .Single(item => item.Label == UiText.Get(optionLabelKey));
 
         var value = filterKind switch
@@ -66,7 +67,7 @@ public sealed partial class AutoFilterDialogTests
             _ => "2026-05-21"
         };
 
-        AutoFilterDialog.BuildCriteriaText(option, value).Should().Be(expected);
+        AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option, value).Should().Be(expected);
     }
 
     [Fact]
@@ -84,10 +85,12 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void BuildBetweenCriteriaText_UsesSeparateMinimumAndMaximumValues()
     {
-        var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
+        var option = AutoFilterMenuPlanner.CreateCriteriaOptions(
+                AutoFilterMenuFilterKind.Number,
+                InvariantAutoFilterMenuTextProvider.Instance)
             .Single(item => item.Label == UiText.Get("AutoFilter_Criteria_Between"));
 
-        AutoFilterDialog.BuildBetweenCriteriaText(option, " 10 ", "20")
+        AutoFilterDialogCriteriaPlanner.BuildBetweenCriteriaText(option, " 10 ", "20")
             .Should()
             .Be("between:10:20");
     }
@@ -97,10 +100,12 @@ public sealed partial class AutoFilterDialogTests
     [InlineData("AutoFilter_Criteria_Bottom10Percent", "bottompercent:25")]
     public void BuildTopBottomCriteriaText_UsesExcelCountControl(string optionLabelKey, string expected)
     {
-        var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
+        var option = AutoFilterMenuPlanner.CreateCriteriaOptions(
+                AutoFilterMenuFilterKind.Number,
+                InvariantAutoFilterMenuTextProvider.Instance)
             .Single(item => item.Label == UiText.Get(optionLabelKey));
 
-        AutoFilterDialog.BuildTopBottomCriteriaText(option, expected.Split(':')[1])
+        AutoFilterDialogCriteriaPlanner.BuildTopBottomCriteriaText(option, expected.Split(':')[1])
             .Should()
             .Be(expected);
     }
@@ -120,7 +125,7 @@ public sealed partial class AutoFilterDialogTests
     [InlineData("Next Year", "datebetween:2027-01-01:2027-12-31")]
     public void BuildDatePresetCriteriaText_UsesExcelDateFilterPresets(string preset, string expected)
     {
-        AutoFilterDialog.BuildDatePresetCriteriaText(preset, new DateTime(2026, 5, 22))
+        AutoFilterDialogCriteriaPlanner.BuildDatePresetCriteriaText(preset, new DateTime(2026, 5, 22))
             .Should()
             .Be(expected);
     }
@@ -134,16 +139,19 @@ public sealed partial class AutoFilterDialogTests
         string optionLabel,
         string expected)
     {
-        var option = AutoFilterDialog.GetCriteriaOptions(filterKind)
+        var option = AutoFilterMenuPlanner.CreateCriteriaOptions(filterKind, InvariantAutoFilterMenuTextProvider.Instance)
             .Single(item => item.Label == optionLabel);
 
-        AutoFilterDialog.BuildCriteriaText(option, string.Empty).Should().Be(expected);
+        AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option, string.Empty).Should().Be(expected);
     }
 
     [Fact]
     public void CriteriaPartial_DelegatesPureCriteriaBehaviorToPlanner()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("AutoFilterDialog.Criteria.cs");
+        var source = DialogSourceTestSupport.ReadHostSources(
+            "AutoFilterDialog.cs",
+            "AutoFilterDialog.State.cs",
+            "AutoFilterDialog.Controls.cs");
 
         source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildResult");
         source.Should().Contain("AutoFilterDialogCriteriaPlanner.BuildCriteriaText");
@@ -155,9 +163,11 @@ public sealed partial class AutoFilterDialogTests
     [InlineData(AutoFilterMenuFilterKind.Date)]
     public void R107_GetSecondRowCriteriaOptions_ExcludesUncombinableSpecialCriteria(AutoFilterMenuFilterKind filterKind)
     {
-        var criteriaOptions = AutoFilterDialog.GetCriteriaOptions(filterKind);
+        var criteriaOptions = AutoFilterMenuPlanner.CreateCriteriaOptions(
+            filterKind,
+            InvariantAutoFilterMenuTextProvider.Instance);
 
-        var secondRowOptions = AutoFilterDialog.GetSecondRowCriteriaOptions(criteriaOptions);
+        var secondRowOptions = AutoFilterDialogCriteriaPlanner.GetSecondRowCriteriaOptions(criteriaOptions);
 
         secondRowOptions.Should().NotContain(option => AutoFilterDialogCriteriaPlanner.IsBetweenOption(option));
         secondRowOptions.Should().NotContain(option => AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option));
@@ -182,9 +192,11 @@ public sealed partial class AutoFilterDialogTests
     [Fact]
     public void R107_GetSecondRowCriteriaOptions_TextFamilyHasNoSpecialCriteriaToExclude()
     {
-        var criteriaOptions = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Text);
+        var criteriaOptions = AutoFilterMenuPlanner.CreateCriteriaOptions(
+            AutoFilterMenuFilterKind.Text,
+            InvariantAutoFilterMenuTextProvider.Instance);
 
-        AutoFilterDialog.GetSecondRowCriteriaOptions(criteriaOptions)
+        AutoFilterDialogCriteriaPlanner.GetSecondRowCriteriaOptions(criteriaOptions)
             .Should()
             .Equal(criteriaOptions);
     }
@@ -198,7 +210,7 @@ public sealed partial class AutoFilterDialogTests
         string secondCriteria,
         string expected)
     {
-        AutoFilterDialog.BuildCompositeCriteriaText(firstCriteria, connector, secondCriteria)
+        AutoFilterDialogCriteriaPlanner.BuildCompositeCriteriaText(firstCriteria, connector, secondCriteria)
             .Should()
             .Be(expected);
     }
@@ -215,16 +227,18 @@ public sealed partial class AutoFilterDialogTests
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new TextValue("East"));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(10));
         var range = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
-        var option = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Number)
+        var option = AutoFilterMenuPlanner.CreateCriteriaOptions(
+                AutoFilterMenuFilterKind.Number,
+                InvariantAutoFilterMenuTextProvider.Instance)
             .Single(item => item.Label == UiText.Get("AutoFilter_Criteria_GreaterThan"));
-        var result = AutoFilterDialog.BuildResult(
+        var result = AutoFilterDialogCriteriaPlanner.BuildResult(
             AutoFilterSortDirection.None,
             [
                 new AutoFilterDialogItem("5", "5", true),
                 new AutoFilterDialogItem("10", "10", true)
             ],
             "",
-            AutoFilterDialog.BuildCriteriaText(option, "7"));
+            AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option, "7"));
 
         FilterInputParser.TryParseCriterion(result.CriteriaText, out var criterion, out var error)
             .Should()

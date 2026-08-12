@@ -43,6 +43,24 @@ public static class ColorInputParser
         return false;
     }
 
+    public static bool TryParseRgbComponents(
+        string? redText,
+        string? greenText,
+        string? blueText,
+        out CellColor color)
+    {
+        color = default;
+        if (!TryParseByte(redText, out var red) ||
+            !TryParseByte(greenText, out var green) ||
+            !TryParseByte(blueText, out var blue))
+        {
+            return false;
+        }
+
+        color = new CellColor(red, green, blue);
+        return true;
+    }
+
     public static bool TryParseRgbColorText(string text, out CellColor color)
         => TryParseRgbColorText(text, RgbTripletTextProfile.CellEditor, out color);
 
@@ -133,6 +151,9 @@ public static class ColorInputParser
             && byte.TryParse(parts[1], NumberStyles.Integer, componentCulture, out g)
             && byte.TryParse(parts[2], NumberStyles.Integer, componentCulture, out b);
     }
+
+    private static bool TryParseByte(string? text, out byte value) =>
+        byte.TryParse(text?.Trim(), out value);
 
     private static string FormatRgbComponents(byte r, byte g, byte b) =>
         $"{r},{g},{b}";

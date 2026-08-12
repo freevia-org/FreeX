@@ -91,12 +91,6 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
             "RibbonRuntimeCatalogPlanner.cs"));
         var hostSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
         var avaloniaMainSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs"));
-        var avaloniaRawIdsSource = File.ReadAllText(Path.Combine(
-            repoRoot,
-            "src",
-            "FreeX.App.Presentation",
-            "Ribbon",
-            "FreeXRibbonCommandIdentityCatalog.RawCanonical.cs"));
         var homeRibbonMenuSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.Ribbon.Definitions", "HomeRibbonMenus.g.cs"));
 
         plannerSource.Should().Contain("public static readonly IReadOnlyList<ConditionalFormatPopupCatalogGroup> PopupGroups");
@@ -110,8 +104,15 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
         foreach (var item in ConditionalFormatPresetGalleryPlanner.PopupItems)
         {
             homeRibbonMenuSource.Should().Contain($"\"{item.CommandId}\"");
-            avaloniaRawIdsSource.Should().Contain($"\"{item.CommandId}\"");
             avaloniaMainSource.Should().Contain($"[\"{item.CommandId}\"]");
         }
+
+        File.Exists(Path.Combine(
+                repoRoot,
+                "src",
+                "FreeX.App.Presentation",
+                "Ribbon",
+                "FreeXRibbonCommandIdentityCatalog.RawCanonical.cs"))
+            .Should().BeFalse("the ribbon definition is the command-id inventory");
     }
 }

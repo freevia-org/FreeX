@@ -7,6 +7,7 @@ namespace FreeX.App.Host;
 public sealed partial class SymbolPickerDialog : Window
 {
     private static readonly IReadOnlyList<string> FontChoices = CreateFontChoices();
+    private static readonly IReadOnlyList<string> SubsetChoices = SymbolPickerCatalogPlanner.GetSubsetNames();
 
     public char SelectedChar { get; private set; }
     public string SelectedSymbol { get; private set; } = "";
@@ -31,8 +32,6 @@ public sealed partial class SymbolPickerDialog : Window
         SelectedSymbol = selection.Symbol;
         SelectedChar = selection.SelectedChar;
     }
-
-    public static IReadOnlyList<string> GetFontChoices() => FontChoices;
 
     private static IReadOnlyList<string> CreateFontChoices()
     {

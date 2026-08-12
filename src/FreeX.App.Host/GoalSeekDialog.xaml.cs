@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using FreeX.App.Presentation.Dialogs;
+using FreeX.App.Services;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -44,15 +45,17 @@ public partial class GoalSeekDialog : Window
 
     private void OkBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (!GoalSeekInputParser.TryParseWithPresentation(
+        if (!GoalSeekRequestParser.TryParse(
                 _sheetId,
                 SetCellBox.Text,
                 ToValueBox.Text,
                 ChangingCellBox.Text,
                 out var input,
-                out var presentation))
+                out var parseResult))
         {
-            var validation = presentation!;
+            var validation = GoalSeekStatusDialogPlanner.DescribeValidationError(
+                parseResult,
+                GoalSeekPresentationProfile.Wpf);
             DialogMessageHelper.ShowWarning(
                 this,
                 validation.Message.Resolve(UiText.Get, UiText.Format),

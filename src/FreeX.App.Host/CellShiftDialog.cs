@@ -69,12 +69,6 @@ public sealed class CellShiftDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    public static IReadOnlyList<CellShiftDialogOption> GetAvailableChoices(CellShiftDialogMode mode) =>
-        CellShiftDialogPlanner.GetAvailableChoices(mode);
-
-    public static KeyboardInsertDeleteDialogChoice ToKeyboardChoice(CellShiftDialogMode mode, CellShiftDialogChoice choice) =>
-        CellShiftDialogPlanner.ToKeyboardChoice(mode, choice);
-
     private void FocusInitialKeyboardTarget()
     {
         var firstButton = FindFirstButton();
@@ -88,7 +82,7 @@ public sealed class CellShiftDialog : Window
         var selected = FindSelectedButton();
         SelectedChoice = selected?.Tag is CellShiftDialogChoice choice
             ? choice
-            : GetAvailableChoices(_mode)[0].Choice;
+            : CellShiftDialogPlanner.GetAvailableChoices(_mode)[0].Choice;
         DialogResult = true;
     }
 
