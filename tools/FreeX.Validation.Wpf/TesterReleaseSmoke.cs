@@ -5,10 +5,12 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Free.Shared.Ribbon;
+using FreeX.App.Host;
 using FreeX.App.UI;
 using FreeX.Core.Model;
+using FreeX.Ribbon.Definitions;
 
-namespace FreeX.App.Host;
+namespace FreeX.Validation.Wpf;
 
 internal sealed record TesterReleaseSmokeReport(
     bool Success,
@@ -21,7 +23,7 @@ internal static class TesterReleaseSmoke
 {
     internal const string CommandLineSwitch = "--tester-release-smoke";
 
-    public static bool TryRun(IReadOnlyList<string> startupArgs, out int exitCode)
+    internal static bool TryRun(IReadOnlyList<string> startupArgs, out int exitCode)
     {
         var switchIndex = -1;
         for (var i = 0; i < startupArgs.Count; i++)
@@ -43,13 +45,11 @@ internal static class TesterReleaseSmoke
             ? startupArgs[switchIndex + 1]
             : "tester-release-smoke.json";
         var report = Validate();
-
         var fullReportPath = Path.GetFullPath(reportPath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullReportPath)!);
         File.WriteAllText(
             fullReportPath,
             JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
-
         exitCode = report.Success ? 0 : 1;
         return true;
     }
@@ -58,17 +58,15 @@ internal static class TesterReleaseSmoke
     {
         var errors = new List<string>();
         var actionableCommandIds = EnumerateActionableCommandIds().ToArray();
-
         var missingHandlers = actionableCommandIds
             .Where(id => !FreeXRibbonHandlerMap.Handlers.ContainsKey(id))
             .ToArray();
         if (missingHandlers.Length > 0)
             errors.Add($"Ribbon commands without handlers: {string.Join(", ", missingHandlers)}");
 
-        var mainWindowType = typeof(MainWindow);
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
         var unresolvedMethods = FreeXRibbonHandlerMap.Handlers
-            .Where(pair => mainWindowType.GetMethod(pair.Value, flags) is null)
+            .Where(pair => typeof(MainWindow).GetMethod(pair.Value, flags) is null)
             .Select(pair => $"{pair.Key} -> {pair.Value}")
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToArray();
@@ -76,7 +74,7 @@ internal static class TesterReleaseSmoke
             errors.Add($"Ribbon handlers without MainWindow methods: {string.Join(", ", unresolvedMethods)}");
 
         var borderPixelSnapPassed = ValidateBorderPixelSnapping(errors);
-        return new TesterReleaseSmokeReport(
+        return new(
             errors.Count == 0,
             actionableCommandIds.Length,
             FreeXRibbonHandlerMap.Handlers.Count,
@@ -93,7 +91,6 @@ internal static class TesterReleaseSmoke
             .OfType<RibbonComboBox>()
             .Select(combo => combo.CommandId.Value)
             .ToHashSet(StringComparer.Ordinal);
-
         return definition.Tabs
             .SelectMany(tab => tab.Groups)
             .SelectMany(group => group.Controls)
@@ -107,7 +104,6 @@ internal static class TesterReleaseSmoke
     {
         if (!string.IsNullOrEmpty(control.CommandId.Value))
             yield return control.CommandId.Value;
-
         var menu = control switch
         {
             RibbonSplitButton split => split.Menu,
@@ -116,7 +112,6 @@ internal static class TesterReleaseSmoke
         };
         if (menu is null)
             yield break;
-
         foreach (var id in EnumerateMenuCommandIds(menu.Items))
             yield return id;
     }
@@ -127,7 +122,6 @@ internal static class TesterReleaseSmoke
         {
             if (item.CommandId is { } id && !string.IsNullOrEmpty(id.Value))
                 yield return id.Value;
-
             foreach (var childId in EnumerateMenuCommandIds(item.Children))
                 yield return childId;
         }
@@ -142,18 +136,15 @@ internal static class TesterReleaseSmoke
                 BindingFlags.NonPublic | BindingFlags.Static)
                 ?? throw new MissingMethodException(nameof(GridView), "DrawBorderEdge");
             var border = new CellBorder(BorderStyle.Thin, CellColor.Black);
-
             foreach (var scale in new[] { 1.0, 1.25, 1.5 })
             {
                 var visual = new DrawingVisual();
-                using (var drawingContext = visual.RenderOpen())
+                using (var context = visual.RenderOpen())
                 {
                     foreach (var y in new[] { 10.0, 15.5 })
-                    {
                         drawBorderEdge.Invoke(
                             null,
-                            [drawingContext, border, new Point(10, y), new Point(90, y), null, null, scale]);
-                    }
+                            [context, border, new Point(10, y), new Point(90, y), null, null, scale]);
                 }
 
                 var bitmap = new RenderTargetBitmap(
@@ -163,23 +154,17 @@ internal static class TesterReleaseSmoke
                     96 * scale,
                     PixelFormats.Pbgra32);
                 bitmap.Render(visual);
-
                 var x = (int)Math.Round(50 * scale);
-                var paintedRowCounts = new[] { 10.0, 15.5 }
-                    .Select(y => CountPaintedRowsNear(
-                        bitmap,
-                        x,
-                        (int)Math.Round(y * scale)))
+                var counts = new[] { 10.0, 15.5 }
+                    .Select(y => CountPaintedRowsNear(bitmap, x, (int)Math.Round(y * scale)))
                     .ToArray();
-                if (paintedRowCounts.Any(count => count != 1))
+                if (counts.Any(count => count != 1))
                 {
                     errors.Add(
-                        $"Thin borders were not one device pixel at scale {scale}: " +
-                        string.Join(", ", paintedRowCounts));
+                        $"Thin borders were not one device pixel at scale {scale}: {string.Join(", ", counts)}");
                     return false;
                 }
             }
-
             return true;
         }
         catch (Exception ex)
@@ -189,11 +174,7 @@ internal static class TesterReleaseSmoke
         }
     }
 
-    private static int CountPaintedRowsNear(
-        RenderTargetBitmap bitmap,
-        int x,
-        int centerY,
-        int radius = 3) =>
+    private static int CountPaintedRowsNear(RenderTargetBitmap bitmap, int x, int centerY, int radius = 3) =>
         Enumerable.Range(centerY - radius, radius * 2 + 1)
             .Count(y => y >= 0 && y < bitmap.PixelHeight && IsPaintedPixel(bitmap, x, y));
 

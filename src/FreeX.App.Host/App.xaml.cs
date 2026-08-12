@@ -44,12 +44,6 @@ public partial class App : Application
     {
         var startupArgs = GetStartupArgs(e);
 
-        if (TesterReleaseSmoke.TryRun(startupArgs, out var testerReleaseSmokeExitCode))
-        {
-            Shutdown(testerReleaseSmokeExitCode);
-            return;
-        }
-
         // Always apply the active brand theme early — before the main window loads — so that
         // DynamicResource references in the title-bar chrome pick up the correct brushes.
         // For the DEFAULT (FreeX) theme the values are BYTE-IDENTICAL to ThemeResources.xaml,

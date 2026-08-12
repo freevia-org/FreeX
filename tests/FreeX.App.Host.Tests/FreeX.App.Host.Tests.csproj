@@ -47,6 +47,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Wpf\FreeX.ParityCapture.Wpf.csproj" />
+    <ProjectReference Include="..\..\tools\FreeX.Validation.Wpf\FreeX.Validation.Wpf.csproj" Aliases="ValidationWpf" />
     <ProjectReference Include="..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" Aliases="ProductionWpf" />
     <ProjectReference Include="..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />

@@ -1,11 +1,41 @@
+extern alias ProductionWpf;
+extern alias ValidationWpf;
+
 using System.IO;
 using System.Text.Json;
 using FluentAssertions;
+using TesterReleaseSmoke = ValidationWpf::FreeX.Validation.Wpf.TesterReleaseSmoke;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed class TesterReleaseSmokeTests
 {
+    [Fact]
+    public void ShippingAssembly_DoesNotOwnTesterReleaseSmoke()
+    {
+        var assembly = typeof(ProductionWpf::FreeX.App.Host.MainWindow).Assembly;
+
+        assembly.GetType("FreeX.App.Host.TesterReleaseSmoke").Should().BeNull();
+        assembly.GetType("FreeX.App.Host.TesterReleaseSmokeReport").Should().BeNull();
+    }
+
+    [Fact]
+    public void ValidationAssembly_OwnsTesterReleaseSmoke()
+    {
+        typeof(TesterReleaseSmoke).Assembly.GetName().Name.Should().Be("FreeX.Validation.Wpf");
+
+        var hostProject = WorkspaceFileLocator.Find(
+            "src", "FreeX.App.Host", "FreeX.App.Host.csproj");
+        File.Exists(Path.Combine(
+            Path.GetDirectoryName(hostProject)!,
+            "TesterReleaseSmoke.cs")).Should().BeFalse();
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.App.Host", "App.xaml.cs")
+            .Should().NotContain("TesterReleaseSmoke");
+        WorkspaceFileLocator.ReadAllText(
+                "tools", "FreeX.Validation.Wpf", "TesterReleaseSmoke.cs")
+            .Should().Contain("internal static class TesterReleaseSmoke");
+    }
+
     [Fact]
     public void Validate_CoversAllRibbonCommandsAndPixelSnappedBorders()
     {

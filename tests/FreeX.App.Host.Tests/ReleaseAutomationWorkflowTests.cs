@@ -330,6 +330,8 @@ public sealed class ReleaseAutomationWorkflowTests
         publisher.Should().Contain("-p:IncludeNativeLibrariesForSelfExtract=true");
         publisher.Should().Contain("-p:IncludeAllContentForSelfExtract=true");
         publisher.Should().Contain("-p:FreePWindowsBuild=false");
+        publisher.Should().Contain("$testerReleaseSmokeProjectPath");
+        publisher.Should().Contain("$smokeToolPath");
         publisher.Should().Contain("@(\"--tester-release-smoke\", $smokeReportPath)");
         publisher.Should().Contain("$smokeArguments = @(\"--packaging-smoke\")");
         publisher.Should().Contain("freep_packaging_smoke=passed");

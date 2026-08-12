@@ -49,6 +49,7 @@ if ($Runtimes.Count -eq 0) {
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
+$testerReleaseSmokeProjectPath = Join-Path $repoRoot "tools\FreeX.Validation.Wpf\FreeX.Validation.Wpf.csproj"
 if (-not $OutputDir) {
     $OutputDir = Join-Path $repoRoot "artifacts\sister-tester-release-$Version"
 }
@@ -169,8 +170,21 @@ foreach ($runtime in $Runtimes) {
     if ($isWindowsRuntime -and $App -eq "FreeX") {
         $smokeRan = $true
         $smokeReportPath = Join-Path $OutputDir "$App-$runtime-tester-release-smoke.json"
+        $smokeToolDir = Join-Path $OutputDir "smoke\$runtime"
+        if (Test-Path -LiteralPath $smokeToolDir) {
+            Remove-Item -LiteralPath $smokeToolDir -Recurse -Force
+        }
+        & dotnet publish $testerReleaseSmokeProjectPath `
+            --configuration $Configuration `
+            --runtime $runtime `
+            --self-contained false `
+            --output $smokeToolDir
+        if ($LASTEXITCODE -ne 0) {
+            throw "$App $runtime tester-release smoke tool publish failed with exit code $LASTEXITCODE."
+        }
+        $smokeToolPath = Join-Path $smokeToolDir "FreeX.Validation.Wpf.exe"
         $smokeProcess = Start-Process `
-            -FilePath $expectedExe `
+            -FilePath $smokeToolPath `
             -ArgumentList @("--tester-release-smoke", $smokeReportPath) `
             -WindowStyle Hidden `
             -Wait `
@@ -183,6 +197,7 @@ foreach ($runtime in $Runtimes) {
         if ($smokeReport.Success -ne $true) {
             throw "$App $runtime tester-release smoke reported failure."
         }
+        Remove-Item -LiteralPath $smokeToolDir -Recurse -Force
     }
     elseif (-not $isWindowsRuntime) {
         $smokeRan = $true
