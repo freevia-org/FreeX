@@ -204,14 +204,16 @@ public sealed class OsClipboardServiceTests
     // ════════════════════════════════════════════════════════════════════════════════
 
     [Fact]
-    public void CompatibilityPlanner_OsImagePresent_ReturnsOsImage()
+    public void SharedPlanner_OsImagePresent_ReturnsImage()
     {
-        var action = OsClipboardService.DecidePasteAction(
-            osHasImage: true,
-            osHasText: false,
-            internalHasData: false);
+        var action = PresentationClipboardPastePlanner.Decide(
+            hasNativeSelection: false,
+            hasImage: true,
+            hasText: false,
+            internalHasData: false,
+            ownCopyIsCurrent: false);
 
-        action.Should().Be(PasteAction.OsImage);
+        action.Should().Be(PresentationClipboardPasteSource.Image);
     }
 
     [Fact]
@@ -552,7 +554,7 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
-    public void WpfClipboardCommands_Copy_WriteFailure_InvokesOnWriteFailedWithMessage()
+    public void ClipboardSession_Copy_WriteFailure_InvokesOnWriteFailedWithMessage()
     {
         // End-to-end reproduction of the silent-failure finding: Copy used to swallow the
         // OS-clipboard write exception entirely (WpfClipboardCommands.Copy discarded the bool
@@ -562,13 +564,13 @@ public sealed class OsClipboardServiceTests
         var svc  = new OsClipboardService(fake, new StubShapeRenderer());
         string? reported = null;
 
-        WpfClipboardCommands.Copy(sess, svc, error => reported = error);
+        svc.Copy(sess, error => reported = error);
 
         reported.Should().Be("clipboard locked");
     }
 
     [StaFact]
-    public void WpfClipboardCommands_Copy_Success_DoesNotInvokeOnWriteFailed()
+    public void ClipboardSession_Copy_Success_DoesNotInvokeOnWriteFailed()
     {
         // Sibling no-regression: a successful copy must not report a failure.
         var fake = new FakeOsClipboard();
@@ -576,21 +578,21 @@ public sealed class OsClipboardServiceTests
         var svc  = new OsClipboardService(fake, new StubShapeRenderer());
         var invoked = false;
 
-        WpfClipboardCommands.Copy(sess, svc, _ => invoked = true);
+        svc.Copy(sess, _ => invoked = true);
 
         invoked.Should().BeFalse();
         fake.WasSetCalled.Should().BeTrue();
     }
 
     [StaFact]
-    public void WpfClipboardCommands_Cut_WriteFailure_InvokesOnWriteFailedWithMessage()
+    public void ClipboardSession_Cut_WriteFailure_InvokesOnWriteFailedWithMessage()
     {
         var fake = new FakeOsClipboard { ThrowOnWrite = true };
         var sess = MakeSessionWithShape(out _);
         var svc  = new OsClipboardService(fake, new StubShapeRenderer());
         string? reported = null;
 
-        WpfClipboardCommands.Cut(sess, svc, error => reported = error);
+        svc.Cut(sess, error => reported = error);
 
         reported.Should().Be("clipboard locked");
     }
@@ -1074,7 +1076,7 @@ Header\cell Value\cell\row}"),
         var s2 = new SlideShape { Id = 2u, Kind = SlideShapeKind.AutoShape, TextBody = new TextBody() };
         var p2 = new Paragraph(); p2.Runs.Add(new Run { Text = "Bar" }); s2.TextBody!.Paragraphs.Add(p2);
 
-        var text = OsClipboardService.ExtractText(new[] { s1, s2 });
+        var text = PresentationClipboardContentFactory.ExtractText(new[] { s1, s2 });
 
         text.Should().Contain("Foo");
         text.Should().Contain("Bar");
@@ -1084,8 +1086,8 @@ Header\cell Value\cell\row}"),
     public void ExtractText_ShapeWithNoTextBody_IsSkipped()
     {
         var s1 = new SlideShape { Id = 1u, Kind = SlideShapeKind.AutoShape }; // no TextBody
-        var text = OsClipboardService.ExtractText(new[] { s1 });
-        text.Should().BeEmpty();
+        var text = PresentationClipboardContentFactory.ExtractText(new[] { s1 });
+        text.Should().BeNull();
     }
 
     // ════════════════════════════════════════════════════════════════════════════════

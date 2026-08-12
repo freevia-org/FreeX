@@ -12,33 +12,26 @@ using FreeP.Core.Model;
 
 namespace FreeP.App.Host;
 
-public sealed record WpfNativePrintCapability(
-    bool CanPrint,
-    string Reason)
+internal static class WpfPresentationPrintService
 {
-    public static WpfNativePrintCapability Unavailable(string reason) =>
-        new(false, string.IsNullOrWhiteSpace(reason)
-            ? "No Windows printer queue is available for native printing."
-            : reason.Trim());
-}
-
-internal static class WpfNativePrintCapabilityDetector
-{
-    public static WpfNativePrintCapability Detect()
+    public static PresentationNativePrintHandoffHostCapabilities DetectCapabilities()
     {
+        const string hostName = "WPF print host";
         if (!OperatingSystem.IsWindows())
-            return WpfNativePrintCapability.Unavailable("Native WPF printing is available only on Windows.");
+        {
+            return PresentationNativePrintHandoffHostCapabilities.Deferred(
+                hostName,
+                "Native WPF printing is available only on Windows.");
+        }
 
         var discovery = WpfPrintQueueCatalog.Discover();
         return discovery.HasQueues
-            ? new WpfNativePrintCapability(true, "WPF native printer dialog is available.")
-            : WpfNativePrintCapability.Unavailable(
+            ? PresentationNativePrintHandoffHostCapabilities.Available(hostName)
+            : PresentationNativePrintHandoffHostCapabilities.Deferred(
+                hostName,
                 discovery.FailureReason ?? "Windows reported no available printer queue.");
     }
-}
 
-internal static class WpfPresentationPrintService
-{
     public static bool ShowPrintDialogAndPrint(
         Presentation presentation,
         PresentationPrintRequest request,

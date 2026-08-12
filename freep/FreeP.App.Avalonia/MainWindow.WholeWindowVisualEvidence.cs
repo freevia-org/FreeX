@@ -97,7 +97,7 @@ public sealed partial class MainWindow
         WholeWindowVisualEvidenceScenario scenario,
         IReadOnlyList<DialogPaneVisualEvidenceAssertion> preparationAssertions)
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var tabs = RibbonTabControlForVisualEvidence();
         var activeTabId = (tabs?.SelectedItem as TabItem)?.Tag as string ?? string.Empty;
         var visibleTabs = tabs?.Items.OfType<TabItem>()

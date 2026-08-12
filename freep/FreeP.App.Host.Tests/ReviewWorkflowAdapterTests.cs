@@ -2223,7 +2223,7 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(
             new FreePOptions(),
             messageService: TestUserMessageService.DiscardUnsavedChanges,
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."));
         try
         {
             window.Editor.InsertSlide();
@@ -2270,7 +2270,7 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(
             new FreePOptions(),
             messageService: TestUserMessageService.DiscardUnsavedChanges,
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."));
         try
         {
             window.Editor.InsertSlide();
@@ -2303,7 +2303,7 @@ public sealed class ReviewWorkflowAdapterTests
         var window = new MainWindow(
             new FreePOptions(),
             messageService: TestUserMessageService.DiscardUnsavedChanges,
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."));
         try
         {
             window.Editor.InsertSlide();

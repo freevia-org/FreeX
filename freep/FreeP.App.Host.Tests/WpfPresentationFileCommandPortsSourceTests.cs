@@ -36,7 +36,7 @@ public sealed class WpfPresentationFileCommandPortsSourceTests
         source.Should().Contain("WpfPresentationSlideImageRenderer.RenderSlideToPng");
         source.Should().Contain("WpfRasterPdfWriter.WriteToBytes");
         source.Should().Contain("WpfPresentationPrintService.ShowPrintDialogAndPrint(");
-        source.Should().Contain("WpfVideoExportAdapter");
+        source.Should().Contain("WindowsNativePrintOutput.CreateVideoAdapter(resolvedVideoCapability)");
         source.Should().Contain("WpfFileDialogService.ShowOpenDialog(");
         source.Should().Contain("WpfFileDialogService.ShowSaveDialog(");
         source.Should().Contain("new OpenFolderDialog");
@@ -97,22 +97,21 @@ public sealed class WpfPresentationFileCommandPortsSourceTests
     }
 
     [Fact]
-    public void WpfVideoExportAdapter_OnlySelectsARecordingBackend()
+    public void WpfComposition_SelectsRecordingOwnedVideoBackendsDirectly()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Host",
-            "WpfVideoExportAdapter.cs"));
+            "WpfPresentationFileCommandPorts.cs"));
 
-        source.Should().Contain("new WindowsNativeVideoExportAdapter(capability)");
-        source.Should().Contain("new LinuxVideoExportAdapter(capability, processRunner)");
-        source.Should().Contain("_inner.ExportAsync(package, outputPath, cancellationToken, mediaArtifacts)");
-        source.Should().NotContain("TemporaryDirectoryLease");
-        source.Should().NotContain("ZipArchive");
-        source.Should().NotContain("BuildFfmpegArguments");
-        source.Should().NotContain("ProcessStartInfo");
-        source.Should().NotContain("ReadAllBytesAsync");
+        source.Should().Contain("WindowsNativePrintOutput.CreateVideoAdapter(resolvedVideoCapability)")
+            .And.Contain("new LinuxNativeOutputCapabilityDetector(")
+            .And.NotContain("WpfVideoExportAdapter")
+            .And.NotContain("WpfVideoEncoderCapabilityDetector");
+        File.Exists(Path.Combine(root, "freep", "FreeP.App.Host", "WpfVideoExportAdapter.cs"))
+            .Should().BeFalse();
     }
 
     [Fact]

@@ -262,14 +262,32 @@ internal static class FreePRibbonCommands
         Action<string, string>? onClipboardWriteFailed) =>
         new()
         {
-            Copy = () => WpfClipboardCommands.Copy(
-                editor,
-                osClipboard,
-                error => onClipboardWriteFailed?.Invoke("Copy", error)),
-            Cut = () => WpfClipboardCommands.Cut(
-                editor,
-                osClipboard,
-                error => onClipboardWriteFailed?.Invoke("Cut", error)),
+            Copy = () =>
+            {
+                if (osClipboard is not null)
+                {
+                    osClipboard.Copy(
+                        editor,
+                        error => onClipboardWriteFailed?.Invoke("Copy", error));
+                    return;
+                }
+
+                PresentationClipboardWorkflow.CommitCopy(
+                    PresentationClipboardWorkflow.PrepareInternalWrite(editor));
+            },
+            Cut = () =>
+            {
+                if (osClipboard is not null)
+                {
+                    osClipboard.Cut(
+                        editor,
+                        error => onClipboardWriteFailed?.Invoke("Cut", error));
+                    return;
+                }
+
+                PresentationClipboardWorkflow.CommitCut(
+                    PresentationClipboardWorkflow.PrepareInternalWrite(editor));
+            },
             Paste = () =>
             {
                 if (osClipboard is not null)

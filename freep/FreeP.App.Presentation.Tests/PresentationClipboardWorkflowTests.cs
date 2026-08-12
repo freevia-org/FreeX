@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeP.App.Compositor;
 
 namespace FreeP.App.Compositor.Tests;
@@ -225,6 +226,57 @@ public sealed class PresentationClipboardWorkflowTests
     }
 
     [Fact]
+    public async Task PlatformSession_CutWritesBeforeDeleteAndKeepsInternalClipboard()
+    {
+        var (editor, slide) = CreateEditor();
+        editor.Select(1);
+        var clipboard = new FakePlatformClipboard();
+        var shapeCountDuringWrite = 0;
+        clipboard.BeforeWrite = () => shapeCountDuringWrite = slide.Shapes.Count;
+        var session = CreatePlatformSession(clipboard);
+
+        var written = await session.CutAsync(editor);
+
+        written.Should().BeTrue();
+        shapeCountDuringWrite.Should().Be(2);
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(2u);
+        editor.CanPaste.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PlatformSession_WriteFailureOwnsFeedbackAndStillCompletesCut()
+    {
+        var (editor, slide) = CreateEditor();
+        editor.Select(1);
+        var clipboard = new FakePlatformClipboard { FailWrites = true };
+        var session = CreatePlatformSession(clipboard);
+
+        var written = await session.CutAsync(editor);
+
+        written.Should().BeFalse();
+        session.LastWriteFailureMessage.Should().Be("clipboard locked");
+        slide.Shapes.Select(shape => shape.Id).Should().Equal(2u);
+        editor.CanPaste.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task PlatformSession_ExternalIdentityChangeInvalidatesOwnCopyAndUsesExternalImage()
+    {
+        var (editor, slide) = CreateEditor();
+        editor.Select(1);
+        var clipboard = new FakePlatformClipboard();
+        var session = CreatePlatformSession(clipboard);
+        (await session.CopyAsync(editor)).Should().BeTrue();
+
+        clipboard.ReplaceExternally(new PresentationClipboardContent(PngBytes: [10, 20, 30]));
+        var source = await session.PasteAsync(editor);
+
+        source.Should().Be(PresentationClipboardPasteSource.Image);
+        slide.Shapes[^1].Kind.Should().Be(SlideShapeKind.Picture);
+        session.OwnCopyHasCurrentPlatformIdentity.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlatformAdapters_KeepClipboardDecisionsInSharedWorkflow()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
@@ -249,11 +301,6 @@ public sealed class PresentationClipboardWorkflowTests
             "freep",
             "FreeP.App.Host",
             "OsClipboardService.cs"));
-        var wpfCommands = File.ReadAllText(Path.Combine(
-            root,
-            "freep",
-            "FreeP.App.Host",
-            "WpfClipboardCommands.cs"));
         var wpfRichAdapter = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -266,26 +313,20 @@ public sealed class PresentationClipboardWorkflowTests
             "AvaloniaRichTextEditor.cs"));
 
         workflow.Should().Contain("PresentationClipboardWorkflow");
+        workflow.Should().Contain("PresentationPlatformClipboardSession");
         workflow.Should().Contain("PresentationClipboardOwnershipTracker");
         workflow.Should().Contain("PresentationClipboardOperationQueue");
         workflow.Should().Contain("ApplyRichPayload");
 
-        foreach (var adapter in new[] { avaloniaService, wpfService })
-        {
-            adapter.Should().Contain("PresentationClipboardWorkflow.ApplyPaste(");
-            adapter.Should().Contain("PresentationClipboardOwnershipTracker");
-            adapter.Should().NotContain("PasteExternalShapes(");
-            adapter.Should().NotContain("InsertPicture(");
-            adapter.Should().NotContain("InsertTextBox(");
-            adapter.Should().NotContain("InsertTableFromClipboard(");
-            adapter.Should().NotContain("TryParseXamlPackage(");
-            adapter.Should().NotContain("TryParseRtf(");
-        }
-
-        wpfCommands.Should().Contain("PresentationClipboardWorkflow.CommitCopy(");
-        wpfCommands.Should().Contain("PresentationClipboardWorkflow.CommitCut(");
-        wpfCommands.Should().NotContain("editor.CopySelectedShapes(");
-        wpfCommands.Should().NotContain("editor.DeleteSelected(");
+        wpfService.Should().Contain("PresentationPlatformClipboardSession")
+            .And.NotContain("PresentationClipboardOwnershipTracker")
+            .And.NotContain("PresentationClipboardWorkflow.ApplyPaste(");
+        avaloniaWindow.Should().Contain("PresentationPlatformClipboardSession")
+            .And.NotContain("PresentationClipboardOwnershipTracker")
+            .And.NotContain("PresentationClipboardWorkflow.ApplyPaste(");
+        avaloniaService.Should().NotContain("PresentationClipboardOwnershipTracker")
+            .And.NotContain("AvaloniaPresentationClipboardService")
+            .And.NotContain("IPresentationSystemClipboard");
 
         avaloniaService.Should().NotContain("IncrementalHash");
         avaloniaWindow.Should().Contain("PresentationClipboardOperationQueue");
@@ -312,6 +353,14 @@ public sealed class PresentationClipboardWorkflowTests
             slide);
     }
 
+    private static PresentationPlatformClipboardSession CreatePlatformSession(
+        IPlatformClipboard clipboard) =>
+        new(
+            clipboard,
+            static (_, _, _) => [1, 2, 3],
+            static content => PresentationClipboardPlatformMapper.ToPlatformContent(content),
+            PresentationClipboardPlatformIdentityStrategy.ChangeIdentity);
+
     private static SlideShape CreateShape(uint id, string name, string text)
     {
         var body = new TextBody();
@@ -332,4 +381,49 @@ public sealed class PresentationClipboardWorkflowTests
 
     private static string ExtractText(SlideShape shape) =>
         string.Concat(shape.TextBody!.Paragraphs.SelectMany(p => p.Runs).Select(run => run.Text));
+
+    private sealed class FakePlatformClipboard : IPlatformClipboard
+    {
+        private PresentationClipboardContent _content = new();
+        private int _revision;
+
+        public bool FailWrites { get; init; }
+        public Action? BeforeWrite { get; set; }
+
+        public ValueTask<PlatformClipboardReadResult<PlatformClipboardContent>> ReadAsync(
+            PlatformClipboardReadRequest request,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(
+                PlatformClipboardReadResult<PlatformClipboardContent>.Success(
+                    PresentationClipboardPlatformMapper.ToPlatformContent(_content)));
+
+        public ValueTask<PlatformClipboardWriteResult> WriteAsync(
+            PlatformClipboardContent content,
+            CancellationToken cancellationToken = default)
+        {
+            if (FailWrites)
+                return ValueTask.FromResult(PlatformClipboardWriteResult.Failed("clipboard locked"));
+
+            BeforeWrite?.Invoke();
+            _content = PresentationClipboardPlatformMapper.FromPlatformContent(content);
+            _revision++;
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
+
+        public ValueTask<PlatformClipboardWriteResult> ClearAsync(
+            CancellationToken cancellationToken = default)
+        {
+            _content = new PresentationClipboardContent();
+            _revision++;
+            return ValueTask.FromResult(PlatformClipboardWriteResult.Success());
+        }
+
+        public string TryGetChangeIdentity() => _revision.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        public void ReplaceExternally(PresentationClipboardContent content)
+        {
+            _content = content;
+            _revision++;
+        }
+    }
 }

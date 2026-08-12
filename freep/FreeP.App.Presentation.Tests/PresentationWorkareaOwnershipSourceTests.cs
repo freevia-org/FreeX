@@ -50,7 +50,7 @@ public sealed class PresentationWorkareaOwnershipSourceTests
             .And.NotContain("SlideSizeDialogPlanner.BuildInitialState(")
             .And.NotContain("LastHeaderFooterState = HeaderFooterCommandPlanner.BuildState(Editor)")
             .And.NotContain("QueueClipboardCopy();");
-        wpfEndpoint.Should().Contain("WpfClipboardCommands.Copy(Editor, _osClipboard)")
+        wpfEndpoint.Should().Contain("Copy = () => _osClipboard.Copy(Editor)")
             .And.Contain("RefreshSlidePane = RefreshSlidePane")
             .And.NotContain("SlidePaneHost.Child = new SlidePane(context.Snapshot.Editor)");
         avaloniaEndpoint.Should().Contain(

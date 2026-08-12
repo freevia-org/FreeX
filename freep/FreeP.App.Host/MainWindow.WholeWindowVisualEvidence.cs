@@ -95,7 +95,7 @@ public sealed partial class MainWindow
         WholeWindowVisualEvidenceScenario scenario,
         IReadOnlyList<DialogPaneVisualEvidenceAssertion> preparationAssertions)
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var activeTabId = ActiveRibbonTabId(definition);
         var visibleTabs = VisibleRibbonTabIds(definition);
         var visibleContextualTabs = definition.Tabs
@@ -254,7 +254,7 @@ public sealed partial class MainWindow
             return true;
         }
 
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var index = definition.Tabs.ToList().FindIndex(tab => StringComparer.Ordinal.Equals(tab.Id, tabId));
         if (index < 0)
             return false;

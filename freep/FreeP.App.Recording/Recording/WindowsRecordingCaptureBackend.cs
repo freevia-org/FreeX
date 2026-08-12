@@ -101,47 +101,33 @@ public sealed class WindowsRecordingCaptureBackend : ISlideShowRecordingCaptureB
         WindowsRecordingHostMetadata metadata,
         IWindowsRecordingDeviceCatalog deviceCatalog)
     {
-        try
-        {
-            var devices = deviceCatalog.EnumerateDevices()
-                .Where(device => device.Kind is SlideShowRecordingCaptureDeviceKind.Microphone
-                    or SlideShowRecordingCaptureDeviceKind.Camera)
-                .ToArray();
-            return SlideShowRecordingCaptureAdapterReadiness.FromDevices(
-                metadata.HostName,
-                metadata.AdapterName,
-                devices,
-                requiresUserPermission: true,
-                devices.Any(device => device.IsAvailable) ? MissingDeviceReason(devices) : NoDevicesReason);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
+        var availability = WindowsRecordingDeviceAvailabilityPlanner.Detect(deviceCatalog);
+        if (availability.DetectionFailure is { } failure)
         {
             return SlideShowRecordingCaptureAdapterReadiness.FromDevices(
                 metadata.HostName,
                 metadata.AdapterName,
                 Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>(),
                 requiresUserPermission: true,
-                $"Windows recording device enumeration failed: {ex.Message}");
+                $"Windows recording device enumeration failed: {failure}");
         }
+
+        return SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+            metadata.HostName,
+            metadata.AdapterName,
+            availability.Devices,
+            requiresUserPermission: true,
+            availability.HasAvailableDevice ? MissingDeviceReason(availability) : NoDevicesReason);
     }
 
-    private static string MissingDeviceReason(IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> devices)
-    {
-        var hasMicrophone = devices.Any(device =>
-            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
-            device.IsAvailable);
-        var hasCamera = devices.Any(device =>
-            device.Kind == SlideShowRecordingCaptureDeviceKind.Camera &&
-            device.IsAvailable);
-
-        return (hasMicrophone, hasCamera) switch
+    private static string MissingDeviceReason(WindowsRecordingDeviceAvailability availability) =>
+        (availability.HasMicrophone, availability.HasCamera) switch
         {
             (true, true) => string.Empty,
             (true, false) => "No Windows camera devices were reported by the host OS.",
             (false, true) => "No Windows microphone devices were reported by the host OS.",
             _ => NoDevicesReason
         };
-    }
 
     private static SlideShowRecordingCaptureDeviceKind DeviceKind(SlideShowRecordingMediaArtifactKind kind) =>
         kind == SlideShowRecordingMediaArtifactKind.NarrationAudio

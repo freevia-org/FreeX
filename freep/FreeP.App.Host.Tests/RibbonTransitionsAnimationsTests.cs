@@ -11,7 +11,7 @@ namespace FreeP.App.Host.Tests;
 /// Wave 4C: Tests for the Transitions and Animations ribbon tabs.
 ///
 /// Verifies:
-/// - FreePRibbon.Build() includes the expected tabs, groups and command ids.
+/// - FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf) includes the expected tabs, groups and command ids.
 /// - FreePRibbonCommands: invoking transition commands sets Editor.CurrentSlideTransition correctly.
 /// - Invoking an animation command adds to Editor.CurrentSlideAnimations.
 /// - "Apply To All" propagates the current slide's transition to every slide.
@@ -65,21 +65,21 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void RibbonBuild_ContainsTransitionsTab()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         Assert.Contains(def.Tabs, t => t.Id == "transitions");
     }
 
     [Fact]
     public void RibbonBuild_ContainsAnimationsTab()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         Assert.Contains(def.Tabs, t => t.Id == "animations");
     }
 
     [Fact]
     public void TransitionsTab_ContainsTransitionGalleryGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         Assert.Contains(tab.Groups, g => g.Id == "transition-gallery");
     }
@@ -87,7 +87,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionsTab_ContainsTimingGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         Assert.Contains(tab.Groups, g => g.Id == "transition-timing");
     }
@@ -95,7 +95,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionTimingGroup_ContainsSoundAuthoringCommands()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         var group = tab.Groups.Single(g => g.Id == "transition-timing");
 
@@ -106,7 +106,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionsTab_ContainsSlideShowGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         Assert.Contains(tab.Groups, g => g.Id == "slideshow-from-transitions");
     }
@@ -114,7 +114,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void AnimationsTab_ContainsAnimationEffectsGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "animations");
         Assert.Contains(tab.Groups, g => g.Id == "animation-effects");
     }
@@ -122,7 +122,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void AnimationsTab_ContainsTimingGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "animations");
         Assert.Contains(tab.Groups, g => g.Id == "animation-timing");
     }
@@ -130,7 +130,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionGalleryGroup_ContainsFadeCommandId()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         var group = tab.Groups.Single(g => g.Id == "transition-gallery");
         // At least one control must carry the freep.transition.fade id.
@@ -140,7 +140,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void SlideShowGroup_ContainsFromBeginningAndFromCurrent()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "transitions");
         var group = tab.Groups.Single(g => g.Id == "slideshow-from-transitions");
         Assert.Contains(group.Controls, c => c.CommandId.Value == "freep.slideshow.from-beginning");
@@ -284,7 +284,7 @@ public class RibbonTransitionsAnimationsTests
     [Fact]
     public void TransitionMoreMenu_ContainsEveryExtendedKind()
     {
-        var tab = FreePRibbon.Build().Tabs.Single(t => t.Id == "transitions");
+        var tab = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf).Tabs.Single(t => t.Id == "transitions");
         var group = tab.Groups.Single(g => g.Id == "transition-more");
         var dropdown = Assert.IsType<RibbonDropdown>(
             group.Controls.Single(control => control.CommandId.Value == "freep.transition.more"));

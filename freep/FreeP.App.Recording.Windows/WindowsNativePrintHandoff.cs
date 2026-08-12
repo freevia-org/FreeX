@@ -31,41 +31,23 @@ public static class WindowsNativePrintOutput
     {
         ArgumentNullException.ThrowIfNull(deviceCatalog);
 
-        try
-        {
-            var devices = deviceCatalog.EnumerateDevices();
-            var hasMicrophone = devices.Any(device =>
-                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
-                device.IsAvailable);
-            var hasCamera = devices.Any(device =>
-                device.Kind == SlideShowRecordingCaptureDeviceKind.Camera &&
-                device.IsAvailable);
-            var canMuxTimedCaptions = WindowsNativeVideoExportAdapter.CanUseCaptionFallback;
+        var availability = WindowsRecordingDeviceAvailabilityPlanner.Detect(deviceCatalog);
+        var canMuxTimedCaptions = WindowsNativeVideoExportAdapter.CanUseCaptionFallback;
+        var reason = BuildWindowsVideoCapabilityReason(
+            availability.HasMicrophone,
+            availability.HasCamera,
+            canMuxTimedCaptions);
+        if (availability.DetectionFailure is { } failure)
+            reason += $" Device detection failed: {failure}";
 
-            return new LinuxVideoEncoderCapability(
-                CanEncodeMp4: true,
-                ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
-                EncoderName: "Windows MediaComposition",
-                CanCaptureNarration: hasMicrophone,
-                Reason: BuildWindowsVideoCapabilityReason(hasMicrophone, hasCamera, canMuxTimedCaptions),
-                CanCaptureCameraAndMedia: hasCamera,
-                CanMuxTimedCaptions: canMuxTimedCaptions);
-        }
-        catch (Exception ex) when (ex is not OutOfMemoryException)
-        {
-            var canMuxTimedCaptions = WindowsNativeVideoExportAdapter.CanUseCaptionFallback;
-            return new LinuxVideoEncoderCapability(
-                CanEncodeMp4: true,
-                ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
-                EncoderName: "Windows MediaComposition",
-                CanCaptureNarration: false,
-                Reason: BuildWindowsVideoCapabilityReason(
-                    hasMicrophone: false,
-                    hasCamera: false,
-                    canMuxTimedCaptions: canMuxTimedCaptions) + $" Device detection failed: {ex.Message}",
-                CanCaptureCameraAndMedia: false,
-                CanMuxTimedCaptions: canMuxTimedCaptions);
-        }
+        return new LinuxVideoEncoderCapability(
+            CanEncodeMp4: true,
+            ExecutablePath: WindowsNativeVideoExportAdapter.ExecutablePath,
+            EncoderName: "Windows MediaComposition",
+            CanCaptureNarration: availability.HasMicrophone,
+            Reason: reason,
+            CanCaptureCameraAndMedia: availability.HasCamera,
+            CanMuxTimedCaptions: canMuxTimedCaptions);
     }
 
     private static string BuildWindowsVideoCapabilityReason(

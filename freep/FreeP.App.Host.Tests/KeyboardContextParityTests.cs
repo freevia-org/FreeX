@@ -63,7 +63,7 @@ public sealed class KeyboardContextParityTests
         var window = new MainWindow(
             new FreePOptions(),
             messageService: TestUserMessageService.DiscardUnsavedChanges,
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."));
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."));
         try
         {
             Execute(window, Key.P, ModifierKeys.Control);

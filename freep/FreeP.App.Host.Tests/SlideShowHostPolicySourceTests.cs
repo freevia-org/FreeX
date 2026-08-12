@@ -202,6 +202,19 @@ public sealed class SlideShowHostPolicySourceTests
     }
 
     [Fact]
+    public void WpfHost_UsesCanonicalSlideshowTypesWithoutCompatibilityAliases()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+
+        File.Exists(Path.Combine(root, "freep", "FreeP.App.Host", "SlideShowController.cs"))
+            .Should().BeFalse();
+        File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "GlobalUsings.cs"))
+            .Should().Contain("global using FreeP.App.Compositor;")
+            .And.NotContain("global using SlideShowController =")
+            .And.NotContain("global using AnimationStep =");
+    }
+
+    [Fact]
     public void WpfSlideShowWindow_ExecutesAnimationStepsThroughSharedPlaybackPlans()
     {
         var source = File.ReadAllText(Path.Combine(

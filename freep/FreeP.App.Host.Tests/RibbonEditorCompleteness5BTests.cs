@@ -76,14 +76,14 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void RibbonBuild_ContainsDesignTab()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         Assert.Contains(def.Tabs, t => t.Id == "design");
     }
 
     [Fact]
     public void AnimationEmphasisCommands_AreDefinedAndRouted()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var effects = definition.Tabs
             .Single(tab => tab.Id == "animations")
             .Groups.Single(group => group.Id == "animation-effects");
@@ -113,7 +113,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void SmartArtContinuousBlockProcess_IsDefinedAndRoutedByHost()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var layouts = definition.Tabs
             .SelectMany(tab => tab.Groups)
             .Single(group => group.Id == "smartart-layouts");
@@ -132,7 +132,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void SmartArtQuickStyleGallery_IsDefinedAndAllEntriesRouteThroughHost()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var styles = definition.Tabs
             .SelectMany(tab => tab.Groups)
             .Single(group => group.Id == "smartart-styles");
@@ -167,7 +167,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void PictureCropCommands_AreDefinedAndRouteThroughSharedSession()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var illustrationIds = definition.Tabs
             .Single(tab => tab.Id == "insert")
             .Groups.Single(group => group.Id == "illustrations")
@@ -208,7 +208,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void SmartArtExtendedLayouts_AreDefinedAndRoutedByHost()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var layouts = definition.Tabs
             .SelectMany(tab => tab.Groups)
             .Single(group => group.Id == "smartart-layouts");
@@ -266,7 +266,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void DesignTab_ContainsThemesGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "design");
         Assert.Contains(tab.Groups, g => g.Id == "themes");
     }
@@ -274,7 +274,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void DesignTab_ContainsCustomizeGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "design");
         Assert.Contains(tab.Groups, g => g.Id == "customize");
     }
@@ -282,7 +282,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void ThemesGroup_ContainsAllFiveBuiltInThemeIds()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "design");
         var group = tab.Groups.Single(g => g.Id == "themes");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
@@ -296,7 +296,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void CustomizeGroup_ContainsSlideSizeIds()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "design");
         var group = tab.Groups.Single(g => g.Id == "customize");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
@@ -309,7 +309,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void InsertTab_ContainsTablesGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "insert");
         Assert.Contains(tab.Groups, g => g.Id == "tables");
     }
@@ -317,7 +317,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void InsertTab_ContainsChartsGroup()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "insert");
         Assert.Contains(tab.Groups, g => g.Id == "charts");
     }
@@ -325,7 +325,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void IllustrationsGroup_ContainsCommonShapeIds()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "insert");
         var group = tab.Groups.Single(g => g.Id == "illustrations");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
@@ -379,7 +379,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void TablesGroup_ContainsExpectedTableIds()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "insert");
         var group = tab.Groups.Single(g => g.Id == "tables");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
@@ -391,7 +391,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void ChartsGroup_ContainsExpectedChartIds()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "insert");
         var group = tab.Groups.Single(g => g.Id == "charts");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
@@ -422,7 +422,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void TextGroup_ContainsHeaderFooterCommandIds()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "insert");
         var group = tab.Groups.Single(g => g.Id == "text");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();
@@ -436,7 +436,7 @@ public class RibbonEditorCompleteness5BTests
     [Fact]
     public void HomeTab_ClipboardGroup_ContainsFormatPainterId()
     {
-        var def = FreePRibbon.Build();
+        var def = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var tab = def.Tabs.Single(t => t.Id == "home");
         var group = tab.Groups.Single(g => g.Id == "clipboard");
         var ids = group.Controls.Select(c => c.CommandId.Value).ToHashSet();

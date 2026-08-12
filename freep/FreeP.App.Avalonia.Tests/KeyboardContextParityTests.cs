@@ -372,7 +372,7 @@ public sealed class KeyboardContextParityTests
                     .GetVisualDescendants()
                     .OfType<ComboBox>()
                     .First(control => Equals(control.Tag, "freep.font-family"));
-                var definition = FreePRibbonAvalonia.Build();
+                var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
                 var home = definition.Tabs.Single(tab => tab.Id == "home");
                 var font = home.Groups.Single(group => group.Id == "font");
                 var comboDefinition = font.Controls.Single(control => control.CommandId.Value == "freep.font-family");
@@ -407,7 +407,7 @@ public sealed class KeyboardContextParityTests
                 window.Show();
 
                 var ribbon = window.RibbonControlForTests!;
-                var definition = FreePRibbonAvalonia.Build();
+                var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
                 var home = definition.Tabs.Single(tab => tab.Id == "home");
                 Button? collapsedButton = null;
 

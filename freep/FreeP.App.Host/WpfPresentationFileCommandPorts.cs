@@ -32,7 +32,7 @@ internal static class WpfPresentationFileCommandSessionFactory
         Func<IReadOnlyList<int>?>? getPrintSelectedSlideNumbers = null,
         LinuxVideoEncoderCapability? videoEncoderCapability = null,
         ILinuxVideoExportAdapter? videoExportAdapter = null,
-        WpfNativePrintCapability? nativePrintCapability = null,
+        PresentationNativePrintHandoffHostCapabilities? nativePrintCapability = null,
         Func<PresentationVideoExportRequest?, PresentationVideoFramePackageArtifact>?
             videoFramePackageArtifactFactory = null)
     {
@@ -55,13 +55,13 @@ internal static class WpfPresentationFileCommandSessionFactory
         var render = new WpfPresentationFileRenderPort();
         var print = new WpfPresentationPrintPort(
             window,
-            nativePrintCapability ?? WpfNativePrintCapabilityDetector.Detect(),
+            nativePrintCapability ?? WpfPresentationPrintService.DetectCapabilities(),
             () => session?.LastNativePrintHandoffPlan);
         var resolvedVideoCapability = videoEncoderCapability ??
             videoExportAdapter?.Capability ??
-            WpfVideoEncoderCapabilityDetector.Detect();
+            DetectVideoEncoderCapability();
         var videoPort = new WpfPresentationVideoPort(
-            videoExportAdapter ?? new WpfVideoExportAdapter(resolvedVideoCapability),
+            videoExportAdapter ?? WindowsNativePrintOutput.CreateVideoAdapter(resolvedVideoCapability),
             BuildVideoExportHostCapabilities(resolvedVideoCapability));
         session = new PresentationFileCommandSession(
             getModel,
@@ -93,6 +93,15 @@ internal static class WpfPresentationFileCommandSessionFactory
             capability.CanCaptureCameraAndMedia,
             capability.CanMuxTimedCaptions,
             capability.Reason);
+
+    private static LinuxVideoEncoderCapability DetectVideoEncoderCapability() =>
+        OperatingSystem.IsWindows()
+            ? WindowsNativePrintOutput.Detect().Video
+            : new LinuxNativeOutputCapabilityDetector(
+                    new PathLinuxRecordingExecutableLocator(),
+                    new SystemLinuxRecordingProbeRunner())
+                .Detect(canCaptureNarrationOverride: false)
+                .Video;
 }
 
 internal sealed class WpfPresentationFilePickerPort : IPresentationFilePickerPort
@@ -170,14 +179,12 @@ internal sealed class WpfPresentationPrintPort : IPresentationPrintPort
 
     public WpfPresentationPrintPort(
         Window owner,
-        WpfNativePrintCapability capability,
+        PresentationNativePrintHandoffHostCapabilities capability,
         Func<PresentationNativePrintHandoffPlan?> getLastHandoffPlan)
     {
         _owner = owner;
         _getLastHandoffPlan = getLastHandoffPlan ?? throw new ArgumentNullException(nameof(getLastHandoffPlan));
-        Capabilities = capability.CanPrint
-            ? PresentationNativePrintHandoffHostCapabilities.Available("WPF print host")
-            : PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", capability.Reason);
+        Capabilities = capability;
     }
 
     public PresentationNativePrintHandoffHostCapabilities Capabilities { get; }

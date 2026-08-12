@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using Free.Shared.AppServices;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -17,6 +18,159 @@ public sealed record PresentationClipboardWriteRequest(
 public sealed record PresentationClipboardPasteRequest(
     EditingSession Editor,
     int SlideIndex);
+
+public sealed class PresentationClipboardPlatformIdentityStrategy
+{
+    private readonly Func<IPlatformClipboard, PresentationClipboardContent?, string?> _resolve;
+
+    private PresentationClipboardPlatformIdentityStrategy(
+        Func<IPlatformClipboard, PresentationClipboardContent?, string?> resolve) =>
+        _resolve = resolve;
+
+    public static PresentationClipboardPlatformIdentityStrategy ChangeIdentity { get; } =
+        new(static (clipboard, _) => clipboard.TryGetChangeIdentity());
+
+    public static PresentationClipboardPlatformIdentityStrategy ContentIdentity(
+        Func<byte[]?, byte[]?>? normalizePng = null) =>
+        new((_, content) => content is null
+            ? null
+            : PresentationClipboardContentIdentity.Compute(content, normalizePng));
+
+    internal string? Resolve(
+        IPlatformClipboard clipboard,
+        PresentationClipboardContent? content) =>
+        _resolve(clipboard, content);
+}
+
+/// <summary>
+/// Owns renderer-neutral clipboard command orchestration over the shared platform boundary.
+/// Hosts provide only selection rendering, native format projection, identity, and sync/queue policy.
+/// </summary>
+public sealed class PresentationPlatformClipboardSession
+{
+    private readonly IPlatformClipboard _clipboard;
+    private readonly Func<Presentation, Slide, IReadOnlyList<SlideShape>, byte[]> _renderPng;
+    private readonly Func<PresentationClipboardContent, PlatformClipboardContent> _toPlatformContent;
+    private readonly PresentationClipboardPlatformIdentityStrategy _identityStrategy;
+    private readonly PresentationClipboardOwnershipTracker _ownership = new();
+
+    public PresentationPlatformClipboardSession(
+        IPlatformClipboard clipboard,
+        Func<Presentation, Slide, IReadOnlyList<SlideShape>, byte[]> renderPng,
+        Func<PresentationClipboardContent, PlatformClipboardContent> toPlatformContent,
+        PresentationClipboardPlatformIdentityStrategy identityStrategy)
+    {
+        _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
+        _renderPng = renderPng ?? throw new ArgumentNullException(nameof(renderPng));
+        _toPlatformContent = toPlatformContent ?? throw new ArgumentNullException(nameof(toPlatformContent));
+        _identityStrategy = identityStrategy ?? throw new ArgumentNullException(nameof(identityStrategy));
+    }
+
+    public string? LastWriteFailureMessage { get; private set; }
+
+    public bool OwnCopyHasCurrentPlatformIdentity =>
+        _ownership.HasCurrentPlatformIdentity(_identityStrategy.Resolve(_clipboard, null));
+
+    public PresentationClipboardWriteRequest PrepareWrite(EditingSession editor) =>
+        PresentationClipboardWorkflow.PrepareWrite(
+            editor,
+            _renderPng,
+            Guid.NewGuid().ToString("N"));
+
+    public PresentationClipboardPasteRequest PreparePaste(EditingSession editor) =>
+        PresentationClipboardWorkflow.PreparePaste(editor);
+
+    public Task<bool> CopyAsync(
+        EditingSession editor,
+        CancellationToken cancellationToken = default) =>
+        ExecuteCopyAsync(PrepareWrite(editor), cancellationToken);
+
+    public async Task<bool> ExecuteCopyAsync(
+        PresentationClipboardWriteRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        PresentationClipboardWorkflow.CommitCopy(request);
+        return await WriteAsync(request, cancellationToken);
+    }
+
+    public Task<bool> CutAsync(
+        EditingSession editor,
+        CancellationToken cancellationToken = default) =>
+        ExecuteCutAsync(PrepareWrite(editor), cancellationToken);
+
+    public async Task<bool> ExecuteCutAsync(
+        PresentationClipboardWriteRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var written = await WriteAsync(request, cancellationToken);
+        PresentationClipboardWorkflow.CommitCut(request);
+        return written;
+    }
+
+    public async Task<bool> WriteAsync(
+        PresentationClipboardWriteRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Content is null)
+        {
+            LastWriteFailureMessage = null;
+            return false;
+        }
+
+        var result = await _clipboard.WriteAsync(
+            _toPlatformContent(request.Content),
+            cancellationToken);
+        if (result.IsSuccess)
+        {
+            _ownership.RecordSuccessfulWrite(
+                request.Content,
+                _identityStrategy.Resolve(_clipboard, request.Content));
+            LastWriteFailureMessage = null;
+            return true;
+        }
+
+        _ownership.Invalidate();
+        LastWriteFailureMessage = result.ErrorMessage;
+        return false;
+    }
+
+    public Task<PresentationClipboardPasteSource> PasteAsync(
+        EditingSession editor,
+        bool preferSystemClipboard = true,
+        CancellationToken cancellationToken = default) =>
+        ExecutePasteAsync(
+            PreparePaste(editor),
+            preferSystemClipboard,
+            cancellationToken);
+
+    public async Task<PresentationClipboardPasteSource> ExecutePasteAsync(
+        PresentationClipboardPasteRequest request,
+        bool preferSystemClipboard = true,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var read = await _clipboard.ReadAsync(
+            PresentationClipboardPlatformMapper.ReadRequest,
+            cancellationToken);
+        var content = read.Status == PlatformClipboardReadStatus.Success
+            ? PresentationClipboardPlatformMapper.FromPlatformContent(read.Value)
+            : new PresentationClipboardContent();
+        var identity = _identityStrategy.Resolve(_clipboard, content);
+        var ownCopy = read.Status == PlatformClipboardReadStatus.Success
+            && _ownership.IsCurrent(content, identity, request.Editor.CanPaste);
+        if (!ownCopy)
+            _ownership.Invalidate();
+
+        return PresentationClipboardWorkflow.ApplyPaste(
+            request,
+            content,
+            ownCopy,
+            preferSystemClipboard);
+    }
+}
 
 /// <summary>
 /// Owns renderer-neutral copy, cut, and paste transitions. Desktop hosts retain only native

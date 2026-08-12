@@ -461,7 +461,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         FreePOptions options,
         IApplicationOptionsStore<FreePOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
-        WpfNativePrintCapability? nativePrintCapability = null,
+        PresentationNativePrintHandoffHostCapabilities? nativePrintCapability = null,
         IReadOnlyList<string>? startupFilePaths = null)
     {
         _options = options ?? new FreePOptions();
@@ -649,7 +649,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             onSmartArtQuickStylePreset: preset => ApplySmartArtQuickStylePreset(preset),
             importAsset: ImportPresentationAssetAsync,
             onClipboardWriteFailed: ReportClipboardWriteFailure);
-        var ribbon = BuildRibbon(FreePRibbon.Build(), commands, stateStore);
+        var ribbon = BuildRibbon(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf), commands, stateStore);
 
         // Body: slide pane + stage.
         var body = BuildBody();

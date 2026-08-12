@@ -93,6 +93,19 @@ public sealed class WindowsNativePrintHandoffTests
     }
 
     [Fact]
+    public void WindowsVideoCapability_WhenDeviceEnumerationFails_PreservesExportContext()
+    {
+        var capability = WindowsNativePrintOutput.DetectWindowsVideoCapability(
+            new ThrowingWindowsRecordingDeviceCatalog());
+
+        capability.CanEncodeMp4.Should().BeTrue();
+        capability.CanCaptureNarration.Should().BeFalse();
+        capability.CanCaptureCameraAndMedia.Should().BeFalse();
+        capability.Reason.Should().Contain("Windows MediaComposition video export is available");
+        capability.Reason.Should().Contain("Device detection failed: device catalog failed");
+    }
+
+    [Fact]
     public void WindowsVideoCapabilitySelectsTheNativeAdapter()
     {
         var capability = new LinuxVideoEncoderCapability(
@@ -241,5 +254,11 @@ public sealed class WindowsNativePrintHandoffTests
         params SlideShowRecordingCaptureDeviceDescriptor[] devices) : IWindowsRecordingDeviceCatalog
     {
         public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() => devices;
+    }
+
+    private sealed class ThrowingWindowsRecordingDeviceCatalog : IWindowsRecordingDeviceCatalog
+    {
+        public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() =>
+            throw new InvalidOperationException("device catalog failed");
     }
 }

@@ -8,7 +8,7 @@ using FreeP.App.Recording.Windows;
 
 namespace FreeP.App.Host.Tests;
 
-public sealed class WpfVideoExportAdapterTests : IDisposable
+public sealed class RecordingVideoExportAdapterTests : IDisposable
 {
     private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.WpfVideoExportTests-");
     private string _tempDirectory => _temporaryDirectory.Path;
@@ -18,7 +18,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
     [Fact]
     public void EncoderProbe_SelectsPreferredSoftwareEncoder()
     {
-        WpfVideoEncoderCapabilityDetector.SelectSoftwareEncoder(
+        LinuxNativeOutputCapabilityDetector.SelectSoftwareEncoder(
                 " V....D libx264 H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10\n" +
                 " V..... mpeg4 MPEG-4 part 2")
             .Should().Be("libx264");
@@ -30,7 +30,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
         if (!OperatingSystem.IsWindows())
             return;
 
-        var capability = WpfVideoEncoderCapabilityDetector.Detect();
+        var capability = WindowsNativePrintOutput.Detect().Video;
         var devices = new WindowsNativeRecordingDeviceCatalog().EnumerateDevices();
 
         capability.ExecutablePath.Should().Be(WindowsNativeVideoExportAdapter.ExecutablePath);
@@ -44,7 +44,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
     [Fact]
     public void WindowsNativeCapability_ReportsOnlyInjectedCaptureDevices()
     {
-        var capability = WpfVideoEncoderCapabilityDetector.DetectWindowsCaptureCapability(
+        var capability = WindowsNativePrintOutput.DetectWindowsVideoCapability(
             new FakeRecordingDeviceCatalog(
                 new SlideShowRecordingCaptureDeviceDescriptor(
                     SlideShowRecordingCaptureDeviceKind.Microphone,
@@ -67,7 +67,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
     {
         var output = Path.Combine(_tempDirectory, "deck.mp4");
         var runner = new SuccessfulVideoProcessRunner(output);
-        var adapter = new WpfVideoExportAdapter(
+        var adapter = new LinuxVideoExportAdapter(
             new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "ready"),
             runner);
 
@@ -85,7 +85,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
     public async Task Export_RemovesInvalidEncoderOutput()
     {
         var output = Path.Combine(_tempDirectory, "invalid.mp4");
-        var adapter = new WpfVideoExportAdapter(
+        var adapter = new LinuxVideoExportAdapter(
             new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "mpeg4", false, "ready"),
             new InvalidVideoProcessRunner(output));
 
@@ -101,7 +101,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
     {
         var output = Path.Combine(_tempDirectory, "narrated.mp4");
         var runner = new SuccessfulVideoProcessRunner(output);
-        var adapter = new WpfVideoExportAdapter(
+        var adapter = new LinuxVideoExportAdapter(
             new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "ready"),
             runner);
         var presentation = Presentation.CreateEmpty();
@@ -144,7 +144,7 @@ public sealed class WpfVideoExportAdapterTests : IDisposable
     {
         var output = Path.Combine(_tempDirectory, "camera.mp4");
         var runner = new SuccessfulVideoProcessRunner(output);
-        var adapter = new WpfVideoExportAdapter(
+        var adapter = new LinuxVideoExportAdapter(
             new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "ready"),
             runner);
         var presentation = Presentation.CreateEmpty();

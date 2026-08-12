@@ -83,7 +83,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
     private readonly PresentationFileCommandSession _fileSession;
     private readonly StartupDirtyTrace? _startupDirtyTrace;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
-    private readonly AvaloniaPresentationClipboardService _clipboardService;
+    private readonly PresentationPlatformClipboardSession _clipboardService;
     private Func<FileOpenPickerPlan, Task<string?>>? _openPickerOverrideForTests;
     private Func<FileSavePickerPlan, Task<string?>>? _savePickerOverrideForTests;
     internal Func<FileSavePickerPlan, Task<VideoPickerSelectionForTests?>>? VideoPickerOverrideForTests { get; set; }
@@ -716,7 +716,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         FreePOptions? options = null,
         Func<string, Task<SaveChangesPrompt>>? promptSaveChangesAsync = null,
         Func<string, Exception, Task>? showFileCommandErrorAsync = null,
-        IPresentationSystemClipboard? systemClipboard = null,
+        IPlatformClipboard? systemClipboard = null,
         IPresentationClipboardShapeRenderer? clipboardRenderer = null,
         LinuxNativeOutputCapabilities? nativeOutputCapabilities = null,
         ILinuxVideoExportAdapter? videoExportAdapter = null,
@@ -753,10 +753,18 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             (nativeOutputCapabilities is null ? DetectNativeOutputCapabilities : null);
         _printOutputPackageFactory = printOutputPackageFactory;
         _videoFramePackageArtifactFactory = videoFramePackageArtifactFactory;
-        _clipboardService = new AvaloniaPresentationClipboardService(
-            systemClipboard ?? new AvaloniaPresentationSystemClipboard(
+        var resolvedClipboardRenderer = clipboardRenderer ?? new AvaloniaClipboardShapeRenderer();
+        _clipboardService = new PresentationPlatformClipboardSession(
+            systemClipboard ?? new AvaloniaPlatformClipboard(
                 () => TopLevel.GetTopLevel(this)?.Clipboard),
-            clipboardRenderer ?? new AvaloniaClipboardShapeRenderer());
+            resolvedClipboardRenderer.RenderSelection,
+            static content => PresentationClipboardPlatformMapper.ToPlatformContent(
+                content,
+                PresentationClipboardPlatformMapper.ResolveNativeScope(),
+                PresentationClipboardPlatformMapper.ResolveNativeXamlPackageFormat(),
+                PresentationClipboardPlatformMapper.ResolveNativeRtfFormat()),
+            PresentationClipboardPlatformIdentityStrategy.ContentIdentity(
+                AvaloniaClipboardShapeRenderer.NormalizePng));
 
         _workareaSession = new PresentationWorkareaSession(CreateWorkareaEndpoint());
         // ── Core UI elements ──────────────────────────────────────────────────
@@ -2539,7 +2547,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
     private Control BuildRibbon()
     {
         var registry = BuildCommandRegistry();
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         _ribbonDefinition = definition;
         _ribbonCommandRegistry = registry;
 

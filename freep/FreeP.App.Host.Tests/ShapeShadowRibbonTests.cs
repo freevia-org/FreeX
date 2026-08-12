@@ -9,7 +9,7 @@ public sealed class ShapeShadowRibbonTests
     [Fact]
     public void ShapeShadowPresets_AreDefinedAndRoutedByHost()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var illustrations = definition.Tabs
             .SelectMany(tab => tab.Groups)
             .Single(group => group.Id == "illustrations");
@@ -43,7 +43,7 @@ public sealed class ShapeShadowRibbonTests
     [Fact]
     public void ShapeGlowPresets_AreDefinedAndRoutedByHost()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var illustrations = definition.Tabs
             .SelectMany(tab => tab.Groups)
             .Single(group => group.Id == "illustrations");
@@ -77,7 +77,7 @@ public sealed class ShapeShadowRibbonTests
     [Fact]
     public void ShapeSoftEdgePresets_AreDefinedAndRoutedByHost()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var illustrations = definition.Tabs
             .SelectMany(tab => tab.Groups)
             .Single(group => group.Id == "illustrations");
@@ -111,7 +111,7 @@ public sealed class ShapeShadowRibbonTests
     [Fact]
     public void ShapeBevelPresets_AreDefinedAndRoutedByHost()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var illustrations = definition.Tabs
             .SelectMany(tab => tab.Groups)
             .Single(group => group.Id == "illustrations");
@@ -145,7 +145,7 @@ public sealed class ShapeShadowRibbonTests
     [Fact]
     public void Shape3dPresets_AreDefinedAndRoutedByHost()
     {
-        var definition = FreePRibbon.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf);
         var illustrations = definition.Tabs
             .SelectMany(tab => tab.Groups)
             .Single(group => group.Id == "illustrations");

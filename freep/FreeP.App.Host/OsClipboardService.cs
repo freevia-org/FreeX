@@ -49,12 +49,11 @@ public static class WpfOsClipboard
 /// <summary>Coordinates FreeP clipboard policy with the shared platform boundary.</summary>
 public sealed class OsClipboardService
 {
-    private readonly IPlatformClipboard _clipboard;
     private readonly IShapeRenderer _renderer;
-    private readonly PresentationClipboardOwnershipTracker _ownership = new();
+    private readonly PresentationPlatformClipboardSession _session;
 
     internal bool OwnCopyIsCurrentOnOs =>
-        _ownership.HasCurrentPlatformIdentity(CurrentSequenceIdentity());
+        _session.OwnCopyHasCurrentPlatformIdentity;
 
     /// <summary>
     /// The message from the most recent failed OS-clipboard write (<see
@@ -62,15 +61,20 @@ public sealed class OsClipboardService
     /// has run yet). Copy/Cut callers read this after a false result so the failure reaches the user
     /// instead of vanishing silently.
     /// </summary>
-    public string? LastWriteFailureMessage { get; private set; }
+    public string? LastWriteFailureMessage => _session.LastWriteFailureMessage;
 
     public int RenderWidthPx { get; set; } = 1280;
     public int RenderHeightPx { get; set; } = 720;
 
     public OsClipboardService(IPlatformClipboard clipboard, IShapeRenderer renderer)
     {
-        _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
+        ArgumentNullException.ThrowIfNull(clipboard);
         _renderer = renderer ?? throw new ArgumentNullException(nameof(renderer));
+        _session = new PresentationPlatformClipboardSession(
+            clipboard,
+            RenderSelection,
+            static content => PresentationClipboardPlatformMapper.ToPlatformContent(content),
+            PresentationClipboardPlatformIdentityStrategy.ChangeIdentity);
     }
 
     public void PlaceSelectionOnOsClipboard(EditingSession editor) =>
@@ -83,40 +87,27 @@ public sealed class OsClipboardService
     }
 
     internal PresentationClipboardWriteRequest PrepareWrite(EditingSession editor) =>
-        PresentationClipboardWorkflow.PrepareWrite(
-            editor,
-            (presentation, slide, shapes) => _renderer.RenderShapesToPng(
-                presentation,
-                slide,
-                shapes,
-                RenderWidthPx,
-                RenderHeightPx),
-            Guid.NewGuid().ToString("N"));
+        _session.PrepareWrite(editor);
 
-    internal bool TryWrite(PresentationClipboardWriteRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-        if (request.Content is null)
-        {
-            LastWriteFailureMessage = null;
-            return false;
-        }
-
-        var result = _clipboard.WriteAsync(
-                PresentationClipboardPlatformMapper.ToPlatformContent(request.Content))
-            .AsTask()
+    internal bool TryWrite(PresentationClipboardWriteRequest request) =>
+        _session.WriteAsync(request)
             .GetAwaiter()
             .GetResult();
-        if (result.IsSuccess)
-        {
-            _ownership.RecordSuccessfulWrite(request.Content, CurrentSequenceIdentity());
-            LastWriteFailureMessage = null;
-            return true;
-        }
 
-        _ownership.Invalidate();
-        LastWriteFailureMessage = result.ErrorMessage;
-        return false;
+    public void Copy(
+        EditingSession editor,
+        Action<string>? onWriteFailed = null)
+    {
+        var written = _session.CopyAsync(editor).GetAwaiter().GetResult();
+        ReportFailure(written, onWriteFailed);
+    }
+
+    public void Cut(
+        EditingSession editor,
+        Action<string>? onWriteFailed = null)
+    {
+        var written = _session.CutAsync(editor).GetAwaiter().GetResult();
+        ReportFailure(written, onWriteFailed);
     }
 
     public void Paste(EditingSession editor, bool preferOsClipboard = true) =>
@@ -124,25 +115,10 @@ public sealed class OsClipboardService
 
     internal PresentationClipboardPasteSource PasteWithResult(
         EditingSession editor,
-        bool preferOsClipboard = true)
-    {
-        ArgumentNullException.ThrowIfNull(editor);
-        var read = _clipboard.ReadAsync(PresentationClipboardPlatformMapper.ReadRequest)
-            .AsTask()
+        bool preferOsClipboard = true) =>
+        _session.PasteAsync(editor, preferOsClipboard)
             .GetAwaiter()
             .GetResult();
-        var content = read.Status == PlatformClipboardReadStatus.Success
-            ? PresentationClipboardPlatformMapper.FromPlatformContent(read.Value)
-            : new PresentationClipboardContent();
-
-        var ownCopy = preferOsClipboard
-            && _ownership.IsCurrent(content, CurrentSequenceIdentity(), editor.CanPaste);
-        return PresentationClipboardWorkflow.ApplyPaste(
-            PresentationClipboardWorkflow.PreparePaste(editor),
-            content,
-            ownCopy,
-            preferOsClipboard);
-    }
 
     internal DataObject BuildDataObject(
         Presentation presentation,
@@ -164,46 +140,20 @@ public sealed class OsClipboardService
             PresentationClipboardPlatformMapper.ToPlatformContent(content));
     }
 
-    public static PasteAction DecidePasteAction(
-        bool osHasImage,
-        bool osHasText,
-        bool internalHasData,
-        bool preferOsClipboard = true,
-        bool ownCopyIsCurrentOnOs = false,
-        bool osHasRichText = false,
-        bool osHasXamlPackage = false)
+    private byte[] RenderSelection(
+        Presentation presentation,
+        Slide slide,
+        IReadOnlyList<SlideShape> shapes) =>
+        _renderer.RenderShapesToPng(
+            presentation,
+            slide,
+            shapes,
+            RenderWidthPx,
+            RenderHeightPx);
+
+    private void ReportFailure(bool written, Action<string>? onWriteFailed)
     {
-        var source = !preferOsClipboard && internalHasData
-            ? PresentationClipboardPasteSource.Internal
-            : PresentationClipboardPastePlanner.Decide(
-                hasNativeSelection: false,
-                hasImage: osHasImage,
-                hasText: osHasText,
-                internalHasData: internalHasData,
-                ownCopyIsCurrent: ownCopyIsCurrentOnOs,
-                hasRichText: osHasRichText,
-                hasXamlPackage: osHasXamlPackage);
-        return source switch
-        {
-            PresentationClipboardPasteSource.Image => PasteAction.OsImage,
-            PresentationClipboardPasteSource.RichText => PasteAction.OsText,
-            PresentationClipboardPasteSource.XamlPackage => PasteAction.OsText,
-            PresentationClipboardPasteSource.Text => PasteAction.OsText,
-            PresentationClipboardPasteSource.Internal => PasteAction.Internal,
-            _ => PasteAction.Nothing,
-        };
+        if (!written && LastWriteFailureMessage is { } error)
+            onWriteFailed?.Invoke(error);
     }
-
-    internal static string ExtractText(IEnumerable<SlideShape> shapes) =>
-        PresentationClipboardContentFactory.ExtractText(shapes) ?? string.Empty;
-
-    private string? CurrentSequenceIdentity() => _clipboard.TryGetChangeIdentity();
-}
-
-public enum PasteAction
-{
-    OsImage,
-    OsText,
-    Internal,
-    Nothing,
 }

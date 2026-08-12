@@ -40,7 +40,7 @@ public sealed class FileLifecycleTests : IDisposable
             videoEncoderCapability: canEncodeVideo
                 ? new LinuxVideoEncoderCapability(true, "ffmpeg.exe", "libx264", false, "test encoder ready")
                 : LinuxVideoEncoderCapability.Unavailable("Test encoder handoff deferred."),
-            nativePrintCapability: WpfNativePrintCapability.Unavailable("Test printer handoff deferred."),
+            nativePrintCapability: PresentationNativePrintHandoffHostCapabilities.Deferred("WPF print host", "Test printer handoff deferred."),
             videoFramePackageArtifactFactory: videoFramePackageArtifactFactory);
         return (window, file, () => model, () => changes, messages);
     }

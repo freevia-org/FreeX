@@ -14,6 +14,15 @@ public sealed class FreePOptionsTests : IDisposable
     private readonly TestTemporaryDirectory _temporaryDirectory = new("FreeP.OptionsTests-");
     private string _tempDir => _temporaryDirectory.Path;
 
+    [Fact]
+    public void WpfHost_ConsumesCanonicalPresentationOptionsWithoutCompatibilitySubclass()
+    {
+        typeof(FreePOptions).Namespace.Should().Be("FreeP.App.Compositor");
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        File.Exists(Path.Combine(root, "freep", "FreeP.App.Host", "FreePOptions.cs"))
+            .Should().BeFalse();
+    }
+
     public void Dispose() => _temporaryDirectory.Dispose();
 
     [Fact]

@@ -1023,15 +1023,17 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
-    public void App_adapters_delegate_to_shared_definition_without_local_builders()
+    public void App_composition_uses_shared_definition_without_forwarding_facades()
     {
-        var host = File.ReadAllText(RepoFile("freep", "FreeP.App.Host", "FreePRibbon.cs"));
-        host.Should().Contain("FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Wpf)");
+        var host = File.ReadAllText(RepoFile("freep", "FreeP.App.Host", "MainWindow.cs"));
+        host.Should().Contain("FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Wpf)");
         host.Should().NotContain("new RibbonDefinitionBuilder");
 
-        var avalonia = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "FreePRibbonAvalonia.cs"));
-        avalonia.Should().Contain("FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Avalonia)");
+        var avalonia = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        avalonia.Should().Contain("FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia)");
         avalonia.Should().NotContain("new RibbonDefinitionBuilder");
+        File.Exists(RepoFile("freep", "FreeP.App.Host", "FreePRibbon.cs")).Should().BeFalse();
+        File.Exists(RepoFile("freep", "FreeP.App.Avalonia", "FreePRibbonAvalonia.cs")).Should().BeFalse();
     }
 
     [Fact]

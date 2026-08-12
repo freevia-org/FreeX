@@ -46,7 +46,7 @@ public sealed class WpfClipboardCommandTests
         fixture.Slide.Shapes.Add(second);
         fixture.Editor.Select(second.Id, addToSelection: true);
 
-        WpfClipboardCommands.Cut(fixture.Editor, fixture.Service);
+        fixture.Service.Cut(fixture.Editor);
 
         fixture.Slide.Shapes.Should().BeEmpty();
         PresentationClipboardSelectionCodec.Deserialize(
@@ -65,7 +65,7 @@ public sealed class WpfClipboardCommandTests
         var fixture = CreateFixture();
         fixture.Clipboard.ThrowOnWrite = true;
 
-        WpfClipboardCommands.Cut(fixture.Editor, fixture.Service);
+        fixture.Service.Cut(fixture.Editor);
 
         fixture.Slide.Shapes.Should().BeEmpty();
         fixture.Editor.CanPaste.Should().BeTrue();
@@ -98,7 +98,7 @@ public sealed class WpfClipboardCommandTests
         var keyboard = CreateFixture();
 
         ExecuteRibbonCut(ribbon.Editor, ribbon.Service);
-        WpfClipboardCommands.Cut(keyboard.Editor, keyboard.Service);
+        keyboard.Service.Cut(keyboard.Editor);
 
         ribbon.Clipboard.WriteCount.Should().Be(keyboard.Clipboard.WriteCount);
         ribbon.Clipboard.LastContent!.Text

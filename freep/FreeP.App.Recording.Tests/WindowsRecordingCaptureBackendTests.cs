@@ -14,6 +14,56 @@ public sealed class WindowsRecordingCaptureBackendTests
         "ppt/media/freep-recordings/wpf");
 
     [Fact]
+    public void DeviceAvailability_ProjectsAvailableMicrophoneAndCameraOnce()
+    {
+        var availability = WindowsRecordingDeviceAvailabilityPlanner.Detect(
+            new FakeDeviceCatalog(
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic",
+                    "Microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/wav"),
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Camera,
+                    "camera",
+                    "Camera",
+                    IsDefault: true,
+                    IsAvailable: false,
+                    "video/mp4")));
+
+        availability.Devices.Should().HaveCount(2);
+        availability.HasMicrophone.Should().BeTrue();
+        availability.HasCamera.Should().BeFalse();
+        availability.HasAvailableDevice.Should().BeTrue();
+        availability.DetectionFailure.Should().BeNull();
+    }
+
+    [Fact]
+    public void DeviceAvailability_CapturesEnumerationFailureForAllConsumers()
+    {
+        var availability = WindowsRecordingDeviceAvailabilityPlanner.Detect(
+            new ThrowingDeviceCatalog());
+
+        availability.Devices.Should().BeEmpty();
+        availability.HasMicrophone.Should().BeFalse();
+        availability.HasCamera.Should().BeFalse();
+        availability.DetectionFailure.Should().Be("device catalog failed");
+    }
+
+    [Fact]
+    public void Readiness_WhenDeviceEnumerationFails_PreservesCaptureContext()
+    {
+        var backend = CreateBackend(
+            new ThrowingDeviceCatalog(),
+            new FakeCaptureEngine());
+
+        backend.AdapterReadiness.UnavailableReason.Should().Be(
+            "Windows recording device enumeration failed: device catalog failed");
+    }
+
+    [Fact]
     public void Readiness_WithMicrophone_ProjectsNarrationCaptureAndDeferredCamera()
     {
         var backend = CreateBackend(
@@ -502,5 +552,11 @@ public sealed class WindowsRecordingCaptureBackendTests
                 request.PackagePath,
                 payload);
         }
+    }
+
+    private sealed class ThrowingDeviceCatalog : IWindowsRecordingDeviceCatalog
+    {
+        public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() =>
+            throw new InvalidOperationException("device catalog failed");
     }
 }

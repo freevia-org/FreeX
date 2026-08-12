@@ -735,7 +735,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_contains_home_tab()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         definition.Tabs.Should().Contain(t => t.Id == "home",
             "the Home tab must be present in the ribbon definition");
     }
@@ -743,7 +743,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_contains_design_transitions_and_animations_tabs()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
 
         definition.Tabs.Select(tab => tab.Id)
             .Should()
@@ -757,7 +757,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_design_tab_has_planned_design_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var design = definition.Tabs.Single(t => t.Id == "design");
         var commandIds = design.Groups
             .SelectMany(group => group.Controls)
@@ -771,7 +771,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_animations_tab_has_planned_animation_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var animations = definition.Tabs.Single(t => t.Id == "animations");
         var commandIds = EnumerateRibbonCommandIds(animations).ToArray();
 
@@ -892,7 +892,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_home_tab_has_content_and_edit_groups_without_lifecycle_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         home.Groups.Should().NotContain(g => g.Id == "file", "document lifecycle belongs in Backstage");
         home.Groups.Should().Contain(g => g.Id == "slides", "Slides group required");
@@ -905,7 +905,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_transitions_group_has_slideshow_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var transitions = definition.Tabs.Single(t => t.Id == "transitions");
         var slideShow = transitions.Groups.Single(g => g.Id == "slideshow-from-transitions");
         slideShow.Controls.Select(i => i.CommandId.Value).Should().Equal(
@@ -920,7 +920,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_avalonia_chart_injection_preserves_order_metadata_and_duplicate_guards()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var insert = definition.Tabs.Single(t => t.Id == "insert");
         var charts = insert.Groups.Single(g => g.Id == "charts");
 
@@ -957,7 +957,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_slides_group_has_new_duplicate_delete()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home   = definition.Tabs.Single(t => t.Id == "home");
         var slides = home.Groups.Single(g => g.Id == "slides");
         var ids    = slides.Controls.Select(i => i.CommandId.Value).ToList();
@@ -970,7 +970,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_clipboard_group_has_shared_clipboard_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         var clipboard = home.Groups.Single(g => g.Id == "clipboard");
         var ids = clipboard.Controls.Select(i => i.CommandId.Value).ToList();
@@ -983,7 +983,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_edit_group_has_undo_and_redo()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         var edit = home.Groups.Single(g => g.Id == "edit");
         var ids  = edit.Controls.Select(i => i.CommandId.Value).ToList();
@@ -994,7 +994,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_editing_group_has_find_and_replace()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         var editing = home.Groups.Single(g => g.Id == "editing");
         var ids = editing.Controls.Select(i => i.CommandId.Value).ToList();
@@ -1006,7 +1006,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_arrange_group_has_shared_command_ids()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var home = definition.Tabs.Single(t => t.Id == "home");
         var arrange = home.Groups.Single(g => g.Id == "arrange");
         var ids = arrange.Controls
@@ -1038,7 +1038,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_insert_tab_has_object_insertion_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var insert = definition.Tabs.Single(t => t.Id == "insert");
         insert.Groups.Should().Contain(g => g.Id == "text", "Text group required");
         insert.Groups.Should().Contain(g => g.Id == "tables", "Tables group required");
@@ -1106,7 +1106,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_transitions_tab_has_planned_transition_commands()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var transitions = definition.Tabs.Single(t => t.Id == "transitions");
         var commandIds = EnumerateRibbonCommandIds(transitions).ToArray();
 
@@ -1116,7 +1116,7 @@ public sealed class MainWindowHeadlessTests : IDisposable
     [Fact]
     public void RibbonDefinition_transitions_tab_exposes_transition_sound_loop_toggle()
     {
-        var definition = FreePRibbonAvalonia.Build();
+        var definition = FreeP.Ribbon.Definitions.FreePRibbon.Build(FreeP.Ribbon.Definitions.FreePRibbonCapabilities.Avalonia);
         var commandIds = EnumerateRibbonCommandIds(definition.Tabs.Single(t => t.Id == "transitions"));
 
         commandIds.Should().Contain("freep.transition.sound-loop");

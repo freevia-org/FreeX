@@ -53,18 +53,22 @@ public sealed class PlatformClipboardOwnershipSourceTests
     {
         var wpf = Read("shared", "Free.Shared.Shell.Wpf", "WpfPlatformClipboard.cs");
         var avalonia = Read("shared", "Free.Shared.Shell.Avalonia", "AvaloniaPlatformClipboard.cs");
-        var freePHost = Read("freep", "FreeP.App.Host", "OsClipboardService.cs");
-        var freePAvalonia = Read(
+        var presentationWorkflow = Read(
             "freep",
-            "FreeP.App.Avalonia",
-            "PresentationClipboardService.cs");
+            "FreeP.App.Presentation",
+            "Core",
+            "PresentationClipboardWorkflow.cs");
+        var freePHost = Read("freep", "FreeP.App.Host", "OsClipboardService.cs");
+        var freePAvalonia = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
         wpf.Should().Contain("class WpfPlatformClipboard : IPlatformClipboard");
         avalonia.Should().Contain("class AvaloniaPlatformClipboard : IPlatformClipboard");
         wpf.Should().Contain("catch (OperationCanceledException)");
         avalonia.Should().Contain("catch (OperationCanceledException)");
-        freePHost.Should().Contain("private readonly IPlatformClipboard _clipboard;");
-        freePAvalonia.Should().Contain("IPlatformClipboard systemClipboard");
+        presentationWorkflow.Should().Contain("private readonly IPlatformClipboard _clipboard;");
+        freePHost.Should().Contain("private readonly PresentationPlatformClipboardSession _session;");
+        freePAvalonia.Should().Contain("new PresentationPlatformClipboardSession(");
+        freePAvalonia.Should().Contain("systemClipboard ?? new AvaloniaPlatformClipboard(");
     }
 
     private static string SourceWithoutComments(string source) =>
