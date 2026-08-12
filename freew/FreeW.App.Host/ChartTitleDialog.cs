@@ -24,10 +24,10 @@ internal sealed class ChartTitleDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         _titleBox = new TextBox { Text = currentTitle ?? string.Empty, MinWidth = 200 };
-        ImageChartDialogSurfaceSemantics.Apply(_titleBox, surface.Field(ChartTitleDialogField.Title));
+        WpfDialogSurfaceSemantics.Apply(_titleBox, surface.Field(ChartTitleDialogField.Title));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

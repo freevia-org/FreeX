@@ -29,7 +29,7 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageSizeDialogPlanner.BuildInitialState(
             currentWidthPt,
@@ -41,9 +41,9 @@ internal sealed class ImageSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _widthBox = new TextBox { Text = state.WidthText, MinWidth = 120 };
         _heightBox = new TextBox { Text = state.HeightText, MinWidth = 120 };
         _lockCheck = new CheckBox { Content = surface.Field(ImageSizeDialogField.LockAspectRatio).Label, IsChecked = state.LockAspectRatio, Margin = new Thickness(0, 6, 0, 0) };
-        ImageChartDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageSizeDialogField.Width));
-        ImageChartDialogSurfaceSemantics.Apply(_heightBox, surface.Field(ImageSizeDialogField.Height));
-        ImageChartDialogSurfaceSemantics.Apply(_lockCheck, surface.Field(ImageSizeDialogField.LockAspectRatio));
+        WpfDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageSizeDialogField.Width));
+        WpfDialogSurfaceSemantics.Apply(_heightBox, surface.Field(ImageSizeDialogField.Height));
+        WpfDialogSurfaceSemantics.Apply(_lockCheck, surface.Field(ImageSizeDialogField.LockAspectRatio));
 
         _widthBox.TextChanged  += OnWidthChanged;
         _heightBox.TextChanged += OnHeightChanged;

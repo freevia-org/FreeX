@@ -24,12 +24,12 @@ internal sealed class ChartAxisTitlesDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         _catBox = new TextBox { Text = currentCategory ?? string.Empty, MinWidth = 200 };
         _valBox = new TextBox { Text = currentValue ?? string.Empty, MinWidth = 200 };
-        ImageChartDialogSurfaceSemantics.Apply(_catBox, surface.Field(ChartAxisTitlesDialogField.Category));
-        ImageChartDialogSurfaceSemantics.Apply(_valBox, surface.Field(ChartAxisTitlesDialogField.Value));
+        WpfDialogSurfaceSemantics.Apply(_catBox, surface.Field(ChartAxisTitlesDialogField.Category));
+        WpfDialogSurfaceSemantics.Apply(_valBox, surface.Field(ChartAxisTitlesDialogField.Value));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

@@ -318,7 +318,7 @@ public sealed class WatermarkDialog : FreeWDialogWindow
 
     private StackPanel BuildTextPanel()
     {
-        var grid = CreateLabeledGrid();
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(0);
         InsertDialogLayout.AddLabeledRow(grid, 0, WatermarkOptionsDialogPlanner.TextLabel, _text);
         InsertDialogLayout.AddLabeledRow(grid, 1, WatermarkOptionsDialogPlanner.FontLabel, _font);
         InsertDialogLayout.AddLabeledRow(grid, 2, WatermarkOptionsDialogPlanner.ColorLabel, _color);
@@ -341,7 +341,7 @@ public sealed class WatermarkDialog : FreeWDialogWindow
         fileRow.Children.Add(_pathBox);
         fileRow.Children.Add(browseButton);
 
-        var grid = CreateLabeledGrid();
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(0);
         InsertDialogLayout.AddLabeledRow(grid, 0, WatermarkOptionsDialogPlanner.ImageFileLabel, fileRow);
         InsertDialogLayout.AddLabeledRow(grid, 1, WatermarkOptionsDialogPlanner.ScaleLabel, _scaleBox);
         InsertDialogLayout.AddLabeledRow(grid, 2, WatermarkOptionsDialogPlanner.LayoutLabel, CreateRadioRow(_pictureDiagonal, _pictureHorizontal));
@@ -350,14 +350,6 @@ public sealed class WatermarkDialog : FreeWDialogWindow
         panel.Children.Add(grid);
         panel.Children.Add(_washout);
         return panel;
-    }
-
-    private static Grid CreateLabeledGrid()
-    {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        return grid;
     }
 
     private static StackPanel CreateRadioRow(params Control[] controls)

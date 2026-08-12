@@ -9,6 +9,57 @@ namespace Free.Shared.Shell.Avalonia.Tests;
 public sealed class AvaloniaLabeledFormRowTests
 {
     [Fact]
+    public void CreateCompactGrid_RealizesTheFreeWDialogGridContract()
+    {
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(3);
+
+        grid.ColumnDefinitions.Should().HaveCount(2);
+        grid.ColumnDefinitions[0].Width.Should().Be(GridLength.Auto);
+        grid.ColumnDefinitions[1].Width.Should().Be(new GridLength(1, GridUnitType.Star));
+        grid.RowDefinitions.Should().HaveCount(3)
+            .And.OnlyContain(row => row.Height == GridLength.Auto);
+    }
+
+    [Fact]
+    public void AddCompact_PreservesFreeWLabelSpacingAndPlacement()
+    {
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(2);
+        var first = new TextBox();
+        var second = new ComboBox();
+
+        AvaloniaLabeledFormRow.AddCompact(grid, "Width", first, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Style", second, 1);
+
+        var firstLabel = grid.Children[0].Should().BeOfType<TextBlock>().Subject;
+        firstLabel.Margin.Should().Be(new Thickness(0, 0, 8, 0));
+        firstLabel.VerticalAlignment.Should().Be(VerticalAlignment.Center);
+        Grid.GetRow(firstLabel).Should().Be(0);
+        Grid.GetColumn(firstLabel).Should().Be(0);
+        grid.Children[1].Should().BeSameAs(first);
+        Grid.GetColumn(first).Should().Be(1);
+
+        var secondLabel = grid.Children[2].Should().BeOfType<TextBlock>().Subject;
+        secondLabel.Margin.Should().Be(new Thickness(0, 4, 8, 0));
+        Grid.GetRow(secondLabel).Should().Be(1);
+        grid.Children[3].Should().BeSameAs(second);
+        Grid.GetRow(second).Should().Be(1);
+        Grid.GetColumn(second).Should().Be(1);
+    }
+
+    [Fact]
+    public void Place_AddsControlAtTheRequestedCell()
+    {
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(2);
+        var control = new Button();
+
+        AvaloniaLabeledFormRow.Place(grid, control, 1, 1);
+
+        grid.Children.Should().ContainSingle().Which.Should().BeSameAs(control);
+        Grid.GetRow(control).Should().Be(1);
+        Grid.GetColumn(control).Should().Be(1);
+    }
+
+    [Fact]
     public void FreePAndFreeWOptionsDialogsDelegateLabeledRowsToTheSharedRenderer()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
@@ -23,6 +74,29 @@ public sealed class AvaloniaLabeledFormRowTests
             source.Should().Contain("AvaloniaLabeledFormRow.Add(")
                 .And.NotContain("private static void AddRow(");
         }
+    }
+
+    [Fact]
+    public void FreeWCompactDialogsDelegateGridAndPlacementToTheSharedRenderer()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var renderer = Path.Combine(root, "freew", "FreeW.App.Avalonia");
+        var sources = new[]
+        {
+            File.ReadAllText(Path.Combine(renderer, "MediaDialogParity.cs")),
+            File.ReadAllText(Path.Combine(renderer, "PictureFormattingDialogs.cs")),
+            File.ReadAllText(Path.Combine(renderer, "DesignDialogs.cs")),
+            File.ReadAllText(Path.Combine(renderer, "FootnoteEndnoteOptionsDialog.cs")),
+            File.ReadAllText(Path.Combine(renderer, "ImageAndTableConversionDialogs.cs")),
+        };
+
+        sources.Should().OnlyContain(source => source.Contains("AvaloniaLabeledFormRow.", StringComparison.Ordinal));
+        sources[0].Should().NotContain("public static Grid CreateGrid(")
+            .And.NotContain("public static void AddField(")
+            .And.NotContain("public static void Place(");
+        sources[1].Should().NotContain("public static Grid CreateGrid(")
+            .And.NotContain("public static void AddField(")
+            .And.NotContain("public static void Place(");
     }
 
     [Fact]

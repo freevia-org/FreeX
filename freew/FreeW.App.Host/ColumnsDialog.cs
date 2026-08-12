@@ -49,11 +49,11 @@ internal sealed class ColumnsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _presetBox.Items.Add(preset.Label);
         _presetBox.SelectedIndex = plan.PresetIndex;
         _presetBox.SelectionChanged += (_, _) => ApplySelectedPreset();
-        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
-        PageLayoutDialogSurfaceSemantics.Apply(_presetBox, surface.Field(ColumnsDialogField.Preset));
-        PageLayoutDialogSurfaceSemantics.Apply(_countBox, surface.Field(ColumnsDialogField.Count));
-        PageLayoutDialogSurfaceSemantics.Apply(_spacingBox, surface.Field(ColumnsDialogField.Spacing));
-        PageLayoutDialogSurfaceSemantics.Apply(_lineBetween, surface.Field(ColumnsDialogField.LineBetween));
+        WpfDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(_presetBox, surface.Field(ColumnsDialogField.Preset));
+        WpfDialogSurfaceSemantics.Apply(_countBox, surface.Field(ColumnsDialogField.Count));
+        WpfDialogSurfaceSemantics.Apply(_spacingBox, surface.Field(ColumnsDialogField.Spacing));
+        WpfDialogSurfaceSemantics.Apply(_lineBetween, surface.Field(ColumnsDialogField.LineBetween));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

@@ -45,11 +45,11 @@ internal sealed class HyphenationOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWi
         _hyphenateCapsBox = new CheckBox { Content = surface.Field(HyphenationOptionsDialogField.HyphenateCaps).Label, IsChecked = state.HyphenateCaps, Margin = new Thickness(0, 6, 0, 0) };
         _zoneBox = NumberBox(state.ZoneText);
         _limitBox = NumberBox(state.ConsecutiveLimitText);
-        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
-        PageLayoutDialogSurfaceSemantics.Apply(_autoBox, surface.Field(HyphenationOptionsDialogField.Automatic));
-        PageLayoutDialogSurfaceSemantics.Apply(_zoneBox, surface.Field(HyphenationOptionsDialogField.Zone));
-        PageLayoutDialogSurfaceSemantics.Apply(_limitBox, surface.Field(HyphenationOptionsDialogField.ConsecutiveLimit));
-        PageLayoutDialogSurfaceSemantics.Apply(_hyphenateCapsBox, surface.Field(HyphenationOptionsDialogField.HyphenateCaps));
+        WpfDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(_autoBox, surface.Field(HyphenationOptionsDialogField.Automatic));
+        WpfDialogSurfaceSemantics.Apply(_zoneBox, surface.Field(HyphenationOptionsDialogField.Zone));
+        WpfDialogSurfaceSemantics.Apply(_limitBox, surface.Field(HyphenationOptionsDialogField.ConsecutiveLimit));
+        WpfDialogSurfaceSemantics.Apply(_hyphenateCapsBox, surface.Field(HyphenationOptionsDialogField.HyphenateCaps));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

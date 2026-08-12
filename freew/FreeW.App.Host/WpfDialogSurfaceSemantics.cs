@@ -4,7 +4,7 @@ using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
 
-internal static class ImageChartDialogSurfaceSemantics
+internal static class WpfDialogSurfaceSemantics
 {
     public static void Apply<TField>(Window window, DialogSurfaceSpec<TField> surface)
         where TField : struct, Enum
@@ -18,12 +18,5 @@ internal static class ImageChartDialogSurfaceSemantics
     {
         AutomationProperties.SetAutomationId(element, field.AutomationId);
         AutomationProperties.SetName(element, field.AutomationName);
-    }
-
-    public static void ApplyValidation<TField>(FrameworkElement element, DialogSurfaceSpec<TField> surface)
-        where TField : struct, Enum
-    {
-        if (surface.ValidationAutomationId is { } automationId)
-            AutomationProperties.SetAutomationId(element, automationId);
     }
 }

@@ -41,10 +41,10 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _lines = NumberBox(state.LinesToDropText);
         _distance = NumberBox(state.DistanceFromTextText);
-        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
-        PageLayoutDialogSurfaceSemantics.Apply(_font, surface.Field(DropCapOptionsDialogField.Font));
-        PageLayoutDialogSurfaceSemantics.Apply(_lines, surface.Field(DropCapOptionsDialogField.LinesToDrop));
-        PageLayoutDialogSurfaceSemantics.Apply(_distance, surface.Field(DropCapOptionsDialogField.DistanceFromText));
+        WpfDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(_font, surface.Field(DropCapOptionsDialogField.Font));
+        WpfDialogSurfaceSemantics.Apply(_lines, surface.Field(DropCapOptionsDialogField.LinesToDrop));
+        WpfDialogSurfaceSemantics.Apply(_distance, surface.Field(DropCapOptionsDialogField.DistanceFromText));
 
         var positionRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         positionRow.Children.Add(_none);
@@ -58,7 +58,7 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 4)
         };
-        PageLayoutDialogSurfaceSemantics.Apply(
+        WpfDialogSurfaceSemantics.Apply(
             positionHeading,
             surface.Field(DropCapOptionsDialogField.Position));
         panel.Children.Add(positionHeading);
@@ -81,7 +81,7 @@ internal sealed class DropCapOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             GroupName = "DropCapPosition",
             Margin = new Thickness(4, 2, 12, 2)
         };
-        PageLayoutDialogSurfaceSemantics.Apply(button, field);
+        WpfDialogSurfaceSemantics.Apply(button, field);
         return button;
     }
 

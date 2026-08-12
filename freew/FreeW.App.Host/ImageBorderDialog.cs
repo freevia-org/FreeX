@@ -25,7 +25,7 @@ internal sealed class ImageBorderDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageBorderDialogPlanner.BuildInitialState(
             colorHex,
@@ -39,9 +39,9 @@ internal sealed class ImageBorderDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         foreach (var style in ImageBorderDialogPlanner.DashItems)
             _dashBox.Items.Add(style.Label);
         _dashBox.SelectedIndex = state.DashIndex;
-        ImageChartDialogSurfaceSemantics.Apply(_colorBox, surface.Field(ImageBorderDialogField.Color));
-        ImageChartDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageBorderDialogField.Width));
-        ImageChartDialogSurfaceSemantics.Apply(_dashBox, surface.Field(ImageBorderDialogField.Style));
+        WpfDialogSurfaceSemantics.Apply(_colorBox, surface.Field(ImageBorderDialogField.Color));
+        WpfDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ImageBorderDialogField.Width));
+        WpfDialogSurfaceSemantics.Apply(_dashBox, surface.Field(ImageBorderDialogField.Style));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

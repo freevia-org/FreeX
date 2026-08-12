@@ -36,10 +36,10 @@ internal sealed class CustomParagraphSpacingDialog : Free.Shared.Ribbon.Wpf.Dial
         _beforeBox = NumberBox(state.SpaceBeforeText);
         _afterBox = NumberBox(state.SpaceAfterText);
         _lineBox = NumberBox(state.LineSpacingText);
-        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
-        PageLayoutDialogSurfaceSemantics.Apply(_beforeBox, surface.Field(CustomParagraphSpacingDialogField.SpaceBefore));
-        PageLayoutDialogSurfaceSemantics.Apply(_afterBox, surface.Field(CustomParagraphSpacingDialogField.SpaceAfter));
-        PageLayoutDialogSurfaceSemantics.Apply(_lineBox, surface.Field(CustomParagraphSpacingDialogField.LineSpacing));
+        WpfDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(_beforeBox, surface.Field(CustomParagraphSpacingDialogField.SpaceBefore));
+        WpfDialogSurfaceSemantics.Apply(_afterBox, surface.Field(CustomParagraphSpacingDialogField.SpaceAfter));
+        WpfDialogSurfaceSemantics.Apply(_lineBox, surface.Field(CustomParagraphSpacingDialogField.LineSpacing));
 
         Content = BuildContent();
         Loaded += (_, _) => DialogFocus.FocusAndSelect(_beforeBox);

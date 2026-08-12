@@ -32,7 +32,7 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface with { AutomationName = title });
+        WpfDialogSurfaceSemantics.Apply(this, surface with { AutomationName = title });
 
         var state = ImagePositionDialogPlanner.BuildInitialState(
             hOffPt,
@@ -48,10 +48,10 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _vAnchorBox = Combo(ImagePositionDialogPlanner.VerticalAnchorItems, state.VerticalAnchorIndex);
         _hAnchorBox.IsEnabled = !isGroupLocal;
         _vAnchorBox.IsEnabled = !isGroupLocal;
-        ImageChartDialogSurfaceSemantics.Apply(_hBox, surface.Field(ImagePositionDialogField.HorizontalOffset));
-        ImageChartDialogSurfaceSemantics.Apply(_hAnchorBox, surface.Field(ImagePositionDialogField.HorizontalAnchor));
-        ImageChartDialogSurfaceSemantics.Apply(_vBox, surface.Field(ImagePositionDialogField.VerticalOffset));
-        ImageChartDialogSurfaceSemantics.Apply(_vAnchorBox, surface.Field(ImagePositionDialogField.VerticalAnchor));
+        WpfDialogSurfaceSemantics.Apply(_hBox, surface.Field(ImagePositionDialogField.HorizontalOffset));
+        WpfDialogSurfaceSemantics.Apply(_hAnchorBox, surface.Field(ImagePositionDialogField.HorizontalAnchor));
+        WpfDialogSurfaceSemantics.Apply(_vBox, surface.Field(ImagePositionDialogField.VerticalOffset));
+        WpfDialogSurfaceSemantics.Apply(_vAnchorBox, surface.Field(ImagePositionDialogField.VerticalAnchor));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

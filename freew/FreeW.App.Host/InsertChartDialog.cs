@@ -34,7 +34,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = InsertChartDialogPlanner.BuildInitialState(seed, CultureInfo.CurrentCulture);
 
@@ -46,7 +46,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         foreach (ChartKind kind in Enum.GetValues<ChartKind>())
             _kindBox.Items.Add(kind.ToString());
         _kindBox.SelectedItem = state.Kind.ToString();
-        ImageChartDialogSurfaceSemantics.Apply(_kindBox, surface.Field(InsertChartDialogField.ChartType));
+        WpfDialogSurfaceSemantics.Apply(_kindBox, surface.Field(InsertChartDialogField.ChartType));
         panel.Children.Add(_kindBox);
 
         // ── Chart title ──────────────────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Text = state.Title,
             Margin = new Thickness(0, 0, 0, 10)
         };
-        ImageChartDialogSurfaceSemantics.Apply(_titleBox, surface.Field(InsertChartDialogField.Title));
+        WpfDialogSurfaceSemantics.Apply(_titleBox, surface.Field(InsertChartDialogField.Title));
         panel.Children.Add(_titleBox);
 
         // ── Data grid ────────────────────────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         });
 
         _dataGrid = BuildDataGrid(state);
-        ImageChartDialogSurfaceSemantics.Apply(_dataGrid, surface.Field(InsertChartDialogField.Data));
+        WpfDialogSurfaceSemantics.Apply(_dataGrid, surface.Field(InsertChartDialogField.Data));
         panel.Children.Add(_dataGrid);
 
         // ── OK / Cancel ──────────────────────────────────────────────────────────────────────────

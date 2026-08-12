@@ -158,12 +158,7 @@ internal sealed class FootnoteEndnoteOptionsDialog : FreeWDialogWindow
         };
         AutomationProperties.SetAutomationId(header, section.AutomationId);
         panel.Children.Add(header);
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(3);
 
         var fields = new Control[] { controls.Format, controls.StartAt, controls.Restart };
         for (var row = 0; row < section.Fields.Count; row++)

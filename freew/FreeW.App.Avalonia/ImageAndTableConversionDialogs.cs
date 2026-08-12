@@ -50,11 +50,7 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
             new Thickness(0, 6, 0, 0));
         ImageChartDialogSurfaceSemantics.ApplyValidation(_status, surface);
 
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < 4; i++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(4);
 
         AddField(grid, surface.Field(ImageCropDialogField.Left).Label, _leftBox, 0);
         AddField(grid, surface.Field(ImageCropDialogField.Right).Label, _rightBox, 1);
@@ -88,8 +84,7 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
 
         Opened += (_, _) =>
         {
-            _leftBox.Focus();
-            _leftBox.SelectAll();
+            AvaloniaCompactDialogChrome.FocusAndSelect(_leftBox);
         };
         KeyDown += (_, e) =>
         {
@@ -133,8 +128,7 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
             ImageCropDialogField.Bottom => _bottomBox,
             _ => _leftBox,
         };
-        box.Focus();
-        box.SelectAll();
+        AvaloniaCompactDialogChrome.FocusAndSelect(box);
     }
 
     private static TextBox MakeBox(string text)
@@ -152,12 +146,8 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 4, 8, 0),
         };
-        Grid.SetRow(text, row);
-        Grid.SetColumn(text, 0);
-        grid.Children.Add(text);
-        Grid.SetRow(field, row);
-        Grid.SetColumn(field, 1);
-        grid.Children.Add(field);
+        AvaloniaLabeledFormRow.Place(grid, text, row, 0);
+        AvaloniaLabeledFormRow.Place(grid, field, row, 1);
     }
 }
 

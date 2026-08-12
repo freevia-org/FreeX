@@ -44,10 +44,10 @@ internal sealed class LineNumberOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _modeBox = new ComboBox { MinWidth = 140 };
         foreach (var label in _session.ModeLabels) _modeBox.Items.Add(label);
         _modeBox.SelectedIndex = state.ModeIndex;
-        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
-        PageLayoutDialogSurfaceSemantics.Apply(_startAtBox, surface.Field(LineNumberOptionsDialogField.StartAt));
-        PageLayoutDialogSurfaceSemantics.Apply(_countByBox, surface.Field(LineNumberOptionsDialogField.CountBy));
-        PageLayoutDialogSurfaceSemantics.Apply(_modeBox, surface.Field(LineNumberOptionsDialogField.Numbering));
+        WpfDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(_startAtBox, surface.Field(LineNumberOptionsDialogField.StartAt));
+        WpfDialogSurfaceSemantics.Apply(_countByBox, surface.Field(LineNumberOptionsDialogField.CountBy));
+        WpfDialogSurfaceSemantics.Apply(_modeBox, surface.Field(LineNumberOptionsDialogField.Numbering));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

@@ -23,7 +23,7 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         _choices = new ComboBox
         {
@@ -32,7 +32,7 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
             SelectedIndex = 0,
             MinWidth = 230
         };
-        PageLayoutDialogSurfaceSemantics.Apply(
+        WpfDialogSurfaceSemantics.Apply(
             _choices,
             surface.Field(ManualHyphenationDialogField.Choices));
 
@@ -43,9 +43,9 @@ internal sealed class ManualHyphenationDialog : Free.Shared.Ribbon.Wpf.DialogWin
         var cancelContent = ShellStrings.Current.Cancel;
         var cancel = new Button { Content = cancelContent, MinWidth = 72, Margin = new Thickness(8, 0, 0, 0), IsCancel = true };
         cancel.Click += (_, _) => CloseWith(_session.PlanCancel());
-        PageLayoutDialogSurfaceSemantics.Apply(yes, surface.Field(ManualHyphenationDialogField.Yes));
-        PageLayoutDialogSurfaceSemantics.Apply(no, surface.Field(ManualHyphenationDialogField.No));
-        PageLayoutDialogSurfaceSemantics.Apply(cancel, surface.Field(ManualHyphenationDialogField.Cancel));
+        WpfDialogSurfaceSemantics.Apply(yes, surface.Field(ManualHyphenationDialogField.Yes));
+        WpfDialogSurfaceSemantics.Apply(no, surface.Field(ManualHyphenationDialogField.No));
+        WpfDialogSurfaceSemantics.Apply(cancel, surface.Field(ManualHyphenationDialogField.Cancel));
         AutomationProperties.SetName(cancel, ShellStrings.Current.CreateAutomationName(cancelContent));
         var cancelAccelerator = ShellStringText.CreateAcceleratorKey(cancelContent);
         if (!string.IsNullOrEmpty(cancelAccelerator))

@@ -37,11 +37,11 @@ internal sealed class ImageAdjustDialog : FreeWDialogWindow
         _transparency = Box(state.TransparencyText);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
-        var grid = Chrome.CreateGrid(5);
-        Chrome.AddField(grid, "Brightness (-100 to 100):", _brightness, 0);
-        Chrome.AddField(grid, "Contrast (-100 to 100):", _contrast, 1);
-        Chrome.AddField(grid, "Saturation (0 to 400):", _saturation, 2);
-        Chrome.AddField(grid, "Transparency (0 to 100):", _transparency, 3);
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(5);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Brightness (-100 to 100):", _brightness, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Contrast (-100 to 100):", _contrast, 1);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Saturation (0 to 400):", _saturation, 2);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Transparency (0 to 100):", _transparency, 3);
         Grid.SetRow(_status, 4);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
@@ -60,7 +60,7 @@ internal sealed class ImageAdjustDialog : FreeWDialogWindow
                 },
             },
         };
-        Opened += (_, _) => Chrome.FocusAndSelect(_brightness);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_brightness);
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -86,7 +86,7 @@ internal sealed class ImageAdjustDialog : FreeWDialogWindow
         }
 
         _status.Text = validation?.Message ?? ImageAdjustDialogPlanner.BrightnessValidationMessage;
-        Chrome.FocusAndSelect(validation?.Field switch
+        AvaloniaCompactDialogChrome.FocusAndSelect(validation?.Field switch
         {
             ImageAdjustDialogField.Contrast => _contrast,
             ImageAdjustDialogField.Saturation => _saturation,
@@ -135,19 +135,19 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         _verticalAnchor.IsEnabled = !isGroupLocal;
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
-        var grid = Chrome.CreateGrid(7);
-        Chrome.AddField(grid, "Horizontal offset (pt):", _horizontal, 0);
-        Chrome.AddField(grid, "Relative to:", _horizontalAnchor, 1);
-        Chrome.AddField(grid, "Vertical offset (pt):", _vertical, 2);
-        Chrome.AddField(grid, "Relative to:", _verticalAnchor, 3);
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(7);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Horizontal offset (pt):", _horizontal, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Relative to:", _horizontalAnchor, 1);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Vertical offset (pt):", _vertical, 2);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Relative to:", _verticalAnchor, 3);
         Grid.SetRow(_status, 4);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
         var ok = Chrome.Button("OK", Accept, isDefault: true);
         var cancel = Chrome.Button("Cancel", () => Close(null), isCancel: true);
-        Chrome.Place(grid, AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)), 5, 1);
+        AvaloniaLabeledFormRow.Place(grid, AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)), 5, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => Chrome.FocusAndSelect(_horizontal);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_horizontal);
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -182,7 +182,7 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         }
 
         _status.Text = validation?.Message ?? ImagePositionDialogPlanner.OffsetValidationMessage;
-        Chrome.FocusAndSelect(validation?.Field == ImagePositionDialogField.VerticalOffset ? _vertical : _horizontal);
+        AvaloniaCompactDialogChrome.FocusAndSelect(validation?.Field == ImagePositionDialogField.VerticalOffset ? _vertical : _horizontal);
     }
 }
 
@@ -200,11 +200,11 @@ internal sealed class ChartTitleDialog : FreeWDialogWindow
         ShowInTaskbar = false;
         _title = Chrome.TextBox(currentTitle ?? string.Empty, 220);
 
-        var grid = Chrome.CreateGrid(2);
-        Chrome.AddField(grid, "Title:", _title, 0);
-        Chrome.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 1, 1);
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(2);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Title:", _title, 0);
+        AvaloniaLabeledFormRow.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 1, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => Chrome.FocusAndSelect(_title);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_title);
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -230,12 +230,12 @@ internal sealed class ChartAxisTitlesDialog : FreeWDialogWindow
         _category = Chrome.TextBox(categoryTitle ?? string.Empty, 220);
         _value = Chrome.TextBox(valueTitle ?? string.Empty, 220);
 
-        var grid = Chrome.CreateGrid(3);
-        Chrome.AddField(grid, "Category axis:", _category, 0);
-        Chrome.AddField(grid, "Value axis:", _value, 1);
-        Chrome.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 2, 1);
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(3);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Category axis:", _category, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Value axis:", _value, 1);
+        AvaloniaLabeledFormRow.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 2, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => Chrome.FocusAndSelect(_category);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_category);
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -267,15 +267,15 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
         _height = Chrome.TextBox(state.HeightText, 120);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
-        var grid = Chrome.CreateGrid(4);
-        Chrome.AddField(grid, "Width (pt):", _width, 0);
-        Chrome.AddField(grid, "Height (pt):", _height, 1);
+        var grid = AvaloniaLabeledFormRow.CreateCompactGrid(4);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Width (pt):", _width, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, "Height (pt):", _height, 1);
         Grid.SetRow(_status, 2);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
-        Chrome.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 3, 1);
+        AvaloniaLabeledFormRow.Place(grid, Chrome.ActionRow(Accept, () => Close(null)), 3, 1);
         Content = new Border { Padding = new Thickness(14), Child = grid };
-        Opened += (_, _) => Chrome.FocusAndSelect(_width);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_width);
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -295,7 +295,7 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
         }
 
         _status.Text = errorMessage ?? ChartSizeDialogPlanner.WidthValidationMessage;
-        Chrome.FocusAndSelect(errorMessage == ChartSizeDialogPlanner.HeightValidationMessage ? _height : _width);
+        AvaloniaCompactDialogChrome.FocusAndSelect(errorMessage == ChartSizeDialogPlanner.HeightValidationMessage ? _height : _width);
     }
 }
 
@@ -392,7 +392,7 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
                     new Thickness(0, metrics.FooterTopMargin, 0, 0)),
             },
         };
-        Opened += (_, _) => Chrome.FocusAndSelect(_edit);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_edit);
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -403,7 +403,7 @@ internal sealed class InsertSmartArtDialog : FreeWDialogWindow
     {
         _nodes.Items.Add("New Item");
         _nodes.SelectedIndex = _nodes.Items.Count - 1;
-        Chrome.FocusAndSelect(_edit);
+        AvaloniaCompactDialogChrome.FocusAndSelect(_edit);
     }
 
     private void RemoveNode()
@@ -509,7 +509,7 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
             ],
             new Thickness(0, 12, 0, 0)));
         Content = new Border { Padding = new Thickness(14), Child = panel };
-        Opened += (_, _) => Chrome.FocusAndSelect(_title);
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_title);
         Chrome.Escape(this, () => Close(null));
     }
 
@@ -545,13 +545,13 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = SeriesColumnWidth() });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var categoryBox = CellBox(category);
-        Chrome.Place(row, categoryBox, 0, 0);
+        AvaloniaLabeledFormRow.Place(row, categoryBox, 0, 0);
         var boxes = new List<TextBox>();
         for (var i = 0; i < _seriesNames.Count; i++)
         {
             var box = CellBox(i < values.Count ? values[i] : string.Empty);
             boxes.Add(box);
-            Chrome.Place(row, box, 0, i + 1);
+            AvaloniaLabeledFormRow.Place(row, box, 0, i + 1);
         }
         var controls = new RowControls { Category = categoryBox, Values = boxes, View = row };
         _rows.Add(controls);
@@ -698,36 +698,6 @@ internal static class Chrome
 
     public static StackPanel ActionRow(Action accept, Action cancel) =>
         AvaloniaCompactDialogChrome.CreateActionRow([Button("OK", accept, isDefault: true), Button("Cancel", cancel, isCancel: true)], new Thickness(0, 12, 0, 0));
-
-    public static Grid CreateGrid(int rows)
-    {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var i = 0; i < rows; i++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        return grid;
-    }
-
-    public static void AddField(Grid grid, string label, Control field, int row)
-    {
-        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, row == 0 ? 0 : 4, 8, 0) };
-        Place(grid, text, row, 0);
-        Place(grid, field, row, 1);
-    }
-
-    public static void Place(Grid grid, Control control, int row, int column)
-    {
-        Grid.SetRow(control, row);
-        Grid.SetColumn(control, column);
-        grid.Children.Add(control);
-    }
-
-    public static void FocusAndSelect(TextBox box)
-    {
-        box.Focus();
-        box.SelectAll();
-    }
 
     public static void Escape(Window window, Action close) => window.KeyDown += (_, e) =>
     {

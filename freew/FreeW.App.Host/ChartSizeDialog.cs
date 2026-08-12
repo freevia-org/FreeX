@@ -25,7 +25,7 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ChartSizeDialogPlanner.BuildInitialState(widthPt, heightPt, CultureInfo.CurrentCulture);
 
@@ -39,8 +39,8 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Text = state.HeightText,
             MinWidth = 120
         };
-        ImageChartDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ChartSizeDialogField.Width));
-        ImageChartDialogSurfaceSemantics.Apply(_heightBox, surface.Field(ChartSizeDialogField.Height));
+        WpfDialogSurfaceSemantics.Apply(_widthBox, surface.Field(ChartSizeDialogField.Width));
+        WpfDialogSurfaceSemantics.Apply(_heightBox, surface.Field(ChartSizeDialogField.Height));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

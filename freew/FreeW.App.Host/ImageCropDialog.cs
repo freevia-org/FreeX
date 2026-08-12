@@ -25,7 +25,7 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageCropDialogPlanner.BuildInitialState(
             left,
@@ -41,10 +41,10 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _rightBox = Box(state.RightText);
         _topBox = Box(state.TopText);
         _bottomBox = Box(state.BottomText);
-        ImageChartDialogSurfaceSemantics.Apply(_leftBox, surface.Field(ImageCropDialogField.Left));
-        ImageChartDialogSurfaceSemantics.Apply(_rightBox, surface.Field(ImageCropDialogField.Right));
-        ImageChartDialogSurfaceSemantics.Apply(_topBox, surface.Field(ImageCropDialogField.Top));
-        ImageChartDialogSurfaceSemantics.Apply(_bottomBox, surface.Field(ImageCropDialogField.Bottom));
+        WpfDialogSurfaceSemantics.Apply(_leftBox, surface.Field(ImageCropDialogField.Left));
+        WpfDialogSurfaceSemantics.Apply(_rightBox, surface.Field(ImageCropDialogField.Right));
+        WpfDialogSurfaceSemantics.Apply(_topBox, surface.Field(ImageCropDialogField.Top));
+        WpfDialogSurfaceSemantics.Apply(_bottomBox, surface.Field(ImageCropDialogField.Bottom));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

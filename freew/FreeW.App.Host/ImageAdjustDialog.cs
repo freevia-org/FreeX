@@ -25,7 +25,7 @@ internal sealed class ImageAdjustDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        ImageChartDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ImageAdjustDialogPlanner.BuildInitialState(
             brightnessPct,
@@ -38,10 +38,10 @@ internal sealed class ImageAdjustDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _contrastBox = Box(state.ContrastText);
         _saturationBox = Box(state.SaturationText);
         _transparencyBox = Box(state.TransparencyText);
-        ImageChartDialogSurfaceSemantics.Apply(_brightnessBox, surface.Field(ImageAdjustDialogField.Brightness));
-        ImageChartDialogSurfaceSemantics.Apply(_contrastBox, surface.Field(ImageAdjustDialogField.Contrast));
-        ImageChartDialogSurfaceSemantics.Apply(_saturationBox, surface.Field(ImageAdjustDialogField.Saturation));
-        ImageChartDialogSurfaceSemantics.Apply(_transparencyBox, surface.Field(ImageAdjustDialogField.Transparency));
+        WpfDialogSurfaceSemantics.Apply(_brightnessBox, surface.Field(ImageAdjustDialogField.Brightness));
+        WpfDialogSurfaceSemantics.Apply(_contrastBox, surface.Field(ImageAdjustDialogField.Contrast));
+        WpfDialogSurfaceSemantics.Apply(_saturationBox, surface.Field(ImageAdjustDialogField.Saturation));
+        WpfDialogSurfaceSemantics.Apply(_transparencyBox, surface.Field(ImageAdjustDialogField.Transparency));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

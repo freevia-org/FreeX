@@ -28,7 +28,7 @@ internal sealed class ParagraphIndentDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
-        PageLayoutDialogSurfaceSemantics.Apply(this, surface);
+        WpfDialogSurfaceSemantics.Apply(this, surface);
 
         var state = ParagraphIndentDialogPlanner.BuildInitialState(
             leftPt,
@@ -47,10 +47,10 @@ internal sealed class ParagraphIndentDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _specialBox.SelectionChanged += (_, _) =>
             _specialAmountBox.IsEnabled = ParagraphIndentDialogPlanner.IsSpecialAmountEnabled(_specialBox.SelectedIndex);
         _specialAmountBox.IsEnabled = state.SpecialAmountEnabled;
-        PageLayoutDialogSurfaceSemantics.Apply(_leftBox, surface.Field(ParagraphIndentDialogField.Left));
-        PageLayoutDialogSurfaceSemantics.Apply(_rightBox, surface.Field(ParagraphIndentDialogField.Right));
-        PageLayoutDialogSurfaceSemantics.Apply(_specialBox, surface.Field(ParagraphIndentDialogField.Special));
-        PageLayoutDialogSurfaceSemantics.Apply(_specialAmountBox, surface.Field(ParagraphIndentDialogField.SpecialAmount));
+        WpfDialogSurfaceSemantics.Apply(_leftBox, surface.Field(ParagraphIndentDialogField.Left));
+        WpfDialogSurfaceSemantics.Apply(_rightBox, surface.Field(ParagraphIndentDialogField.Right));
+        WpfDialogSurfaceSemantics.Apply(_specialBox, surface.Field(ParagraphIndentDialogField.Special));
+        WpfDialogSurfaceSemantics.Apply(_specialAmountBox, surface.Field(ParagraphIndentDialogField.SpecialAmount));
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
