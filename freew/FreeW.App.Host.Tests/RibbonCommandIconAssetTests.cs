@@ -97,19 +97,22 @@ public sealed class RibbonCommandIconAssetTests
             "align-center.svg", "chart.svg", "datetime.svg", "font-dialog.svg", "highlight.svg", "zoom-dialog.svg",
             "reject-all.svg", "style-heading1.svg", "style-heading2.svg", "style-title.svg"
         })
-            File.Exists(Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg", alias)).Should().BeFalse();
+            File.Exists(Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "Resources", "CommandIconsSvg", alias)).Should().BeFalse();
     }
 
     [Fact]
     public void FreeW_exact_duplicate_aliases_resolve_through_Wpf_loader_and_publish()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var iconDirectory = Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg");
+        var iconDirectory = Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "Resources", "CommandIconsSvg");
         var project = XDocument.Load(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"));
         var localIcons = project
             .Descendants("Content")
-            .Single(item => (string?)item.Attribute("Include") == @"Resources\CommandIconsSvg\**\*.svg");
+            .Single(item => (string?)item.Attribute("Include") ==
+                @"..\FreeW.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
 
+        ((string?)localIcons.Attribute("Link")).Should().Be(
+            @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
         ((string?)localIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
         ((string?)localIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
 

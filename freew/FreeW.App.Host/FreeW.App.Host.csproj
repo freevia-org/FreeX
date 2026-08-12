@@ -73,9 +73,6 @@
     <EmbeddedResource Include="..\..\docs\legal\privacy.md" LogicalName="FreeW.Legal.PrivacyNotice.md" />
     <EmbeddedResource Include="..\..\THIRD_PARTY_NOTICES.md" LogicalName="FreeW.Legal.ThirdPartyNotices.md" />
     <EmbeddedResource Include="..\..\THIRD_PARTY_LICENSES.md" LogicalName="FreeW.Legal.ThirdPartyLicenses.md" />
-    <!-- Bundled English thesaurus: compact Moby II derivative (~3 000 headwords, public domain).
-         Embedded so the lookup works with no file I/O and ships as a single DLL with no deploy steps. -->
-    <EmbeddedResource Include="Resources\thesaurus-en.txt" LogicalName="FreeW.App.Host.Resources.thesaurus-en.txt" />
   </ItemGroup>
 
   <ItemGroup>
@@ -83,12 +80,15 @@
              Link="Resources\FreeW.ico"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <!-- FreeW's own icons: Word-specific artwork plus a few Word-unique glyphs. -->
-    <Content Include="Resources\CommandIconsSvg\**\*.svg"
+    <!-- FreeW-specific artwork is owned by the renderer-neutral ribbon definitions project. -->
+    <Content Include="..\FreeW.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
+             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <!-- Insert > Icons content library: curated monochrome SVGs for document insertion (W20). -->
-    <Content Include="Resources\ContentIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\FreeW.Ribbon.Definitions\Resources\ContentIconsSvg\**\*.svg"
+             Link="Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
     <!-- Reuse FreeX's actual Office-quality icons wherever a command has a FreeX equivalent. A small
          reviewed set has intentional FreeW-specific variants with the same slug; exclude those FreeX
          items so publish has one deterministic source path and the FreeW artwork wins. -->

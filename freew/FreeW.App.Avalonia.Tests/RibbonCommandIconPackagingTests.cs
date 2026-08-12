@@ -27,7 +27,7 @@ public sealed class RibbonCommandIconPackagingTests
         foreach (var include in new[]
         {
             @"..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg",
-            @"..\FreeW.App.Host\Resources\CommandIconsSvg\**\*.svg",
+            @"..\FreeW.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg",
         })
         {
             var canonicalIcons = project

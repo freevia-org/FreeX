@@ -65,13 +65,12 @@
              Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <!-- FreeW-specific canonical artwork remains owned by the WPF host; link it into the same
-         flat runtime directory so Avalonia resolves the shared aliases identically. -->
-    <Content Include="..\FreeW.App.Host\Resources\CommandIconsSvg\**\*.svg"
+    <!-- FreeW-specific canonical artwork is owned by the renderer-neutral ribbon definitions project. -->
+    <Content Include="..\FreeW.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
              Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FreeW.App.Host\Resources\ContentIconsSvg\**\*.svg"
+    <Content Include="..\FreeW.Ribbon.Definitions\Resources\ContentIconsSvg\**\*.svg"
              Link="Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
