@@ -89,7 +89,7 @@ public sealed partial class MainWindow
         ApplyPivotTextBoxChrome(nameBox, fixedHeight: false);
         SetWpfValueFieldTextBoxHeight(nameBox);
         AutomationProperties.SetAutomationId(nameBox, "PivotValueFieldSettingsNameBox");
-        AutomationProperties.SetName(nameBox, "Custom name");
+        AutomationProperties.SetName(nameBox, UiText.Get("PivotValueFieldSettings_CustomName2"));
 
         var summaryBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var (label, _) in PivotValueFieldPlanner.SummaryFunctions)
@@ -98,7 +98,7 @@ public sealed partial class MainWindow
         ApplyPivotComboBoxChrome(summaryBox);
         PivotValueFieldSettingsVisual.ApplyComboBox(summaryBox);
         AutomationProperties.SetAutomationId(summaryBox, "PivotValueFieldSettingsSummaryBox");
-        AutomationProperties.SetName(summaryBox, "Summarize by");
+        AutomationProperties.SetName(summaryBox, UiText.Get("PivotValueFieldSettings_SummarizeByAutomationName"));
 
         var showValuesAsBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         foreach (var (label, _) in PivotValueFieldPlanner.ShowValuesAsOptions)
@@ -107,7 +107,7 @@ public sealed partial class MainWindow
         ApplyPivotComboBoxChrome(showValuesAsBox);
         PivotValueFieldSettingsVisual.ApplyComboBox(showValuesAsBox);
         AutomationProperties.SetAutomationId(showValuesAsBox, "PivotValueFieldSettingsShowValuesAsBox");
-        AutomationProperties.SetName(showValuesAsBox, "Show values as");
+        AutomationProperties.SetName(showValuesAsBox, UiText.Get("PivotValueFieldSettings_ShowValuesAs3"));
 
         var baseFieldBox = new ComboBox { MinWidth = 240, HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch };
         baseFieldBox.Items.Add(PivotValueFieldPlanner.AutomaticBaseFieldLabel);
@@ -117,13 +117,13 @@ public sealed partial class MainWindow
         ApplyPivotComboBoxChrome(baseFieldBox);
         PivotValueFieldSettingsVisual.ApplyComboBox(baseFieldBox);
         AutomationProperties.SetAutomationId(baseFieldBox, "PivotValueFieldSettingsBaseFieldBox");
-        AutomationProperties.SetName(baseFieldBox, "Base field");
+        AutomationProperties.SetName(baseFieldBox, UiText.Get("PivotValueFieldSettings_BaseField2"));
 
         var baseItemBox = new TextBox { MinWidth = 240, Text = field.BaseItem ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_BaseItemPlaceholder") };
         ApplyPivotTextBoxChrome(baseItemBox);
         PivotValueFieldSettingsVisual.ApplyTextBox(baseItemBox, PivotValueFieldSettingsVisual.ControlHeight);
         AutomationProperties.SetAutomationId(baseItemBox, "PivotValueFieldSettingsBaseItemBox");
-        AutomationProperties.SetName(baseItemBox, "Base item");
+        AutomationProperties.SetName(baseItemBox, UiText.Get("PivotValueFieldSettings_BaseItem2"));
 
         var basePanel = new StackPanel { Spacing = 0 };
         basePanel.Children.Add(new TextBlock { Text = UiText.Get("PivotValueField_BaseField"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground, Margin = new Thickness(0, 10, 0, 6) });
@@ -458,7 +458,9 @@ public sealed partial class MainWindow
             valueFieldBox.Items.Add(dataField.Name);
         ApplyPivotComboBoxChrome(valueFieldBox);
         AutomationProperties.SetAutomationId(valueFieldBox, "PivotSortOptionsValueFieldBox");
-        AutomationProperties.SetName(valueFieldBox, "Value field");
+        AutomationProperties.SetName(
+            valueFieldBox,
+            UiText.CreateAutomationName(UiText.Get("PivotSort_ValueField")));
 
         var initialMode = PivotSortPlanner.InitialMode(currentSort, target.SourceFieldIndex);
         switch (initialMode)

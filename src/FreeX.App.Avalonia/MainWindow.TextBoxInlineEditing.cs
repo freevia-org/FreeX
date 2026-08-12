@@ -54,7 +54,7 @@ public sealed partial class MainWindow
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         RequestOptionalTextBoxInlineLayoutObservation();
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusTextBoxInlineEditor();
     }
 
@@ -90,8 +90,8 @@ public sealed partial class MainWindow
         _textBoxInlineEditor.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
         _textBoxInlineEditor.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
         AutomationProperties.SetAutomationId(_textBoxInlineEditor, "TextBoxInlineEditor");
-        AutomationProperties.SetName(_textBoxInlineEditor, "Text box inline editor");
-        AutomationProperties.SetHelpText(_textBoxInlineEditor, "Edits the selected text box in place.");
+        AutomationProperties.SetName(_textBoxInlineEditor, UiText.Get("TextBoxInlineEditor_AutomationName"));
+        AutomationProperties.SetHelpText(_textBoxInlineEditor, UiText.Get("TextBoxInlineEditor_HelpText"));
         _textBoxInlineEditor.KeyDown += TextBoxInlineEditor_KeyDown;
         _textBoxInlineEditor.TextChanged += (_, _) =>
         {
@@ -204,7 +204,7 @@ public sealed partial class MainWindow
                 var result = _session.ExecuteReviewCommand(plan.Command!);
                 if (!result.Success)
                 {
-                    ShowEditIssue(result.ErrorMessage ?? "Could not edit text box.");
+                    ShowEditIssue(result.ErrorMessage ?? UiText.Get("TextBoxInlineEditor_EditFailed"));
                     return false;
                 }
 

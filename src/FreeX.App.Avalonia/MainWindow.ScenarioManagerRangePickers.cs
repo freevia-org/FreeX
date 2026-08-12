@@ -34,14 +34,14 @@ public sealed partial class MainWindow
             dialog,
             FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsBox,
             FreeXAutomationIdCatalog.ScenarioManager.ChangingCellsPickerButton,
-            "Select changing cells range",
+            UiText.Get("ScenarioManager_SelectChangingCellsRangeAutomationName"),
             "range.scenario-manager.changing-cells");
         AddScenarioManagerRangePicker(
             owner,
             dialog,
             FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox,
             FreeXAutomationIdCatalog.ScenarioManager.ResultCellsPickerButton,
-            "Select result cells range",
+            UiText.Get("ScenarioManager_SelectResultCellsRangeAutomationName"),
             "range.scenario-manager.result-cells");
     }
 

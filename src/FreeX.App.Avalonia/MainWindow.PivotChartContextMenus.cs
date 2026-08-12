@@ -135,7 +135,7 @@ public sealed partial class MainWindow
             Focusable = true,
         };
         AutomationProperties.SetAutomationId(button, $"PivotChartFieldButton_{fieldButton.Replace(" ", string.Empty)}");
-        AutomationProperties.SetName(button, $"PivotChart {fieldButton}");
+        AutomationProperties.SetName(button, UiText.Format("PivotChart_FieldButtonAutomationNameFormat", fieldButton));
         button.Click += (_, _) => SelectChart(chart);
         AvaloniaManagedContextMenu.Attach(
             button,
@@ -260,7 +260,9 @@ public sealed partial class MainWindow
                 Focusable = true,
             };
             AutomationProperties.SetAutomationId(anchor, $"WaterfallPoint_{bar.PointIndex}");
-            AutomationProperties.SetName(anchor, $"Waterfall point {bar.PointIndex + 1}");
+            AutomationProperties.SetName(
+                anchor,
+                UiText.Format("Chart_WaterfallPointAutomationNameFormat", bar.PointIndex + 1));
             anchor.PointerPressed += (_, args) =>
             {
                 if (args.GetCurrentPoint(anchor).Properties.IsLeftButtonPressed)
@@ -293,6 +295,8 @@ public sealed partial class MainWindow
             return;
 
         var result = _session.ExecuteReviewCommand(command);
-        RefreshShell(result.Success ? "Set as Total" : result.ErrorMessage ?? "Set as Total failed");
+        RefreshShell(result.Success
+            ? UiText.Get("Chart_SetAsTotalStatus")
+            : result.ErrorMessage ?? UiText.Get("Chart_SetAsTotalFailed"));
     }
 }

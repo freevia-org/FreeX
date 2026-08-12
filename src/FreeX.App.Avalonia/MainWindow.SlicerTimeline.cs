@@ -155,7 +155,7 @@ public sealed partial class MainWindow
         }
 
         AutomationProperties.SetAutomationId(canvas, $"Slicer{slicer.Name}");
-        AutomationProperties.SetName(canvas, $"Slicer {layout.Caption}");
+        AutomationProperties.SetName(canvas, UiText.Format("Slicer_AutomationNameFormat", layout.Caption));
 
         canvas.PointerPressed += (_, args) =>
         {
@@ -263,7 +263,7 @@ public sealed partial class MainWindow
         canvas.Children.Add(CreateTrackRect(layout.SelectionRect, SlicerSelectionBrush, zoomFactor));
 
         AutomationProperties.SetAutomationId(canvas, $"Timeline{timeline.Name}");
-        AutomationProperties.SetName(canvas, $"Timeline {layout.Caption}");
+        AutomationProperties.SetName(canvas, UiText.Format("Timeline_AutomationNameFormat", layout.Caption));
 
         canvas.PointerPressed += (_, args) =>
         {

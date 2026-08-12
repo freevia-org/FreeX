@@ -94,9 +94,11 @@ public sealed partial class MainWindow
         };
 
         AutomationProperties.SetAutomationId(container, $"Chart{chart.Id:N}");
-        AutomationProperties.SetName(container, $"Chart {ChartDisplayName(chart)}");
+        AutomationProperties.SetName(container, UiText.Format("Chart_AutomationNameFormat", ChartDisplayName(chart)));
         AutomationProperties.SetHelpText(container, UiText.Get("ChartLoc_SelectChartHelpText"));
-        AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+        AutomationProperties.SetItemStatus(
+            container,
+            UiText.Get(selected ? "Automation_Selected" : "Automation_NotSelected"));
 
         // WPF shows a move cursor over a chart body and directional resize cursors over the
         // selected chart's handles. Keep the hover affordance driven by the same portable hit-test

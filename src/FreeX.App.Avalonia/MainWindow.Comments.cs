@@ -103,11 +103,11 @@ public sealed partial class MainWindow
         var result = ReviewSessionController.ConvertNotesToComments();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Convert to Comments failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ThreadedComment_ConvertFailed"));
             return;
         }
 
-        ApplyReviewRefreshPlan(result.RefreshPlan, "Converted notes to comments.");
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Get("Comment_ConvertedNotesToComments"));
     }
 
     private void ToggleActiveCellNoteVisibility()
@@ -119,7 +119,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        ApplyReviewRefreshPlan(result.RefreshPlan, "Show/Hide Note");
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Get("Comment_ToggledNoteVisibility"));
     }
 
     private void ToggleAllNotesVisibility()
@@ -131,7 +131,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        ApplyReviewRefreshPlan(result.RefreshPlan, "Show All Notes");
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Get("Comment_ToggledAllNotesVisibility"));
     }
 
     // ── Threaded comment dialog: create / edit root / reply / edit-reply / delete-reply ────────
@@ -161,7 +161,7 @@ public sealed partial class MainWindow
         }
 
         ApplyReviewRefreshPlan(mutation.RefreshPlan, existing is null
-            ? $"Added comment to {cellRef}"
+            ? UiText.Format("MainWindowMessage_CommentAdded", cellRef)
             : UiText.Format("Comment_CommentUpdated", cellRef));
     }
 

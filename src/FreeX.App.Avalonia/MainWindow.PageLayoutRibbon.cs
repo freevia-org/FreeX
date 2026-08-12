@@ -53,7 +53,7 @@ public partial class MainWindow
 
         var commandPlan = session.PlanScaleToFit(
             plan.ScaleToFit,
-            _statusText.Text ?? "Ready");
+            _statusText.Text ?? UiText.Get("MainLoc_Ready"));
         var result = _session.ExecuteReviewCommand(commandPlan.Command);
         var status = PageLayoutStatusPlanner.ResolveCommandStatus(
             commandPlan,

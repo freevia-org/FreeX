@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Charts;
+using FreeX.App.Localization;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Presentation.DrawingUI;
@@ -305,8 +306,8 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
             _chartType);
         var result = session.ExecuteReviewCommand(command);
         _setStatus(result.Success
-            ? $"Inserted {_chartType} chart"
-            : result.ErrorMessage ?? "Insert Chart failed.");
+            ? UiText.Format("ChartLoc_InsertedChartStatusFormat", _chartType)
+            : result.ErrorMessage ?? UiText.Get("ChartLoc_InsertChartFailed"));
     }
 }
 

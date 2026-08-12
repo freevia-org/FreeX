@@ -35,7 +35,7 @@ public sealed partial class MainWindow
         if (!_session.SelectFormulaPointModeSourceRange(range))
             return;
 
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
     }
 
     public bool CommitOwnedFormulaPointModeEdit()
@@ -62,7 +62,7 @@ public sealed partial class MainWindow
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
         ClearInlineCellEditorState();
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusShellRegion(ShellFocusTarget.Worksheet);
         return true;
     }

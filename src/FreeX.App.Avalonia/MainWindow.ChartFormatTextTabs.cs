@@ -95,7 +95,8 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
         var command = ChartQuickCommandCatalog.SeriesMarkerSize;
-        if (!TryGetSelectedChart(command.Label, out var chart))
+        var commandLabel = UiText.Get(command.TitleResourceKey);
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         if (!ChartWorkflowCommandCatalog.CanOpenDialog(chart, ChartWorkflowCommandCatalog.FormatDataSeries))
@@ -114,6 +115,8 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
+        var commandLabel = UiText.Get(command.TitleResourceKey);
+
         var selectedChartId = _selectedDrawingObjectKind == SelectionPaneObjectKind.Chart
             ? _selectedDrawingObjectId
             : null;
@@ -126,19 +129,19 @@ public sealed partial class MainWindow
         if (!plan.CanExecute)
         {
             RefreshShell(plan.Issue == ChartLayoutCommandIssue.MissingChart
-                ? UiText.Format(ChartWorkflowCommandCatalog.SelectChartBeforeUsingStatusResourceKey, command.Label)
+                ? UiText.Format(ChartWorkflowCommandCatalog.SelectChartBeforeUsingStatusResourceKey, commandLabel)
                 : unsupportedMessage ?? ChartQuickUnsupportedStatus(command));
             return;
         }
 
         var result = _session.ExecuteReviewCommand(plan.Command!);
         RefreshShell(ChartWorkflowCommandCatalog
-            .DescribeCommandResult(result.Success, command.Label, result.ErrorMessage)
+            .DescribeCommandResult(result.Success, commandLabel, result.ErrorMessage)
             .Resolve(UiText.Get, UiText.Format));
     }
 
     private static string ChartQuickUnsupportedStatus(ChartQuickCommandDescriptor command) =>
         command.UnsupportedStatusResourceKey is { } resourceKey
             ? UiText.Get(resourceKey)
-            : UiText.Format(ChartWorkflowCommandCatalog.CommandNotYetAvailableStatusResourceKey, command.Label);
+            : UiText.Format(ChartWorkflowCommandCatalog.CommandNotYetAvailableStatusResourceKey, UiText.Get(command.TitleResourceKey));
 }

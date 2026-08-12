@@ -24,9 +24,9 @@ public sealed partial class MainWindow
         {
             // --- Help tab (always visible). ---
             ["About FreeX#AboutBtn_Click"] = () => RunGuarded(ShowAboutDialogAsync),
-            ["Help Online#HelpOnlineBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online")),
-            ["Feedback#FeedbackBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback")),
-            ["Check for Updates#CheckForUpdatesBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates")),
+            ["Help Online#HelpOnlineBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"))),
+            ["Feedback#FeedbackBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"))),
+            ["Check for Updates#CheckForUpdatesBtn_Click"] = () => RunGuarded(() => OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"))),
             ["Copy Diagnostics#CopyDiagnosticsBtn_Click"] = () => RunGuarded(CopyDiagnosticsToClipboardAsync),
             ["Legal Notices#LegalNoticesBtn_Click"] = () => RunGuarded(ShowLegalNoticesDialogAsync),
 

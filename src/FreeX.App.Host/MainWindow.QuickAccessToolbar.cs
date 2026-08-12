@@ -261,7 +261,7 @@ public partial class MainWindow
         if (!saveResult.IsPersisted)
         {
             ShowOwnedMessage(
-                saveResult.PersistenceError ?? "Failed to save Quick Access Toolbar customization.",
+                saveResult.PersistenceError ?? UiText.Get("QuickAccessToolbar_CustomizationSaveFailed"),
                 UiText.Get("Options_QuickAccessToolbar"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

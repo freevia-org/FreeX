@@ -66,7 +66,7 @@ internal sealed class FormatCellsColorPicker : Button
         _moreColorsTitle = moreColorsTitle;
         _includeClear = includeClear;
         _noColorChoice = new FormatCellsColorChoice(noColorLabel, null, Clear: false);
-        _clearChoice = includeClear ? new FormatCellsColorChoice("No fill", null, Clear: true) : null;
+        _clearChoice = includeClear ? new FormatCellsColorChoice(UiText.Get("FormatCells_NoFill"), null, Clear: true) : null;
         _selected = _noColorChoice;
 
         MinWidth = 180;

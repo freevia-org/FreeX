@@ -94,7 +94,7 @@ public sealed partial class MainWindow
             Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand),
         };
         AutomationProperties.SetAutomationId(buttonBorder, $"PivotDropdown_{address.Row}_{address.Col}");
-        AutomationProperties.SetName(buttonBorder, "Pivot field dropdown");
+        AutomationProperties.SetName(buttonBorder, UiText.Get("PivotLoc_FieldDropdownAutomationName"));
 
         // Capture menuTarget for the click lambda (avoids repeated dictionary lookup).
         var capturedTarget = menuTarget;

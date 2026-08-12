@@ -52,7 +52,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            ShowOpenIssue($"More Fill Colors failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("MoreColors_FillFailedFormat", ex.Message));
         }
     }
 
@@ -69,7 +69,7 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            ShowOpenIssue($"More Font Colors failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("MoreColors_FontFailedFormat", ex.Message));
         }
     }
 

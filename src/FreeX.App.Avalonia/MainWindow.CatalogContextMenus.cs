@@ -46,7 +46,7 @@ public sealed partial class MainWindow
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         AutomationProperties.SetAutomationId(host, "BelowRibbonQuickAccessToolbarHost");
-        AutomationProperties.SetName(host, "Quick Access Toolbar below the Ribbon");
+        AutomationProperties.SetName(host, UiText.Get("QuickAccessToolbar_BelowRibbonAutomationName"));
         return host;
     }
 
@@ -59,7 +59,7 @@ public sealed partial class MainWindow
         _avaloniaQuickAccessBelowRibbonHost = belowRibbonHost;
         titleBarHost.Children.Clear();
         AutomationProperties.SetAutomationId(_avaloniaQuickAccessToolbar, "QuickAccessToolbar");
-        AutomationProperties.SetName(_avaloniaQuickAccessToolbar, "Quick Access Toolbar");
+        AutomationProperties.SetName(_avaloniaQuickAccessToolbar, UiText.Get("Options_QuickAccessToolbar"));
         WindowDecorationProperties.SetElementRole(
             _avaloniaQuickAccessToolbar,
             WindowDecorationsElementRole.User);
@@ -205,7 +205,9 @@ public sealed partial class MainWindow
         };
         WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         AutomationProperties.SetAutomationId(button, $"{command.Id}QatHistoryButton");
-        AutomationProperties.SetName(button, $"{command.CommandName} history");
+        AutomationProperties.SetName(
+            button,
+            UiText.Format("QuickAccessToolbar_HistoryAutomationNameFormat", command.CommandName));
         var menu = AvaloniaManagedContextMenu.Attach(
             button,
             () => AvaloniaQuickAccessToolbarContextMenu.BuildHistoryItems(

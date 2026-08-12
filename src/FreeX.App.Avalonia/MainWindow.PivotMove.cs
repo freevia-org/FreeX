@@ -55,7 +55,7 @@ public sealed partial class MainWindow
         };
         ApplyPivotButtonChrome(destinationPicker, 30);
         AutomationProperties.SetAutomationId(destinationPicker, "MovePivotDestinationPickerButton");
-        AutomationProperties.SetName(destinationPicker, "Select PivotTable destination");
+        AutomationProperties.SetName(destinationPicker, UiText.Get("MovePivotTable_SelectDestination"));
 
         var dialog = new Window
         {

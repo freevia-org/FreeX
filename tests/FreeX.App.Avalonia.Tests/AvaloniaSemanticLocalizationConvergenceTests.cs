@@ -55,6 +55,27 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
         "Content = PrettyStyleName(preset)",
     };
 
+    private static readonly IReadOnlyDictionary<(string File, string Literal), int> JustifiedRendererLiterals =
+        new Dictionary<(string File, string Literal), int>
+        {
+            [("FreeX.App.Avalonia/MainWindow.cs", "B")] = 1,
+            [("FreeX.App.Avalonia/MainWindow.cs", "I")] = 1,
+            [("FreeX.App.Avalonia/MainWindow.cs", "U")] = 2,
+            [("FreeX.App.Avalonia/MainWindow.cs", "S")] = 1,
+            [("FreeX.App.Avalonia/MainWindow.cs", "A+")] = 1,
+            [("FreeX.App.Avalonia/MainWindow.cs", "A-")] = 1,
+            [("FreeX.App.Avalonia/MainWindow.cs", "A")] = 1,
+            [("FreeX.App.Avalonia/MainWindow.SlicerTimelinePane.cs", "X")] = 1,
+        };
+
+    private static readonly IReadOnlyDictionary<(string File, string Literal), int> CatalogCollisionAllowlist =
+        new Dictionary<(string File, string Literal), int>
+        {
+            [("FreeX.App.Avalonia/MainWindow.FillSeries.cs", "1")] = 1,
+            [("FreeX.App.Avalonia/MainWindow.Print.cs", "1")] = 3,
+            [("FreeX.App.Host/PrintPreviewDialog.Layout.cs", "1")] = 3,
+        };
+
     [Fact]
     public void ActiveAvaloniaRenderer_DoesNotAssignResourceTextFromRawLiterals()
     {
@@ -62,11 +83,9 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
             .Select(UiText.GetNeutral)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .ToHashSet(StringComparer.Ordinal);
-        var sourceDirectory = TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory(
-            "src",
-            "FreeX.App.Avalonia");
-        var sources = AuditedSources(sourceDirectory);
+        var sources = AuditedRendererSources();
         var failures = new List<string>();
+        var allowedCounts = new Dictionary<(string File, string Literal), int>();
 
         foreach (var (name, source) in sources)
         {
@@ -76,11 +95,19 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
                 if (!resourceValues.Contains(literal))
                     continue;
 
+                var key = (name, literal);
+                if (CatalogCollisionAllowlist.ContainsKey(key))
+                {
+                    allowedCounts[key] = allowedCounts.GetValueOrDefault(key) + 1;
+                    continue;
+                }
+
                 var line = source.AsSpan(0, match.Index).Count('\n') + 1;
                 failures.Add($"{name}:{line}: {literal}");
             }
         }
 
+        allowedCounts.Should().BeEquivalentTo(CatalogCollisionAllowlist);
         failures.Should().BeEmpty(
             "semantic renderer text that already exists in the localization catalog must be resolved through UiText");
     }
@@ -88,12 +115,9 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
     [Fact]
     public void ActiveAvaloniaRenderer_DoesNotPassScopedSemanticTextAsRawArguments()
     {
-        var sourceDirectory = TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory(
-            "src",
-            "FreeX.App.Avalonia");
         var failures = new List<string>();
 
-        foreach (var (name, source) in AuditedSources(sourceDirectory))
+        foreach (var (name, source) in AuditedRendererSources())
         {
             foreach (var pattern in ScopedIndirectSemanticLiteralPatterns)
             {
@@ -108,6 +132,30 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
 
         failures.Should().BeEmpty(
             "semantic text passed indirectly to renderer helpers must also be resolved through UiText");
+    }
+
+    [Fact]
+    public void ShippingRenderers_OnlyUsePreciselyAllowlistedRawSemanticLiterals()
+    {
+        var actual = new Dictionary<(string File, string Literal), int>();
+
+        foreach (var (name, source) in AuditedRendererSources())
+        {
+            foreach (Match match in RawSemanticAssignment.Matches(source))
+            {
+                var literal = Regex.Unescape(match.Groups["text"].Value);
+                if (!literal.Any(char.IsLetter))
+                    continue;
+
+                var key = (name, literal);
+                actual[key] = actual.GetValueOrDefault(key) + 1;
+            }
+        }
+
+        actual.Should().BeEquivalentTo(
+            JustifiedRendererLiterals,
+            options => options.WithStrictOrdering(),
+            "raw renderer text is limited to language-independent formatting glyphs with exact counts");
     }
 
     [Fact]
@@ -218,82 +266,23 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
         (T)(typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(window)
             ?? throw new InvalidOperationException($"Missing MainWindow field '{name}'."));
 
-    private static IReadOnlyList<(string Name, string Source)> AuditedSources(string sourceDirectory)
+    private static IReadOnlyList<(string Name, string Source)> AuditedRendererSources()
     {
-        string Read(string fileName) => File.ReadAllText(Path.Combine(sourceDirectory, fileName));
-
         var sources = new List<(string Name, string Source)>();
-        foreach (var fileName in new[]
-                 {
-                     "FormatCellsColorPicker.cs",
-                     "MainWindow.AutoFilter.cs",
-                     "MainWindow.CellStyles.cs",
-                     "MainWindow.Comments.cs",
-                     "MainWindow.ConditionalFormat.cs",
-                     "MainWindow.InsertDeleteCells.cs",
-                     "MainWindow.InsertFunction.cs",
-                     "MainWindow.LiveBackstage.cs",
-                     "MainWindow.MoreColors.cs",
-                     "MainWindow.RowColumnVisibility.cs",
-                     "MainWindow.StatusBar.cs",
-                     "MainWindow.Symbol.cs",
-                     "MainWindow.Themes.cs",
-                 })
+        foreach (var projectName in new[] { "FreeX.App.Avalonia", "FreeX.App.Host" })
         {
-            sources.Add((fileName, Read(fileName)));
-        }
-
-        var mainWindow = Read("MainWindow.cs");
-        foreach (var signature in new[]
-                 {
-                     "private Control BuildToolbar()",
-                     "private Control BuildStatusBar()",
-                     "private async Task ShowZoomDialogAsync()",
-                     "private async Task<string?> ShowRenameSheetDialogAsync",
-                     "private async Task<FindDialogResult?> ShowFindInputDialogAsync",
-                     "private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync",
-                     "private async Task ShowGoToDialogAsync()",
-                     "private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync",
-                     "private async Task ShowWorkbookStatisticsDialogAsync()",
-                     "private async Task<SortDialogResult?> ShowSortInputDialogAsync()",
-                     "private async Task ShowGoalSeekDialogAsync()",
-                     "private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync",
-                     "private async Task<AdvancedFilterPlan?> ShowAdvancedFilterInputDialogAsync()",
-                     "private async Task<RemoveDuplicatesPlan?> ShowRemoveDuplicatesInputDialogAsync",
-                     "private async Task<ForecastSheetPlan?> ShowForecastSheetInputDialogAsync()",
-                     "private async Task<bool> ConfirmNormalizedOverwriteAsync",
-                     "private async Task<DirtyWorkbookCloseChoice> ShowDirtyWorkbookCloseDialogAsync",
-                     "internal async Task<bool> ShowRecoveryPromptAsync",
-                     "private static void UpdateFindReplaceFormatState",
-                 })
-        {
-            sources.Add(($"MainWindow.cs::{signature}", ExtractMethod(mainWindow, signature)));
+            var sourceDirectory = TestWorkspaceFileLocator.FindDirectoryFromBaseDirectory("src", projectName);
+            foreach (var path in Directory.EnumerateFiles(sourceDirectory, "*.cs", SearchOption.AllDirectories)
+                         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                                        && !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)))
+            {
+                var relativePath = Path.GetRelativePath(Path.GetDirectoryName(sourceDirectory)!, path)
+                    .Replace('\\', '/');
+                sources.Add((relativePath, File.ReadAllText(path)));
+            }
         }
 
         return sources;
-    }
-
-    private static string ExtractMethod(string source, string signature)
-    {
-        var start = source.IndexOf(signature, StringComparison.Ordinal);
-        start.Should().BeGreaterThanOrEqualTo(0, $"'{signature}' must remain present");
-        var openingBrace = source.IndexOf('{', start);
-        openingBrace.Should().BeGreaterThan(start);
-
-        var depth = 0;
-        for (var index = openingBrace; index < source.Length; index++)
-        {
-            depth += source[index] switch
-            {
-                '{' => 1,
-                '}' => -1,
-                _ => 0,
-            };
-            if (depth == 0)
-                return source[start..(index + 1)];
-        }
-
-        throw new InvalidOperationException($"Could not find the end of '{signature}'.");
     }
 
     private static void AssertPseudoLocalized(object? value)

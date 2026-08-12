@@ -117,14 +117,14 @@ public sealed partial class ScenarioManagerDialog : Window
             row: 1,
             UiText.Get("ScenarioManager_ChangingCells"),
             _changingCellsBox,
-            "Select changing cells range",
+            UiText.Get("ScenarioManager_SelectChangingCellsRangeAutomationName"),
             ScenarioManagerRangeSelectionTarget.ChangingCells);
         AddReferenceField(
             fields,
             row: 2,
             UiText.Get("ScenarioManager_ResultCells"),
             _resultCellsBox,
-            "Select result cells range",
+            UiText.Get("ScenarioManager_SelectResultCellsRangeAutomationName"),
             ScenarioManagerRangeSelectionTarget.ResultCells);
         AddField(fields, row: 3, UiText.Get("ScenarioManager_Comment"), _commentBox);
         AddCheckBox(fields, row: 4, _lockedBox);

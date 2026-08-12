@@ -80,7 +80,7 @@ public sealed partial class MainWindow
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
-            RefreshShell(result.ErrorMessage ?? "Form control interaction failed.");
+            RefreshShell(result.ErrorMessage ?? UiText.Get("FormControls_InteractionFailed"));
             return;
         }
 

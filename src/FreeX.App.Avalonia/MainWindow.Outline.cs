@@ -102,8 +102,8 @@ public sealed partial class MainWindow
     {
         var result = _session.ClearActiveWorksheetOutline();
         RefreshShell(result.Success
-            ? "Cleared the worksheet outline."
-            : result.ErrorMessage ?? "Could not clear the outline.");
+            ? UiText.Get("Outline_ClearedStatus")
+            : result.ErrorMessage ?? UiText.Get("Outline_ClearFailed"));
     }
 
     /// <summary>

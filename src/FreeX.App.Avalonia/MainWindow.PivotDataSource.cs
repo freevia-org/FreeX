@@ -59,7 +59,7 @@ public sealed partial class MainWindow
         };
         ApplyPivotButtonChrome(sourcePicker, 30);
         AutomationProperties.SetAutomationId(sourcePicker, "PivotDataSourceRangePickerButton");
-        AutomationProperties.SetName(sourcePicker, "Select PivotTable source range");
+        AutomationProperties.SetName(sourcePicker, UiText.Get("PivotTableDataSource_SelectPivotTableSourceRange"));
 
         var dialog = new Window
         {

@@ -375,12 +375,14 @@ public sealed partial class MainWindow
             var result = _session.GoToCell(target);
             if (!result.Success)
             {
-                ShowEditIssue(result.ErrorMessage ?? "Could not navigate to accessibility issue.");
+                ShowEditIssue(result.ErrorMessage ?? UiText.Get("AccessibilityChecker_NavigateFailed"));
                 return;
             }
 
             if (result.SelectedRange is { } selectedRange)
-                RefreshShell($"Selected {FormatRangeReference(selectedRange)} (accessibility issue)");
+                RefreshShell(UiText.Format(
+                    "AccessibilityChecker_SelectedIssueStatusFormat",
+                    FormatRangeReference(selectedRange)));
         }
     }
 

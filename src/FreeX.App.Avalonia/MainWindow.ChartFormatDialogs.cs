@@ -283,9 +283,11 @@ public sealed partial class MainWindow
 
     // ---- Format Axis (real, SetChartLayoutCommand via ChartAxisPlanner) -------------------------------
 
-    private Task ShowChartXAxisFormatDialog() => ShowChartAxisFormatDialog(useXAxis: true, "X Axis");
+    private Task ShowChartXAxisFormatDialog() =>
+        ShowChartAxisFormatDialog(useXAxis: true, UiText.Get("ChartAxisFormat_XAxisTitle"));
 
-    private Task ShowChartYAxisFormatDialog() => ShowChartAxisFormatDialog(useXAxis: false, "Y Axis");
+    private Task ShowChartYAxisFormatDialog() =>
+        ShowChartAxisFormatDialog(useXAxis: false, UiText.Get("ChartAxisFormat_YAxisTitle"));
 
     private async Task ShowChartAxisFormatDialog(bool useXAxis, string commandLabel)
     {
@@ -414,7 +416,7 @@ public sealed partial class MainWindow
         // WPF ChartAxisFormatDialog selects the minimum editor when the dialog is loaded. Keep the
         // equivalent Avalonia target explicit because this dialog's controls are nested in scrollable
         // group boxes and are not reliably discovered by generic first-control focus.
-        var dialog = NewChartDialog($"Format {commandLabel}", "ChartAxisFormatDialog", minimumBox);
+        var dialog = NewChartDialog(commandLabel, "ChartAxisFormatDialog", minimumBox);
         dialog.SizeToContent = SizeToContent.Manual;
         dialog.Width = 432;
         dialog.Height = 720;
@@ -1335,8 +1337,8 @@ public sealed partial class MainWindow
 
     private static string DescribeColor(string label, CellColor? color) =>
         color is { } c
-            ? $"{label}: #{c.R:X2}{c.G:X2}{c.B:X2}"
-            : $"{label}: (default)";
+            ? UiText.Format("ChartColor_DescriptionFormat", label, $"#{c.R:X2}{c.G:X2}{c.B:X2}")
+            : UiText.Format("ChartColor_DefaultDescriptionFormat", label);
 
     private static string FormatOptionalColorText(CellColor? color) =>
         color is { } c ? $"#{c.R:X2}{c.G:X2}{c.B:X2}" : "none";

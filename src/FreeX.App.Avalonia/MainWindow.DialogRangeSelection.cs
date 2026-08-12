@@ -278,7 +278,9 @@ public sealed partial class MainWindow
 
         var picker = CreateDialogRangePickerButton(
             registration.PickerAutomationId,
-            $"Select worksheet range for {AutomationProperties.GetName(target) ?? "input"}");
+            UiText.Format(
+                "DialogRangePicker_SelectRangeForFormat",
+                AutomationProperties.GetName(target) ?? UiText.Get("Common_Input")));
         parent.Children.RemoveAt(index);
         parent.Children.Insert(index, BuildDialogRangePickerRow(target, picker));
         return picker;

@@ -93,7 +93,7 @@ public sealed partial class MainWindow
         };
         ApplyNamesButtonChrome(selectedRefersToPicker, minWidth: 30);
         AutomationProperties.SetAutomationId(selectedRefersToPicker, "NameManagerSelectedRefersToPickerButton");
-        AutomationProperties.SetName(selectedRefersToPicker, "Select referenced range");
+        AutomationProperties.SetName(selectedRefersToPicker, UiText.Get("NameDefinition_RangePickerAutomationName"));
 
         var newButton = new Button { Content = UiText.Get("InsertLoc_NewButton"), MinWidth = 84 };
         ApplyNamesButtonChrome(newButton, minWidth: 84);
@@ -321,7 +321,7 @@ public sealed partial class MainWindow
         };
         ApplyNamesButtonChrome(refersToPicker, minWidth: 30);
         AutomationProperties.SetAutomationId(refersToPicker, "DefineNameRefersToPickerButton");
-        AutomationProperties.SetName(refersToPicker, "Select referenced range");
+        AutomationProperties.SetName(refersToPicker, UiText.Get("NameDefinition_RangePickerAutomationName"));
 
         var commentBox = new TextBox
         {

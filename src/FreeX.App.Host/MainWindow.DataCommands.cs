@@ -150,7 +150,7 @@ public partial class MainWindow
                     importResult.WorksheetCount,
                     importResult.ErrorDetail));
                 ShowOwnedMessage(
-                    importResult.UserMessage ?? "Failed to import data.",
+                    importResult.UserMessage ?? UiText.Get("GetData_ImportFailedMessage"),
                     UiText.Get("MainWindowMessage_GetDataTitle"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);

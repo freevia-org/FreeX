@@ -197,7 +197,7 @@ public partial class MainWindow
             throw new ArgumentException("Axis command descriptor does not have a quick command.", nameof(command));
 
         if (!TryExecuteRepeatableChartLayout(
-                command.Label,
+                UiText.Get(command.TitleResourceKey),
                 UiText.Get(command.HostMissingSelectionMessageResourceKey),
                 null,
                 null,
@@ -225,7 +225,7 @@ public partial class MainWindow
             return ChartCommandWorkflowPlanner.BuildLayoutCommand(_currentSheetId, chart, options);
         }
 
-        if (!TryExecuteRepeatableCommand(CreateCommand, command.Label, out _))
+        if (!TryExecuteRepeatableCommand(CreateCommand, UiText.Get(command.TitleResourceKey), out _))
             return;
         UpdateViewport();
     }

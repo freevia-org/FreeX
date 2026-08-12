@@ -257,7 +257,7 @@ public partial class MainWindow
         if (!result.IsPersisted)
         {
             ShowOwnedMessage(
-                result.PersistenceError ?? "Failed to save status bar customization.",
+                result.PersistenceError ?? UiText.Get("StatusBar_CustomizationSaveFailed"),
                 UiText.Get("StatusBar_CustomizeStatusBar"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);

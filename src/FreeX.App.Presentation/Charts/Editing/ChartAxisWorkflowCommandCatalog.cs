@@ -33,7 +33,35 @@ public sealed record ChartAxisWorkflowCommandDescriptor(
     bool UseXAxis,
     string Label,
     string HostMissingSelectionMessageResourceKey,
-    ChartAxisQuickCommand? QuickCommand = null);
+    ChartAxisQuickCommand? QuickCommand = null)
+{
+    public string TitleResourceKey => Id switch
+    {
+        ChartAxisWorkflowCommandId.XAxisFormat => "ChartAxisFormat_XAxisTitle",
+        ChartAxisWorkflowCommandId.YAxisFormat => "ChartAxisFormat_YAxisTitle",
+        ChartAxisWorkflowCommandId.XAxisTickMarks => "MainWindow_TooltipTitle_XAxisTicks",
+        ChartAxisWorkflowCommandId.YAxisTickMarks => "MainWindow_TooltipTitle_YAxisTicks",
+        ChartAxisWorkflowCommandId.XAxisLabels => "MainWindow_TooltipTitle_XAxisLabels",
+        ChartAxisWorkflowCommandId.YAxisLabels => "MainWindow_TooltipTitle_YAxisLabels",
+        ChartAxisWorkflowCommandId.XAxisLabelFont => "MainWindow_TooltipTitle_XAxisLabelFont",
+        ChartAxisWorkflowCommandId.YAxisLabelFont => "MainWindow_TooltipTitle_YAxisLabelFont",
+        ChartAxisWorkflowCommandId.XAxisLabelAngle => "MainWindow_TooltipTitle_XAxisLabelAngle",
+        ChartAxisWorkflowCommandId.YAxisLabelAngle => "MainWindow_TooltipTitle_YAxisLabelAngle",
+        ChartAxisWorkflowCommandId.XAxisLine => "MainWindow_TooltipTitle_XAxisLine",
+        ChartAxisWorkflowCommandId.YAxisLine => "MainWindow_TooltipTitle_YAxisLine",
+        ChartAxisWorkflowCommandId.XAxisGridlines => "MainWindow_TooltipTitle_XAxisGridlines",
+        ChartAxisWorkflowCommandId.YAxisGridlines => "MainWindow_TooltipTitle_YAxisGridlines",
+        ChartAxisWorkflowCommandId.XAxisGridlineStyle => "MainWindow_TooltipTitle_XGridlineStyle",
+        ChartAxisWorkflowCommandId.YAxisGridlineStyle => "MainWindow_TooltipTitle_YGridlineStyle",
+        ChartAxisWorkflowCommandId.XAxisNumberFormat => "MainWindow_TooltipTitle_XAxisNumberFormat",
+        ChartAxisWorkflowCommandId.YAxisNumberFormat => "MainWindow_TooltipTitle_YAxisNumberFormat",
+        ChartAxisWorkflowCommandId.XAxisLogScale => "MainWindow_TooltipTitle_XLogScale",
+        ChartAxisWorkflowCommandId.YAxisLogScale => "MainWindow_TooltipTitle_YLogScale",
+        ChartAxisWorkflowCommandId.XAxisBounds => "MainWindow_TooltipTitle_XAxisBounds",
+        ChartAxisWorkflowCommandId.YAxisBounds => "MainWindow_TooltipTitle_YAxisBounds",
+        _ => throw new ArgumentOutOfRangeException(nameof(Id), Id, null),
+    };
+}
 
 /// <summary>
 /// Shared descriptors for chart axis contextual commands. The axis planner owns the layout deltas; this

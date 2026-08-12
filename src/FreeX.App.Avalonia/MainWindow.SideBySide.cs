@@ -147,7 +147,7 @@ public sealed partial class MainWindow : Window
                 clampedRow,
                 clampedCol);
             if (_session.SetViewportOrigin(topRow, leftCol))
-                RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         }
         finally
         {

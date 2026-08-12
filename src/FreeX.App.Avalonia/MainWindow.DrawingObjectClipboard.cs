@@ -31,7 +31,7 @@ public sealed partial class MainWindow
         var outcome = _session.ExecuteReviewCommand(command, _session.ActiveCell);
         if (!outcome.Success)
         {
-            ShowEditIssue(outcome.ErrorMessage ?? "Paste failed.");
+            ShowEditIssue(outcome.ErrorMessage ?? UiText.Get("MainLoc_PasteFailed"));
             return;
         }
 
@@ -63,6 +63,6 @@ public sealed partial class MainWindow
         _ribbonContextSource.OnDrawingObjectSelected(selection.Kind);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
-        RefreshShell($"Selected {FormatDrawingObjectKind(selection.Kind)}");
+        RefreshShell(UiText.Format("MainLoc_SelectedX", FormatDrawingObjectKind(selection.Kind)));
     }
 }

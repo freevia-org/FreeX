@@ -88,6 +88,9 @@ public sealed partial class MainWindow
     private static string ChartWorkflowCaption(ChartWorkflowCommandDescriptor command) =>
         command.TitleResourceKey is { } resourceKey ? UiText.Get(resourceKey) : command.Label;
 
+    private static string ChartWorkflowCaption(ChartAxisWorkflowCommandDescriptor command) =>
+        UiText.Get(command.TitleResourceKey);
+
     private static string ChartWorkflowUnsupportedStatus(ChartWorkflowCommandDescriptor command) =>
         command.UnsupportedStatusResourceKey is { } resourceKey
             ? UiText.Get(resourceKey)
@@ -792,7 +795,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Legend", out var chart))
+        var commandLabel = UiText.Get("ChartLoc_LegendTitle");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var current = ChartLegendPlanner.Read(chart);
@@ -800,10 +804,10 @@ public sealed partial class MainWindow
         if (result is not { } edited)
             return;
 
-        if (!TryGetSelectedChart("Legend", out chart))
+        if (!TryGetSelectedChart(commandLabel, out chart))
             return;
 
-        ApplyChartLayout("Legend", chart, ChartLegendPlanner.Plan(edited));
+        ApplyChartLayout(commandLabel, chart, ChartLegendPlanner.Plan(edited));
     }
 
     private async Task<ChartLegendInput?> ShowChartLegendDialogAsync(bool showLegend, ChartLegendPosition position)
@@ -814,7 +818,9 @@ public sealed partial class MainWindow
         var positionChoices = ChartLegendPlanner.GetPositionChoices();
         var positionCombo = CreateChartComboBox(260, positionChoices);
         positionCombo.DisplayMemberBinding = new global::Avalonia.Data.Binding(nameof(ChartLegendPositionChoice.DisplayName));
-        AutomationProperties.SetName(positionCombo, "Legend position");
+        AutomationProperties.SetName(
+            positionCombo,
+            UiText.CreateAutomationName(UiText.Get("ChartLoc_LegendPositionLabel")));
         AutomationProperties.SetAutomationId(positionCombo, "ChartLegendPositionCombo");
         positionCombo.SelectedItem =
             positionChoices.FirstOrDefault(c => c.Position == position)
@@ -853,10 +859,11 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Data Label Position", out var chart))
+        var commandLabel = UiText.Get("MainWindow_TooltipTitle_DataLabelPosition");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
-        ApplyChartLayout("Data Label Position", chart, new ChartLayoutOptions(
+        ApplyChartLayout(commandLabel, chart, new ChartLayoutOptions(
             ShowDataLabels: true,
             DataLabelPosition: ChartQuickFormatCycler.NextDataLabelPosition(chart.DataLabelPosition)));
     }
@@ -889,29 +896,31 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Chart Shape Fill", out var chart))
+        var commandLabel = UiText.Get("ChartLoc_ChartAreaFill");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var color = await ShowMoreColorsDialogAsync(
             UiText.Get("ChartLoc_ChartAreaFill"),
             chart.ChartAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-        if (color is { } chosen && TryGetSelectedChart("Chart Area Fill", out chart))
-            ApplyChartLayout("Chart Area Fill", chart, new ChartLayoutOptions(ChartAreaFillColor: chosen));
+        if (color is { } chosen && TryGetSelectedChart(commandLabel, out chart))
+            ApplyChartLayout(commandLabel, chart, new ChartLayoutOptions(ChartAreaFillColor: chosen));
     }
 
     private async Task ShowChartShapeOutlineDialog()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Chart Shape Outline", out var chart))
+        var commandLabel = UiText.Get("ChartLoc_PlotAreaBorder");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var color = await ShowMoreColorsDialogAsync(
             UiText.Get("ChartLoc_PlotAreaBorder"),
             chart.PlotAreaBorderColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-        if (color is { } chosen && TryGetSelectedChart("Plot Area Border", out chart))
+        if (color is { } chosen && TryGetSelectedChart(commandLabel, out chart))
         {
-            ApplyChartLayout("Plot Area Border", chart, new ChartLayoutOptions(
+            ApplyChartLayout(commandLabel, chart, new ChartLayoutOptions(
                 PlotAreaBorderColor: chosen,
                 PlotAreaBorderThickness: ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)));
         }
@@ -921,14 +930,15 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart("Plot Area Fill", out var chart))
+        var commandLabel = UiText.Get("ChartLoc_PlotAreaFill");
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var color = await ShowMoreColorsDialogAsync(
             UiText.Get("ChartLoc_PlotAreaFill"),
             chart.PlotAreaFillColor ?? ChartQuickFormatCycler.DefaultSeriesColor);
-        if (color is { } chosen && TryGetSelectedChart("Plot Area Fill", out chart))
-            ApplyChartLayout("Plot Area Fill", chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
+        if (color is { } chosen && TryGetSelectedChart(commandLabel, out chart))
+            ApplyChartLayout(commandLabel, chart, new ChartLayoutOptions(PlotAreaFillColor: chosen));
     }
 
     private void CycleChartXAxisGridlines()
@@ -955,7 +965,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart(command.Label, out var chart))
+        var commandLabel = ChartWorkflowCaption(command);
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         if (!ChartAxisPlanner.SupportsAxes(chart.Type))
@@ -967,7 +978,7 @@ public sealed partial class MainWindow
         if (command.QuickCommand is not { } quickCommand)
             return;
 
-        ApplyChartLayout(command.Label, chart, ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand));
+        ApplyChartLayout(commandLabel, chart, ChartAxisPlanner.PlanQuickCommand(chart, command.UseXAxis, quickCommand));
     }
 
     private void ExecuteChartAxisPlannedCommand(
@@ -976,7 +987,8 @@ public sealed partial class MainWindow
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
-        if (!TryGetSelectedChart(command.Label, out var chart))
+        var commandLabel = ChartWorkflowCaption(command);
+        if (!TryGetSelectedChart(commandLabel, out var chart))
             return;
 
         var plan = planner(_session.ActiveSheet, chart, command.UseXAxis);
@@ -988,7 +1000,7 @@ public sealed partial class MainWindow
             return;
         }
 
-        ApplyChartLayout(command.Label, chart, options);
+        ApplyChartLayout(commandLabel, chart, options);
     }
 
     /// <summary>Reports that a Chart-tab command has no Core support yet (no silent no-op, no invented behavior).</summary>

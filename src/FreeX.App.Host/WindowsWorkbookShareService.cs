@@ -6,6 +6,7 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Storage;
 using WinRT;
+using FreeX.App.Localization;
 
 namespace FreeX.App.Host;
 
@@ -59,13 +60,13 @@ public sealed class WindowsWorkbookShareService : IWorkbookShareService
                 request.Data.Properties.Title = string.IsNullOrWhiteSpace(workbookName)
                     ? Path.GetFileName(filePath)
                     : workbookName;
-                request.Data.Properties.Description = "FreeX workbook";
+                request.Data.Properties.Description = UiText.Get("WindowsShare_WorkbookDescription");
                 request.Data.SetStorageItems([storageFile]);
                 request.Data.RequestedOperation = DataPackageOperation.Copy;
             }
             catch
             {
-                request.FailWithDisplayText("FreeX could not prepare this workbook for Windows Share.");
+                request.FailWithDisplayText(UiText.Get("WindowsShare_PrepareFailedMessage"));
             }
             finally
             {

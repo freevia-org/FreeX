@@ -202,7 +202,7 @@ public sealed partial class MainWindow
             if (list.SelectedItem is WatchWindowRowPlan row)
             {
                 SelectCell(row.Address);
-                RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
             }
         };
         list.KeyDown += (_, e) =>

@@ -114,8 +114,12 @@ internal static class AvaloniaBackstageRecentFileContextMenu
                 Tag = command.Action,
             };
             AutomationProperties.SetAutomationId(item, command.AutomationId);
-            AutomationProperties.SetName(item, $"{command.CommandName}: {fileName}");
-            AutomationProperties.SetHelpText(item, $"{command.CommandName} for {fileName}.");
+            AutomationProperties.SetName(
+                item,
+                UiText.Format("RecentFile_AutomationNameFormat", command.CommandName, fileName));
+            AutomationProperties.SetHelpText(
+                item,
+                UiText.Format("RecentFile_HelpTextFormat", command.CommandName, fileName));
             item.Click += (_, _) => dispatch(command.Action);
             return (Control)item;
         }).ToArray();

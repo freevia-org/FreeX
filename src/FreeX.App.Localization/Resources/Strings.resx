@@ -20148,4 +20148,610 @@ and {0} more.</value>
   <data name="SheetTabs_SelectedAllVisibleStatus" xml:space="preserve">
     <value>Selected all visible sheets</value>
   </data>
+  <data name="AccessibilityChecker_NavigateFailed" xml:space="preserve">
+    <value>Could not navigate to accessibility issue.</value>
+  </data>
+  <data name="CellEdit_FormulaErrorMessage" xml:space="preserve">
+    <value>Microsoft Excel found an error in this formula. Please check the formula and try again.</value>
+  </data>
+  <data name="CellEdit_FormulaErrorTitle" xml:space="preserve">
+    <value>Microsoft Excel</value>
+  </data>
+  <data name="CellEdit_InvalidValueMessage" xml:space="preserve">
+    <value>The value is not valid.</value>
+  </data>
+  <data name="CellEdit_ValidationErrorTitle" xml:space="preserve">
+    <value>Validation Error</value>
+  </data>
+  <data name="Chart_AutomationNameFormat" xml:space="preserve">
+    <value>Chart {0}</value>
+  </data>
+  <data name="Chart_SetAsTotalFailed" xml:space="preserve">
+    <value>Set as Total failed.</value>
+  </data>
+  <data name="Chart_SetAsTotalStatus" xml:space="preserve">
+    <value>Set as Total</value>
+  </data>
+  <data name="Chart_WaterfallPointAutomationNameFormat" xml:space="preserve">
+    <value>Waterfall point {0}</value>
+  </data>
+  <data name="ChartColor_DefaultDescriptionFormat" xml:space="preserve">
+    <value>{0}: (default)</value>
+  </data>
+  <data name="ChartColor_DescriptionFormat" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="ChartLoc_InsertedChartStatusFormat" xml:space="preserve">
+    <value>Inserted {0} chart</value>
+  </data>
+  <data name="Clipboard_UnavailableOnPlatform" xml:space="preserve">
+    <value>Clipboard unavailable on this platform.</value>
+  </data>
+  <data name="Comment_ConvertedNotesToComments" xml:space="preserve">
+    <value>Converted notes to comments.</value>
+  </data>
+  <data name="Comment_ToggledAllNotesVisibility" xml:space="preserve">
+    <value>Toggled visibility for all notes.</value>
+  </data>
+  <data name="Comment_ToggledNoteVisibility" xml:space="preserve">
+    <value>Toggled note visibility.</value>
+  </data>
+  <data name="Common_Input" xml:space="preserve">
+    <value>Input</value>
+  </data>
+  <data name="Common_UnknownError" xml:space="preserve">
+    <value>Unknown error</value>
+  </data>
+  <data name="DataTable_ValidationAutomationName" xml:space="preserve">
+    <value>Data Table validation</value>
+  </data>
+  <data name="DataTable_ValidationHelpText" xml:space="preserve">
+    <value>Shows Data Table validation and error messages.</value>
+  </data>
+  <data name="DrawingObject_PreviewHelpText" xml:space="preserve">
+    <value>Selects this drawing object preview in the workbook viewport.</value>
+  </data>
+  <data name="File_CloseFailedFormat" xml:space="preserve">
+    <value>Close failed: {0}</value>
+  </data>
+  <data name="File_FinishOperationBeforeClosing" xml:space="preserve">
+    <value>Finish opening or saving before closing FreeX.</value>
+  </data>
+  <data name="File_FinishOperationBeforeQuitting" xml:space="preserve">
+    <value>Finish opening or saving before quitting FreeX.</value>
+  </data>
+  <data name="File_FinishSavingBeforeEditing" xml:space="preserve">
+    <value>Finish saving before editing cells.</value>
+  </data>
+  <data name="File_OpenCanceledMessage" xml:space="preserve">
+    <value>Open canceled.</value>
+  </data>
+  <data name="File_OpenFailedFormat" xml:space="preserve">
+    <value>Open failed: {0}</value>
+  </data>
+  <data name="File_OpenRequiresLocalPath" xml:space="preserve">
+    <value>Open requires a local file path.</value>
+  </data>
+  <data name="File_SaveAsRequiresLocalPath" xml:space="preserve">
+    <value>Save As requires a local file path.</value>
+  </data>
+  <data name="File_SaveCanceledMessage" xml:space="preserve">
+    <value>Save canceled.</value>
+  </data>
+  <data name="File_SaveFailedFormat" xml:space="preserve">
+    <value>Save failed: {0}</value>
+  </data>
+  <data name="ForecastSheet_CreatedStatusFormat" xml:space="preserve">
+    <value>Created forecast sheet from {0}</value>
+  </data>
+  <data name="FormatCells_BorderLineStyleAutomationName" xml:space="preserve">
+    <value>Border line style</value>
+  </data>
+  <data name="FormatCells_BorderPresetAutomationName" xml:space="preserve">
+    <value>Border preset</value>
+  </data>
+  <data name="FormatCells_IndentLevelAutomationName" xml:space="preserve">
+    <value>Indent level</value>
+  </data>
+  <data name="FormControls_InteractionFailed" xml:space="preserve">
+    <value>Form control interaction failed.</value>
+  </data>
+  <data name="FormulaPointMode_ResizeGripAutomationNameFormat" xml:space="preserve">
+    <value>Formula reference resize grip for {0}</value>
+  </data>
+  <data name="FreezePanes_FreezeFirstColumnFailed" xml:space="preserve">
+    <value>Freeze First Column failed.</value>
+  </data>
+  <data name="FreezePanes_FreezePanesFailed" xml:space="preserve">
+    <value>Freeze Panes failed.</value>
+  </data>
+  <data name="FreezePanes_FreezeTopRowFailed" xml:space="preserve">
+    <value>Freeze Top Row failed.</value>
+  </data>
+  <data name="FreezePanes_FrozeFirstColumnSuccessAction" xml:space="preserve">
+    <value>Froze first column for</value>
+  </data>
+  <data name="FreezePanes_FrozePanesSuccessAction" xml:space="preserve">
+    <value>Froze panes at</value>
+  </data>
+  <data name="FreezePanes_FrozeTopRowSuccessAction" xml:space="preserve">
+    <value>Froze top row for</value>
+  </data>
+  <data name="FreezePanes_UnfreezePanesFailed" xml:space="preserve">
+    <value>Unfreeze Panes failed.</value>
+  </data>
+  <data name="FreezePanes_UnfrozePanesSuccessAction" xml:space="preserve">
+    <value>Unfroze panes for</value>
+  </data>
+  <data name="GetData_ImportFailedMessage" xml:space="preserve">
+    <value>Failed to import data.</value>
+  </data>
+  <data name="Hyperlink_BookmarkButtonHelpText" xml:space="preserve">
+    <value>Choose a bookmark or cell reference within the destination.</value>
+  </data>
+  <data name="Hyperlink_ScreenTipButtonHelpText" xml:space="preserve">
+    <value>Set the ScreenTip text shown when hovering the hyperlink.</value>
+  </data>
+  <data name="MacShare_FileNotFound" xml:space="preserve">
+    <value>{0} could not find {1}.</value>
+  </data>
+  <data name="MacShare_FileUrlFailed" xml:space="preserve">
+    <value>{0} could not create a file URL for {1}.</value>
+  </data>
+  <data name="MacShare_NoActiveWindow" xml:space="preserve">
+    <value>{0} is unavailable because no macOS window is active.</value>
+  </data>
+  <data name="MainLoc_ActionRangeStatusFormat" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="MainLoc_AdvancedFilterFailed" xml:space="preserve">
+    <value>Advanced Filter failed.</value>
+  </data>
+  <data name="MainLoc_AlignmentFailed" xml:space="preserve">
+    <value>Alignment failed.</value>
+  </data>
+  <data name="MainLoc_AppliedFillColorStatusFormat" xml:space="preserve">
+    <value>Applied fill color to {0}</value>
+  </data>
+  <data name="MainLoc_AppliedFontColorStatusFormat" xml:space="preserve">
+    <value>Applied font color to {0}</value>
+  </data>
+  <data name="MainLoc_AppliedPresetStatusFormat" xml:space="preserve">
+    <value>Applied {0} to {1}</value>
+  </data>
+  <data name="MainLoc_AppliedStyleStatusFormat" xml:space="preserve">
+    <value>Applied {0} style to {1}</value>
+  </data>
+  <data name="MainLoc_AutofilledStatusFormat" xml:space="preserve">
+    <value>Autofilled {0}</value>
+  </data>
+  <data name="MainLoc_AutofillFailed" xml:space="preserve">
+    <value>Autofill failed.</value>
+  </data>
+  <data name="MainLoc_AutoSumFailed" xml:space="preserve">
+    <value>AutoSum failed.</value>
+  </data>
+  <data name="MainLoc_BoldFailed" xml:space="preserve">
+    <value>Bold failed.</value>
+  </data>
+  <data name="MainLoc_BordersFailed" xml:space="preserve">
+    <value>Borders failed.</value>
+  </data>
+  <data name="MainLoc_CellStyleFailed" xml:space="preserve">
+    <value>Cell Style failed.</value>
+  </data>
+  <data name="MainLoc_ClearAllFailed" xml:space="preserve">
+    <value>Clear All failed.</value>
+  </data>
+  <data name="MainLoc_ClearCommentsNotesFailed" xml:space="preserve">
+    <value>Clear Comments and Notes failed.</value>
+  </data>
+  <data name="MainLoc_ClearContentsFailed" xml:space="preserve">
+    <value>Clear Contents failed.</value>
+  </data>
+  <data name="MainLoc_ClearedFillStatusFormat" xml:space="preserve">
+    <value>Cleared fill from {0}</value>
+  </data>
+  <data name="MainLoc_ClearedRangeStatusFormat" xml:space="preserve">
+    <value>Cleared {0}</value>
+  </data>
+  <data name="MainLoc_ClearFormatsFailed" xml:space="preserve">
+    <value>Clear Formats failed.</value>
+  </data>
+  <data name="MainLoc_ClearHyperlinksFailed" xml:space="preserve">
+    <value>Clear Hyperlinks failed.</value>
+  </data>
+  <data name="MainLoc_CopyCellsFailed" xml:space="preserve">
+    <value>Copy Cells failed.</value>
+  </data>
+  <data name="MainLoc_DataTableFailed" xml:space="preserve">
+    <value>Data Table failed.</value>
+  </data>
+  <data name="MainLoc_DecreasedDecimalsStatusFormat" xml:space="preserve">
+    <value>Decreased decimals for {0}</value>
+  </data>
+  <data name="MainLoc_DecreaseDecimalFailed" xml:space="preserve">
+    <value>Decrease Decimal failed.</value>
+  </data>
+  <data name="MainLoc_DecreasedFontSizeStatusFormat" xml:space="preserve">
+    <value>Decreased font size for {0}</value>
+  </data>
+  <data name="MainLoc_DecreasedIndentStatusFormat" xml:space="preserve">
+    <value>Decreased indent for {0}</value>
+  </data>
+  <data name="MainLoc_DecreaseFontSizeFailed" xml:space="preserve">
+    <value>Decrease Font Size failed.</value>
+  </data>
+  <data name="MainLoc_DecreaseIndentFailed" xml:space="preserve">
+    <value>Decrease Indent failed.</value>
+  </data>
+  <data name="MainLoc_DoubleUnderlineFailed" xml:space="preserve">
+    <value>Double Underline failed.</value>
+  </data>
+  <data name="MainLoc_EditedCellStatusFormat" xml:space="preserve">
+    <value>Edited {0}</value>
+  </data>
+  <data name="MainLoc_EditFailed" xml:space="preserve">
+    <value>Edit failed.</value>
+  </data>
+  <data name="MainLoc_EditHistoryUnavailable" xml:space="preserve">
+    <value>Edit History is unavailable.</value>
+  </data>
+  <data name="MainLoc_FillColorFailed" xml:space="preserve">
+    <value>Fill Color failed.</value>
+  </data>
+  <data name="MainLoc_FlashFillFailed" xml:space="preserve">
+    <value>Flash Fill failed.</value>
+  </data>
+  <data name="MainLoc_FontColorFailed" xml:space="preserve">
+    <value>Font Color failed.</value>
+  </data>
+  <data name="MainLoc_ForecastSheetFailed" xml:space="preserve">
+    <value>Forecast Sheet failed.</value>
+  </data>
+  <data name="MainLoc_IncreasedDecimalsStatusFormat" xml:space="preserve">
+    <value>Increased decimals for {0}</value>
+  </data>
+  <data name="MainLoc_IncreaseDecimalFailed" xml:space="preserve">
+    <value>Increase Decimal failed.</value>
+  </data>
+  <data name="MainLoc_IncreasedFontSizeStatusFormat" xml:space="preserve">
+    <value>Increased font size for {0}</value>
+  </data>
+  <data name="MainLoc_IncreasedIndentStatusFormat" xml:space="preserve">
+    <value>Increased indent for {0}</value>
+  </data>
+  <data name="MainLoc_IncreaseFontSizeFailed" xml:space="preserve">
+    <value>Increase Font Size failed.</value>
+  </data>
+  <data name="MainLoc_IncreaseIndentFailed" xml:space="preserve">
+    <value>Increase Indent failed.</value>
+  </data>
+  <data name="MainLoc_InsertHyperlinkFailed" xml:space="preserve">
+    <value>Insert Hyperlink failed.</value>
+  </data>
+  <data name="MainLoc_ItalicFailed" xml:space="preserve">
+    <value>Italic failed.</value>
+  </data>
+  <data name="MainLoc_MergeCenterFailed" xml:space="preserve">
+    <value>Merge &amp; Center failed.</value>
+  </data>
+  <data name="MainLoc_MoveCellsFailed" xml:space="preserve">
+    <value>Move Cells failed.</value>
+  </data>
+  <data name="MainLoc_NoFillFailed" xml:space="preserve">
+    <value>No Fill failed.</value>
+  </data>
+  <data name="MainLoc_PasteFailed" xml:space="preserve">
+    <value>Paste failed.</value>
+  </data>
+  <data name="MainLoc_PasteSpecialFailed" xml:space="preserve">
+    <value>Paste Special failed.</value>
+  </data>
+  <data name="MainLoc_RemoveDuplicatesFailed" xml:space="preserve">
+    <value>Remove Duplicates failed.</value>
+  </data>
+  <data name="MainLoc_RemoveHyperlinksFailed" xml:space="preserve">
+    <value>Remove Hyperlinks failed.</value>
+  </data>
+  <data name="MainLoc_RepeatedLastActionStatusFormat" xml:space="preserve">
+    <value>Repeated last action in {0}</value>
+  </data>
+  <data name="MainLoc_RepeatFailed" xml:space="preserve">
+    <value>Repeat failed.</value>
+  </data>
+  <data name="MainLoc_StrikethroughFailed" xml:space="preserve">
+    <value>Strikethrough failed.</value>
+  </data>
+  <data name="MainLoc_TabColorFailed" xml:space="preserve">
+    <value>Tab Color failed.</value>
+  </data>
+  <data name="MainLoc_UnderlineFailed" xml:space="preserve">
+    <value>Underline failed.</value>
+  </data>
+  <data name="MainLoc_UnmergeCellsFailed" xml:space="preserve">
+    <value>Unmerge Cells failed.</value>
+  </data>
+  <data name="MainLoc_UnmergedCellsStatusFormat" xml:space="preserve">
+    <value>Unmerged cells in {0}</value>
+  </data>
+  <data name="MainLoc_VerticalAlignmentFailed" xml:space="preserve">
+    <value>Vertical alignment failed.</value>
+  </data>
+  <data name="MainLoc_WrapTextFailed" xml:space="preserve">
+    <value>Wrap Text failed.</value>
+  </data>
+  <data name="MoreColors_FillFailedFormat" xml:space="preserve">
+    <value>More Fill Colors failed: {0}</value>
+  </data>
+  <data name="MoreColors_FontFailedFormat" xml:space="preserve">
+    <value>More Font Colors failed: {0}</value>
+  </data>
+  <data name="NumberFormat_AccountingFailed" xml:space="preserve">
+    <value>Accounting format failed.</value>
+  </data>
+  <data name="NumberFormat_AccountingSuccessAction" xml:space="preserve">
+    <value>Applied accounting format to</value>
+  </data>
+  <data name="NumberFormat_AppliedNamedFormatSuccessAction" xml:space="preserve">
+    <value>Applied {0} format to</value>
+  </data>
+  <data name="NumberFormat_CommaFailed" xml:space="preserve">
+    <value>Comma style failed.</value>
+  </data>
+  <data name="NumberFormat_CommaSuccessAction" xml:space="preserve">
+    <value>Applied comma style to</value>
+  </data>
+  <data name="NumberFormat_CurrencyFailed" xml:space="preserve">
+    <value>Currency format failed.</value>
+  </data>
+  <data name="NumberFormat_CurrencySuccessAction" xml:space="preserve">
+    <value>Applied currency format to</value>
+  </data>
+  <data name="NumberFormat_DateSuccessAction" xml:space="preserve">
+    <value>Applied Date format to</value>
+  </data>
+  <data name="NumberFormat_GeneralSuccessAction" xml:space="preserve">
+    <value>Applied General format to</value>
+  </data>
+  <data name="NumberFormat_NumberFailed" xml:space="preserve">
+    <value>Number format failed.</value>
+  </data>
+  <data name="NumberFormat_NumberSuccessAction" xml:space="preserve">
+    <value>Applied Number format to</value>
+  </data>
+  <data name="NumberFormat_PercentFailed" xml:space="preserve">
+    <value>Percent format failed.</value>
+  </data>
+  <data name="NumberFormat_PercentSuccessAction" xml:space="preserve">
+    <value>Applied percent format to</value>
+  </data>
+  <data name="NumberFormat_ScientificSuccessAction" xml:space="preserve">
+    <value>Applied Scientific format to</value>
+  </data>
+  <data name="NumberFormat_TimeSuccessAction" xml:space="preserve">
+    <value>Applied Time format to</value>
+  </data>
+  <data name="Outline_ClearedStatus" xml:space="preserve">
+    <value>Cleared the worksheet outline.</value>
+  </data>
+  <data name="Outline_ClearFailed" xml:space="preserve">
+    <value>Could not clear the outline.</value>
+  </data>
+  <data name="Outline_UpdateColumnGroupFailed" xml:space="preserve">
+    <value>Could not update the column outline group.</value>
+  </data>
+  <data name="Outline_UpdateRowGroupFailed" xml:space="preserve">
+    <value>Could not update the row outline group.</value>
+  </data>
+  <data name="PivotChart_FieldButtonAutomationNameFormat" xml:space="preserve">
+    <value>PivotChart {0}</value>
+  </data>
+  <data name="PivotFieldFilter_CountOrValueAutomationName" xml:space="preserve">
+    <value>Count or value</value>
+  </data>
+  <data name="PivotFieldFilter_LabelFilterKindAutomationName" xml:space="preserve">
+    <value>Label filter kind</value>
+  </data>
+  <data name="PivotFieldFilter_SecondValueAutomationName" xml:space="preserve">
+    <value>Second value</value>
+  </data>
+  <data name="PivotFieldFilter_ValueFilterKindAutomationName" xml:space="preserve">
+    <value>Value filter kind</value>
+  </data>
+  <data name="PivotLoc_FieldDropdownAutomationName" xml:space="preserve">
+    <value>Pivot field dropdown</value>
+  </data>
+  <data name="PivotTableOptions_CompactIndentAutomationName" xml:space="preserve">
+    <value>Compact form row label indent</value>
+  </data>
+  <data name="PivotTableOptions_ReportFilterAreaAutomationName" xml:space="preserve">
+    <value>Report filter area</value>
+  </data>
+  <data name="PivotValueFieldSettings_SummarizeByAutomationName" xml:space="preserve">
+    <value>Summarize by</value>
+  </data>
+  <data name="QuickAccessToolbar_BelowRibbonAutomationName" xml:space="preserve">
+    <value>Quick Access Toolbar below the Ribbon</value>
+  </data>
+  <data name="QuickAccessToolbar_CustomizationSaveFailed" xml:space="preserve">
+    <value>Failed to save Quick Access Toolbar customization.</value>
+  </data>
+  <data name="RecentFile_AutomationNameFormat" xml:space="preserve">
+    <value>{0}: {1}</value>
+  </data>
+  <data name="RecentFile_HelpTextFormat" xml:space="preserve">
+    <value>{0} for {1}.</value>
+  </data>
+  <data name="ReviewSummary_AutomationName" xml:space="preserve">
+    <value>Review Summary</value>
+  </data>
+  <data name="ReviewSummary_CloseHelpText" xml:space="preserve">
+    <value>Close review summary.</value>
+  </data>
+  <data name="ReviewSummary_HelpText" xml:space="preserve">
+    <value>Summarizes workbook statistics and review item counts.</value>
+  </data>
+  <data name="ReviewSummary_SpellingIssues" xml:space="preserve">
+    <value>Spelling issues</value>
+  </data>
+  <data name="ReviewSummary_ThreadedComments" xml:space="preserve">
+    <value>Threaded comments</value>
+  </data>
+  <data name="ScenarioManager_CloseHelpText" xml:space="preserve">
+    <value>Close Scenario Manager.</value>
+  </data>
+  <data name="ScenarioManager_CommentHelpText" xml:space="preserve">
+    <value>Scenario comment.</value>
+  </data>
+  <data name="ScenarioManager_DeletedStatusFormat" xml:space="preserve">
+    <value>Deleted scenario '{0}'</value>
+  </data>
+  <data name="ScenarioManager_FlagListFormat" xml:space="preserve">
+    <value>{0}.</value>
+  </data>
+  <data name="ScenarioManager_HiddenState" xml:space="preserve">
+    <value>hidden</value>
+  </data>
+  <data name="ScenarioManager_LockedState" xml:space="preserve">
+    <value>locked</value>
+  </data>
+  <data name="ScenarioManager_NoComment" xml:space="preserve">
+    <value>No comment.</value>
+  </data>
+  <data name="ScenarioManager_NoScenarioSelected" xml:space="preserve">
+    <value>No scenario selected.</value>
+  </data>
+  <data name="ScenarioManager_ResultCellsHelpText" xml:space="preserve">
+    <value>The worksheet cells whose results the scenario reports.</value>
+  </data>
+  <data name="ScenarioManager_SaveAddAutomationName" xml:space="preserve">
+    <value>Save/Add</value>
+  </data>
+  <data name="ScenarioManager_SaveAddHelpText" xml:space="preserve">
+    <value>Save the selected cells as a new or updated scenario.</value>
+  </data>
+  <data name="ScenarioManager_ScenarioFallbackName" xml:space="preserve">
+    <value>scenario</value>
+  </data>
+  <data name="ScenarioManager_ScenarioNameHelpText" xml:space="preserve">
+    <value>Scenario name.</value>
+  </data>
+  <data name="ScenarioManager_SelectChangingCellsRangeAutomationName" xml:space="preserve">
+    <value>Select changing cells range</value>
+  </data>
+  <data name="ScenarioManager_SelectResultCellsRangeAutomationName" xml:space="preserve">
+    <value>Select result cells range</value>
+  </data>
+  <data name="ScenarioManager_SelectSavedScenarioHelpText" xml:space="preserve">
+    <value>Select a saved scenario.</value>
+  </data>
+  <data name="ScenarioManager_ShowHelpText" xml:space="preserve">
+    <value>Apply the selected scenario values to the workbook.</value>
+  </data>
+  <data name="ScenarioManager_SummaryReportAutomationName" xml:space="preserve">
+    <value>Summary Report</value>
+  </data>
+  <data name="ScenarioManager_SummaryReportHelpText" xml:space="preserve">
+    <value>Create a scenario summary report sheet.</value>
+  </data>
+  <data name="ScenarioManager_ValidationAutomationName" xml:space="preserve">
+    <value>Scenario Manager validation</value>
+  </data>
+  <data name="ScenarioManager_ValidationHelpText" xml:space="preserve">
+    <value>Shows Scenario Manager validation and error messages.</value>
+  </data>
+  <data name="ScenarioManager_VisibleEditableState" xml:space="preserve">
+    <value>Visible, editable.</value>
+  </data>
+  <data name="SheetTabs_DeletedStatusFormat" xml:space="preserve">
+    <value>Deleted {0}</value>
+  </data>
+  <data name="SheetTabs_DuplicatedStatusFormat" xml:space="preserve">
+    <value>Duplicated {0}</value>
+  </data>
+  <data name="SheetTabs_HidStatusFormat" xml:space="preserve">
+    <value>Hid {0}</value>
+  </data>
+  <data name="SheetTabs_InsertedStatusFormat" xml:space="preserve">
+    <value>Inserted {0}</value>
+  </data>
+  <data name="SheetTabs_MovedLeftStatusFormat" xml:space="preserve">
+    <value>Moved {0} left</value>
+  </data>
+  <data name="SheetTabs_MovedRightStatusFormat" xml:space="preserve">
+    <value>Moved {0} right</value>
+  </data>
+  <data name="SheetTabs_UngroupedToStatusFormat" xml:space="preserve">
+    <value>Ungrouped sheets to {0}</value>
+  </data>
+  <data name="SheetTabs_UnhidStatusFormat" xml:space="preserve">
+    <value>Unhid {0}</value>
+  </data>
+  <data name="Slicer_AutomationNameFormat" xml:space="preserve">
+    <value>Slicer {0}</value>
+  </data>
+  <data name="SplitPane_MoveFailed" xml:space="preserve">
+    <value>Could not move split pane.</value>
+  </data>
+  <data name="StatusBar_CustomizationSaveFailed" xml:space="preserve">
+    <value>Failed to save status bar customization.</value>
+  </data>
+  <data name="Subtotal_ValidationAutomationName" xml:space="preserve">
+    <value>Subtotal validation</value>
+  </data>
+  <data name="Subtotal_ValidationHelpText" xml:space="preserve">
+    <value>Shows Subtotal validation messages.</value>
+  </data>
+  <data name="TextBoxInlineEditor_AutomationName" xml:space="preserve">
+    <value>Text box inline editor</value>
+  </data>
+  <data name="TextBoxInlineEditor_EditFailed" xml:space="preserve">
+    <value>Could not edit text box.</value>
+  </data>
+  <data name="TextBoxInlineEditor_HelpText" xml:space="preserve">
+    <value>Edits the selected text box in place.</value>
+  </data>
+  <data name="TextEntry_EnterValueHelpTextFormat" xml:space="preserve">
+    <value>Enter {0}.</value>
+  </data>
+  <data name="TextRotation_ClockwiseSuccessAction" xml:space="preserve">
+    <value>Angled text clockwise for</value>
+  </data>
+  <data name="TextRotation_CounterclockwiseSuccessAction" xml:space="preserve">
+    <value>Angled text counterclockwise for</value>
+  </data>
+  <data name="TextRotation_DownSuccessAction" xml:space="preserve">
+    <value>Rotated text down for</value>
+  </data>
+  <data name="TextRotation_GenericSuccessAction" xml:space="preserve">
+    <value>Rotated text for</value>
+  </data>
+  <data name="TextRotation_HorizontalSuccessAction" xml:space="preserve">
+    <value>Set horizontal text for</value>
+  </data>
+  <data name="TextRotation_UpSuccessAction" xml:space="preserve">
+    <value>Rotated text up for</value>
+  </data>
+  <data name="TextRotation_VerticalSuccessAction" xml:space="preserve">
+    <value>Set vertical text for</value>
+  </data>
+  <data name="ThreadedComment_ConvertFailed" xml:space="preserve">
+    <value>Convert to Comments failed.</value>
+  </data>
+  <data name="Timeline_AutomationNameFormat" xml:space="preserve">
+    <value>Timeline {0}</value>
+  </data>
+  <data name="WindowsShare_PrepareFailedMessage" xml:space="preserve">
+    <value>FreeX could not prepare this workbook for Windows Share.</value>
+  </data>
+  <data name="WindowsShare_WorkbookDescription" xml:space="preserve">
+    <value>FreeX workbook</value>
+  </data>
+  <data name="Worksheet_SelectAllCellsAutomationName" xml:space="preserve">
+    <value>Select all cells</value>
+  </data>
+  <data name="Worksheet_SelectAllToolTip" xml:space="preserve">
+    <value>Select all</value>
+  </data>
 </root>

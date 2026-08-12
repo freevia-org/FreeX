@@ -115,7 +115,9 @@ public sealed partial class MainWindow
             PivotOptionsPlanner.FindReportLayoutIndex(values.ReportLayout));
         ApplyPivotComboBoxChrome(reportLayoutBox);
         AutomationProperties.SetAutomationId(reportLayoutBox, "PivotOptionsReportLayoutBox");
-        AutomationProperties.SetName(reportLayoutBox, "Report layout");
+        AutomationProperties.SetName(
+            reportLayoutBox,
+            UiText.CreateAutomationName(UiText.Get("PivotTableOptions_ReportLayoutLabel")));
 
         var compactIndentBox = OptionTextBox(
             PivotOptionsPlanner.CompactRowLabelIndentText(values.CompactRowLabelIndent),
@@ -125,7 +127,7 @@ public sealed partial class MainWindow
         compactIndentBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
         ApplyPivotTextBoxChrome(compactIndentBox);
         AutomationProperties.SetAutomationId(compactIndentBox, "PivotOptionsCompactIndentBox");
-        AutomationProperties.SetName(compactIndentBox, "Compact form row label indent");
+        AutomationProperties.SetName(compactIndentBox, UiText.Get("PivotTableOptions_CompactIndentAutomationName"));
 
         var subtotalsBox = new CheckBox
         {
@@ -139,7 +141,9 @@ public sealed partial class MainWindow
             PivotOptionsPlanner.SubtotalPlacements.Select(item => (string?)item.Label).ToArray(),
             PivotOptionsPlanner.FindSubtotalPlacementIndex(values.SubtotalPlacement));
         AutomationProperties.SetAutomationId(subtotalPlacementBox, "PivotOptionsSubtotalPlacementBox");
-        AutomationProperties.SetName(subtotalPlacementBox, "Subtotal placement");
+        AutomationProperties.SetName(
+            subtotalPlacementBox,
+            UiText.CreateAutomationName(UiText.Get("PivotTableOptions_SubtotalPlacementLabel")));
 
         var repeatLabelsBox = new CheckBox
         {
@@ -221,13 +225,15 @@ public sealed partial class MainWindow
             PivotOptionsPlanner.PageFieldLayouts.Select(option => option.Label).ToArray(),
             PivotOptionsPlanner.FindPageFieldLayoutIndex(values.PageOverThenDown));
         AutomationProperties.SetAutomationId(pageFieldLayoutBox, "PivotOptionsPageFieldLayoutBox");
-        AutomationProperties.SetName(pageFieldLayoutBox, "Report filter area");
+        AutomationProperties.SetName(pageFieldLayoutBox, UiText.Get("PivotTableOptions_ReportFilterAreaAutomationName"));
         pageWrapBox = OptionTextBox(PivotOptionsPlanner.PageWrapText(values.PageWrap), 80);
         pageWrapBox.Width = 60;
         pageWrapBox.MinWidth = 60;
         pageWrapBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Center;
         AutomationProperties.SetAutomationId(pageWrapBox, "PivotOptionsPageWrapBox");
-        AutomationProperties.SetName(pageWrapBox, "Report filter fields per column");
+        AutomationProperties.SetName(
+            pageWrapBox,
+            UiText.CreateAutomationName(UiText.Get("PivotTableOptions_ReportFilterFieldsPerColumnLabel")));
 
         var layoutSection = new StackPanel { Spacing = 6 };
         layoutSection.Children.Add(OptionLabel(UiText.Get("PivotTableOptions_ReportLayoutLabel")));

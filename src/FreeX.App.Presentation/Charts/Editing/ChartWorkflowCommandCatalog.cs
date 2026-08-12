@@ -47,27 +47,32 @@ public static class ChartWorkflowCommandCatalog
     public static readonly ChartWorkflowCommandDescriptor ChangeChartType = new(
         ChartWorkflowCommandId.ChangeChartType,
         "Change Chart Type",
-        DefaultHostMissingSelectionMessageResourceKey);
+        DefaultHostMissingSelectionMessageResourceKey,
+        "ChangeChartType_Title");
 
     public static readonly ChartWorkflowCommandDescriptor SelectDataSource = new(
         ChartWorkflowCommandId.SelectDataSource,
         "Select Data Source",
-        DefaultHostMissingSelectionMessageResourceKey);
+        DefaultHostMissingSelectionMessageResourceKey,
+        SelectDataSourcePlanner.DialogTitleResourceKey);
 
     public static readonly ChartWorkflowCommandDescriptor MoveChart = new(
         ChartWorkflowCommandId.MoveChart,
         "Move Chart",
-        DefaultHostMissingSelectionMessageResourceKey);
+        DefaultHostMissingSelectionMessageResourceKey,
+        "MoveChart_Title");
 
     public static readonly ChartWorkflowCommandDescriptor FormatChartArea = new(
         ChartWorkflowCommandId.FormatChartArea,
         "Format Chart Area",
-        "MainWindowMessage_ChartSelectForChartAreaFormatting");
+        "MainWindowMessage_ChartSelectForChartAreaFormatting",
+        "ChartArea_Title");
 
     public static readonly ChartWorkflowCommandDescriptor ChartTitles = new(
         ChartWorkflowCommandId.ChartTitles,
         "Chart Titles",
-        "MainWindowMessage_ChartSelectForTitles");
+        "MainWindowMessage_ChartSelectForTitles",
+        "ChartTitles_Title");
 
     public static readonly ChartWorkflowCommandDescriptor FormatBarColumn = new(
         ChartWorkflowCommandId.FormatBarColumn,
@@ -135,6 +140,7 @@ public static class ChartWorkflowCommandCatalog
         ChartWorkflowCommandId.ComboChart,
         "Combo Chart",
         "MainWindowMessage_ChartSelectForComboOptions",
+        "ChartCombo_Title",
         HostUnsupportedMessageResourceKey: "MainWindowMessage_ChartComboUnsupported",
         UnsupportedStatusResourceKey: "ChartLoc_ComboChartsNeed");
 
@@ -142,6 +148,7 @@ public static class ChartWorkflowCommandCatalog
         ChartWorkflowCommandId.SecondaryAxis,
         "Secondary Axis",
         "MainWindowMessage_ChartSecondaryAxisRequiresChart",
+        "MainWindow_TooltipTitle_SecondaryAxis",
         HostUnsupportedMessageResourceKey: "MainWindowMessage_ChartSecondaryAxisUnsupported",
         UnsupportedStatusResourceKey: "ChartLoc_SecondaryAxisNeeds");
 

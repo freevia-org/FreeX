@@ -1111,12 +1111,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["More Borders"] = () => _ = ShowFormatCellsDialogAsync(),
                     // Home ▸ Font ▸ Orientation dropdown items (canonical ids from HomeRibbonMenus.Orientation).
                     // Same rotation values as the native Format ▸ Orientation flyout.
-                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed."),
-                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, "Angled text counterclockwise for", "Angle Counterclockwise failed."),
-                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, "Angled text clockwise for", "Angle Clockwise failed."),
-                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed."),
-                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed."),
-                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed."),
+                    ["Horizontal"] = () => ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("TextRotation_HorizontalFailed")),
+                    ["Angle Counterclockwise"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("TextRotation_CounterclockwiseFailed")),
+                    ["Angle Clockwise"] = () => ApplySelectedRangeTextRotation(-45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("TextRotation_ClockwiseFailed")),
+                    ["Vertical Text"] = () => ApplySelectedRangeTextRotation(255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("TextRotation_VerticalFailed")),
+                    ["Rotate Text Up"] = () => ApplySelectedRangeTextRotation(90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("TextRotation_UpFailed")),
+                    ["Rotate Text Down"] = () => ApplySelectedRangeTextRotation(-90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("TextRotation_DownFailed")),
                     // Home ▸ Cells ▸ Insert / Delete / Format dropdown items that map to existing handlers
                     // (canonical ids from HomeRibbonMenus.Insert/Delete/Format). The lock-cell item stays NoOp
                     // until that operation exists in the shell.
@@ -1163,7 +1163,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Increase Decimal Places"] = IncreaseSelectedRangeDecimalPlaces,
                     ["Decrease Decimal Places"] = DecreaseSelectedRangeDecimalPlaces,
                     // Home Alignment Orientation + Cells Format → existing handlers.
-                    ["Orientation"] = () => ApplySelectedRangeTextRotation(45, "Rotated text for", "Orientation failed."),
+                    ["Orientation"] = () => ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_GenericSuccessAction"), UiText.Get("TextRotation_OrientationFailed")),
                     ["Format"] = () => _ = ShowFormatCellsDialogAsync(),
                     // View tab (Window group) + Formulas tab.
                     ["Unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
@@ -2270,22 +2270,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formatCellsMenuItem.Click += async (_, _) => await ShowFormatCellsDialogAsync();
 
         _horizontalTextMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(0, "Set horizontal text for", "Horizontal Text failed.");
+            ApplySelectedRangeTextRotation(0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("TextRotation_HorizontalFailed"));
 
         _angleCounterclockwiseMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(45, "Angled text counterclockwise for", "Angle Counterclockwise failed.");
+            ApplySelectedRangeTextRotation(45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("TextRotation_CounterclockwiseFailed"));
 
         _angleClockwiseMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(-45, "Angled text clockwise for", "Angle Clockwise failed.");
+            ApplySelectedRangeTextRotation(-45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("TextRotation_ClockwiseFailed"));
 
         _verticalTextMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(255, "Set vertical text for", "Vertical Text failed.");
+            ApplySelectedRangeTextRotation(255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("TextRotation_VerticalFailed"));
 
         _rotateTextUpMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(90, "Rotated text up for", "Rotate Text Up failed.");
+            ApplySelectedRangeTextRotation(90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("TextRotation_UpFailed"));
 
         _rotateTextDownMenuItem.Click += (_, _) =>
-            ApplySelectedRangeTextRotation(-90, "Rotated text down for", "Rotate Text Down failed.");
+            ApplySelectedRangeTextRotation(-90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("TextRotation_DownFailed"));
 
         _currencyFormatMenuItem.Click += (_, _) => ApplySelectedRangeCurrencyFormat();
 
@@ -2385,11 +2385,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _pageBreakPreviewMenuItem.ToggleType = MenuItemToggleType.CheckBox;
         _pageBreakPreviewMenuItem.Click += (_, _) => TogglePageBreakPreview();
 
-        _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
+        _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
 
-        _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
+        _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, UiText.Get("MainWindow_Content_Feedback"));
 
-        _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates");
+        _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, UiText.Get("MainWindow_Content_CheckForUpdates"));
 
         _aboutMenuItem.Click += async (_, _) => await ShowAboutDialogAsync();
 
@@ -3977,7 +3977,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// ribbon's toggle states -- none of which a pan can affect, since panning never moves the active
     /// cell or selection. Re-running that whole chain on EVERY scroll tick (as both
     /// WorksheetScrollBar_ValueChanged and SheetScrollViewer_PointerWheelChanged used to, via an
-    /// unconditional RefreshShell("Ready")) was pure per-tick overhead layered on top of BuildSheetGrid's
+    /// unconditional ready-state refresh was pure per-tick overhead layered on top of BuildSheetGrid's
     /// own per-cell control allocation cost (BuildSheetGrid itself still rebuilds the grid content on
     /// every call -- Avalonia has no container-recycling viewport here yet -- but this at least stops
     /// also tearing down and rebuilding everything else around it on every notch of a continuous scroll).
@@ -5308,9 +5308,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 : null;
 
         AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
-        AutomationProperties.SetName(container, $"{FormatDrawingObjectKind(drawingObject.Kind)} {drawingObject.DisplayName}");
-        AutomationProperties.SetHelpText(container, "Selects this drawing object preview in the workbook viewport.");
-        AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+        AutomationProperties.SetName(
+            container,
+            UiText.Format(
+                "DrawingObject_AutomationNameFormat",
+                FormatDrawingObjectKind(drawingObject.Kind),
+                drawingObject.DisplayName));
+        AutomationProperties.SetHelpText(container, UiText.Get("DrawingObject_PreviewHelpText"));
+        AutomationProperties.SetItemStatus(
+            container,
+            UiText.Get(selected ? "Automation_Selected" : "Automation_NotSelected"));
 
         container.PointerPressed += (_, args) =>
         {
@@ -5396,7 +5403,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _ribbonContextSource.OnDrawingObjectSelected(drawingObject.Kind);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
-        RefreshShell($"Selected {FormatDrawingObjectKind(drawingObject.Kind)}: {drawingObject.DisplayName}");
+        RefreshShell(UiText.Format(
+            "DrawingObject_SelectedStatusFormat",
+            FormatDrawingObjectKind(drawingObject.Kind),
+            drawingObject.DisplayName));
     }
 
     private bool IsSelectedDrawingObject(DrawingObjectBounds drawingObject) =>
@@ -6756,9 +6766,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var header = CreateHeaderCell("", zoomFactor: zoomFactor);
         header.Cursor = new Cursor(StandardCursorType.Hand);
-        ToolTip.SetTip(header, "Select all");
+        ToolTip.SetTip(header, UiText.Get("Worksheet_SelectAllToolTip"));
         AutomationProperties.SetAutomationId(header, "WorksheetSelectAllCorner");
-        AutomationProperties.SetName(header, "Select all cells");
+        AutomationProperties.SetName(header, UiText.Get("Worksheet_SelectAllCellsAutomationName"));
         header.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(header);
@@ -7696,8 +7706,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.AutofillDragRange(source, fillRange.Value, ctrlHeld: false);
         _session.SelectRange(completedSelection);
         RefreshShell(result.Success
-            ? $"Autofilled {FormatRangeReference(completedSelection)}"
-            : result.ErrorMessage ?? "Autofill failed.");
+            ? UiText.Format("MainLoc_AutofilledStatusFormat", FormatRangeReference(completedSelection))
+            : result.ErrorMessage ?? UiText.Get("MainLoc_AutofillFailed"));
     }
 
     /// <summary>
@@ -7813,8 +7823,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.AutofillDragRange(source, operationRange, ctrlHeld);
         _session.SelectRange(completedSelection);
         RefreshShell(result.Success
-            ? $"Autofilled {FormatRangeReference(completedSelection)}"
-            : result.ErrorMessage ?? "Autofill failed.");
+            ? UiText.Format("MainLoc_AutofilledStatusFormat", FormatRangeReference(completedSelection))
+            : result.ErrorMessage ?? UiText.Get("MainLoc_AutofillFailed"));
     }
 
     private static FillCellsDirection ResolveAutofillDirection(GridRange source, GridRange fillRange)
@@ -7948,7 +7958,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 fallbackAddress: target.Start);
             var copyStatus = copyResult.Success
                 ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
-                : copyResult.ErrorMessage ?? "Copy Cells failed.";
+                : copyResult.ErrorMessage ?? UiText.Get("MainLoc_CopyCellsFailed");
             // ExecuteReviewCommand intentionally collapses the session selection to the first
             // affected cell while applying a generic edit. Render that intermediate state, then
             // restore the complete destination range and rebuild the grid once more. Without the
@@ -7966,7 +7976,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.MoveSelectedRangeTo(source, target);
         RefreshShell(result.Success
             ? UiText.Format("MainLoc_SelectedX", FormatRangeReference(target))
-            : result.ErrorMessage ?? "Move Cells failed.");
+            : result.ErrorMessage ?? UiText.Get("MainLoc_MoveCellsFailed"));
     }
 
     /// <summary>
@@ -9122,7 +9132,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (CommitEditAcrossSelection(text))
             {
                 ClearFormulaRangeEntryState();
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
             args.Handled = true;
@@ -9203,7 +9213,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearFormulaRangeEntryState();
         _formulaRangeEditingSession.ApplyTypedEntry(editText);
         _session.BeginFormulaEdit(address);
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         if (_inlineCellEditor is { } editor)
             FocusInlineCellEditor(address, editor);
     }
@@ -9217,7 +9227,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (rowDelta != 0 || colDelta != 0)
                 _session.MoveActiveCell(rowDelta, colDelta);
 
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
             // The inline editor is detached by CommitFormulaBox before the next-cell refresh.
             // Restore focus to the newly active cell itself, matching WPF's worksheet focus handoff
             // and keeping the next physical F2/text packet on the worksheet rather than the shell
@@ -9235,7 +9245,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
         ClearInlineCellEditorState();
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         FocusShellRegion(ShellFocusTarget.Worksheet);
     }
 
@@ -10520,7 +10530,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Cursor = new Cursor(StandardCursorType.SizeAll),
             };
             AutomationProperties.SetAutomationId(grip, "WorksheetFormulaReferenceGrip");
-            AutomationProperties.SetName(grip, $"Formula reference resize grip for {highlight.Text}");
+            AutomationProperties.SetName(
+                grip,
+                UiText.Format("FormulaPointMode_ResizeGripAutomationNameFormat", highlight.Text));
             Canvas.SetLeft(grip, left + width - FormulaReferenceGripHitSize / 2);
             Canvas.SetTop(grip, top + height - FormulaReferenceGripHitSize / 2);
             grip.PointerPressed += (_, args) =>
@@ -11884,7 +11896,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetActiveSheetTabColor(color);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Tab Color failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_TabColorFailed"));
             return;
         }
 
@@ -11983,12 +11995,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = new[]
             {
-                CreateTextRotationMenuItem("Horizontal", 0, "Set horizontal text for", "Horizontal Text failed."),
-                CreateTextRotationMenuItem("Angle Counterclockwise", 45, "Angled text counterclockwise for", "Angle Counterclockwise failed."),
-                CreateTextRotationMenuItem("Angle Clockwise", -45, "Angled text clockwise for", "Angle Clockwise failed."),
-                CreateTextRotationMenuItem("Vertical Text", 255, "Set vertical text for", "Vertical Text failed."),
-                CreateTextRotationMenuItem("Rotate Text Up", 90, "Rotated text up for", "Rotate Text Up failed."),
-                CreateTextRotationMenuItem("Rotate Text Down", -90, "Rotated text down for", "Rotate Text Down failed."),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_Horizontal"), 0, UiText.Get("TextRotation_HorizontalSuccessAction"), UiText.Get("TextRotation_HorizontalFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_AngleCounterclockwise"), 45, UiText.Get("TextRotation_CounterclockwiseSuccessAction"), UiText.Get("TextRotation_CounterclockwiseFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_AngleClockwise"), -45, UiText.Get("TextRotation_ClockwiseSuccessAction"), UiText.Get("TextRotation_ClockwiseFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_VerticalText"), 255, UiText.Get("TextRotation_VerticalSuccessAction"), UiText.Get("TextRotation_VerticalFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_RotateTextUp"), 90, UiText.Get("TextRotation_UpSuccessAction"), UiText.Get("TextRotation_UpFailed")),
+                CreateTextRotationMenuItem(UiText.Get("MainWindow_Header_RotateTextDown"), -90, UiText.Get("TextRotation_DownSuccessAction"), UiText.Get("TextRotation_DownFailed")),
             },
         };
 
@@ -12386,7 +12398,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         ClearSelectedDrawingObject();
-        RefreshShell($"Ungrouped sheets to {_session.ActiveSheet.Name}");
+        RefreshShell(UiText.Format("SheetTabs_UngroupedToStatusFormat", _session.ActiveSheet.Name));
     }
 
     private void AddNewSheet()
@@ -12405,7 +12417,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Inserted {_session.ActiveSheet.Name}");
+        RefreshShell(UiText.Format("SheetTabs_InsertedStatusFormat", _session.ActiveSheet.Name));
     }
 
     private async Task CreateNewWorkbookAsync()
@@ -12502,7 +12514,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // so force a recalc here — sheet structure commands don't report affected cells to the
         // shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDuplicate_Click).
         _session.RecalculateWorkbook();
-        RefreshShell($"Duplicated {sourceName}");
+        RefreshShell(UiText.Format("SheetTabs_DuplicatedStatusFormat", sourceName));
     }
 
     private void MoveActiveSheetLeft()
@@ -12525,7 +12537,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
         // (sheet structure commands don't report affected cells to the automatic recalc path).
         _session.RecalculateWorkbook();
-        RefreshShell($"Moved {sheetName} left");
+        RefreshShell(UiText.Format("SheetTabs_MovedLeftStatusFormat", sheetName));
     }
 
     private void MoveActiveSheetRight()
@@ -12548,7 +12560,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Reordering sheets can change which sheets a 3-D reference spans, so force a recalc
         // (sheet structure commands don't report affected cells to the automatic recalc path).
         _session.RecalculateWorkbook();
-        RefreshShell($"Moved {sheetName} right");
+        RefreshShell(UiText.Format("SheetTabs_MovedRightStatusFormat", sheetName));
     }
 
     private void ToggleShowGridlines()
@@ -12873,7 +12885,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         RefreshViewportSizeForZoom();
-        RefreshShell($"Zoom {StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)}");
+        RefreshShell(UiText.Format(
+            "Zoom_StatusFormat",
+            StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent)));
     }
 
     /// <summary>
@@ -13002,7 +13016,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Hid {sheetName}");
+        RefreshShell(UiText.Format("SheetTabs_HidStatusFormat", sheetName));
     }
 
     private async Task UnhideSheetAsync()
@@ -13032,7 +13046,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Unhid {sheet.Name}");
+        RefreshShell(UiText.Format("SheetTabs_UnhidStatusFormat", sheet.Name));
     }
 
     private void DeleteActiveSheet()
@@ -13056,7 +13070,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // stale, so force a recalc here — sheet structure commands don't report affected cells to
         // the shared edit pipeline's automatic recalc (WPF host parity: SheetCtxDelete_Click).
         _session.RecalculateWorkbook();
-        RefreshShell($"Deleted {sheetName}");
+        RefreshShell(UiText.Format("SheetTabs_DeletedStatusFormat", sheetName));
     }
 
     private async Task<WorkbookHiddenSheet?> ShowUnhideSheetDialogAsync(IReadOnlyList<WorkbookHiddenSheet> hiddenSheets)
@@ -14907,7 +14921,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeHyperlink(plan);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Insert Hyperlink failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_InsertHyperlinkFailed"));
             return;
         }
 
@@ -15022,13 +15036,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplyDialogButtonChrome(screenTipButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
         AutomationProperties.SetName(screenTipButton, UiText.CreateAutomationName(UiText.Get("Hyperlink_ScreenTip")));
         AutomationProperties.SetAutomationId(screenTipButton, "HyperlinkScreenTipButton");
-        AutomationProperties.SetHelpText(screenTipButton, "Set the ScreenTip text shown when hovering the hyperlink.");
+        AutomationProperties.SetHelpText(screenTipButton, UiText.Get("Hyperlink_ScreenTipButtonHelpText"));
 
         var bookmarkButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_Bookmark")) };
         ApplyDialogButtonChrome(bookmarkButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
         AutomationProperties.SetName(bookmarkButton, UiText.CreateAutomationName(UiText.Get("Hyperlink_Bookmark")));
         AutomationProperties.SetAutomationId(bookmarkButton, "HyperlinkBookmarkButton");
-        AutomationProperties.SetHelpText(bookmarkButton, "Choose a bookmark or cell reference within the destination.");
+        AutomationProperties.SetHelpText(bookmarkButton, UiText.Get("Hyperlink_BookmarkButtonHelpText"));
 
         var validationText = new TextBlock
         {
@@ -15501,24 +15515,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             LineHeight = 21,
         };
-        AutomationProperties.SetName(summaryBlock, "Review Summary");
+        AutomationProperties.SetName(summaryBlock, UiText.Get("ReviewSummary_AutomationName"));
         AutomationProperties.SetAutomationId(summaryBlock, "ReviewSummaryText");
-        AutomationProperties.SetHelpText(summaryBlock, "Summarizes workbook statistics and review item counts.");
+        AutomationProperties.SetHelpText(summaryBlock, UiText.Get("ReviewSummary_HelpText"));
 
         var spellingList = CreateReviewPreviewList(
-            "Spelling issues",
+            UiText.Get("ReviewSummary_SpellingIssues"),
             "ReviewSpellingIssuesList",
             display.SpellingIssues);
         var accessibilityList = CreateReviewPreviewList(
-            "Accessibility issues",
+            UiText.Get("AccessibilityChecker_IssueListAutomationName"),
             "ReviewAccessibilityIssuesList",
             display.AccessibilityIssues);
         var notesList = CreateReviewPreviewList(
-            "Notes",
+            UiText.Get("ShellLoc_NotesTitle"),
             "ReviewNotesList",
             display.Notes);
         var commentsList = CreateReviewPreviewList(
-            "Threaded comments",
+            UiText.Get("ReviewSummary_ThreadedComments"),
             "ReviewCommentsList",
             display.ThreadedComments);
 
@@ -15529,9 +15543,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Padding = new Thickness(10, 4),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
-        AutomationProperties.SetName(closeButton, "Close");
+        AutomationProperties.SetName(closeButton, UiText.CreateAutomationName(UiText.Get("Common_Close")));
         AutomationProperties.SetAutomationId(closeButton, "ReviewCloseButton");
-        AutomationProperties.SetHelpText(closeButton, "Close review summary.");
+        AutomationProperties.SetHelpText(closeButton, UiText.Get("ReviewSummary_CloseHelpText"));
         closeButton.Click += (_, _) => dialog.Close();
 
         dialog.KeyDown += (_, e) =>
@@ -15711,7 +15725,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     await ShowMergeCellsContentWarningDialogAsync(contentPlan));
                 if (!decision.ShouldProceed)
                 {
-                    RefreshShell(_statusText.Text ?? "Ready");
+                    RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
                     return;
                 }
 
@@ -15805,7 +15819,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Height = 278,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
         };
-        AutomationProperties.SetName(numberCategoryList, "Category");
+        AutomationProperties.SetName(
+            numberCategoryList,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Category")));
         AutomationProperties.SetAutomationId(numberCategoryList, "FormatCellsNumberCategoryList");
         numberCategoryList.FontSize = 12;
         numberCategoryList.FontFamily = FormulaBarFontFamily;
@@ -15814,7 +15830,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 260,
         };
-        AutomationProperties.SetName(numberFormatBox, "Type");
+        AutomationProperties.SetName(
+            numberFormatBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Type")));
         AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatBox");
         ApplyFormatCellsComboBoxChrome(numberFormatBox);
 
@@ -15824,7 +15842,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 .ToString(CultureInfo.InvariantCulture),
             MinWidth = 100,
         };
-        AutomationProperties.SetName(numberDecimalPlacesBox, "Decimal places");
+        AutomationProperties.SetName(
+            numberDecimalPlacesBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_DecimalPlaces")));
         AutomationProperties.SetAutomationId(numberDecimalPlacesBox, "FormatCellsNumberDecimalPlacesBox");
         ApplyDialogTextBoxChrome(numberDecimalPlacesBox);
 
@@ -15895,7 +15915,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 : (numberSymbols.Contains("$") ? "$" : (numberSymbols.Count > 0 ? numberSymbols[0] : null)),
             MinWidth = 220,
         };
-        AutomationProperties.SetName(numberSymbolBox, "Symbol");
+        AutomationProperties.SetName(
+            numberSymbolBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Symbol")));
         AutomationProperties.SetAutomationId(numberSymbolBox, "FormatCellsNumberSymbolBox");
         ApplyFormatCellsComboBoxChrome(numberSymbolBox);
 
@@ -15906,7 +15928,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 200,
             Height = 96,
         };
-        AutomationProperties.SetName(numberNegativeBox, "Negative numbers");
+        AutomationProperties.SetName(
+            numberNegativeBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_NegativeNumbers")));
         AutomationProperties.SetAutomationId(numberNegativeBox, "FormatCellsNumberNegativeBox");
 
         var numberPreview = new TextBlock
@@ -16077,7 +16101,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 100,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetName(indentLevelBox, "Indent level");
+        AutomationProperties.SetName(indentLevelBox, UiText.Get("FormatCells_IndentLevelAutomationName"));
         AutomationProperties.SetAutomationId(indentLevelBox, "FormatCellsIndentLevelBox");
         ApplyDialogTextBoxChrome(indentLevelBox);
 
@@ -16087,7 +16111,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 100,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
-        AutomationProperties.SetName(textRotationBox, "Text rotation");
+        AutomationProperties.SetName(textRotationBox, UiText.Get("FormatCells_TextRotation"));
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
         ApplyDialogTextBoxChrome(textRotationBox);
 
@@ -16114,7 +16138,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = currentFontName,
             MinWidth = 180,
         };
-        AutomationProperties.SetName(fontNameBox, "Font");
+        AutomationProperties.SetName(
+            fontNameBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Font")));
         AutomationProperties.SetAutomationId(fontNameBox, "FormatCellsFontNameBox");
         ApplyDialogTextBoxChrome(fontNameBox);
 
@@ -16123,7 +16149,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Text = currentFontSize.ToString("0.##", CultureInfo.InvariantCulture),
             MinWidth = 100,
         };
-        AutomationProperties.SetName(fontSizeBox, "Size");
+        AutomationProperties.SetName(
+            fontSizeBox,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Size")));
         AutomationProperties.SetAutomationId(fontSizeBox, "FormatCellsFontSizeBox");
         ApplyDialogTextBoxChrome(fontSizeBox);
 
@@ -16144,7 +16172,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetName(fontNameList, "Font");
+        AutomationProperties.SetName(
+            fontNameList,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Font")));
         AutomationProperties.SetAutomationId(fontNameList, "FormatCellsFontNameList");
         fontNameList.SelectionChanged += (_, _) =>
         {
@@ -16162,7 +16192,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
-        AutomationProperties.SetName(fontSizeList, "Size");
+        AutomationProperties.SetName(
+            fontSizeList,
+            UiText.CreateAutomationName(UiText.Get("FormatCells_Size")));
         AutomationProperties.SetAutomationId(fontSizeList, "FormatCellsFontSizeList");
         fontSizeList.SelectionChanged += (_, _) =>
         {
@@ -16171,7 +16203,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
 
         var fontColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreFontColors"));
-        AutomationProperties.SetName(fontColorBox, "Font color");
+        AutomationProperties.SetName(fontColorBox, UiText.Get("FormatCells_FontColorTitle"));
         AutomationProperties.SetAutomationId(fontColorBox, "FormatCellsFontColorBox");
         var normalFontBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_NormalFont"), "FormatCellsNormalFontBox", false);
         normalFontBox.PropertyChanged += (_, e) =>
@@ -16268,7 +16300,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             SelectedIndex = 0,
             MinWidth = 220,
         };
-        AutomationProperties.SetName(borderPresetBox, "Border preset");
+        AutomationProperties.SetName(borderPresetBox, UiText.Get("FormatCells_BorderPresetAutomationName"));
         AutomationProperties.SetAutomationId(borderPresetBox, "FormatCellsBorderPresetBox");
         ApplyFormatCellsComboBoxChrome(borderPresetBox);
         // Windows renders the line style as a scrollable textual list, not a combo.
@@ -16281,7 +16313,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         borderColorBox.ConfigureCompactPickButton();
         borderColorBox.BorderBrush = Brush(112, 112, 112);
         borderColorBox.CornerRadius = new CornerRadius(0);
-        AutomationProperties.SetName(borderColorBox, "Border color");
+        AutomationProperties.SetName(borderColorBox, UiText.Get("FormatCells_BorderColorTitle"));
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
 
         TextBox CreateBorderColorTextBox(FormatCellsColorPicker picker, string automationId)
@@ -17652,7 +17684,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
             });
         }
-        AutomationProperties.SetName(listBox, "Border line style");
+        AutomationProperties.SetName(listBox, UiText.Get("FormatCells_BorderLineStyleAutomationName"));
         AutomationProperties.SetAutomationId(listBox, automationId);
         return listBox;
     }
@@ -18028,7 +18060,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ClearSelectedDrawingObject();
         ClearFormulaRangeEntryState();
         _session.BeginFormulaEdit(address);
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         var originalText = _formulaBox.Text ?? "";
         _formulaBox.Focus();
         if (initialText is not null)
@@ -18123,7 +18155,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             if (_isOpening || _isSaving)
             {
-                ShowSaveIssue("Finish saving before editing cells.");
+                ShowSaveIssue(UiText.Get("File_FinishSavingBeforeEditing"));
             }
             else if (CommitFormulaBox())
             {
@@ -18135,7 +18167,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var rowDelta = GetCellIndexDelta(current.Row, adjustedTarget.Row);
                 var colDelta = GetCellIndexDelta(current.Col, adjustedTarget.Col);
                 _session.MoveActiveCell(rowDelta, colDelta);
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
             else
@@ -18149,12 +18181,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             if (_isOpening || _isSaving)
             {
-                ShowSaveIssue("Finish saving before editing cells.");
+                ShowSaveIssue(UiText.Get("File_FinishSavingBeforeEditing"));
             }
             else if (CommitEditAcrossSelection(_formulaBox.Text ?? ""))
             {
                 ClearFormulaRangeEntryState();
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
             else
@@ -18469,7 +18501,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _ribbonContextSource.OnDrawingObjectSelected(objectKind);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
-        RefreshShell($"Selected {FormatDrawingObjectKind(objectKind)}: {item.Name}");
+        RefreshShell(UiText.Format(
+            "DrawingObject_SelectedStatusFormat",
+            FormatDrawingObjectKind(objectKind),
+            item.Name));
         RecordOptionalNameBoxSelection(item);
         return true;
     }
@@ -18510,7 +18545,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (_isOpening || _isSaving)
         {
-            ShowSaveIssue("Finish saving before editing cells.");
+            ShowSaveIssue(UiText.Get("File_FinishSavingBeforeEditing"));
             return false;
         }
 
@@ -18519,7 +18554,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Edit failed");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_EditFailed"));
             return false;
         }
 
@@ -18537,7 +18572,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // committed -- a subsequent Paste must not silently move/copy a source range the user has
         // since overwritten.
         SetClipboardMarquee(null, isCut: false);
-        RefreshShell($"Edited {FormatCellReference(address)}");
+        RefreshShell(UiText.Format("MainLoc_EditedCellStatusFormat", FormatCellReference(address)));
         return true;
     }
 
@@ -18549,7 +18584,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (_isOpening || _isSaving)
         {
-            ShowSaveIssue("Finish saving before editing cells.");
+            ShowSaveIssue(UiText.Get("File_FinishSavingBeforeEditing"));
             return false;
         }
 
@@ -18557,7 +18592,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Edit failed");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_EditFailed"));
             return false;
         }
 
@@ -18678,11 +18713,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.InsertAutoSumFormula(functionName);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "AutoSum failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_AutoSumFailed"));
             return;
         }
 
-        RefreshShell($"Inserted {functionName.ToUpperInvariant()} at {targetReference}");
+        RefreshShell(UiText.Format(
+            "MainLoc_InsertedFunctionStatusFormat",
+            functionName.ToUpperInvariant(),
+            targetReference));
     }
 
     private void FillSelectedRange(FillCellsDirection direction)
@@ -18716,7 +18754,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.FlashFillSelectedRange();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Flash Fill failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FlashFillFailed"));
             return;
         }
 
@@ -18736,11 +18774,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SortSelectedRange(ascending);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
             return;
         }
 
-        RefreshShell($"Sorted {rangeReference} {(ascending ? "A to Z" : "Z to A")}");
+        RefreshShell(UiText.Format(
+            "MainLoc_SortedDirectionStatusFormat",
+            rangeReference,
+            UiText.Get(ascending ? "Sort_AtoZ" : "Sort_ZtoA")));
     }
 
     /// <summary>
@@ -18788,7 +18829,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SortSelectedRange(sortPlan);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Sort failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_SortFailed"));
             return;
         }
 
@@ -20198,8 +20239,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ExecuteAdvancedFilterPlan(plan);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Advanced Filter failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_AdvancedFilterFailed"));
             return;
         }
 
@@ -20785,9 +20826,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Foreground = Brush(143, 74, 18),
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(errorText, "Subtotal validation");
+        AutomationProperties.SetName(errorText, UiText.Get("Subtotal_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "SubtotalErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Subtotal validation messages.");
+        AutomationProperties.SetHelpText(errorText, UiText.Get("Subtotal_ValidationHelpText"));
 
         var okButton = new Button
         {
@@ -21019,8 +21060,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ExecuteRemoveDuplicatesPlan(plan);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Remove Duplicates failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_RemoveDuplicatesFailed"));
             return;
         }
 
@@ -21362,25 +21403,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaCompactDialogChrome.ApplyListBox(scenarioList, dialogChrome);
         AutomationProperties.SetName(scenarioList, StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")));
         AutomationProperties.SetAutomationId(scenarioList, FreeXAutomationIdCatalog.ScenarioManager.ScenarioList);
-        AutomationProperties.SetHelpText(scenarioList, "Select a saved scenario.");
+        AutomationProperties.SetHelpText(scenarioList, UiText.Get("ScenarioManager_SelectSavedScenarioHelpText"));
 
         var nameBox = new TextBox
         {
             MinWidth = 170,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(nameBox, dialogChrome);
-        AutomationProperties.SetName(nameBox, "Scenario name");
+        AutomationProperties.SetName(nameBox, UiText.Get("ScenarioManager_ScenarioNameAutomationName"));
         AutomationProperties.SetAutomationId(nameBox, FreeXAutomationIdCatalog.ScenarioManager.AvaloniaScenarioNameBox);
-        AutomationProperties.SetHelpText(nameBox, "Scenario name.");
+        AutomationProperties.SetHelpText(nameBox, UiText.Get("ScenarioManager_ScenarioNameHelpText"));
 
         var commentBox = new TextBox
         {
             MinWidth = 170,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(commentBox, dialogChrome);
-        AutomationProperties.SetName(commentBox, "Comment");
+        AutomationProperties.SetName(commentBox, UiText.Get("ScenarioManager_CommentAutomationName"));
         AutomationProperties.SetAutomationId(commentBox, FreeXAutomationIdCatalog.ScenarioManager.CommentBox);
-        AutomationProperties.SetHelpText(commentBox, "Scenario comment.");
+        AutomationProperties.SetHelpText(commentBox, UiText.Get("ScenarioManager_CommentHelpText"));
 
         var changingCellsBox = new TextBox
         {
@@ -21397,9 +21438,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 170,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(resultCellsBox, dialogChrome);
-        AutomationProperties.SetName(resultCellsBox, "Result cells");
+        AutomationProperties.SetName(resultCellsBox, UiText.Get("ScenarioManager_ResultCellsAutomationName"));
         AutomationProperties.SetAutomationId(resultCellsBox, FreeXAutomationIdCatalog.ScenarioManager.ResultCellsBox);
-        AutomationProperties.SetHelpText(resultCellsBox, "The worksheet cells whose results the scenario reports.");
+        AutomationProperties.SetHelpText(resultCellsBox, UiText.Get("ScenarioManager_ResultCellsHelpText"));
 
         var preventChangesBox = new CheckBox
         {
@@ -21430,9 +21471,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetName(errorText, "Scenario Manager validation");
+        AutomationProperties.SetName(errorText, UiText.Get("ScenarioManager_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, FreeXAutomationIdCatalog.ScenarioManager.ErrorText);
-        AutomationProperties.SetHelpText(errorText, "Shows Scenario Manager validation and error messages.");
+        AutomationProperties.SetHelpText(errorText, UiText.Get("ScenarioManager_ValidationHelpText"));
 
         var saveButton = new Button
         {
@@ -21441,9 +21482,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(saveButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.Scenarios.Count == 0);
-        AutomationProperties.SetName(saveButton, "Save/Add");
+        AutomationProperties.SetName(saveButton, UiText.Get("ScenarioManager_SaveAddAutomationName"));
         AutomationProperties.SetAutomationId(saveButton, FreeXAutomationIdCatalog.ScenarioManager.SaveButton);
-        AutomationProperties.SetHelpText(saveButton, "Save the selected cells as a new or updated scenario.");
+        AutomationProperties.SetHelpText(saveButton, UiText.Get("ScenarioManager_SaveAddHelpText"));
 
         var editButton = new Button
         {
@@ -21463,9 +21504,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(showButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth, isDefault: plan.SelectedScenario is not null);
-        AutomationProperties.SetName(showButton, "Show");
+        AutomationProperties.SetName(
+            showButton,
+            UiText.CreateAutomationName(UiText.Get("ScenarioManager_Show")));
         AutomationProperties.SetAutomationId(showButton, FreeXAutomationIdCatalog.ScenarioManager.ShowButton);
-        AutomationProperties.SetHelpText(showButton, "Apply the selected scenario values to the workbook.");
+        AutomationProperties.SetHelpText(showButton, UiText.Get("ScenarioManager_ShowHelpText"));
 
         var deleteButton = new Button
         {
@@ -21474,9 +21517,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(deleteButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
-        AutomationProperties.SetName(deleteButton, "Delete");
+        AutomationProperties.SetName(
+            deleteButton,
+            UiText.CreateAutomationName(UiText.Get("ScenarioManager_Delete")));
         AutomationProperties.SetAutomationId(deleteButton, FreeXAutomationIdCatalog.ScenarioManager.DeleteButton);
-        AutomationProperties.SetHelpText(deleteButton, "Delete the selected scenario.");
+        AutomationProperties.SetHelpText(deleteButton, UiText.Get("ScenarioManager_DeleteTheSelectedScenario"));
 
         var summaryButton = new Button
         {
@@ -21485,9 +21530,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = ScenarioManagerDialogLayout.ActionButtonWidth,
         };
         AvaloniaCompactDialogChrome.ApplyButton(summaryButton, dialogChrome, ScenarioManagerDialogLayout.ActionButtonWidth);
-        AutomationProperties.SetName(summaryButton, "Summary Report");
+        AutomationProperties.SetName(summaryButton, UiText.Get("ScenarioManager_SummaryReportAutomationName"));
         AutomationProperties.SetAutomationId(summaryButton, FreeXAutomationIdCatalog.ScenarioManager.SummaryButton);
-        AutomationProperties.SetHelpText(summaryButton, "Create a scenario summary report sheet.");
+        AutomationProperties.SetHelpText(summaryButton, UiText.Get("ScenarioManager_SummaryReportHelpText"));
 
         var closeButton = new Button
         {
@@ -21498,7 +21543,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AvaloniaCompactDialogChrome.ApplyButton(closeButton, dialogChrome, ScenarioManagerDialogLayout.CloseButtonWidth);
         AutomationProperties.SetName(closeButton, StripDisplayMnemonic(UiText.Get("ScenarioManager_Close")));
         AutomationProperties.SetAutomationId(closeButton, FreeXAutomationIdCatalog.ScenarioManager.CloseButton);
-        AutomationProperties.SetHelpText(closeButton, "Close Scenario Manager.");
+        AutomationProperties.SetHelpText(closeButton, UiText.Get("ScenarioManager_CloseHelpText"));
 
         string? CurrentScenarioName() =>
             scenarioList.SelectedItem is ScenarioManagerDialogScenarioItem item
@@ -21614,7 +21659,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void ReportScenarioManagerFailure(WorkbookCellEditResult result)
         {
-            var message = result.ErrorMessage ?? "Scenario Manager failed.";
+        var message = result.ErrorMessage ?? UiText.Get("MainLoc_ScenarioManagerFailed");
             errorText.Text = message;
             errorText.IsVisible = true;
             ShowEditIssue(message);
@@ -21681,7 +21726,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var result = _session.ExecuteScenarioManagerSavePlan(savePlan, request);
             if (!ApplyScenarioManagerResult(
                     result,
-                    $"Saved scenario '{acceptedName}' ({changingCells.Count} {FormatCountLabel(changingCells.Count, "cell")})"))
+                    UiText.Format(
+                        "ScenarioManager_SavedStatusFormat",
+                        acceptedName,
+                        changingCells.Count,
+                        FormatCountLabel(changingCells.Count, "ScenarioManager_CellSingular", "ScenarioManager_CellPlural"))))
             {
                 var target = action == ScenarioManagerAction.Edit
                     ? nameBox
@@ -21703,7 +21752,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var result = _session.ExecuteScenarioManagerShowPlan(showPlan);
             if (!ApplyScenarioManagerResult(
                     result,
-                    $"Showed scenario '{showPlan.SelectedScenario?.Name ?? scenarioName}'"))
+                    UiText.Format(
+                        "ScenarioManager_ShowedStatusFormat",
+                        showPlan.SelectedScenario?.Name ?? scenarioName)))
                 return;
 
             RefreshDialogPlan(showPlan.SelectedScenario?.Name ?? scenarioName);
@@ -21713,9 +21764,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             var scenarioName = CurrentScenarioName();
             var deletePlan = ScenarioManagerPlanner.CreateDeletePlan(_session.Workbook, scenarioName);
-            var deletedName = deletePlan.SelectedScenario?.Name ?? scenarioName ?? "scenario";
+            var deletedName = deletePlan.SelectedScenario?.Name
+                ?? scenarioName
+                ?? UiText.Get("ScenarioManager_ScenarioFallbackName");
             var result = _session.ExecuteScenarioManagerDeletePlan(deletePlan);
-            if (!ApplyScenarioManagerResult(result, $"Deleted scenario '{deletedName}'"))
+            if (!ApplyScenarioManagerResult(
+                    result,
+                    UiText.Format("ScenarioManager_DeletedStatusFormat", deletedName)))
                 return;
 
             RefreshDialogPlan();
@@ -21752,7 +21807,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var result = _session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan);
             if (!ApplyScenarioManagerResult(
                     result,
-                    $"Created Scenario Summary for {summaryPlan.Scenarios.Count} {FormatCountLabel(summaryPlan.Scenarios.Count, "scenario")}"))
+                    UiText.Format(
+                        "ScenarioManager_CreatedSummaryStatusFormat",
+                        summaryPlan.Scenarios.Count,
+                        FormatCountLabel(
+                            summaryPlan.Scenarios.Count,
+                            "ScenarioManager_ScenarioSingular",
+                            "ScenarioManager_ScenarioPlural"))))
                 return;
 
             RefreshDialogPlan(selectedScenarioName);
@@ -21886,34 +21947,45 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     private static string FormatScenarioManagerSelectionSummary(GridRange range) =>
-        $"Current selection: {FormatRangeReference(range)} ({range.CellCount} {FormatCountLabel(range.CellCount, "cell")})";
+        UiText.Format(
+            "ScenarioManager_CurrentSelectionFormat",
+            FormatRangeReference(range),
+            range.CellCount,
+            FormatCountLabel(range.CellCount, "ScenarioManager_CellSingular", "ScenarioManager_CellPlural"));
 
     private static string FormatScenarioManagerScenarioDetails(ScenarioManagerScenarioChoice? choice)
     {
         if (choice is null)
-            return "No scenario selected.";
+            return UiText.Get("ScenarioManager_NoScenarioSelected");
 
         var comment = string.IsNullOrWhiteSpace(choice.Comment)
-            ? "No comment."
+            ? UiText.Get("ScenarioManager_NoComment")
             : choice.Comment.Trim();
         var flags = new List<string>();
         if (choice.Hidden)
-            flags.Add("hidden");
+            flags.Add(UiText.Get("ScenarioManager_HiddenState"));
         if (choice.Locked)
-            flags.Add("locked");
+            flags.Add(UiText.Get("ScenarioManager_LockedState"));
 
         var flagText = flags.Count == 0
-            ? "Visible, editable."
-            : string.Join(", ", flags.Select(flag => CultureInfo.CurrentCulture.TextInfo.ToTitleCase(flag))) + ".";
+            ? UiText.Get("ScenarioManager_VisibleEditableState")
+            : UiText.Format("ScenarioManager_FlagListFormat", string.Join(UiText.Get("Common_ListSeparator"), flags));
         return string.Join(
             Environment.NewLine,
-            $"{choice.Name}: {choice.ChangingCellCount} {FormatCountLabel(choice.ChangingCellCount, "changing cell")}.",
+            UiText.Format(
+                "ScenarioManager_ChangingCellCountFormat",
+                choice.Name,
+                choice.ChangingCellCount,
+                FormatCountLabel(
+                    choice.ChangingCellCount,
+                    "ScenarioManager_ChangingCellSingular",
+                    "ScenarioManager_ChangingCellPlural")),
             comment,
             flagText);
     }
 
-    private static string FormatCountLabel(long count, string singular) =>
-        count == 1 ? singular : $"{singular}s";
+    private static string FormatCountLabel(long count, string singularKey, string pluralKey) =>
+        UiText.Get(count == 1 ? singularKey : pluralKey);
 
     private static void AddScenarioManagerField(AvaloniaGrid grid, int row, string label, Control control)
     {
@@ -21960,12 +22032,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ExecuteDataTablePlan(plan);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Data Table failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DataTableFailed"));
             return;
         }
 
-        RefreshShell($"Created {FormatDataTableMode(plan)} Data Table for {tableRange}");
+        RefreshShell(UiText.Format(
+            "DataTable_CreatedStatusFormat",
+            FormatDataTableMode(plan),
+            tableRange));
     }
 
     private async Task<DataTablePlan?> ShowDataTableInputDialogAsync(
@@ -22030,9 +22105,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             TextWrapping = TextWrapping.Wrap,
             IsVisible = false,
         };
-        AutomationProperties.SetName(errorText, "Data Table validation");
+        AutomationProperties.SetName(errorText, UiText.Get("DataTable_ValidationAutomationName"));
         AutomationProperties.SetAutomationId(errorText, "DataTableErrorText");
-        AutomationProperties.SetHelpText(errorText, "Shows Data Table readiness and validation messages.");
+        AutomationProperties.SetHelpText(errorText, UiText.Get("DataTable_ValidationHelpText"));
 
         var okButton = new Button
         {
@@ -22042,7 +22117,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             IsDefault = true,
         };
         ApplyDataToolsButtonChrome(okButton, 76, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
+        AutomationProperties.SetName(okButton, UiText.CreateAutomationName(UiText.Get("Common_Ok")));
         AutomationProperties.SetAutomationId(okButton, "DataTableOkButton");
         AutomationProperties.SetHelpText(okButton, UiText.Get("TableLoc_OK"));
 
@@ -22275,12 +22350,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ExecuteForecastSheetPlan(plan);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Forecast Sheet failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ForecastSheetFailed"));
             return;
         }
 
-        RefreshShell($"Created Forecast Sheet from {sourceRange}");
+        RefreshShell(UiText.Format("ForecastSheet_CreatedStatusFormat", sourceRange));
     }
 
     private async Task<ForecastSheetPlan?> ShowForecastSheetInputDialogAsync()
@@ -22592,7 +22667,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ItemsSource = typeChoices,
             MinWidth = 220,
         };
-        AutomationProperties.SetName(typeBox, "Allow");
+        AutomationProperties.SetName(
+            typeBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_Allow")));
         AutomationProperties.SetAutomationId(typeBox, "DataValidationTypeBox");
         ApplyDialogComboBoxChrome(typeBox);
 
@@ -22601,7 +22678,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ItemsSource = operatorChoices,
             MinWidth = 220,
         };
-        AutomationProperties.SetName(operatorBox, "Data");
+        AutomationProperties.SetName(
+            operatorBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_Data")));
         AutomationProperties.SetAutomationId(operatorBox, "DataValidationOperatorBox");
         ApplyDialogComboBoxChrome(operatorBox);
         var operatorField = CreateDataValidationField(UiText.Get("DataValidation_Data"), operatorBox);
@@ -22611,7 +22690,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 240,
         };
-        AutomationProperties.SetName(formula1Box, "Value");
+        AutomationProperties.SetName(
+            formula1Box,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_Value")));
         AutomationProperties.SetAutomationId(formula1Box, "DataValidationFormula1Box");
         ApplyDialogTextBoxChrome(formula1Box);
         var formula1Field = CreateDataValidationField(formula1Label, formula1Box);
@@ -22621,7 +22702,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 240,
         };
-        AutomationProperties.SetName(formula2Box, "Maximum");
+        AutomationProperties.SetName(
+            formula2Box,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_Maximum")));
         AutomationProperties.SetAutomationId(formula2Box, "DataValidationFormula2Box");
         ApplyDialogTextBoxChrome(formula2Box);
         var formula2Field = CreateDataValidationField(formula2Label, formula2Box);
@@ -22658,7 +22741,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 240,
         };
-        AutomationProperties.SetName(promptTitleBox, "Input title");
+        AutomationProperties.SetName(
+            promptTitleBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_InputTitle")));
         AutomationProperties.SetAutomationId(promptTitleBox, "DataValidationPromptTitleBox");
         ApplyDialogTextBoxChrome(promptTitleBox);
 
@@ -22669,7 +22754,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 240,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(promptMessageBox, "Input message");
+        AutomationProperties.SetName(
+            promptMessageBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_InputMessage2")));
         AutomationProperties.SetAutomationId(promptMessageBox, "DataValidationPromptMessageBox");
         promptMessageBox.FontSize = 12;
         promptMessageBox.FontFamily = FormulaBarFontFamily;
@@ -22688,7 +22775,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ItemsSource = alertStyleChoices,
             MinWidth = 220,
         };
-        AutomationProperties.SetName(alertStyleBox, "Style");
+        AutomationProperties.SetName(
+            alertStyleBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_AlertStyle")));
         AutomationProperties.SetAutomationId(alertStyleBox, "DataValidationAlertStyleBox");
         ApplyDialogComboBoxChrome(alertStyleBox);
 
@@ -22696,7 +22785,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinWidth = 240,
         };
-        AutomationProperties.SetName(errorTitleBox, "Error title");
+        AutomationProperties.SetName(
+            errorTitleBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_ErrorTitle")));
         AutomationProperties.SetAutomationId(errorTitleBox, "DataValidationErrorTitleBox");
         ApplyDialogTextBoxChrome(errorTitleBox);
 
@@ -22707,7 +22798,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 240,
             TextWrapping = TextWrapping.Wrap,
         };
-        AutomationProperties.SetName(errorMessageBox, "Error message");
+        AutomationProperties.SetName(
+            errorMessageBox,
+            UiText.CreateAutomationName(UiText.Get("DataValidation_ErrorMessage")));
         AutomationProperties.SetAutomationId(errorMessageBox, "DataValidationErrorMessageBox");
         errorMessageBox.FontSize = 12;
         errorMessageBox.FontFamily = FormulaBarFontFamily;
@@ -23246,7 +23339,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Edit history unavailable.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_EditHistoryUnavailable"));
             return;
         }
 
@@ -23301,7 +23394,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 cutResult.ClipboardMarker));
         if (write.Status == PlatformClipboardWriteStatus.Unavailable)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
         if (!write.IsSuccess)
@@ -23362,7 +23455,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var write = await _platformClipboard.WriteAsync(clipboardContent);
         if (write.Status == PlatformClipboardWriteStatus.Unavailable)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
         if (!write.IsSuccess)
@@ -23494,7 +23587,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textRead = await ReadClipboardTextForPastePlanningAsync();
         if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
@@ -23520,7 +23613,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             clipboardMarker: textRead.Marker);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteFailed"));
             return;
         }
 
@@ -23657,7 +23750,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textRead = await ReadClipboardTextForPastePlanningAsync();
         if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
@@ -23669,7 +23762,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             : _session.PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed, html: html);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Paste Special failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_PasteSpecialFailed"));
             return;
         }
 
@@ -23696,7 +23789,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textRead = await ReadClipboardTextAsync();
         if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
@@ -23724,7 +23817,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textRead = await ReadClipboardTextAsync();
         if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
@@ -23752,7 +23845,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textRead = await ReadClipboardTextAsync();
         if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
@@ -23780,7 +23873,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textRead = await ReadClipboardTextAsync();
         if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
@@ -23808,7 +23901,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textRead = await ReadClipboardTextForPastePlanningAsync();
         if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
@@ -23837,7 +23930,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var textRead = await ReadClipboardTextAsync();
         if (!textRead.Available)
         {
-            ShowEditIssue("Clipboard unavailable on this platform.");
+            ShowEditIssue(UiText.Get("Clipboard_UnavailableOnPlatform"));
             return;
         }
 
@@ -23866,7 +23959,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeContents();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear Contents failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearContentsFailed"));
             return;
         }
 
@@ -23875,7 +23968,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // but this shell's own marching-ants overlay is separate UI-only state RefreshShell does not
         // touch -- clear it here too, matching the WPF host's TryExecuteEditCells-routed Clear Contents.
         SetClipboardMarquee(null, isCut: false);
-        RefreshShell($"Cleared {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedRangeStatusFormat", rangeReference));
     }
 
     private void ClearSelectedRangeAll()
@@ -23890,7 +23983,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeAll();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear All failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearAllFailed"));
             return;
         }
 
@@ -23909,7 +24002,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeFormats();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear Formats failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearFormatsFailed"));
             return;
         }
 
@@ -23928,7 +24021,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeComments();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear Comments and Notes failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearCommentsNotesFailed"));
             return;
         }
 
@@ -23947,7 +24040,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeHyperlinks();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Clear Hyperlinks failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ClearHyperlinksFailed"));
             return;
         }
 
@@ -23972,7 +24065,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.RemoveSelectedRangeHyperlinks();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Remove Hyperlinks failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_RemoveHyperlinksFailed"));
             return;
         }
 
@@ -24077,12 +24170,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.DecreaseSelectedRangeIndent();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Decrease Indent failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DecreaseIndentFailed"));
             return;
         }
 
-        RefreshShell($"Decreased indent for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_DecreasedIndentStatusFormat", rangeReference));
     }
 
     private void IncreaseSelectedRangeIndent()
@@ -24097,12 +24190,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.IncreaseSelectedRangeIndent();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Increase Indent failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_IncreaseIndentFailed"));
             return;
         }
 
-        RefreshShell($"Increased indent for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_IncreasedIndentStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeBold(bool enabled)
@@ -24118,11 +24211,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _boldButton.IsChecked = _session.IsSelectedRangeStartBold;
-            ShowEditIssue(result.ErrorMessage ?? "Bold failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_BoldFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Bolded" : "Unbolded")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_BoldedStatusFormat" : "MainLoc_UnboldedStatusFormat",
+            rangeReference));
     }
 
     /// <summary>
@@ -24156,11 +24251,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.RepeatLastAction();
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Repeat failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_RepeatFailed"));
             return;
         }
 
-        RefreshShell($"Repeated last action in {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_RepeatedLastActionStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeItalic(bool enabled)
@@ -24176,11 +24271,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _italicButton.IsChecked = _session.IsSelectedRangeStartItalic;
-            ShowEditIssue(result.ErrorMessage ?? "Italic failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ItalicFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Italicized" : "Unitalicized")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_ItalicizedStatusFormat" : "MainLoc_UnitalicizedStatusFormat",
+            rangeReference));
     }
 
     private void ApplySelectedRangeUnderline(bool enabled)
@@ -24196,11 +24293,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _underlineButton.IsChecked = _session.IsSelectedRangeStartUnderline;
-            ShowEditIssue(result.ErrorMessage ?? "Underline failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_UnderlineFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Underlined" : "Removed underline from")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_UnderlinedStatusFormat" : "MainLoc_RemovedUnderlineStatusFormat",
+            rangeReference));
     }
 
     private void ApplySelectedRangeDoubleUnderline(bool enabled)
@@ -24216,11 +24315,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _doubleUnderlineButton.IsChecked = _session.IsSelectedRangeStartDoubleUnderline;
-            ShowEditIssue(result.ErrorMessage ?? "Double Underline failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DoubleUnderlineFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Double underlined" : "Removed double underline from")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_DoubleUnderlinedStatusFormat" : "MainLoc_RemovedDoubleUnderlineStatusFormat",
+            rangeReference));
     }
 
     private void ApplySelectedRangeStrikethrough(bool enabled)
@@ -24236,11 +24337,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _strikethroughButton.IsChecked = _session.IsSelectedRangeStartStrikethrough;
-            ShowEditIssue(result.ErrorMessage ?? "Strikethrough failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_StrikethroughFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Struck through" : "Removed strikethrough from")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_StruckThroughStatusFormat" : "MainLoc_RemovedStrikethroughStatusFormat",
+            rangeReference));
     }
 
     /// <summary>
@@ -24263,7 +24366,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeFontSize(size);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SetFontSizeFailed"));
             return;
         }
@@ -24290,7 +24393,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeFontName(fontName);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_SetFontFailed"));
             return;
         }
@@ -24310,12 +24413,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.IncreaseSelectedRangeFontSize();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Increase Font Size failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_IncreaseFontSizeFailed"));
             return;
         }
 
-        RefreshShell($"Increased font size for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_IncreasedFontSizeStatusFormat", rangeReference));
     }
 
     private void DecreaseSelectedRangeFontSize()
@@ -24330,12 +24433,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.DecreaseSelectedRangeFontSize();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Decrease Font Size failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DecreaseFontSizeFailed"));
             return;
         }
 
-        RefreshShell($"Decreased font size for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_DecreasedFontSizeStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeFillColor(CellColor fillColor)
@@ -24350,12 +24453,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeFillColor(fillColor);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Fill Color failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FillColorFailed"));
             return;
         }
 
-        RefreshShell($"Applied fill color to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedFillColorStatusFormat", rangeReference));
     }
 
     private void ClearSelectedRangeFill()
@@ -24370,12 +24473,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.ClearSelectedRangeFill();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "No Fill failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_NoFillFailed"));
             return;
         }
 
-        RefreshShell($"Cleared fill from {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ClearedFillStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeFontColor(CellColor fontColor)
@@ -24390,12 +24493,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeFontColor(fontColor);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Font Color failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_FontColorFailed"));
             return;
         }
 
-        RefreshShell($"Applied font color to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedFontColorStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeCellStylePreset(CellStylePreset preset)
@@ -24411,12 +24514,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeCellStylePreset(preset);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Cell Style failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_CellStyleFailed"));
             return;
         }
 
-        RefreshShell($"Applied {presetName} style to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedStyleStatusFormat", presetName, rangeReference));
     }
 
     private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)
@@ -24436,12 +24539,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _borderPickerColor);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Borders failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_BordersFailed"));
             return;
         }
 
-        RefreshShell($"Applied {presetName} to {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_AppliedPresetStatusFormat", presetName, rangeReference));
     }
 
     private async Task MergeAndCenterSelectedRangeAsync()
@@ -24507,7 +24610,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 await ShowMergeCellsContentWarningDialogAsync(contentPlan));
             if (!decision.ShouldProceed)
             {
-                RefreshShell(_statusText.Text ?? "Ready");
+                RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
                 return;
             }
 
@@ -24517,8 +24620,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.MergeAndCenterSelectedRange(contentResolution);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Merge & Center failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_MergeCenterFailed"));
             return;
         }
 
@@ -24674,17 +24777,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.UnmergeSelectedRange();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Unmerge Cells failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_UnmergeCellsFailed"));
             return;
         }
 
-        RefreshShell($"Unmerged cells in {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_UnmergedCellsStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeCurrencyFormat()
     {
-        ApplySelectedRangeNumberFormat(CurrencyNumberFormat, "Applied currency format to", "Currency format failed.");
+        ApplySelectedRangeNumberFormat(
+            CurrencyNumberFormat,
+            UiText.Get("NumberFormat_CurrencySuccessAction"),
+            UiText.Get("NumberFormat_CurrencyFailed"));
     }
 
     /// <summary>
@@ -24694,17 +24800,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void ApplySelectedRangeAccountingFormat(string symbol)
     {
         var format = FormatCellsNumberFormatPlanner.BuildAccountingFormatFor(2, symbol);
-        ApplySelectedRangeNumberFormat(format, "Applied accounting format to", "Accounting format failed.");
+        ApplySelectedRangeNumberFormat(
+            format,
+            UiText.Get("NumberFormat_AccountingSuccessAction"),
+            UiText.Get("NumberFormat_AccountingFailed"));
     }
 
     private void ApplySelectedRangePercentFormat()
     {
-        ApplySelectedRangeNumberFormat(PercentNumberFormat, "Applied percent format to", "Percent format failed.");
+        ApplySelectedRangeNumberFormat(
+            PercentNumberFormat,
+            UiText.Get("NumberFormat_PercentSuccessAction"),
+            UiText.Get("NumberFormat_PercentFailed"));
     }
 
     private void ApplySelectedRangeCommaStyle()
     {
-        ApplySelectedRangeNumberFormat(CommaNumberFormat, "Applied comma style to", "Comma style failed.");
+        ApplySelectedRangeNumberFormat(
+            CommaNumberFormat,
+            UiText.Get("NumberFormat_CommaSuccessAction"),
+            UiText.Get("NumberFormat_CommaFailed"));
     }
 
     /// <summary>
@@ -24717,14 +24832,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var (successAction, failureMessage) = shortcut switch
         {
-            NumberFormatShortcut.General => ("Applied General format to", "Number format failed."),
-            NumberFormatShortcut.Number => ("Applied Number format to", "Number format failed."),
-            NumberFormatShortcut.Currency => ("Applied currency format to", "Currency format failed."),
-            NumberFormatShortcut.Percentage => ("Applied percent format to", "Percent format failed."),
-            NumberFormatShortcut.Date => ("Applied Date format to", "Number format failed."),
-            NumberFormatShortcut.Time => ("Applied Time format to", "Number format failed."),
-            NumberFormatShortcut.Scientific => ("Applied Scientific format to", "Number format failed."),
-            _ => ("Applied Number format to", "Number format failed."),
+            NumberFormatShortcut.General => (UiText.Get("NumberFormat_GeneralSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            NumberFormatShortcut.Number => (UiText.Get("NumberFormat_NumberSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            NumberFormatShortcut.Currency => (UiText.Get("NumberFormat_CurrencySuccessAction"), UiText.Get("NumberFormat_CurrencyFailed")),
+            NumberFormatShortcut.Percentage => (UiText.Get("NumberFormat_PercentSuccessAction"), UiText.Get("NumberFormat_PercentFailed")),
+            NumberFormatShortcut.Date => (UiText.Get("NumberFormat_DateSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            NumberFormatShortcut.Time => (UiText.Get("NumberFormat_TimeSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            NumberFormatShortcut.Scientific => (UiText.Get("NumberFormat_ScientificSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
+            _ => (UiText.Get("NumberFormat_NumberSuccessAction"), UiText.Get("NumberFormat_NumberFailed")),
         };
         ApplySelectedRangeNumberFormat(NumberFormatShortcutService.GetFormat(shortcut), successAction, failureMessage);
     }
@@ -24743,7 +24858,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         if (option.Code is { } numberFormat)
-            ApplySelectedRangeNumberFormat(numberFormat, $"Applied {option.Label} format to", "Number format failed.");
+            ApplySelectedRangeNumberFormat(
+                numberFormat,
+                UiText.Format("NumberFormat_AppliedNamedFormatSuccessAction", option.Label),
+                UiText.Get("NumberFormat_NumberFailed"));
     }
 
     private void ApplySelectedRangeNumberFormat(string numberFormat, string successAction, string failureMessage)
@@ -24758,12 +24876,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeNumberFormat(numberFormat);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? failureMessage);
             return;
         }
 
-        RefreshShell($"{successAction} {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ActionRangeStatusFormat", successAction, rangeReference));
     }
 
     private void ApplySelectedRangeTextRotation(int textRotation, string successAction, string failureMessage)
@@ -24778,12 +24896,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeTextRotation(textRotation);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? failureMessage);
             return;
         }
 
-        RefreshShell($"{successAction} {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_ActionRangeStatusFormat", successAction, rangeReference));
     }
 
     private void IncreaseSelectedRangeDecimalPlaces()
@@ -24798,12 +24916,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.IncreaseSelectedRangeDecimalPlaces();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Increase Decimal failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_IncreaseDecimalFailed"));
             return;
         }
 
-        RefreshShell($"Increased decimals for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_IncreasedDecimalsStatusFormat", rangeReference));
     }
 
     private void DecreaseSelectedRangeDecimalPlaces()
@@ -24818,12 +24936,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.DecreaseSelectedRangeDecimalPlaces();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Decrease Decimal failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_DecreaseDecimalFailed"));
             return;
         }
 
-        RefreshShell($"Decreased decimals for {rangeReference}");
+        RefreshShell(UiText.Format("MainLoc_DecreasedDecimalsStatusFormat", rangeReference));
     }
 
     private void ApplySelectedRangeWrapText(bool enabled)
@@ -24839,32 +24957,46 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!result.Success)
         {
             _wrapTextButton.IsChecked = _session.IsSelectedRangeStartWrapText;
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Wrap Text failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_WrapTextFailed"));
             return;
         }
 
-        RefreshShell($"{(enabled ? "Wrapped" : "Unwrapped")} {rangeReference}");
+        RefreshShell(UiText.Format(
+            enabled ? "MainLoc_WrappedStatusFormat" : "MainLoc_UnwrappedStatusFormat",
+            rangeReference));
     }
 
     private void FreezePanesAtActiveCell()
     {
-        ApplyFreezePaneCommand(_session.FreezePanesAtActiveCell, "Froze panes at", "Freeze Panes failed.");
+        ApplyFreezePaneCommand(
+            _session.FreezePanesAtActiveCell,
+            UiText.Get("FreezePanes_FrozePanesSuccessAction"),
+            UiText.Get("FreezePanes_FreezePanesFailed"));
     }
 
     private void FreezeTopRow()
     {
-        ApplyFreezePaneCommand(_session.FreezeTopRow, "Froze top row for", "Freeze Top Row failed.");
+        ApplyFreezePaneCommand(
+            _session.FreezeTopRow,
+            UiText.Get("FreezePanes_FrozeTopRowSuccessAction"),
+            UiText.Get("FreezePanes_FreezeTopRowFailed"));
     }
 
     private void FreezeFirstColumn()
     {
-        ApplyFreezePaneCommand(_session.FreezeFirstColumn, "Froze first column for", "Freeze First Column failed.");
+        ApplyFreezePaneCommand(
+            _session.FreezeFirstColumn,
+            UiText.Get("FreezePanes_FrozeFirstColumnSuccessAction"),
+            UiText.Get("FreezePanes_FreezeFirstColumnFailed"));
     }
 
     private void UnfreezePanes()
     {
-        ApplyFreezePaneCommand(_session.UnfreezePanes, "Unfroze panes for", "Unfreeze Panes failed.");
+        ApplyFreezePaneCommand(
+            _session.UnfreezePanes,
+            UiText.Get("FreezePanes_UnfrozePanesSuccessAction"),
+            UiText.Get("FreezePanes_UnfreezePanesFailed"));
     }
 
     private void ApplyFreezePaneCommand(Func<WorkbookCellEditResult> execute, string successAction, string failureMessage)
@@ -24879,12 +25011,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = execute();
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
             ShowEditIssue(result.ErrorMessage ?? failureMessage);
             return;
         }
 
-        RefreshShell($"{successAction} {sheetName}");
+        RefreshShell(UiText.Format("MainLoc_ActionRangeStatusFormat", successAction, sheetName));
     }
 
     private void ApplySelectedRangeHorizontalAlignment(CellHAlign alignment)
@@ -24899,8 +25031,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeHorizontalAlignment(alignment);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Alignment failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_AlignmentFailed"));
             return;
         }
 
@@ -24919,8 +25051,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var result = _session.SetSelectedRangeVerticalAlignment(alignment);
         if (!result.Success)
         {
-            RefreshShell(_statusText.Text ?? "Ready");
-            ShowEditIssue(result.ErrorMessage ?? "Vertical alignment failed.");
+            RefreshShell(_statusText.Text ?? UiText.Get("MainLoc_Ready"));
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_VerticalAlignmentFailed"));
             return;
         }
 
@@ -24954,7 +25086,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         catch (Exception ex)
         {
-            ShowOpenIssue($"Open failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("File_OpenFailedFormat", ex.Message));
         }
     }
 
@@ -25396,7 +25528,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             if (e.Key == Key.F1)
             {
                 e.Handled = true;
-                await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
+                await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, UiText.Get("MainWindow_Content_HelpOnline"));
                 return;
             }
 
@@ -25439,7 +25571,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 e.Handled = true;
                 SetClipboardMarquee(null, isCut: false);
                 _drawingObjectClipboard.Clear();
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 return;
             }
 
@@ -25452,7 +25584,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 e.Handled = true;
                 ClearSelectedDrawingObject();
-                RefreshShell("Ready");
+                RefreshShell(UiText.Get("MainLoc_Ready"));
                 return;
             }
 
@@ -25579,7 +25711,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (!TryCommitPendingFormulaEdit())
             return true;
 
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
         if (_activeDataValidationDropdown is null)
             return false;
 
@@ -25668,7 +25800,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        RefreshShell($"Picked {selected} for {FormatCellReference(address)}");
+        RefreshShell(UiText.Format(
+            "DataValidation_PickedValueStatusFormat",
+            selected,
+            FormatCellReference(address)));
     }
 
     private void CycleShellFocus(bool reverse)
@@ -25812,7 +25947,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
         {
             e.Cancel = true;
-            ShowOpenIssue("Finish opening or saving before closing FreeX.");
+            ShowOpenIssue(UiText.Get("File_FinishOperationBeforeClosing"));
             return;
         }
 
@@ -25843,7 +25978,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         catch (Exception ex)
         {
-            ShowOpenIssue($"Close failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("File_CloseFailedFormat", ex.Message));
         }
     }
 
@@ -25851,7 +25986,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (_isOpening || _isSaving)
         {
-            ShowOpenIssue("Finish opening or saving before quitting FreeX.");
+            ShowOpenIssue(UiText.Get("File_FinishOperationBeforeQuitting"));
             return;
         }
 
@@ -25907,7 +26042,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             _endMode = nextEndMode;
             e.Handled = true;
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
             return;
         }
 
@@ -25946,7 +26081,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _session.MoveActiveCellWithinSelection(cycle.Target);
             ClearSelectedDrawingObject();
             e.Handled = true;
-            RefreshShell("Ready");
+            RefreshShell(UiText.Get("MainLoc_Ready"));
             return;
         }
 
@@ -26027,7 +26162,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         MoveOrExtendActiveCellTo(navigationTarget, extendSelection && !moveOnly);
         ClearSelectedDrawingObject();
         e.Handled = true;
-        RefreshShell("Ready");
+        RefreshShell(UiText.Get("MainLoc_Ready"));
     }
 
     private CellAddress OffsetAddress(CellAddress current, int rowDelta, int colDelta) =>
@@ -26312,7 +26447,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var path = pickedStorageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowOpenIssue("Open requires a local file path.");
+            ShowOpenIssue(UiText.Get("File_OpenRequiresLocalPath"));
                     return;
                 }
 
@@ -26535,7 +26670,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // session was never replaced (ReplaceSession only runs after LoadAsync/the
             // ThrowIfCancellationRequested above both return normally), so there is nothing to roll
             // back -- just report the abort, matching the WPF host's equivalent catch.
-            ShowOpenIssue("Open canceled.");
+                ShowOpenIssue(UiText.Get("File_OpenCanceledMessage"));
         }
         catch (Exception ex)
         {
@@ -26548,7 +26683,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // propagates out of an `async void` event handler (OpenButton_Click / the Open Recent
             // menu item's click handler), which is fatal and crashes the whole app instead of
             // showing "Open failed: ..." (R86-services-file-format-detect-5-1).
-            ShowOpenIssue($"Open failed: {ex.Message}");
+            ShowOpenIssue(UiText.Format("File_OpenFailedFormat", ex.Message));
         }
         finally
         {
@@ -26868,7 +27003,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 var path = pickedStorageFile.LocalPath;
                 if (string.IsNullOrWhiteSpace(path))
                 {
-                    ShowSaveIssue("Save As requires a local file path.");
+            ShowSaveIssue(UiText.Get("File_SaveAsRequiresLocalPath"));
                     return false;
                 }
 
@@ -26881,7 +27016,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                         pathPlan.Path,
                         NormalizedOverwriteTargetKind.Workbook))
                 {
-                    ShowSaveIssue("Save canceled.");
+                ShowSaveIssue(UiText.Get("File_SaveCanceledMessage"));
                     return false;
                 }
 
@@ -27340,13 +27475,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
             if (workflowResult.Outcome == WorkbookFileOperationOutcome.Canceled)
             {
-                ShowSaveIssue("Save canceled.");
+                ShowSaveIssue(UiText.Get("File_SaveCanceledMessage"));
                 return false;
             }
 
             if (workflowResult.Outcome == WorkbookFileOperationOutcome.Failed)
             {
-                ShowSaveIssue($"Save failed: {workflowResult.Exception?.Message ?? "Unknown error."}");
+                ShowSaveIssue(UiText.Format(
+                    "File_SaveFailedFormat",
+                    workflowResult.Exception?.Message ?? UiText.Get("Common_UnknownError")));
                 return false;
             }
 
@@ -27369,7 +27506,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         catch (Exception ex)
         {
-            ShowSaveIssue($"Save failed: {ex.Message}");
+            ShowSaveIssue(UiText.Format("File_SaveFailedFormat", ex.Message));
             return false;
         }
         finally

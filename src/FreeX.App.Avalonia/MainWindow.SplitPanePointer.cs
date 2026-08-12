@@ -242,7 +242,7 @@ public partial class MainWindow
             RefreshShell(UiText.Get("MainLoc_Ready"));
         }
         else
-            ShowEditIssue(result.ErrorMessage ?? "Could not move split pane.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("SplitPane_MoveFailed"));
     }
 
     private void ApplySplitPaneScrollbarTrackTarget(

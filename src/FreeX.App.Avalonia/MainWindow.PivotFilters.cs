@@ -613,16 +613,16 @@ public sealed partial class MainWindow
         kindBox.SelectedIndex = PivotFieldFilterPlanner.FindLabelKindIndex(existing?.Kind ?? PivotLabelFilterKind.Equals);
         ApplyPivotComboBoxChrome(kindBox);
         AutomationProperties.SetAutomationId(kindBox, "PivotLabelFilterKindBox");
-        AutomationProperties.SetName(kindBox, "Label filter kind");
+        AutomationProperties.SetName(kindBox, UiText.Get("PivotFieldFilter_LabelFilterKindAutomationName"));
 
         var value1 = new TextBox { MinWidth = 200, Text = existing?.Value ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_ValuePlaceholder") };
         ApplyPivotTextBoxChrome(value1);
         AutomationProperties.SetAutomationId(value1, "PivotLabelFilterValueBox");
-        AutomationProperties.SetName(value1, "Value");
+        AutomationProperties.SetName(value1, UiText.Get("NamedRange_Value"));
         var value2 = new TextBox { MinWidth = 200, Text = existing?.Value2 ?? string.Empty, PlaceholderText = UiText.Get("PivotLoc_SecondValuePlaceholder") };
         ApplyPivotTextBoxChrome(value2);
         AutomationProperties.SetAutomationId(value2, "PivotLabelFilterValue2Box");
-        AutomationProperties.SetName(value2, "Second value");
+        AutomationProperties.SetName(value2, UiText.Get("PivotFieldFilter_SecondValueAutomationName"));
 
         void SyncSecond()
         {
@@ -734,7 +734,7 @@ public sealed partial class MainWindow
         kindBox.SelectedIndex = PivotFieldFilterPlanner.FindValueKindIndex(existing?.Kind ?? PivotValueFilterKind.GreaterThan);
         ApplyPivotComboBoxChrome(kindBox);
         AutomationProperties.SetAutomationId(kindBox, "PivotValueFilterKindBox");
-        AutomationProperties.SetName(kindBox, "Value filter kind");
+        AutomationProperties.SetName(kindBox, UiText.Get("PivotFieldFilter_ValueFilterKindAutomationName"));
 
         var dataFieldBox = new ComboBox { MinWidth = 200 };
         for (var index = 0; index < pivot.DataFields.Count; index++)
@@ -742,7 +742,7 @@ public sealed partial class MainWindow
         dataFieldBox.SelectedIndex = PivotFieldFilterPlanner.InitialDataFieldIndex(existing, pivot.DataFields.Count);
         ApplyPivotComboBoxChrome(dataFieldBox);
         AutomationProperties.SetAutomationId(dataFieldBox, "PivotValueFilterDataFieldBox");
-        AutomationProperties.SetName(dataFieldBox, "Summarize by");
+        AutomationProperties.SetName(dataFieldBox, UiText.Get("PivotValueFieldSettings_SummarizeByAutomationName"));
 
         var primary = new TextBox
         {
@@ -752,7 +752,7 @@ public sealed partial class MainWindow
         };
         ApplyPivotTextBoxChrome(primary);
         AutomationProperties.SetAutomationId(primary, "PivotValueFilterPrimaryBox");
-        AutomationProperties.SetName(primary, "Count or value");
+        AutomationProperties.SetName(primary, UiText.Get("PivotFieldFilter_CountOrValueAutomationName"));
         var secondary = new TextBox
         {
             MinWidth = 200,
@@ -761,7 +761,7 @@ public sealed partial class MainWindow
         };
         ApplyPivotTextBoxChrome(secondary);
         AutomationProperties.SetAutomationId(secondary, "PivotValueFilterSecondaryBox");
-        AutomationProperties.SetName(secondary, "Second value");
+        AutomationProperties.SetName(secondary, UiText.Get("PivotFieldFilter_SecondValueAutomationName"));
 
         void SyncInputs()
         {

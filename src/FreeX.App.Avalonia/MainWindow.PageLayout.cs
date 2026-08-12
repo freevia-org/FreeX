@@ -85,7 +85,7 @@ public sealed partial class MainWindow
 
         var plan = CreatePageLayoutCommandSession().PlanHeaderFooter(
             edited,
-            _statusText.Text ?? "Ready");
+            _statusText.Text ?? UiText.Get("MainLoc_Ready"));
         var result = _session.ExecuteReviewCommand(plan.Command);
         var status = PageLayoutStatusPlanner.ResolveCommandStatus(
             plan,

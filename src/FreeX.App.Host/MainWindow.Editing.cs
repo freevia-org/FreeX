@@ -1553,8 +1553,8 @@ public partial class MainWindow
         {
             case { Kind: WorkbookCellEditFailureKind.InvalidEntrySyntax }:
                 ShowOwnedMessage(
-                    "Microsoft Excel found an error in this formula. Please check the formula and try again.",
-                    "Microsoft Excel",
+                    UiText.Get("CellEdit_FormulaErrorMessage"),
+                    UiText.Get("CellEdit_FormulaErrorTitle"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
                 return;
@@ -1565,8 +1565,8 @@ public partial class MainWindow
                 AlertStyle: { } alertStyle
             } blocked:
                 ShowOwnedMessage(
-                    result.ErrorMessage ?? "The value is not valid.",
-                    blocked.Title ?? "Validation Error",
+                    result.ErrorMessage ?? UiText.Get("CellEdit_InvalidValueMessage"),
+                    blocked.Title ?? UiText.Get("CellEdit_ValidationErrorTitle"),
                     MessageBoxButton.OK,
                     ToDataValidationMessageBoxImage(alertStyle));
                 RefreshValidationDropdown();

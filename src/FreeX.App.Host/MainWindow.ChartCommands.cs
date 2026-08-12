@@ -119,7 +119,7 @@ public partial class MainWindow
                     _currentSheetId,
                     chart,
                     dialog.Result.ChartType),
-                command.Label))
+                ChartWorkflowCaption(command)))
             return;
 
         UpdateViewport();
@@ -162,7 +162,7 @@ public partial class MainWindow
                     dataRange,
                     dialog.Result.FirstColumnIsCategories,
                     dialog.Result.SwitchRowColumn),
-                command.Label))
+                ChartWorkflowCaption(command)))
             return;
 
         // R92-app-chart-data-edit-5-1: replay each Remove Series click, in the SAME order the user
@@ -179,7 +179,7 @@ public partial class MainWindow
             {
                 TryExecuteCommand(
                     ChartCommandWorkflowPlanner.BuildRemoveSeriesCommand(_currentSheetId, chart, seriesIndex),
-                    command.Label);
+                    ChartWorkflowCaption(command));
             }
         }
 
@@ -195,7 +195,7 @@ public partial class MainWindow
                     chart,
                     dialog.Result.BlankDisplayMode,
                     dialog.Result.ShowDataInHiddenRowsAndColumns),
-                command.Label);
+                ChartWorkflowCaption(command));
         }
 
         UpdateViewport();
@@ -235,11 +235,11 @@ public partial class MainWindow
             dialog.Result);
         if (!movePlan.CanExecute)
         {
-            ShowCommandError(new CommandOutcome(false, movePlan.Error), command.Label);
+            ShowCommandError(new CommandOutcome(false, movePlan.Error), ChartWorkflowCaption(command));
             return;
         }
 
-        if (!TryExecuteCommand(movePlan.Command!, command.Label))
+        if (!TryExecuteCommand(movePlan.Command!, ChartWorkflowCaption(command)))
             return;
 
         var targetSheet = movePlan.ExistingTargetSheetId is { } targetSheetId
@@ -814,7 +814,7 @@ public partial class MainWindow
             ? null
             : UiText.Get(command.HostUnsupportedMessageResourceKey);
         if (!TryExecuteRepeatableChartQuickCommand(
-                command.Label,
+                UiText.Get(command.TitleResourceKey),
                 UiText.Get(command.HostMissingSelectionMessageResourceKey),
                 unsupportedMessage,
                 command))

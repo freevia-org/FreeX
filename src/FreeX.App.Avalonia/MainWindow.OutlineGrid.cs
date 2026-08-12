@@ -263,8 +263,8 @@ public sealed partial class MainWindow
             group.Level,
             !group.IsCollapsed);
         RefreshShell(result.Success
-            ? (!group.IsCollapsed ? "Collapsed row outline group." : "Expanded row outline group.")
-            : result.ErrorMessage ?? "Could not update the row outline group.");
+            ? UiText.Get(!group.IsCollapsed ? "Outline_RowGroupCollapsedStatus" : "Outline_RowGroupExpandedStatus")
+            : result.ErrorMessage ?? UiText.Get("Outline_UpdateRowGroupFailed"));
     }
 
     private void ToggleColumnOutlineGroup(OutlineGroupRange group)
@@ -276,8 +276,8 @@ public sealed partial class MainWindow
             group.Level,
             !group.IsCollapsed);
         RefreshShell(result.Success
-            ? (!group.IsCollapsed ? "Collapsed column outline group." : "Expanded column outline group.")
-            : result.ErrorMessage ?? "Could not update the column outline group.");
+            ? UiText.Get(!group.IsCollapsed ? "Outline_ColumnGroupCollapsedStatus" : "Outline_ColumnGroupExpandedStatus")
+            : result.ErrorMessage ?? UiText.Get("Outline_UpdateColumnGroupFailed"));
     }
 
     private static void AddRowOutlineBracket(Canvas overlay, double x, double top, double bottom, double zoomFactor)

@@ -181,7 +181,7 @@ public sealed partial class MainWindow
         var result = _session.MoveActiveSheetTo(toIndex);
         if (!result.Success)
         {
-            ShowEditIssue(result.ErrorMessage ?? "Move Sheet failed.");
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("ShellLoc_MoveSheetFailed"));
             return;
         }
 

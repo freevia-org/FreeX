@@ -7,7 +7,53 @@ public sealed record ChartQuickCommandDescriptor(
     string Label,
     string HostMissingSelectionMessageResourceKey,
     string? HostUnsupportedMessageResourceKey = null,
-    string? UnsupportedStatusResourceKey = null);
+    string? UnsupportedStatusResourceKey = null)
+{
+    public string TitleResourceKey => Command switch
+    {
+        ChartQuickCommand.FirstSliceAngle => "MainWindow_TooltipTitle_FirstSliceAngle",
+        ChartQuickCommand.DoughnutHoleSize => "MainWindow_TooltipTitle_DoughnutHoleSize",
+        ChartQuickCommand.ExplodedSlice => "MainWindow_TooltipTitle_ExplodeSlice",
+        ChartQuickCommand.DataLabelCategoryName => "MainWindow_TooltipTitle_CategoryName",
+        ChartQuickCommand.DataLabelSeriesName => "MainWindow_TooltipTitle_SeriesName",
+        ChartQuickCommand.DataLabelPercentage => "MainWindow_TooltipTitle_Percentage",
+        ChartQuickCommand.DataLabelSeparator => "MainWindow_TooltipTitle_LabelSeparator",
+        ChartQuickCommand.DataLabelNumberFormat => "MainWindow_TooltipTitle_LabelNumberFormat",
+        ChartQuickCommand.DataLabelCallout => "MainWindow_TooltipTitle_DataCallout",
+        ChartQuickCommand.DataLabelFill => "MainWindow_TooltipTitle_DataLabelFill",
+        ChartQuickCommand.DataLabelTextColor => "MainWindow_TooltipTitle_DataLabelText",
+        ChartQuickCommand.DataLabelBorder => "MainWindow_TooltipTitle_DataLabelBorder",
+        ChartQuickCommand.DataLabelFontSize => "MainWindow_TooltipTitle_DataLabelSize",
+        ChartQuickCommand.DataLabelAngle => "MainWindow_TooltipTitle_DataLabelAngle",
+        ChartQuickCommand.PointDataLabel => "MainWindow_TooltipTitle_FormatDataPointLabel",
+        ChartQuickCommand.ChartAreaFill => "MainWindow_TooltipTitle_ChartAreaFill",
+        ChartQuickCommand.ChartTitleColor => "MainWindow_TooltipTitle_ChartTitleColor",
+        ChartQuickCommand.ChartTitleFontSize => "MainWindow_TooltipTitle_ChartTitleSize",
+        ChartQuickCommand.AxisTitleColor => "MainWindow_TooltipTitle_AxisTitleColor",
+        ChartQuickCommand.AxisTitleFontSize => "MainWindow_TooltipTitle_AxisTitleSize",
+        ChartQuickCommand.PlotAreaFill => "MainWindow_TooltipTitle_PlotAreaFill",
+        ChartQuickCommand.PlotAreaBorder => "MainWindow_TooltipTitle_PlotAreaBorder",
+        ChartQuickCommand.LegendTextColor => "MainWindow_TooltipTitle_LegendText",
+        ChartQuickCommand.LegendFill => "MainWindow_TooltipTitle_LegendFill",
+        ChartQuickCommand.LegendBorder => "MainWindow_TooltipTitle_LegendBorder",
+        ChartQuickCommand.LegendFontSize => "MainWindow_TooltipTitle_LegendFontSize",
+        ChartQuickCommand.LegendOverlay => "MainWindow_TooltipTitle_LegendOverlay",
+        ChartQuickCommand.TrendlineMovingAveragePeriod => "MainWindow_TooltipTitle_MovingAveragePeriod",
+        ChartQuickCommand.TrendlinePolynomialOrder => "MainWindow_TooltipTitle_PolynomialOrder",
+        ChartQuickCommand.TrendlineEquation => "MainWindow_TooltipTitle_TrendlineEquation",
+        ChartQuickCommand.TrendlineRSquared => "MainWindow_TooltipTitle_RSquared",
+        ChartQuickCommand.TrendlineColor => "MainWindow_TooltipTitle_TrendlineColor",
+        ChartQuickCommand.TrendlineDash => "MainWindow_TooltipTitle_TrendlineDash",
+        ChartQuickCommand.TrendlineThickness => "MainWindow_TooltipTitle_TrendlineWidth",
+        ChartQuickCommand.SecondaryAxisSeries => "MainWindow_TooltipTitle_SecondaryAxisSeries",
+        ChartQuickCommand.ComboToggle => "MainWindow_TooltipTitle_ComboChart",
+        ChartQuickCommand.ComboSeries => "MainWindow_TooltipTitle_ComboChartSeries",
+        ChartQuickCommand.SeriesWidth => "MainWindow_TooltipTitle_SeriesWidth",
+        ChartQuickCommand.SeriesDash => "MainWindow_TooltipTitle_SeriesDash",
+        ChartQuickCommand.SeriesMarkerSize => "MainWindow_TooltipTitle_MarkerSize",
+        _ => throw new ArgumentOutOfRangeException(nameof(Command), Command, null),
+    };
+}
 
 /// <summary>
 /// Shared labels and host resource keys for chart contextual-tab quick commands. Shells still own

@@ -16,7 +16,7 @@ internal sealed class MacOsWorkbookShareSheetService : IWorkbookShareSheetServic
     public MacOsWorkbookShareSheetService(string shareSheetLabel)
     {
         Capability = new WorkbookShareSheetCapability(shareSheetLabel, CanShowShareSheet: true);
-        _unavailableMessage = $"{Capability.ShareSheetLabel} is unavailable because no macOS window is active.";
+        _unavailableMessage = UiText.Format("MacShare_NoActiveWindow", Capability.ShareSheetLabel);
     }
 
     public WorkbookShareSheetCapability Capability { get; }
@@ -27,7 +27,7 @@ internal sealed class MacOsWorkbookShareSheetService : IWorkbookShareSheetServic
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
         if (!File.Exists(filePath))
-            return WorkbookShareSheetResult.Unavailable($"{Capability.ShareSheetLabel} could not find {filePath}.");
+            return WorkbookShareSheetResult.Unavailable(UiText.Format("MacShare_FileNotFound", Capability.ShareSheetLabel, filePath));
 
         return await Dispatcher.UIThread.InvokeAsync(() => ShowShareSheetOnUiThread(owner, filePath));
     }
@@ -45,7 +45,7 @@ internal sealed class MacOsWorkbookShareSheetService : IWorkbookShareSheetServic
 
         _activeFileUrl = NSUrl.FromFilename(filePath);
         if (_activeFileUrl is null)
-            return WorkbookShareSheetResult.Unavailable($"{Capability.ShareSheetLabel} could not create a file URL for {filePath}.");
+            return WorkbookShareSheetResult.Unavailable(UiText.Format("MacShare_FileUrlFailed", Capability.ShareSheetLabel, filePath));
 
         _activePicker = new NSSharingServicePicker(new NSObject[] { _activeFileUrl });
         _activePicker.ShowRelativeToRect(anchorView.Bounds, anchorView, NSRectEdge.MinYEdge);
