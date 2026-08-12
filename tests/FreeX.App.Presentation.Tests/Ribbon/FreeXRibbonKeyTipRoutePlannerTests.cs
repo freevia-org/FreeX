@@ -99,6 +99,7 @@ public sealed class FreeXRibbonKeyTipRoutePlannerTests
     public void NativeShells_DelegateRoutePolicyToPresentationPlanner()
     {
         var avalonia = ReadSource("src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaRibbonHost.cs");
+        var avaloniaInput = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.LegacyShortcutSequences.cs");
         var wpf = ReadSource("src", "FreeX.App.Host", "MainWindow.Editing.cs")
             + ReadSource("src", "FreeX.App.Host", "MainWindow.KeyTips.cs");
 
@@ -112,9 +113,19 @@ public sealed class FreeXRibbonKeyTipRoutePlannerTests
         wpf.Should().Contain("FreeXRibbonKeyTipRoutePlanner.ResolveTopLevel");
         wpf.Should().Contain("FreeXRibbonKeyTipRoutePlanner.HasLongerTopLevelKeyTipPrefix");
         wpf.Should().NotContain("string.Equals(normalizedKeyTip, \"D\"");
+        wpf.Should().Contain("_ribbonKeyTipSession.HandleToken(token)");
+        avaloniaInput.Should().Contain("_ribbonKeyTipSession.HandleToken(token)");
+        avaloniaInput.Should().NotContain("LegacyDataFilterSequenceState");
+        avaloniaInput.Should().NotContain("LegacyEditPasteSpecialSequenceState");
+        avaloniaInput.Should().NotContain("_ribbonKeyTipInput");
+        avaloniaInput.Should().NotContain("_quickAccessKeyTipInput");
         File.Exists(Path.Combine(
                 RepositoryFileLocator.FindDirectory("src", "FreeX.App.Host"),
                 "RibbonTopLevelKeyTipRouter.cs"))
+            .Should().BeFalse();
+        File.Exists(Path.Combine(
+                RepositoryFileLocator.FindDirectory("src", "FreeX.App.Host"),
+                "RibbonKeyTipMode.cs"))
             .Should().BeFalse();
     }
 

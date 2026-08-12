@@ -5,6 +5,7 @@ using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.InteractionValidation;
 using FreeX.App.Presentation.Interactions;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
@@ -434,7 +435,7 @@ public sealed partial class MainWindow
 
             if (_verifyLegacyFilter)
             {
-                if (_window._legacyDataFilterSequenceState != LegacyDataFilterSequenceState.None)
+                if (_window._ribbonKeyTipSession.LegacySequence != FreeXRibbonLegacyKeyTipSequence.None)
                     return (false, "The legacy Data sequence remained pending after the second F.");
                 if (_window._session.ActiveSheet.AutoFilter is null)
                     return (false, "Alt+D,F,F was consumed without applying AutoFilter.");
@@ -492,7 +493,7 @@ public sealed partial class MainWindow
         ClearSelectionExtensionState();
         _keyboardSelectionMode = ExcelSelectionMode.Normal;
         _endMode = false;
-        ResetLegacyDataFilterSequence();
+        ResetRibbonKeyTipSequence();
         HideBackstageOverlay();
         WindowState = global::Avalonia.Controls.WindowState.Normal;
         _formulaBarExpanded = false;

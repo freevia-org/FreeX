@@ -12,30 +12,15 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    internal enum LegacyDataFilterSequenceState
-    {
-        None,
-        AwaitingFirstFilterKey,
-        AwaitingSecondFilterKey,
-    }
+    private readonly FreeXRibbonKeyTipInputSession _ribbonKeyTipSession = new();
 
-    internal enum LegacyEditPasteSpecialSequenceState
-    {
-        None,
-        AwaitingPasteSpecialKey,
-    }
-
-    private LegacyDataFilterSequenceState _legacyDataFilterSequenceState;
-    private LegacyEditPasteSpecialSequenceState _legacyEditPasteSpecialSequenceState;
-    private string _ribbonKeyTipInput = "";
-    private string _quickAccessKeyTipInput = "";
-
-    internal LegacyDataFilterSequenceState LegacyDataFilterSequenceStateForTest =>
-        _legacyDataFilterSequenceState;
-    internal LegacyEditPasteSpecialSequenceState LegacyEditPasteSpecialSequenceStateForTest =>
-        _legacyEditPasteSpecialSequenceState;
-    internal string RibbonKeyTipInputForTest => _ribbonKeyTipInput;
-    internal string QuickAccessKeyTipInputForTest => _quickAccessKeyTipInput;
+    internal FreeXRibbonLegacyKeyTipSequence LegacyKeyTipSequenceForTest =>
+        _ribbonKeyTipSession.LegacySequence;
+    internal string RibbonKeyTipInputForTest => _ribbonKeyTipSession.Input;
+    internal string QuickAccessKeyTipInputForTest =>
+        _ribbonKeyTipSession.Scope == FreeXRibbonKeyTipInputScope.QuickAccess
+            ? _ribbonKeyTipSession.Input
+            : "";
 
     internal static IReadOnlySet<string> InteractiveValidationLegacyDataFilterInteractionIds { get; } =
         new HashSet<string>(StringComparer.Ordinal)
@@ -45,188 +30,34 @@ public sealed partial class MainWindow
             "shortcut.data.filter-toggle-reapply:2",
         };
 
-    /// <summary>
-    /// Handles Excel's legacy Data &gt; Filter &gt; AutoFilter access-key sequence. The modern
-    /// ribbon reserves A for the Data tab, but D remains a compatibility alias for this sequence.
-    /// </summary>
-    private bool TryHandleLegacyDataFilterSequence(KeyEventArgs args)
+    private bool TryHandleRibbonKeyTipInput(KeyEventArgs args)
     {
         if (TryHandleQuickAccessKeyTipSequence(args))
             return true;
 
-        if (TryHandleLegacyEditPasteSpecialSequence(args))
-            return true;
-
-        if (TryHandleCataloguedRibbonKeyTipSequence(args))
-            return true;
-
-        var sequenceActive = _legacyDataFilterSequenceState != LegacyDataFilterSequenceState.None;
-        var startsSequence = IsLegacyDataFilterSequenceStart(args);
-
-        if (!CanHandleLegacyDataFilterSequence(args))
-        {
-            ResetLegacyDataFilterSequence();
-            return sequenceActive;
-        }
-
-        if (!sequenceActive)
-        {
-            if (!startsSequence)
-                return false;
-
-            // WPF treats D as a legacy alias for Data even though its visible modern keytip is A.
-            if (_ribbonControl is null ||
-                !AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, "A"))
-            {
-                ResetLegacyDataFilterSequence();
-                return false;
-            }
-
-            SetRibbonKeyTipsVisible(false);
-            _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.AwaitingFirstFilterKey;
-            args.Handled = true;
-            return true;
-        }
-
-        if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
-        {
-            ResetLegacyDataFilterSequence();
-            args.Handled = true;
-            return true;
-        }
-
-        if (args.KeyModifiers is not (KeyModifiers.None or KeyModifiers.Alt))
-        {
-            // Let direct shortcuts continue through the normal dispatcher after abandoning the
-            // incomplete legacy sequence.
-            ResetLegacyDataFilterSequence();
-            return false;
-        }
-
-        if (args.Key == Key.F)
-        {
-            args.Handled = true;
-            if (_legacyDataFilterSequenceState == LegacyDataFilterSequenceState.AwaitingFirstFilterKey)
-            {
-                _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.AwaitingSecondFilterKey;
-                return true;
-            }
-
-            ResetLegacyDataFilterSequence();
-            ToggleAutoFilter();
-            return true;
-        }
-
-        // WPF consumes an invalid keytip continuation and exits keytip mode. Do the same so an
-        // accidental prefix cannot leak a character or worksheet command into the active sheet.
-        ResetLegacyDataFilterSequence();
-        args.Handled = true;
-        return true;
-    }
-
-    private bool CanHandleLegacyDataFilterSequence(KeyEventArgs args) =>
-        !_backstageOverlay.IsVisible &&
-        _session.FormulaEditAddress is null &&
-        _inlineCellEditor is null &&
-        !IsTextEditingEventSource(args);
-
-    private bool IsDataRibbonKeyTipAttempt(KeyEventArgs args, string? directAltToken = null)
-    {
-        var sequenceActive = _ribbonKeyTipInput.Length > 0;
-        var token = directAltToken ?? (args.KeyModifiers == KeyModifiers.Alt
-            ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
-            : null);
-        return sequenceActive && _ribbonKeyTipInput.StartsWith("A", StringComparison.OrdinalIgnoreCase) ||
-            !sequenceActive && token == "A" ||
-            _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None && args.Key == Key.A;
-    }
-
-    private bool TryHandleLegacyEditPasteSpecialSequence(KeyEventArgs args)
-    {
-        var sequenceActive = _legacyEditPasteSpecialSequenceState !=
-            LegacyEditPasteSpecialSequenceState.None;
-        var startsSequence = args.Key == Key.E &&
-            (args.KeyModifiers == KeyModifiers.Alt ||
-             _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None);
-
-        if (!CanHandleLegacyDataFilterSequence(args))
-        {
-            if (sequenceActive)
-                ResetLegacyEditPasteSpecialSequence();
-            return sequenceActive;
-        }
-
-        if (!sequenceActive)
-        {
-            if (!startsSequence)
-                return false;
-
-            // WPF preserves Excel's legacy Edit > Paste Special access-key route even though
-            // the current ribbon has no visible Edit tab.
-            SetRibbonKeyTipsVisible(false);
-            _ribbonKeyTipInput = "E";
-            _legacyEditPasteSpecialSequenceState =
-                LegacyEditPasteSpecialSequenceState.AwaitingPasteSpecialKey;
-            args.Handled = true;
-            return true;
-        }
-
-        if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
-        {
-            ResetLegacyEditPasteSpecialSequence();
-            args.Handled = true;
-            return true;
-        }
-
-        if (args.KeyModifiers is not (KeyModifiers.None or KeyModifiers.Alt))
-        {
-            ResetLegacyEditPasteSpecialSequence();
-            return false;
-        }
-
-        if (args.Key == Key.S)
-        {
-            ResetLegacyEditPasteSpecialSequence();
-            _ = ShowPasteSpecialDialogAsync();
-            args.Handled = true;
-            return true;
-        }
-
-        // Match WPF: an invalid continuation is consumed and exits the legacy keytip scope.
-        ResetLegacyEditPasteSpecialSequence();
-        args.Handled = true;
-        return true;
-    }
-
-    private bool IsLegacyDataFilterSequenceStart(KeyEventArgs args) =>
-        args.Key == Key.D &&
-        (args.KeyModifiers == KeyModifiers.Alt ||
-            _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None);
-
-    private void ResetLegacyDataFilterSequence()
-    {
-        _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.None;
-        ResetRibbonKeyTipSequence();
-    }
-
-    private void ResetLegacyEditPasteSpecialSequence()
-    {
-        _legacyEditPasteSpecialSequenceState = LegacyEditPasteSpecialSequenceState.None;
-        ResetRibbonKeyTipSequence();
-    }
-
-    private bool TryHandleCataloguedRibbonKeyTipSequence(KeyEventArgs args)
-    {
-        var sequenceActive = _ribbonKeyTipInput.Length > 0;
+        var sequenceActive = _ribbonKeyTipSession.IsActive &&
+            _ribbonKeyTipSession.Scope != FreeXRibbonKeyTipInputScope.QuickAccess;
         var directAltToken = args.KeyModifiers == KeyModifiers.Alt
             ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
             : null;
 
-        // WPF keeps ribbon access keys out of the worksheet editing and Backstage scopes. The
-        // Data tab is the next legacy-compatible family exercised here (Alt+A, W), so apply the
-        // same boundary before the generic catalog can select the tab or open its live flyout.
+        if (_ribbonKeyTipSession.LegacySequence != FreeXRibbonLegacyKeyTipSequence.None &&
+            !CanHandleRibbonKeyTipInput(args))
+        {
+            ResetRibbonKeyTipSequence();
+            return true;
+        }
+
         if (IsDataRibbonKeyTipAttempt(args, directAltToken) &&
-            !CanHandleLegacyDataFilterSequence(args))
+            !CanHandleRibbonKeyTipInput(args))
+        {
+            ResetRibbonKeyTipSequence();
+            return false;
+        }
+
+        if (!sequenceActive &&
+            directAltToken is "D" or "E" &&
+            !CanHandleRibbonKeyTipInput(args))
         {
             ResetRibbonKeyTipSequence();
             return false;
@@ -237,8 +68,6 @@ public sealed partial class MainWindow
              args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None))
         {
             ResetRibbonKeyTipSequence();
-            // Let the existing top-level handler reopen its badges. This also makes a fresh Alt
-            // naturally recover from any abandoned nested path.
             return false;
         }
 
@@ -249,6 +78,7 @@ public sealed partial class MainWindow
         if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
         {
             var closeBackstage = _backstageOverlay.IsVisible;
+            _ribbonKeyTipSession.HandleEscape();
             ResetRibbonKeyTipSequence();
             if (closeBackstage)
                 HideBackstageOverlay();
@@ -256,7 +86,11 @@ public sealed partial class MainWindow
             return true;
         }
 
-        if (sequenceActive && args.KeyModifiers != KeyModifiers.None)
+        var acceptsAltContinuation =
+            _ribbonKeyTipSession.LegacySequence != FreeXRibbonLegacyKeyTipSequence.None;
+        if (sequenceActive &&
+            args.KeyModifiers != KeyModifiers.None &&
+            (!acceptsAltContinuation || args.KeyModifiers != KeyModifiers.Alt))
         {
             ResetRibbonKeyTipSequence();
             return false;
@@ -273,14 +107,47 @@ public sealed partial class MainWindow
             return true;
         }
 
-        var nextInput = sequenceActive ? _ribbonKeyTipInput + token : token;
-        var match = AvaloniaRibbonKeyTipRoutes.Match(nextInput);
+        if (!sequenceActive)
+            _ribbonKeyTipSession.Enter(FreeXRibbonKeyTipInputScope.Catalog);
+
+        var step = _ribbonKeyTipSession.HandleToken(token);
+        switch (step.Intent)
+        {
+            case FreeXRibbonKeyTipInputIntent.EnterLegacyDataFilter:
+                if (_ribbonControl is null ||
+                    !AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, "A"))
+                {
+                    ResetRibbonKeyTipSequence();
+                    return false;
+                }
+
+                SetRibbonKeyTipsVisible(false);
+                args.Handled = true;
+                return true;
+            case FreeXRibbonKeyTipInputIntent.EnterLegacyEditPasteSpecial:
+            case FreeXRibbonKeyTipInputIntent.WaitForContinuation:
+                SetRibbonKeyTipsVisible(false);
+                args.Handled = true;
+                return true;
+            case FreeXRibbonKeyTipInputIntent.InvokeLegacyDataFilter:
+                ResetRibbonKeyTipSequence();
+                ToggleAutoFilter();
+                args.Handled = true;
+                return true;
+            case FreeXRibbonKeyTipInputIntent.InvokeLegacyEditPasteSpecial:
+                ResetRibbonKeyTipSequence();
+                _ = ShowPasteSpecialDialogAsync();
+                args.Handled = true;
+                return true;
+            case FreeXRibbonKeyTipInputIntent.Cancel:
+                ResetRibbonKeyTipSequence();
+                args.Handled = true;
+                return true;
+        }
+
+        var match = AvaloniaRibbonKeyTipRoutes.Match(step.Input);
         if (!match.IsMatch)
         {
-            // Alt+D and Alt, D belong to the legacy Data > Filter compatibility sequence below.
-            if (!sequenceActive && token == "D")
-                return false;
-
             var consume = sequenceActive || visibleContinuation;
             var closeBackstage = sequenceActive && _backstageOverlay.IsVisible;
             ResetRibbonKeyTipSequence();
@@ -290,16 +157,34 @@ public sealed partial class MainWindow
             return consume;
         }
 
-        _ribbonKeyTipInput = nextInput;
         SetRibbonKeyTipsVisible(false);
         args.Handled = true;
-
         if (match.ExactRoute is { } route)
             ExecuteRibbonKeyTipRoute(route);
 
         if (!match.HasLongerRoute)
             ResetRibbonKeyTipSequence();
         return true;
+    }
+
+    private bool CanHandleRibbonKeyTipInput(KeyEventArgs args) =>
+        !_backstageOverlay.IsVisible &&
+        _session.FormulaEditAddress is null &&
+        _inlineCellEditor is null &&
+        !IsTextEditingEventSource(args);
+
+    private bool IsDataRibbonKeyTipAttempt(KeyEventArgs args, string? directAltToken = null)
+    {
+        directAltToken ??= args.KeyModifiers == KeyModifiers.Alt
+            ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
+            : null;
+        var sequenceActive = _ribbonKeyTipSession.Scope == FreeXRibbonKeyTipInputScope.Catalog &&
+            _ribbonKeyTipSession.Input.Length > 0;
+        return sequenceActive &&
+                _ribbonKeyTipSession.Input.StartsWith("A", StringComparison.OrdinalIgnoreCase) ||
+            !sequenceActive && directAltToken is "A" or "D" ||
+            _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None &&
+                args.Key is Key.A or Key.D;
     }
 
     private void ExecuteRibbonKeyTipRoute(FreeXRibbonKeyTipRoute route)
@@ -352,8 +237,7 @@ public sealed partial class MainWindow
 
     private void ResetRibbonKeyTipSequence()
     {
-        _ribbonKeyTipInput = "";
-        _quickAccessKeyTipInput = "";
+        _ribbonKeyTipSession.Cancel();
         SetRibbonKeyTipsVisible(false);
         if (_ribbonControl is not null)
             AvaloniaRibbonRenderer.CloseKeyTipFlyouts(_ribbonControl);
@@ -362,20 +246,22 @@ public sealed partial class MainWindow
     /// <summary>
     /// Routes the configured Avalonia Quick Access Toolbar using the WPF keytip policy: visible commands
     /// receive 1-9, then two-character 01, 02 ... tips, while Undo/Redo history buttons remain unkeyed.
-    /// This path is intentionally dynamic because the QAT is user-configurable and its order is persisted.
     /// </summary>
     private bool TryHandleQuickAccessKeyTipSequence(KeyEventArgs args)
     {
-        var sequenceActive = _quickAccessKeyTipInput.Length > 0;
+        var sequenceActive =
+            _ribbonKeyTipSession.Scope == FreeXRibbonKeyTipInputScope.QuickAccess;
+        if (_ribbonKeyTipSession.IsActive && !sequenceActive)
+            return false;
+
         var directAltToken = args.KeyModifiers == KeyModifiers.Alt
             ? AvaloniaKeyTipTokenFormatter.Format(args.Key)
             : null;
         var visibleContinuation = _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None;
-
         if (!sequenceActive && directAltToken is null && !visibleContinuation)
             return false;
 
-        if (!CanHandleLegacyDataFilterSequence(args))
+        if (!CanHandleRibbonKeyTipInput(args))
         {
             if (sequenceActive)
                 ResetRibbonKeyTipSequence();
@@ -395,6 +281,7 @@ public sealed partial class MainWindow
             if (!sequenceActive)
                 return false;
 
+            _ribbonKeyTipSession.HandleEscape();
             ResetRibbonKeyTipSequence();
             args.Handled = true;
             return true;
@@ -417,12 +304,10 @@ public sealed partial class MainWindow
             return true;
         }
 
-        var nextInput = sequenceActive ? _quickAccessKeyTipInput + token : token;
+        var nextInput = sequenceActive ? _ribbonKeyTipSession.Input + token : token;
         var match = MatchAvaloniaQuickAccessKeyTip(nextInput);
         if (!match.IsMatch)
         {
-            // Let the normal ribbon catalog handle letters and the first three default QAT digits. Any
-            // active QAT prefix, however, owns its invalid continuation and must consume it like WPF.
             if (!sequenceActive)
                 return false;
 
@@ -431,7 +316,9 @@ public sealed partial class MainWindow
             return true;
         }
 
-        _quickAccessKeyTipInput = nextInput;
+        if (!sequenceActive)
+            _ribbonKeyTipSession.Enter(FreeXRibbonKeyTipInputScope.QuickAccess);
+        var step = _ribbonKeyTipSession.HandleToken(token, recognizeLegacyTopLevel: false);
         SetRibbonKeyTipsVisible(false);
         args.Handled = true;
 
@@ -442,7 +329,7 @@ public sealed partial class MainWindow
                 ResetRibbonKeyTipSequence();
         }
 
-        return true;
+        return step.Handled;
     }
 
     private (string? ExactKeyTip, bool HasLongerKeyTip, bool IsMatch) MatchAvaloniaQuickAccessKeyTip(

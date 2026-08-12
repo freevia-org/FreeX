@@ -8,6 +8,7 @@ using Avalonia.LogicalTree;
 using FluentAssertions;
 
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -41,18 +42,20 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
                 await PressHandled(window, Key.D, KeyModifiers.Alt);
             }
 
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.AwaitingFirstFilterKey);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.DataFilter);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
             sheet.AutoFilter.Should().BeNull();
 
             await PressHandled(window, Key.F);
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.AwaitingSecondFilterKey);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.DataFilter);
+            window.RibbonKeyTipInputForTest.Should().Be("F");
             sheet.AutoFilter.Should().BeNull("the first F is the legacy Data > Filter prefix");
 
             await PressHandled(window, Key.F);
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
             window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
             sheet.AutoFilter.Should().NotBeNull();
 
@@ -88,14 +91,14 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
                 await PressHandled(window, Key.E, KeyModifiers.Alt);
             }
 
-            window.LegacyEditPasteSpecialSequenceStateForTest.Should().Be(
-                MainWindow.LegacyEditPasteSpecialSequenceState.AwaitingPasteSpecialKey);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.EditPasteSpecial);
             invocations.Should().Be(0);
 
             await PressHandled(window, Key.S);
 
-            window.LegacyEditPasteSpecialSequenceStateForTest.Should().Be(
-                MainWindow.LegacyEditPasteSpecialSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
             window.RibbonKeyTipInputForTest.Should().BeEmpty();
             window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
             invocations.Should().Be(1);
@@ -112,14 +115,14 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
             await PressHandled(window, Key.D, KeyModifiers.Alt);
             await PressHandled(window, Key.F);
             await PressHandled(window, Key.Escape);
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
             sheet.AutoFilter.Should().BeNull();
 
             await PressHandled(window, Key.D, KeyModifiers.Alt);
             await PressHandled(window, Key.X);
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
             sheet.AutoFilter.Should().BeNull();
         });
     }
@@ -133,23 +136,23 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
             window.BeginFormulaEditForTest(address, "=1");
             var editingStart = await Press(window, Key.D, KeyModifiers.Alt);
             editingStart.Handled.Should().BeFalse();
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
             window.Session.CancelFormulaEdit();
 
             await PressHandled(window, Key.D, KeyModifiers.Alt);
             window.BeginFormulaEditForTest(address, "=2");
             var editingContinuation = await Press(window, Key.F);
             editingContinuation.Handled.Should().BeFalse();
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
             window.Session.CancelFormulaEdit();
 
             window.ShowBackstageOverlayForTest();
             var backstageStart = await Press(window, Key.D, KeyModifiers.Alt);
             backstageStart.Handled.Should().BeFalse();
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
         });
     }
 
@@ -172,8 +175,8 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
 
             await PressHandled(window, Key.D, KeyModifiers.Alt);
             await PressHandled(window, Key.L, KeyModifiers.Control | KeyModifiers.Alt);
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
             sheet.FilterHiddenRows.Should().Contain(3);
         });
     }
@@ -274,8 +277,8 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
             await PressHandled(window, Key.X);
             window.RibbonKeyTipInputForTest.Should().BeEmpty();
             window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
-            window.LegacyDataFilterSequenceStateForTest.Should().Be(
-                MainWindow.LegacyDataFilterSequenceState.None);
+            window.LegacyKeyTipSequenceForTest.Should().Be(
+                FreeXRibbonLegacyKeyTipSequence.None);
         });
     }
 

@@ -685,14 +685,14 @@ public partial class MainWindow
         if (Keyboard.FocusedElement is not TextBox and not ComboBox)
         {
             var keyTipKey = GetEffectiveKey(e);
-            if (IsStandaloneAltKey(keyTipKey) && _ribbonKeyTipMode.IsActive)
+            if (IsStandaloneAltKey(keyTipKey) && _ribbonKeyTipSession.IsActive)
             {
                 _standaloneAltKeyTipTracker.BeginStandaloneAltCandidate();
                 e.Handled = true;
                 return;
             }
 
-            if (_ribbonKeyTipMode.IsActive &&
+            if (_ribbonKeyTipSession.IsActive &&
                 IsRibbonKeyTipContinuationModifierState(Keyboard.Modifiers))
             {
                 HandleActiveRibbonKeyTip(keyTipKey);

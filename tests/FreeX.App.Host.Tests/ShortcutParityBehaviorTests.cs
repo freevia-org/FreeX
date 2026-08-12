@@ -680,10 +680,10 @@ public sealed class ShortcutParityBehaviorTests
     [Fact]
     public void RibbonKeyTipMode_ClosesOnEscape()
     {
-        var source = DialogSourceTestSupport.ReadHostSources("RibbonKeyTipMode.cs");
+        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
 
-        // Escape exits keytip mode
-        source.Should().ContainAny("Escape", "escape", "Key.Escape");
+        source.Should().Contain("_ribbonKeyTipSession.HandleEscape()");
+        source.Should().Contain("ExitRibbonKeyTipMode()");
     }
 
     [Fact]

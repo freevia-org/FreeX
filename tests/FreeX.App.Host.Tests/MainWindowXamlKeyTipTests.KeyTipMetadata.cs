@@ -86,8 +86,8 @@ public sealed partial class MainWindowXamlKeyTipTests
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
 
-        var prefixGuardIndex = source.IndexOf("HasVisibleTopLevelKeyTipLongerPrefix(_ribbonKeyTipSequence)", StringComparison.Ordinal);
-        var topLevelRouteIndex = source.IndexOf("TryHandleTopLevelRibbonKeyTip(topLevelSequence)", StringComparison.Ordinal);
+        var prefixGuardIndex = source.IndexOf("HasVisibleTopLevelKeyTipLongerPrefix(step.Input)", StringComparison.Ordinal);
+        var topLevelRouteIndex = source.IndexOf("TryHandleTopLevelRibbonKeyTip(step.Input)", StringComparison.Ordinal);
 
         prefixGuardIndex.Should().BeGreaterThanOrEqualTo(0);
         topLevelRouteIndex.Should().BeGreaterThanOrEqualTo(0);

@@ -26743,6 +26743,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Key.NumPad5 => nameof(WorkbookShortcutKey.D5),
             Key.NumPad6 => nameof(WorkbookShortcutKey.D6),
             Key.Add => nameof(WorkbookShortcutKey.OemPlus),
+            Key.Subtract => nameof(WorkbookShortcutKey.OemMinus),
+            Key.Decimal => nameof(WorkbookShortcutKey.OemPeriod),
+            Key.Oem1 => nameof(WorkbookShortcutKey.OemSemicolon),
+            Key.Oem4 => nameof(WorkbookShortcutKey.OemOpenBrackets),
+            Key.Oem6 => nameof(WorkbookShortcutKey.OemCloseBrackets),
+            Key.Oem7 => nameof(WorkbookShortcutKey.OemQuotes),
             _ => key.ToString()
         };
 
@@ -26821,7 +26827,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (TryHandleWorkbookWindowSwitchShortcut(e))
             return;
 
-        if (TryHandleLegacyDataFilterSequence(e))
+        if (TryHandleRibbonKeyTipInput(e))
             return;
 
         if (TryHandleRibbonKeyTips(e))
@@ -26866,7 +26872,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        if (await TryHandleAvaloniaHostShortcutAsync(e))
+        if (await TryHandleApplicationOrLocalShortcutAsync(e))
             return;
 
         if (e.Key == Key.Enter &&

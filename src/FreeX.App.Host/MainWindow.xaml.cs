@@ -44,16 +44,12 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private readonly IAppDiagnostics? _diagnostics;
     private readonly AppDiagnosticsMetadata _diagnosticsMetadata;
     private readonly AppDiagnosticsOptions _diagnosticsOptions;
-    private readonly RibbonKeyTipMode _ribbonKeyTipMode = new();
+    private readonly FreeXRibbonKeyTipInputSession _ribbonKeyTipSession = new();
     private readonly KeyboardCommandDispatcher _keyboardCommandDispatcher = new();
     private readonly WorkbookSessionFactory _sessionFactory = new();
     private WorkbookSession _session;
     private bool _workbookSessionDisposed;
     private readonly StandaloneAltKeyTipTracker _standaloneAltKeyTipTracker = new();
-    private RibbonKeyTipScope _ribbonKeyTipScope = RibbonKeyTipScope.None;
-    private string _ribbonKeyTipSequence = "";
-    private bool _legacyDataKeyTipSequence;
-    private bool _legacyEditKeyTipSequence;
     private ContextMenu? _activeRibbonKeyTipMenu;
     private ItemsControl? _activeRibbonKeyTipItemsControl;
     // Preserve the established partial-class name while keeping WorkbookSession authoritative.

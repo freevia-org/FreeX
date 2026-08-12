@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Shell;
 using FluentAssertions;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Ribbon;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -46,7 +47,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
         private readonly MethodInfo _movePivotFieldToZone;
         private readonly Type _pivotFieldDropZoneType;
         private readonly Type _scopeType;
-        private readonly FieldInfo _scopeField;
+        private readonly FieldInfo _keyTipSessionField;
         private readonly FieldInfo _activeMenuField;
         private readonly FieldInfo _recentFilesField;
         private readonly FieldInfo _optionsField;
@@ -96,10 +97,9 @@ public sealed partial class MainWindowRibbonKeyTipTests
             _movePivotFieldToZone = typeof(MainWindow).GetMethod("MovePivotFieldToZone", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingMethodException(nameof(MainWindow), "MovePivotFieldToZone");
             _pivotFieldDropZoneType = typeof(PivotFieldBucket);
-            _scopeType = typeof(MainWindow).GetNestedType("RibbonKeyTipScope", BindingFlags.NonPublic)
-                ?? throw new MissingMemberException(nameof(MainWindow), "RibbonKeyTipScope");
-            _scopeField = typeof(MainWindow).GetField("_ribbonKeyTipScope", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_ribbonKeyTipScope");
+            _scopeType = typeof(FreeXRibbonKeyTipInputScope);
+            _keyTipSessionField = typeof(MainWindow).GetField("_ribbonKeyTipSession", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_ribbonKeyTipSession");
             _activeMenuField = typeof(MainWindow).GetField("_activeRibbonKeyTipMenu", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_activeRibbonKeyTipMenu");
             _recentFilesField = typeof(MainWindow).GetField("_recentFiles", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -116,7 +116,10 @@ public sealed partial class MainWindowRibbonKeyTipTests
                 ? tab.Header?.ToString()
                 : null;
 
-        public string KeyTipScope => _scopeField.GetValue(_window)?.ToString() ?? "";
+        public string KeyTipScope => KeyTipSession.Scope.ToString();
+
+        private FreeXRibbonKeyTipInputSession KeyTipSession =>
+            (FreeXRibbonKeyTipInputSession)_keyTipSessionField.GetValue(_window)!;
 
         public bool? IsToggleChecked(string name) =>
             (_window.FindName(name) as System.Windows.Controls.Primitives.ToggleButton)?.IsChecked;
@@ -1008,7 +1011,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
             ConfigureQuickAccessToolbar(QuickAccessToolbarCatalog.DefaultCommandIds, belowRibbon: false);
             if (ActiveMenu is { } activeMenu)
                 activeMenu.IsOpen = false;
-            _scopeField.SetValue(_window, Enum.Parse(_scopeType, "None"));
+            KeyTipSession.Cancel();
             _activeMenuField.SetValue(_window, null);
             if (_window.FindName("KeyTipOverlay") is Canvas overlay)
             {

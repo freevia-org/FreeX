@@ -7,6 +7,7 @@ using Avalonia.Input;
 
 using FluentAssertions;
 
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -18,71 +19,39 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
 
-    public static IEnumerable<object[]> WpfHostLocalRoutes()
+    public static IEnumerable<object[]> ApplicationCommandRoutes()
     {
-        yield return Route(Key.T, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.CreateTable);
-        yield return Route(Key.L, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.CreateTable);
-        yield return Route(Key.OemSemicolon, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.InsertCurrentDate);
-        yield return Route(Key.OemSemicolon, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.InsertCurrentTime);
-        yield return Route(Key.D8, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.ToggleOutlineSymbols);
-        yield return Route(Key.F3, KeyModifiers.None, MainWindow.AvaloniaHostShortcut.PasteName);
-        yield return Route(Key.F3, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.NameManager);
-        yield return Route(Key.F3, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.CreateNamesFromSelection);
-        yield return Route(Key.F7, KeyModifiers.None, MainWindow.AvaloniaHostShortcut.SpellCheck);
-        yield return Route(Key.F5, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.RestoreWorkbookWindow);
-        yield return Route(Key.F7, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.MoveWorkbookWindow);
-        yield return Route(Key.F8, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.SizeWorkbookWindow);
-        yield return Route(Key.F6, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.SwitchToNextWorkbookWindow);
-        yield return Route(Key.Tab, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.SwitchToNextWorkbookWindow);
-        yield return Route(Key.F6, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow);
-        yield return Route(Key.Tab, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow);
-        yield return Route(Key.F9, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.MinimizeWorkbookWindow);
-        yield return Route(Key.F10, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.MaximizeOrRestoreWorkbookWindow);
-        yield return Route(Key.F9, KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.RebuildDependenciesAndCalculate);
-        yield return Route(Key.F10, KeyModifiers.Alt | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.OpenErrorChecking);
-        yield return Route(Key.U, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.ToggleFormulaBarExpansion);
-        yield return Route(Key.L, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.ToggleFilter);
-        yield return Route(Key.L, KeyModifiers.Control | KeyModifiers.Alt, MainWindow.AvaloniaHostShortcut.ReapplyFilter);
-        yield return Route(Key.Q, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.QuickAnalysis);
-        yield return Route(Key.F1, KeyModifiers.Alt, MainWindow.AvaloniaHostShortcut.InsertEmbeddedChart);
-        yield return Route(Key.F11, KeyModifiers.None, MainWindow.AvaloniaHostShortcut.InsertChartSheet);
-        yield return Route(Key.Right, KeyModifiers.Alt | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.GroupSelection);
-        yield return Route(Key.Left, KeyModifiers.Alt | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.UngroupSelection);
-        yield return Route(Key.F, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.OpenFormatCellsFont);
-        yield return Route(Key.P, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.OpenFormatCellsFont);
-        yield return Route(Key.F2, KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.NewNote);
-        yield return Route(Key.F2, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.NewThreadedComment);
-        yield return Route(Key.F2, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.EditInFormulaBar);
-        yield return Route(Key.OemPlus, KeyModifiers.Control | KeyModifiers.Alt, MainWindow.AvaloniaHostShortcut.ZoomIn);
-        yield return Route(Key.OemMinus, KeyModifiers.Control | KeyModifiers.Alt, MainWindow.AvaloniaHostShortcut.ZoomOut);
-        yield return Route(Key.OemQuotes, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.CopyFormulaFromAbove);
-        yield return Route(Key.OemQuotes, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.CopyValueFromAbove);
-        yield return Route(Key.Back, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.ScrollActiveCellIntoView);
-        yield return Route(Key.OemPeriod, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.CycleSelectionCorner);
-        yield return Route(Key.OemOpenBrackets, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.SelectDirectPrecedents);
-        yield return Route(Key.OemCloseBrackets, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.SelectDirectDependents);
-        yield return Route(Key.OemOpenBrackets, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.SelectAllPrecedents);
-        yield return Route(Key.OemCloseBrackets, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.SelectAllDependents);
-        yield return Route(Key.Back, KeyModifiers.None, MainWindow.AvaloniaHostShortcut.ClearSelectionAndEdit);
-        yield return Route(Key.Back, KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.ClearSelectionAndEdit);
-        yield return Route(Key.F4, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.CloseWorkbook);
-        yield return Route(Key.D8, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.SelectCurrentRegion);
-        yield return Route(Key.F8, KeyModifiers.None, MainWindow.AvaloniaHostShortcut.ToggleExtendSelection);
-        yield return Route(Key.F8, KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.ToggleAddSelection);
-        yield return Route(Key.OemPlus, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.InsertCells);
-        yield return Route(Key.OemPlus, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.InsertCells);
-        yield return Route(Key.OemMinus, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.DeleteCells);
-        yield return Route(Key.Down, KeyModifiers.Alt, MainWindow.AvaloniaHostShortcut.OpenActiveDropdown);
+        foreach (var shortcut in WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts)
+        {
+            yield return Route(
+                Enum.Parse<Key>(shortcut.Key.ToString()),
+                ToAvaloniaModifiers(shortcut.Modifiers),
+                shortcut.Command);
+        }
     }
 
     [Theory]
-    [MemberData(nameof(WpfHostLocalRoutes))]
-    public void HostLocalMatcher_MirrorsWpfExactChord(
+    [MemberData(nameof(ApplicationCommandRoutes))]
+    public void ApplicationMatcher_ProjectsEveryPortableChord(
         Key key,
         KeyModifiers modifiers,
-        MainWindow.AvaloniaHostShortcut expected)
+        KeyboardCommandShortcut expected)
     {
-        MainWindow.TryResolveAvaloniaHostShortcutForTest(key, modifiers, out var actual)
+        MainWindow.TryResolveApplicationShortcutForTest(key, modifiers, out var actual)
+            .Should().BeTrue();
+        actual.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(Key.Add, KeyModifiers.Control | KeyModifiers.Alt, KeyboardCommandShortcut.ZoomIn)]
+    [InlineData(Key.Subtract, KeyModifiers.Control | KeyModifiers.Alt, KeyboardCommandShortcut.ZoomOut)]
+    [InlineData(Key.Decimal, KeyModifiers.Control, KeyboardCommandShortcut.CycleSelectionCorner)]
+    public void ApplicationMatcher_PreservesNativeKeyAliases(
+        Key key,
+        KeyModifiers modifiers,
+        KeyboardCommandShortcut expected)
+    {
+        MainWindow.TryResolveApplicationShortcutForTest(key, modifiers, out var actual)
             .Should().BeTrue();
         actual.Should().Be(expected);
     }
@@ -93,9 +62,9 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
     [InlineData(Key.F11, KeyModifiers.Control)]
     [InlineData(Key.OemOpenBrackets, KeyModifiers.Alt)]
     [InlineData(Key.Back, KeyModifiers.Alt)]
-    public void HostLocalMatcher_RejectsExtraOrWrongModifiers(Key key, KeyModifiers modifiers)
+    public void ApplicationMatcher_RejectsExtraOrWrongModifiers(Key key, KeyModifiers modifiers)
     {
-        MainWindow.TryResolveAvaloniaHostShortcutForTest(key, modifiers, out _).Should().BeFalse();
+        MainWindow.TryResolveApplicationShortcutForTest(key, modifiers, out _).Should().BeFalse();
     }
 
     [Fact]
@@ -348,7 +317,17 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
     private static object[] Route(
         Key key,
         KeyModifiers modifiers,
-        MainWindow.AvaloniaHostShortcut shortcut) => [key, modifiers, shortcut];
+        KeyboardCommandShortcut shortcut) => [key, modifiers, shortcut];
+
+    private static KeyModifiers ToAvaloniaModifiers(WorkbookShortcutModifiers modifiers)
+    {
+        var result = KeyModifiers.None;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control)) result |= KeyModifiers.Control;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta)) result |= KeyModifiers.Meta;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt)) result |= KeyModifiers.Alt;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift)) result |= KeyModifiers.Shift;
+        return result;
+    }
 
     private static async Task Run(Func<MainWindow, Sheet, Task> test)
     {

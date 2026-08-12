@@ -23,7 +23,7 @@ public sealed class FreeXCalculationConditionalFormattingOwnershipSourceGuardTes
         paired.Should().NotContain("new SetCalculationModeCommand(");
         avalonia.Should().Contain("_session.RecalculateDirtyCells,");
         avaloniaKeyboard.Replace("\r\n", "\n", StringComparison.Ordinal).Should().Contain(
-            "case AvaloniaHostShortcut.RebuildDependenciesAndCalculate:\n                CalculateFull();");
+            "case KeyboardCommandShortcut.RebuildDependenciesAndCalculate:\n                CalculateFull();");
 
         var workflow = ReadSource(
             "src",

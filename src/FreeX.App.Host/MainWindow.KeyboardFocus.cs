@@ -412,7 +412,7 @@ public partial class MainWindow
         if (!_standaloneAltKeyTipTracker.ShouldToggleOnKeyUp(keyTipKey))
             return;
 
-        if (_ribbonKeyTipMode.IsActive)
+        if (_ribbonKeyTipSession.IsActive)
             ExitRibbonKeyTipMode();
         else
             EnterRibbonKeyTipMode(RibbonKeyTipScope.TopLevel);
@@ -427,7 +427,7 @@ public partial class MainWindow
     private void MainWindow_Deactivated(object? sender, EventArgs e)
     {
         _standaloneAltKeyTipTracker.CancelStandaloneAltCandidate();
-        if (_ribbonKeyTipMode.IsActive)
+        if (_ribbonKeyTipSession.IsActive)
             ExitRibbonKeyTipMode();
     }
 }

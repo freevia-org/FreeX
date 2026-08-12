@@ -29,7 +29,7 @@ public sealed partial class MainWindow
         // worksheet-editing or Backstage exclusion is active. The legacy sequence dispatcher has
         // already reset any partial input; returning true here stops the fallback route without
         // marking the key handled.
-        if (IsDataRibbonKeyTipAttempt(args) && !CanHandleLegacyDataFilterSequence(args))
+        if (IsDataRibbonKeyTipAttempt(args) && !CanHandleRibbonKeyTipInput(args))
         {
             ResetRibbonKeyTipSequence();
             args.Handled = false;

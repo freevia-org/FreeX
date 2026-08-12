@@ -8,6 +8,7 @@ using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Editing;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.App.Presentation.Shell;
 using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -16,139 +17,65 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    public enum AvaloniaHostShortcut
+    internal enum AvaloniaLocalShortcut
     {
-        CreateTable,
-        InsertCurrentDate,
-        InsertCurrentTime,
-        ToggleOutlineSymbols,
-        PasteName,
-        NameManager,
-        CreateNamesFromSelection,
-        SpellCheck,
-        RestoreWorkbookWindow,
-        MoveWorkbookWindow,
-        SizeWorkbookWindow,
-        SwitchToNextWorkbookWindow,
-        SwitchToPreviousWorkbookWindow,
-        MinimizeWorkbookWindow,
-        MaximizeOrRestoreWorkbookWindow,
-        RebuildDependenciesAndCalculate,
-        OpenErrorChecking,
-        ToggleFormulaBarExpansion,
-        ToggleFilter,
-        ReapplyFilter,
-        QuickAnalysis,
-        InsertEmbeddedChart,
-        InsertChartSheet,
-        GroupSelection,
-        UngroupSelection,
-        OpenFormatCellsFont,
-        NewNote,
-        NewThreadedComment,
-        EditInFormulaBar,
-        ZoomIn,
-        ZoomOut,
-        CopyFormulaFromAbove,
-        CopyValueFromAbove,
-        ScrollActiveCellIntoView,
-        CycleSelectionCorner,
-        SelectDirectPrecedents,
-        SelectDirectDependents,
-        SelectAllPrecedents,
-        SelectAllDependents,
-        ClearSelectionAndEdit,
-        CloseWorkbook,
         SelectCurrentRegion,
         ToggleExtendSelection,
         ToggleAddSelection,
         InsertCells,
         DeleteCells,
-        OpenActiveDropdown,
     }
 
-    internal readonly record struct AvaloniaHostShortcutRule(
+    internal readonly record struct AvaloniaLocalShortcutRule(
         Key Key,
         KeyModifiers Modifiers,
-        AvaloniaHostShortcut Shortcut);
+        AvaloniaLocalShortcut Shortcut);
 
-    internal static IReadOnlyList<AvaloniaHostShortcutRule> AvaloniaHostShortcutRules { get; } =
+    internal static IReadOnlyList<AvaloniaLocalShortcutRule> AvaloniaLocalShortcutRules { get; } =
     [
-        R(Key.T, Ctrl, AvaloniaHostShortcut.CreateTable),
-        R(Key.L, Ctrl, AvaloniaHostShortcut.CreateTable),
-        R(Key.OemSemicolon, Ctrl, AvaloniaHostShortcut.InsertCurrentDate),
-        R(Key.OemSemicolon, CtrlShift, AvaloniaHostShortcut.InsertCurrentTime),
-        R(Key.D8, Ctrl, AvaloniaHostShortcut.ToggleOutlineSymbols),
-        R(Key.F3, None, AvaloniaHostShortcut.PasteName),
-        R(Key.F3, Ctrl, AvaloniaHostShortcut.NameManager),
-        R(Key.F3, CtrlShift, AvaloniaHostShortcut.CreateNamesFromSelection),
-        R(Key.F7, None, AvaloniaHostShortcut.SpellCheck),
-        R(Key.F5, Ctrl, AvaloniaHostShortcut.RestoreWorkbookWindow),
-        R(Key.F7, Ctrl, AvaloniaHostShortcut.MoveWorkbookWindow),
-        R(Key.F8, Ctrl, AvaloniaHostShortcut.SizeWorkbookWindow),
-        R(Key.F6, Ctrl, AvaloniaHostShortcut.SwitchToNextWorkbookWindow),
-        R(Key.Tab, Ctrl, AvaloniaHostShortcut.SwitchToNextWorkbookWindow),
-        R(Key.F6, CtrlShift, AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow),
-        R(Key.Tab, CtrlShift, AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow),
-        R(Key.F9, Ctrl, AvaloniaHostShortcut.MinimizeWorkbookWindow),
-        R(Key.F10, Ctrl, AvaloniaHostShortcut.MaximizeOrRestoreWorkbookWindow),
-        R(Key.F9, CtrlAltShift, AvaloniaHostShortcut.RebuildDependenciesAndCalculate),
-        R(Key.F10, AltShift, AvaloniaHostShortcut.OpenErrorChecking),
-        R(Key.U, CtrlShift, AvaloniaHostShortcut.ToggleFormulaBarExpansion),
-        R(Key.L, CtrlShift, AvaloniaHostShortcut.ToggleFilter),
-        R(Key.L, CtrlAlt, AvaloniaHostShortcut.ReapplyFilter),
-        R(Key.Q, Ctrl, AvaloniaHostShortcut.QuickAnalysis),
-        R(Key.F1, Alt, AvaloniaHostShortcut.InsertEmbeddedChart),
-        R(Key.F11, None, AvaloniaHostShortcut.InsertChartSheet),
-        R(Key.Right, AltShift, AvaloniaHostShortcut.GroupSelection),
-        R(Key.Left, AltShift, AvaloniaHostShortcut.UngroupSelection),
-        R(Key.F, CtrlShift, AvaloniaHostShortcut.OpenFormatCellsFont),
-        R(Key.P, CtrlShift, AvaloniaHostShortcut.OpenFormatCellsFont),
-        R(Key.F2, Shift, AvaloniaHostShortcut.NewNote),
-        R(Key.F2, CtrlShift, AvaloniaHostShortcut.NewThreadedComment),
-        R(Key.F2, Ctrl, AvaloniaHostShortcut.EditInFormulaBar),
-        R(Key.OemPlus, CtrlAlt, AvaloniaHostShortcut.ZoomIn),
-        R(Key.Add, CtrlAlt, AvaloniaHostShortcut.ZoomIn),
-        R(Key.OemMinus, CtrlAlt, AvaloniaHostShortcut.ZoomOut),
-        R(Key.Subtract, CtrlAlt, AvaloniaHostShortcut.ZoomOut),
-        R(Key.OemQuotes, Ctrl, AvaloniaHostShortcut.CopyFormulaFromAbove),
-        R(Key.OemQuotes, CtrlShift, AvaloniaHostShortcut.CopyValueFromAbove),
-        R(Key.Back, Ctrl, AvaloniaHostShortcut.ScrollActiveCellIntoView),
-        R(Key.OemPeriod, Ctrl, AvaloniaHostShortcut.CycleSelectionCorner),
-        R(Key.Decimal, Ctrl, AvaloniaHostShortcut.CycleSelectionCorner),
-        R(Key.OemOpenBrackets, Ctrl, AvaloniaHostShortcut.SelectDirectPrecedents),
-        R(Key.OemCloseBrackets, Ctrl, AvaloniaHostShortcut.SelectDirectDependents),
-        R(Key.OemOpenBrackets, CtrlShift, AvaloniaHostShortcut.SelectAllPrecedents),
-        R(Key.OemCloseBrackets, CtrlShift, AvaloniaHostShortcut.SelectAllDependents),
-        R(Key.Back, None, AvaloniaHostShortcut.ClearSelectionAndEdit),
-        R(Key.Back, Shift, AvaloniaHostShortcut.ClearSelectionAndEdit),
-        R(Key.F4, Ctrl, AvaloniaHostShortcut.CloseWorkbook),
-        R(Key.D8, CtrlShift, AvaloniaHostShortcut.SelectCurrentRegion),
-        R(Key.F8, None, AvaloniaHostShortcut.ToggleExtendSelection),
-        R(Key.F8, Shift, AvaloniaHostShortcut.ToggleAddSelection),
-        R(Key.OemPlus, Ctrl, AvaloniaHostShortcut.InsertCells),
-        R(Key.OemPlus, CtrlShift, AvaloniaHostShortcut.InsertCells),
-        R(Key.OemMinus, Ctrl, AvaloniaHostShortcut.DeleteCells),
-        R(Key.Down, Alt, AvaloniaHostShortcut.OpenActiveDropdown),
+        R(Key.D8, CtrlShift, AvaloniaLocalShortcut.SelectCurrentRegion),
+        R(Key.F8, None, AvaloniaLocalShortcut.ToggleExtendSelection),
+        R(Key.F8, Shift, AvaloniaLocalShortcut.ToggleAddSelection),
+        R(Key.OemPlus, Ctrl, AvaloniaLocalShortcut.InsertCells),
+        R(Key.OemPlus, CtrlShift, AvaloniaLocalShortcut.InsertCells),
+        R(Key.OemMinus, Ctrl, AvaloniaLocalShortcut.DeleteCells),
     ];
 
-    internal static bool TryResolveAvaloniaHostShortcutForTest(
+    internal static bool TryResolveApplicationShortcutForTest(
         Key key,
         KeyModifiers modifiers,
-        out AvaloniaHostShortcut shortcut) =>
-        TryResolveAvaloniaHostShortcut(key, modifiers, out shortcut);
+        out KeyboardCommandShortcut shortcut) =>
+        TryResolveApplicationShortcut(key, modifiers, out shortcut);
 
     internal bool FormulaBarExpandedForTest => _formulaBarExpanded;
     internal ExcelSelectionMode KeyboardSelectionModeForTest => _keyboardSelectionMode;
 
     private ExcelSelectionMode _keyboardSelectionMode;
 
-    private static bool TryResolveAvaloniaHostShortcut(
+    private static bool TryResolveApplicationShortcut(
         Key key,
         KeyModifiers modifiers,
-        out AvaloniaHostShortcut shortcut)
+        out KeyboardCommandShortcut shortcut)
     {
-        foreach (var rule in AvaloniaHostShortcutRules)
+        shortcut = default;
+        return TryGetWorkbookShortcutKey(key, out var shortcutKey) &&
+            WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
+            shortcutKey,
+            ToWorkbookShortcutModifiers(modifiers),
+            out shortcut);
+    }
+
+    private static AvaloniaLocalShortcutRule R(
+        Key key,
+        KeyModifiers modifiers,
+        AvaloniaLocalShortcut shortcut) => new(key, modifiers, shortcut);
+
+    private static bool TryResolveAvaloniaLocalShortcut(
+        Key key,
+        KeyModifiers modifiers,
+        out AvaloniaLocalShortcut shortcut)
+    {
+        foreach (var rule in AvaloniaLocalShortcutRules)
         {
             if (rule.Key != key || rule.Modifiers != modifiers)
                 continue;
@@ -160,11 +87,6 @@ public sealed partial class MainWindow
         shortcut = default;
         return false;
     }
-
-    private static AvaloniaHostShortcutRule R(
-        Key key,
-        KeyModifiers modifiers,
-        AvaloniaHostShortcut shortcut) => new(key, modifiers, shortcut);
 
     private bool TryHandleWorkbookWindowSwitchShortcut(KeyEventArgs args)
     {
@@ -188,7 +110,7 @@ public sealed partial class MainWindow
     private const KeyModifiers AltShift = KeyModifiers.Alt | KeyModifiers.Shift;
     private const KeyModifiers CtrlAltShift = KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Shift;
 
-    private async Task<bool> TryHandleAvaloniaHostShortcutAsync(KeyEventArgs args)
+    private async Task<bool> TryHandleApplicationOrLocalShortcutAsync(KeyEventArgs args)
     {
         if (TryHandleFocusedEditorShortcut(args))
             return true;
@@ -224,14 +146,42 @@ public sealed partial class MainWindow
             return true;
         }
 
-        if (!TryResolveAvaloniaHostShortcut(args.Key, args.KeyModifiers, out var shortcut))
-            return false;
+        if (!TryResolveApplicationShortcut(args.Key, args.KeyModifiers, out var shortcut))
+        {
+            if (!TryResolveAvaloniaLocalShortcut(args.Key, args.KeyModifiers, out var localShortcut) ||
+                IsTextEditingEventSource(args))
+            {
+                return false;
+            }
+
+            args.Handled = true;
+            switch (localShortcut)
+            {
+                case AvaloniaLocalShortcut.SelectCurrentRegion:
+                    SelectCurrentRegionOrAll();
+                    break;
+                case AvaloniaLocalShortcut.ToggleExtendSelection:
+                    ToggleKeyboardSelectionMode(ExcelWorksheetNavigationModifiers.None);
+                    break;
+                case AvaloniaLocalShortcut.ToggleAddSelection:
+                    ToggleKeyboardSelectionMode(ExcelWorksheetNavigationModifiers.Shift);
+                    break;
+                case AvaloniaLocalShortcut.InsertCells:
+                    await ShowInsertCellsDialogAsync();
+                    break;
+                case AvaloniaLocalShortcut.DeleteCells:
+                    await ShowDeleteCellsDialogAsync();
+                    break;
+            }
+
+            return true;
+        }
 
         var isWorkbookWindowSwitch = shortcut is
-            AvaloniaHostShortcut.SwitchToNextWorkbookWindow or
-            AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow;
+            KeyboardCommandShortcut.SwitchToNextWorkbookWindow or
+            KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow;
         if (IsTextEditingEventSource(args) &&
-            shortcut != AvaloniaHostShortcut.ToggleFormulaBarExpansion &&
+            shortcut != KeyboardCommandShortcut.ToggleFormulaBarExpansion &&
             !isWorkbookWindowSwitch)
         {
             return false;
@@ -240,146 +190,131 @@ public sealed partial class MainWindow
         args.Handled = true;
         switch (shortcut)
         {
-            case AvaloniaHostShortcut.CreateTable:
+            case KeyboardCommandShortcut.CreateTable:
                 await InsertTableFromSelectionAsync();
                 break;
-            case AvaloniaHostShortcut.InsertCurrentDate:
+            case KeyboardCommandShortcut.InsertCurrentDate:
                 InsertCurrentDateOrTime(insertTime: false);
                 break;
-            case AvaloniaHostShortcut.InsertCurrentTime:
+            case KeyboardCommandShortcut.InsertCurrentTime:
                 InsertCurrentDateOrTime(insertTime: true);
                 break;
-            case AvaloniaHostShortcut.ToggleOutlineSymbols:
+            case KeyboardCommandShortcut.ToggleOutlineSymbols:
                 ToggleOutlineSymbolsShortcut();
                 break;
-            case AvaloniaHostShortcut.PasteName:
+            case KeyboardCommandShortcut.PasteName:
                 await ShowPasteNamesDialogAsync();
                 break;
-            case AvaloniaHostShortcut.NameManager:
+            case KeyboardCommandShortcut.NameManager:
                 await ShowNameManagerDialogAsync();
                 break;
-            case AvaloniaHostShortcut.CreateNamesFromSelection:
+            case KeyboardCommandShortcut.CreateNamesFromSelection:
                 await ShowCreateNamesFromSelectionDialogAsync();
                 break;
-            case AvaloniaHostShortcut.SpellCheck:
+            case KeyboardCommandShortcut.SpellCheck:
                 await ShowSpellingDialogAsync();
                 break;
-            case AvaloniaHostShortcut.RestoreWorkbookWindow:
+            case KeyboardCommandShortcut.RestoreWorkbookWindow:
                 RestoreWorkbookWindow();
                 break;
-            case AvaloniaHostShortcut.MoveWorkbookWindow:
+            case KeyboardCommandShortcut.MoveWorkbookWindow:
                 BeginNativeWindowCommand(NativeSystemMove);
                 break;
-            case AvaloniaHostShortcut.SizeWorkbookWindow:
+            case KeyboardCommandShortcut.SizeWorkbookWindow:
                 BeginNativeWindowCommand(NativeSystemSize);
                 break;
-            case AvaloniaHostShortcut.SwitchToNextWorkbookWindow:
+            case KeyboardCommandShortcut.SwitchToNextWorkbookWindow:
                 SwitchWorkbookWindow(forward: true);
                 break;
-            case AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow:
+            case KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow:
                 SwitchWorkbookWindow(forward: false);
                 break;
-            case AvaloniaHostShortcut.MinimizeWorkbookWindow:
+            case KeyboardCommandShortcut.MinimizeWorkbookWindow:
                 WindowState = WindowState.Minimized;
                 break;
-            case AvaloniaHostShortcut.MaximizeOrRestoreWorkbookWindow:
+            case KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow:
                 WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
                 break;
-            case AvaloniaHostShortcut.RebuildDependenciesAndCalculate:
+            case KeyboardCommandShortcut.RebuildDependenciesAndCalculate:
                 CalculateFull();
                 break;
-            case AvaloniaHostShortcut.OpenErrorChecking:
+            case KeyboardCommandShortcut.OpenErrorChecking:
                 await CheckFormulaErrorsAsync();
                 break;
-            case AvaloniaHostShortcut.ToggleFormulaBarExpansion:
+            case KeyboardCommandShortcut.ToggleFormulaBarExpansion:
                 _formulaBarExpanded = !_formulaBarExpanded;
                 ApplyFormulaBarExpansion();
                 break;
-            case AvaloniaHostShortcut.ToggleFilter:
+            case KeyboardCommandShortcut.ToggleFilter:
                 ToggleAutoFilter();
                 break;
-            case AvaloniaHostShortcut.ReapplyFilter:
+            case KeyboardCommandShortcut.ReapplyFilter:
                 ReapplyCurrentFilterSort();
                 break;
-            case AvaloniaHostShortcut.QuickAnalysis:
+            case KeyboardCommandShortcut.QuickAnalysis:
                 await ShowQuickAnalysisDialogAsync();
                 break;
-            case AvaloniaHostShortcut.InsertEmbeddedChart:
+            case KeyboardCommandShortcut.InsertEmbeddedChart:
                 InsertChartFromSelection(ChartType.Column);
                 break;
-            case AvaloniaHostShortcut.InsertChartSheet:
+            case KeyboardCommandShortcut.InsertChartSheet:
                 InsertChartSheetFromSelection();
                 break;
-            case AvaloniaHostShortcut.GroupSelection:
+            case KeyboardCommandShortcut.GroupSelection:
                 GroupSelectedRows();
                 break;
-            case AvaloniaHostShortcut.UngroupSelection:
+            case KeyboardCommandShortcut.UngroupSelection:
                 UngroupSelection();
                 break;
-            case AvaloniaHostShortcut.OpenFormatCellsFont:
+            case KeyboardCommandShortcut.OpenFormatCellsFont:
                 await ShowFormatCellsDialogAsync(initialTabIndex: 2);
                 break;
-            case AvaloniaHostShortcut.NewNote:
+            case KeyboardCommandShortcut.NewNote:
                 await ShowNewNoteDialogAsync();
                 break;
-            case AvaloniaHostShortcut.NewThreadedComment:
+            case KeyboardCommandShortcut.NewThreadedComment:
                 await ShowNewThreadedCommentDialogAsync();
                 break;
-            case AvaloniaHostShortcut.EditInFormulaBar:
+            case KeyboardCommandShortcut.EditInFormulaBar:
                 BeginFormulaEdit(_session.ActiveCell);
                 break;
-            case AvaloniaHostShortcut.ZoomIn:
+            case KeyboardCommandShortcut.ZoomIn:
                 ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, UiText.Get("InsertLoc_ZoomFailed"));
                 break;
-            case AvaloniaHostShortcut.ZoomOut:
+            case KeyboardCommandShortcut.ZoomOut:
                 ApplyZoomPercent(_session.ZoomPercent - StatusBarZoomSliderPlanner.ZoomStepPercent, UiText.Get("InsertLoc_ZoomFailed"));
                 break;
-            case AvaloniaHostShortcut.CopyFormulaFromAbove:
+            case KeyboardCommandShortcut.CopyFormulaFromAbove:
                 CopyFromAbove(CopyFromAboveMode.FormulaOrContent);
                 break;
-            case AvaloniaHostShortcut.CopyValueFromAbove:
+            case KeyboardCommandShortcut.CopyValueFromAbove:
                 CopyFromAbove(CopyFromAboveMode.Value);
                 break;
-            case AvaloniaHostShortcut.ScrollActiveCellIntoView:
+            case KeyboardCommandShortcut.ScrollActiveCellIntoView:
                 ScrollActiveCellIntoView();
                 break;
-            case AvaloniaHostShortcut.CycleSelectionCorner:
+            case KeyboardCommandShortcut.CycleSelectionCorner:
                 CycleSelectionCorner();
                 break;
-            case AvaloniaHostShortcut.SelectDirectPrecedents:
+            case KeyboardCommandShortcut.SelectDirectPrecedents:
                 SelectFormulaAuditCells(selectDependents: false, includeTransitive: false);
                 break;
-            case AvaloniaHostShortcut.SelectDirectDependents:
+            case KeyboardCommandShortcut.SelectDirectDependents:
                 SelectFormulaAuditCells(selectDependents: true, includeTransitive: false);
                 break;
-            case AvaloniaHostShortcut.SelectAllPrecedents:
+            case KeyboardCommandShortcut.SelectAllPrecedents:
                 SelectFormulaAuditCells(selectDependents: false, includeTransitive: true);
                 break;
-            case AvaloniaHostShortcut.SelectAllDependents:
+            case KeyboardCommandShortcut.SelectAllDependents:
                 SelectFormulaAuditCells(selectDependents: true, includeTransitive: true);
                 break;
-            case AvaloniaHostShortcut.ClearSelectionAndEdit:
+            case KeyboardCommandShortcut.ClearSelectionAndEdit:
                 ClearSelectionAndEdit();
                 break;
-            case AvaloniaHostShortcut.CloseWorkbook:
+            case KeyboardCommandShortcut.CloseWorkbook:
                 await CloseWorkbookAsync();
                 break;
-            case AvaloniaHostShortcut.SelectCurrentRegion:
-                SelectCurrentRegionOrAll();
-                break;
-            case AvaloniaHostShortcut.ToggleExtendSelection:
-                ToggleKeyboardSelectionMode(ExcelWorksheetNavigationModifiers.None);
-                break;
-            case AvaloniaHostShortcut.ToggleAddSelection:
-                ToggleKeyboardSelectionMode(ExcelWorksheetNavigationModifiers.Shift);
-                break;
-            case AvaloniaHostShortcut.InsertCells:
-                await ShowInsertCellsDialogAsync();
-                break;
-            case AvaloniaHostShortcut.DeleteCells:
-                await ShowDeleteCellsDialogAsync();
-                break;
-            case AvaloniaHostShortcut.OpenActiveDropdown:
+            case KeyboardCommandShortcut.OpenActiveDropdown:
                 OpenActiveDropdown();
                 break;
         }

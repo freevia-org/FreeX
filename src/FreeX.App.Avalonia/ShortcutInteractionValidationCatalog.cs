@@ -1,5 +1,6 @@
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.InteractionValidation;
+using FreeX.App.Presentation.Shell;
 using Avalonia.Input;
 
 namespace FreeX.App.Avalonia;
@@ -10,7 +11,7 @@ internal static class ShortcutInteractionValidationCatalog
         ShortcutInteractionDescriptor interaction,
         out Key key,
         out KeyModifiers modifiers,
-        out MainWindow.AvaloniaHostShortcut shortcut)
+        out KeyboardCommandShortcut shortcut)
     {
         key = default;
         modifiers = KeyModifiers.None;
@@ -26,7 +27,7 @@ internal static class ShortcutInteractionValidationCatalog
         if (sourceModifiers.HasFlag(ShortcutModifierKeys.Shift)) modifiers |= KeyModifiers.Shift;
         if (sourceModifiers.HasFlag(ShortcutModifierKeys.Alt)) modifiers |= KeyModifiers.Alt;
         if (sourceModifiers.HasFlag(ShortcutModifierKeys.Meta)) modifiers |= KeyModifiers.Meta;
-        return MainWindow.TryResolveAvaloniaHostShortcutForTest(key, modifiers, out shortcut);
+        return MainWindow.TryResolveApplicationShortcutForTest(key, modifiers, out shortcut);
     }
 
     internal static bool TryMapAvaloniaGesture(

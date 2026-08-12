@@ -6,6 +6,52 @@ namespace FreeX.App.Presentation.Tests.Shell;
 
 public sealed class WorkbookKeyboardShortcutCatalogTests
 {
+    private static readonly KeyboardCommandShortcut[] ExpectedApplicationCommands =
+    [
+        KeyboardCommandShortcut.CreateTable,
+        KeyboardCommandShortcut.InsertCurrentDate,
+        KeyboardCommandShortcut.InsertCurrentTime,
+        KeyboardCommandShortcut.ToggleOutlineSymbols,
+        KeyboardCommandShortcut.PasteName,
+        KeyboardCommandShortcut.NameManager,
+        KeyboardCommandShortcut.CreateNamesFromSelection,
+        KeyboardCommandShortcut.SpellCheck,
+        KeyboardCommandShortcut.RestoreWorkbookWindow,
+        KeyboardCommandShortcut.MoveWorkbookWindow,
+        KeyboardCommandShortcut.SizeWorkbookWindow,
+        KeyboardCommandShortcut.SwitchToNextWorkbookWindow,
+        KeyboardCommandShortcut.SwitchToPreviousWorkbookWindow,
+        KeyboardCommandShortcut.MinimizeWorkbookWindow,
+        KeyboardCommandShortcut.MaximizeOrRestoreWorkbookWindow,
+        KeyboardCommandShortcut.RebuildDependenciesAndCalculate,
+        KeyboardCommandShortcut.OpenErrorChecking,
+        KeyboardCommandShortcut.ToggleFormulaBarExpansion,
+        KeyboardCommandShortcut.ToggleFilter,
+        KeyboardCommandShortcut.ReapplyFilter,
+        KeyboardCommandShortcut.QuickAnalysis,
+        KeyboardCommandShortcut.InsertEmbeddedChart,
+        KeyboardCommandShortcut.InsertChartSheet,
+        KeyboardCommandShortcut.GroupSelection,
+        KeyboardCommandShortcut.UngroupSelection,
+        KeyboardCommandShortcut.OpenFormatCellsFont,
+        KeyboardCommandShortcut.NewNote,
+        KeyboardCommandShortcut.NewThreadedComment,
+        KeyboardCommandShortcut.EditInFormulaBar,
+        KeyboardCommandShortcut.ZoomIn,
+        KeyboardCommandShortcut.ZoomOut,
+        KeyboardCommandShortcut.CopyFormulaFromAbove,
+        KeyboardCommandShortcut.CopyValueFromAbove,
+        KeyboardCommandShortcut.ScrollActiveCellIntoView,
+        KeyboardCommandShortcut.CycleSelectionCorner,
+        KeyboardCommandShortcut.SelectDirectPrecedents,
+        KeyboardCommandShortcut.SelectDirectDependents,
+        KeyboardCommandShortcut.SelectAllPrecedents,
+        KeyboardCommandShortcut.SelectAllDependents,
+        KeyboardCommandShortcut.ClearSelectionAndEdit,
+        KeyboardCommandShortcut.CloseWorkbook,
+        KeyboardCommandShortcut.OpenActiveDropdown,
+    ];
+
     [Fact]
     public void SharedResolverOwnsLookupAndDispatchBehavior()
     {
@@ -75,6 +121,54 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
             source.Should().Contain("Resolver.TryDispatch(key, modifiers, dispatch)");
             source.Should().NotContain("foreach (var shortcut in Shortcuts)");
         }
+    }
+
+    [Fact]
+    public void ApplicationCommandCatalog_OwnsAllFortyTwoCrossRendererRoutes()
+    {
+        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts.Should().HaveCount(47);
+        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts
+            .Select(shortcut => shortcut.Command)
+            .Distinct()
+            .Should().BeEquivalentTo(ExpectedApplicationCommands);
+
+        WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts
+            .GroupBy(shortcut => (shortcut.Key, shortcut.Modifiers))
+            .Should().OnlyContain(group => group.Count() == 1);
+
+        foreach (var shortcut in WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts)
+        {
+            WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(
+                    shortcut.Key,
+                    shortcut.Modifiers,
+                    out var resolved)
+                .Should().BeTrue();
+            resolved.Should().Be(shortcut.Command);
+        }
+    }
+
+    [Fact]
+    public void NativeRenderers_OnlyConvertAndDispatchApplicationCommandCatalog()
+    {
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Host",
+            "KeyboardShortcutMatcher.CommandRules.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.KeyboardParity.cs"));
+
+        wpf.Should().Contain("WorkbookKeyboardShortcutCatalog.ApplicationCommandShortcuts");
+        wpf.Should().NotContain("new(KeyboardCommandShortcut.CreateTable");
+        wpf.Should().NotContain("new(KeyboardCommandShortcut.RebuildDependenciesAndCalculate");
+        avalonia.Should().Contain("WorkbookKeyboardShortcutCatalog.TryGetApplicationCommand(");
+        avalonia.Should().NotContain("AvaloniaHostShortcut");
+        avalonia.Should().NotContain("R(Key.T, Ctrl");
+        avalonia.Should().NotContain("R(Key.F9, CtrlAltShift");
     }
 
     [Theory]
