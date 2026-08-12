@@ -281,6 +281,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             textBox,
             LegalNoticesDialogMetrics.TextPadding,
             rightMargin: 2);
+        // Generic dialog chrome supplies the normal product text brush on Opened. Legal-document
+        // surfaces follow the WPF authority's explicit black foreground, so restore it after that pass.
+        textBox.Foreground = Brushes.Black;
         // Avalonia's Consolas metrics are fractionally narrower than WPF's at the shared
         // 12px size. Compensate the glyph width without imposing a line box absent in WPF.
         textBox.FontSize = TextFontSizeCompensation;
