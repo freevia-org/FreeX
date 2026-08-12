@@ -73,6 +73,39 @@ public sealed class ParityCaptureAssemblyOwnershipTests
     }
 
     [Fact]
+    public void ShippingAssembly_DoesNotOwnDialogInspectionSupport()
+    {
+        var assembly = typeof(ProductionAvalonia::FreeX.App.Avalonia.MainWindow).Assembly;
+        var mainWindow = typeof(ProductionAvalonia::FreeX.App.Avalonia.MainWindow);
+        const BindingFlags allMembers = BindingFlags.Public | BindingFlags.NonPublic |
+            BindingFlags.Instance | BindingFlags.Static;
+        string[] inspectionTypes =
+        [
+            "FindDialogInspection",
+            "ReplaceDialogInspection",
+            "GoToDialogInspection",
+            "GoToSpecialDialogInspection",
+            "SortDialogInspection",
+            "DataValidationDialogInspection",
+            "FormatCellsDialogInspection",
+            "ConditionalFormatRuleDialogInspection",
+            "ManageConditionalFormatsDialogInspection",
+            "PasteSpecialDialogInspection",
+        ];
+
+        inspectionTypes.Should().AllSatisfy(name =>
+            assembly.GetType($"FreeX.App.Avalonia.MainWindow+{name}").Should().BeNull());
+        mainWindow.GetMembers(allMembers)
+            .Select(member => member.Name)
+            .Should().NotContain([
+                "CompleteDialogInspection",
+                "ShowHeaderFooterPictureFormatParityDialogAsync",
+                "ShowUnhideWindowParityDialogAsync",
+                "ShowSelectDataDialogAsync",
+            ]);
+    }
+
+    [Fact]
     public void ParityRendererHost_OwnsExtractedRendererTestAccess()
     {
         var supportMainWindow = typeof(global::FreeX.App.Avalonia.MainWindow);
@@ -92,6 +125,22 @@ public sealed class ParityCaptureAssemblyOwnershipTests
             "AllowCloseWithoutDirtyPromptForParityCapture",
             "ChromeSurfaceColor",
         ]);
+
+        typeof(global::FreeX.App.Avalonia.MainWindow)
+            .GetNestedTypes(allMembers)
+            .Select(type => type.Name)
+            .Should().Contain([
+                "FindDialogInspection",
+                "ReplaceDialogInspection",
+                "GoToDialogInspection",
+                "GoToSpecialDialogInspection",
+                "SortDialogInspection",
+                "DataValidationDialogInspection",
+                "FormatCellsDialogInspection",
+                "ConditionalFormatRuleDialogInspection",
+                "ManageConditionalFormatsDialogInspection",
+                "PasteSpecialDialogInspection",
+            ]);
     }
 
     [Fact]
@@ -138,6 +187,11 @@ public sealed class ParityCaptureAssemblyOwnershipTests
                 "RendererHost",
                 "MainWindow.RendererValidationAccess.cs"))
             .Should().BeTrue();
+        File.Exists(Path.Combine(
+                validationDirectory,
+                "RendererHost",
+                "MainWindow.DialogInspectionAccess.cs"))
+            .Should().BeTrue();
         File.Exists(Path.Combine(validationDirectory, "RendererHost", "Program.ValidationHost.cs"))
             .Should().BeTrue();
 
@@ -151,10 +205,46 @@ public sealed class ParityCaptureAssemblyOwnershipTests
 
         shippingProject.Should().Contain("Condition=\"'$(FreeXValidationHost)' == 'true'\"");
         shippingProject.Should().Contain("..\\..\\tools\\FreeX.Validation.Avalonia\\RendererHost");
+        shippingProject.Should().Contain("MainWindow.DialogInspectionAccess.cs");
         validationProject.Should().Contain("Compile Remove=\"RendererHost\\**\\*.cs\"");
         validationProject.Should().Contain("AdditionalProperties=\"FreeXValidationHost=true\"");
         shippingProgram.Should().NotContain("RunValidationToolHost");
         shippingProgram.Should().NotContain("RendererValidationAccess");
+    }
+
+    [Fact]
+    public void ShippingSources_DoNotOwnDialogInspectionContractsOrParityEntryPoints()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var shippingDirectory = Path.Combine(root, "src", "FreeX.App.Avalonia");
+        var supportSource = File.ReadAllText(Path.Combine(
+            root,
+            "tools",
+            "FreeX.Validation.Avalonia",
+            "RendererHost",
+            "MainWindow.DialogInspectionAccess.cs"));
+        var shippingSource = Directory.GetFiles(shippingDirectory, "*.cs", SearchOption.TopDirectoryOnly)
+            .Select(File.ReadAllText)
+            .Aggregate(string.Empty, static (all, source) => all + source);
+
+        shippingSource.Should().NotContain("record FindDialogInspection");
+        shippingSource.Should().NotContain("record ReplaceDialogInspection");
+        shippingSource.Should().NotContain("record GoToDialogInspection");
+        shippingSource.Should().NotContain("record GoToSpecialDialogInspection");
+        shippingSource.Should().NotContain("record SortDialogInspection");
+        shippingSource.Should().NotContain("record DataValidationDialogInspection");
+        shippingSource.Should().NotContain("record FormatCellsDialogInspection");
+        shippingSource.Should().NotContain("record ConditionalFormatRuleDialogInspection");
+        shippingSource.Should().NotContain("record ManageConditionalFormatsDialogInspection");
+        shippingSource.Should().NotContain("record PasteSpecialDialogInspection");
+        shippingSource.Should().NotContain("CompleteDialogInspection");
+        shippingSource.Should().NotContain("ShowHeaderFooterPictureFormatParityDialogAsync");
+        shippingSource.Should().NotContain("ShowUnhideWindowParityDialogAsync");
+        shippingSource.Should().NotContain("ShowSelectDataDialogAsync");
+
+        supportSource.Should().Contain("record FindDialogInspection");
+        supportSource.Should().Contain("record PasteSpecialDialogInspection");
+        supportSource.Should().Contain("CompleteDialogInspection");
     }
 
     [Fact]

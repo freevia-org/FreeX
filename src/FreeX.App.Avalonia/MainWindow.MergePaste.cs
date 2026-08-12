@@ -329,32 +329,10 @@ public sealed partial class MainWindow
     partial void ResolvePasteSpecialWorkflowOverride(ref Func<Task>? handler);
 
     /// <summary>
-    /// Test-only hook (matching the established DialogInspection convention used by
-    /// <c>ShowFormatCellsInputDialogAsync</c>/<c>ShowFindDialogAsync</c>/etc. in MainWindow.cs) exposing
-    /// the real, production content-kind radios / checkboxes / operation radios / footer buttons of the
-    /// ribbon's Paste Special dialog so a headless test can drive them directly -- the OS clipboard itself
-    /// (<c>IClipboard</c>) is <c>[NotClientImplementable]</c> so cannot be doubled in a headless test (see
-    /// the R66/R68 rationale on <see cref="TryGetClipboardTextAsync"/>), but this probe fires from the
-    /// dialog's own <c>Opened</c> event, before any clipboard access happens, so it can still exercise the
-    /// real dialog end-to-end for everything up to (and including) the OK-click selection decision.
-    /// </summary>
-    internal sealed record PasteSpecialDialogInspection(
-        Window Dialog,
-        IReadOnlyList<RadioButton> ContentRadios,
-        CheckBox SkipBlanksBox,
-        CheckBox TransposeBox,
-        CheckBox KeepColumnWidthsBox,
-        IReadOnlyList<RadioButton> OperationRadios,
-        Button PasteLinkButton,
-        Button OkButton,
-        Button CancelButton);
-
-    /// <summary>
     /// Shows the native dialog and returns the shared typed selection, or <c>null</c>. The shared
     /// catalog supplies content order, action policy, labels, stable identities, and default state.
     /// </summary>
-    internal async Task<PasteSpecialDialogSelection?> PromptPasteSpecialModeAsync(
-        Action<PasteSpecialDialogInspection>? inspectionCallback = null)
+    internal async Task<PasteSpecialDialogSelection?> PromptPasteSpecialModeAsync()
     {
         PasteSpecialDialogSelection? result = null;
         var surface = PasteSpecialPlanner.Surface;
@@ -527,16 +505,16 @@ public sealed partial class MainWindow
 
         dialog.Content = root;
         dialog.Opened += (_, _) => okButton.Focus();
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new PasteSpecialDialogInspection(
-                        dialog, radios, skipBlanksBox, transposeBox, keepColumnWidthsBox, operationRadios, pasteLinkButton, okButton, cancelButton)));
-            };
-        }
+        AttachOptionalPasteSpecialDialogObservation(
+            dialog,
+            radios,
+            skipBlanksBox,
+            transposeBox,
+            keepColumnWidthsBox,
+            operationRadios,
+            pasteLinkButton,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;

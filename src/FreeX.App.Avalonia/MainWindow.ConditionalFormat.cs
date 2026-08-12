@@ -46,39 +46,6 @@ public sealed partial class MainWindow
             .Select(preset => (preset, ConditionalFormatPresetFactory.DisplayName(preset)))
             .ToList();
 
-    /// <summary>Controls exposed for dialog inspection.</summary>
-    internal sealed record ConditionalFormatRuleDialogInspection(
-        Window Dialog,
-        ComboBox RuleTypeBox,
-        ComboBox PresetBox,
-        ComboBox OperatorBox,
-        TextBox Value1Box,
-        TextBox FormulaBox,
-        TextBox TextBox,
-        TextBox RankBox,
-        ComboBox TopBottomBox,
-        ComboBox IconSetBox,
-        TextBox MinColorBox,
-        TextBox MaxColorBox,
-        ComboBox HighlightBox,
-        Button OkButton,
-        Button CancelButton);
-
-    /// <summary>Controls exposed for Manage Rules dialog inspection.</summary>
-    internal sealed record ManageConditionalFormatsDialogInspection(
-        Window Dialog,
-        ComboBox ScopeBox,
-        ListBox ListBox,
-        TextBox AppliesToBox,
-        Button NewButton,
-        Button EditButton,
-        Button DeleteButton,
-        Button MoveUpButton,
-        Button MoveDownButton,
-        Button ApplyAppliesToButton,
-        Control AppliesToRow,
-        Button CloseButton);
-
     /// <summary>The native Format-menu "Conditional Formatting" submenu: New Rule, quick presets, Manage.</summary>
     private NativeMenu CreateNativeConditionalFormatMenu()
     {
@@ -226,7 +193,7 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null, startRuleType, inspectionCallback: null);
+        var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null, startRuleType);
         if (built is null)
             return;
 
@@ -238,20 +205,13 @@ public sealed partial class MainWindow
     }
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule) =>
-        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, inspectionCallback: null);
+        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null);
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
-        ConditionalFormat? existingRule,
-        Action<ConditionalFormatRuleDialogInspection>? inspectionCallback) =>
-        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, inspectionCallback);
-
-    private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
-        QuickAnalysisConditionalFormatDialogSeed seed,
-        Action<ConditionalFormatRuleDialogInspection>? inspectionCallback = null) =>
+        QuickAnalysisConditionalFormatDialogSeed seed) =>
         ShowConditionalFormatRuleEditorAsync(
             existingRule: null,
             startRuleType: seed.RuleType,
-            inspectionCallback,
             initialSeed: seed);
 
     /// <summary>
@@ -263,7 +223,6 @@ public sealed partial class MainWindow
     private async Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
         ConditionalFormat? existingRule,
         CfRuleType? startRuleType,
-        Action<ConditionalFormatRuleDialogInspection>? inspectionCallback,
         QuickAnalysisConditionalFormatDialogSeed? initialSeed = null)
     {
         ConditionalFormat? result = null;
@@ -758,30 +717,22 @@ public sealed partial class MainWindow
         ConfigureNativeDialogInitialFocus(dialog, root, ruleTypeBox);
         dialog.Content = root;
 
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new ConditionalFormatRuleDialogInspection(
-                        dialog,
-                        ruleTypeBox,
-                        presetBox,
-                        operatorBox,
-                        value1Box,
-                        formulaBox,
-                        textBox,
-                        rankBox,
-                        topBottomBox,
-                        iconSetBox,
-                        minColorBox,
-                        maxColorBox,
-                        highlightBox,
-                        okButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalConditionalFormatRuleDialogObservation(
+            dialog,
+            ruleTypeBox,
+            presetBox,
+            operatorBox,
+            value1Box,
+            formulaBox,
+            textBox,
+            rankBox,
+            topBottomBox,
+            iconSetBox,
+            minColorBox,
+            maxColorBox,
+            highlightBox,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -1007,9 +958,6 @@ public sealed partial class MainWindow
         return result;
     }
 
-    private Task ShowManageConditionalFormatsDialogAsync() =>
-        ShowManageConditionalFormatsDialogAsync(inspectionCallback: null);
-
     /// <summary>
     /// The Manage Rules dialog: lists the selection's overlapping rules (or every sheet rule when the
     /// selection is a single cell) with New, Edit, Delete, reorder (move up/down), and change applies-to.
@@ -1020,8 +968,7 @@ public sealed partial class MainWindow
     /// mirroring the Windows host's manager (which buffers edits in a private
     /// <c>ObservableCollection&lt;ConditionalFormat&gt;</c>).
     /// </summary>
-    internal async Task ShowManageConditionalFormatsDialogAsync(
-        Action<ManageConditionalFormatsDialogInspection>? inspectionCallback)
+    private async Task ShowManageConditionalFormatsDialogAsync()
     {
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -1435,27 +1382,19 @@ public sealed partial class MainWindow
         // target, so Tab and Shift+Tab both start from the same predictable control.
         dialog.Opened += (_, _) => scopeBox.Focus();
 
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new ManageConditionalFormatsDialogInspection(
-                        dialog,
-                        scopeBox,
-                        listBox,
-                        appliesToBox,
-                        newButton,
-                        editButton,
-                        deleteButton,
-                        moveUpButton,
-                        moveDownButton,
-                        applyAppliesToButton,
-                        appliesToRow,
-                        closeButton)));
-            };
-        }
+        AttachOptionalManageConditionalFormatsDialogObservation(
+            dialog,
+            scopeBox,
+            listBox,
+            appliesToBox,
+            newButton,
+            editButton,
+            deleteButton,
+            moveUpButton,
+            moveDownButton,
+            applyAppliesToButton,
+            appliesToRow,
+            closeButton);
 
         AttachDialogRangePicker(
             dialog,

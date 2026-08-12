@@ -442,40 +442,6 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<Window?>(this);
     }
 
-    private async Task ShowHeaderFooterPictureFormatParityDialogAsync()
-    {
-        var picture = new WorksheetHeaderFooterPicture(
-            [],
-            "image/png",
-            "QuarterlyHeader.png",
-            Width: 160,
-            Height: 80);
-        await ShowHeaderFooterPictureFormatDialogAsync(picture);
-    }
-
-    private async Task ShowUnhideWindowParityDialogAsync()
-    {
-        var hidden = new Window
-        {
-            Title = "Parity Demo:2",
-            Width = 320,
-            Height = 200,
-            ShowInTaskbar = false,
-        };
-        hidden.Show();
-        hidden.Hide();
-        HiddenWindows.Add(hidden);
-        try
-        {
-            await ShowUnhideWindowDialogAsync();
-        }
-        finally
-        {
-            HiddenWindows.Remove(hidden);
-            hidden.Close();
-        }
-    }
-
     private static HeaderFooterEditorSection ResolveHeaderFooterPictureSection(
         WorksheetHeaderFooterPictureSet pictures,
         HeaderFooterEditorSection preferredSection)

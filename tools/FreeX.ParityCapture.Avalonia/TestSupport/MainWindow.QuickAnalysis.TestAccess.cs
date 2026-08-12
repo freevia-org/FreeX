@@ -18,8 +18,6 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private Action<ConditionalFormatRuleDialogInspection>? _interactionValidationConditionalFormatRuleProbe;
-
     /// <summary>
     /// R128B test hook: drives the real Quick Analysis "open conditional-format dialog" apply path
     /// (<see cref="ApplyQuickAnalysisItemAsync"/> -&gt; <see cref="ShowQuickAnalysisConditionalFormatDialogAsync"/>)
@@ -30,8 +28,8 @@ public sealed partial class MainWindow
     /// </summary>
     internal async Task ApplyQuickAnalysisConditionalFormatItemForTestAsync(string itemId, ConditionalFormatPreset preset)
     {
-        var previousProbe = _interactionValidationConditionalFormatRuleProbe;
-        _interactionValidationConditionalFormatRuleProbe = probe =>
+        var previousProbe = _conditionalFormatRuleDialogInspectionCallback;
+        _conditionalFormatRuleDialogInspectionCallback = probe =>
         {
             var presetIndex = ConditionalFormatPresetChoices.ToList().FindIndex(choice => choice.Preset == preset);
             if (presetIndex >= 0)
@@ -51,12 +49,7 @@ public sealed partial class MainWindow
         }
         finally
         {
-            _interactionValidationConditionalFormatRuleProbe = previousProbe;
+            _conditionalFormatRuleDialogInspectionCallback = previousProbe;
         }
     }
-
-    partial void ResolveQuickAnalysisConditionalFormatInspection(
-        ref Action<ConditionalFormatRuleDialogInspection>? inspection) =>
-        inspection = _interactionValidationConditionalFormatRuleProbe;
-
 }

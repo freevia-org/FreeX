@@ -255,7 +255,7 @@ public sealed class AvaloniaSemanticLocalizationConvergenceTests
                      "private async Task ShowGoToDialogAsync()",
                      "private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync",
                      "private async Task ShowWorkbookStatisticsDialogAsync()",
-                     "private async Task<SortDialogResult?> ShowSortInputDialogAsync(Action",
+                     "private async Task<SortDialogResult?> ShowSortInputDialogAsync()",
                      "private async Task ShowGoalSeekDialogAsync()",
                      "private async Task<GoalSeekStatusDialogChoice> ShowGoalSeekStatusDialogAsync",
                      "private async Task<AdvancedFilterPlan?> ShowAdvancedFilterInputDialogAsync()",

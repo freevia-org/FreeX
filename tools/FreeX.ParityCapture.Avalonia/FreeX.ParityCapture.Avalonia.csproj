@@ -17,6 +17,8 @@
              LinkBase="Renderer" />
     <Compile Include="..\FreeX.Validation.Avalonia\RendererHost\MainWindow.RendererValidationAccess.cs"
              Link="Renderer\MainWindow.RendererValidationAccess.cs" />
+    <Compile Include="..\FreeX.Validation.Avalonia\RendererHost\MainWindow.DialogInspectionAccess.cs"
+             Link="Renderer\MainWindow.DialogInspectionAccess.cs" />
     <Compile Include="TestSupport\**\*.cs" />
     <Compile Include="Capture\**\*.cs" />
   </ItemGroup>

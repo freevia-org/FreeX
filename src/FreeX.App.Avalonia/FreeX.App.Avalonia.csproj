@@ -69,6 +69,8 @@
     <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
   <ItemGroup Condition="'$(FreeXValidationHost)' == 'true'">
+    <Compile Include="..\..\tools\FreeX.Validation.Avalonia\RendererHost\MainWindow.DialogInspectionAccess.cs"
+             Link="MainWindow.DialogInspectionAccess.cs" />
     <Compile Include="..\..\tools\FreeX.Validation.Avalonia\RendererHost\MainWindow.RendererValidationAccess.cs"
              Link="MainWindow.RendererValidationAccess.cs" />
     <Compile Include="..\..\tools\FreeX.Validation.Avalonia\RendererHost\Program.ValidationHost.cs"

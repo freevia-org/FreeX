@@ -149,90 +149,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         CheckBox MatchCaseBox,
         CheckBox MatchEntireCellBox,
         Control Panel);
-    internal sealed record FindDialogInspection(
-        Window Dialog,
-        TextBox FindBox,
-        Button FindNextButton,
-        Button FindAllButton,
-        Button CancelButton,
-        FindOptionsControls OptionsControls,
-        Button ChooseFormatButton,
-        Button ClearFormatButton);
-    internal sealed record ReplaceDialogInspection(
-        Window Dialog,
-        TextBox FindBox,
-        TextBox ReplaceBox,
-        Button ReplaceButton,
-        Button ReplaceAllButton,
-        Button CancelButton,
-        FindOptionsControls OptionsControls,
-        Button ChooseFindFormatButton,
-        Button ClearFindFormatButton,
-        Button ChooseReplaceFormatButton,
-        Button ClearReplaceFormatButton);
-    private sealed record SingleInputDialogInspection(
-        Window Dialog,
-        TextBox InputBox,
-        Button AcceptButton,
-        Button CancelButton);
-    internal sealed record GoToDialogInspection(
-        Window Dialog,
-        ListBox HistoryList,
-        TextBox InputBox,
-        Button SpecialButton,
-        Button AcceptButton,
-        Button CancelButton);
     private sealed record GoToDialogResult(
         string? Reference,
         GoToSpecialKind? SpecialKind,
         GoToSpecialOptions? SpecialOptions);
-    internal sealed record GoToSpecialDialogInspection(
-        Window Dialog,
-        Control KindBox,
-        CheckBox NumbersBox,
-        CheckBox TextBox,
-        CheckBox LogicalsBox,
-        CheckBox ErrorsBox,
-        Button OkButton,
-        Button CancelButton);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
-    internal sealed record SortDialogInspection(
-        Window Dialog,
-        CheckBox HeadersCheckBox,
-        Control LevelsGrid,
-        ComboBox SortOnBox,
-        ComboBox ColorBox,
-        Button AddLevelButton,
-        Button DeleteLevelButton,
-        Button CopyLevelButton,
-        Button MoveUpButton,
-        Button MoveDownButton,
-        Button OptionsButton,
-        Button OkButton,
-        Button CancelButton);
     private sealed record DataValidationDialogResult(
         DataValidationDialogAction Action,
         DataValidation? Rule,
         bool ApplyToSameSettings = false);
-    internal sealed record DataValidationDialogInspection(
-        Window Dialog,
-        TextBlock SummaryText,
-        ComboBox TypeBox,
-        ComboBox OperatorBox,
-        TextBox Formula1Box,
-        TextBox Formula2Box,
-        CheckBox AllowBlankBox,
-        CheckBox ShowDropdownBox,
-        CheckBox ShowInputMessageBox,
-        TextBox PromptTitleBox,
-        TextBox PromptMessageBox,
-        CheckBox ShowErrorMessageBox,
-        ComboBox AlertStyleBox,
-        TextBox ErrorTitleBox,
-        TextBox ErrorMessageBox,
-        Button ApplyButton,
-        Button ClearButton,
-        Button CancelButton);
     private sealed record SortDialogResult(
         IReadOnlyList<SortDialogLevel> Levels,
         bool HasHeaders,
@@ -246,20 +171,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         public override string ToString() => Label;
     }
-    internal sealed record FormatCellsDialogInspection(
-        Window Dialog,
-        TabControl TabStrip,
-        TabItem NumberTab,
-        TabItem AlignmentTab,
-        TabItem FontTab,
-        TabItem FillTab,
-        TabItem BorderTab,
-        TabItem ProtectionTab,
-        ListBox NumberCategoryList,
-        ComboBox NumberFormatBox,
-        TextBlock NumberPreview,
-        Button OkButton,
-        Button CancelButton);
     private sealed class FormatCellsDialogWindow : Window
     {
         internal void ResizeClient(Size size) => ClientSize = size;
@@ -13976,7 +13887,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return Task.CompletedTask;
     }
 
-    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogInspection>? inspectionCallback = null)
+    private async Task<FindDialogResult?> ShowFindInputDialogAsync()
     {
         FindDialogResult? result = null;
         var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
@@ -14110,23 +14021,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findBox.Focus();
             findBox.SelectAll();
         };
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new FindDialogInspection(
-                        dialog,
-                        findBox,
-                        findNextButton,
-                        findAllButton,
-                        cancelButton,
-                        optionsControls,
-                        chooseFormatButton,
-                        clearFormatButton)));
-            };
-        }
+        AttachOptionalFindDialogObservation(
+            dialog,
+            findBox,
+            findNextButton,
+            findAllButton,
+            cancelButton,
+            optionsControls,
+            chooseFormatButton,
+            clearFormatButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -14175,7 +14078,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return ShowFindReplaceTabbedDialogAsync(replaceMode: true);
     }
 
-    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogInspection>? inspectionCallback = null)
+    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync()
     {
         ReplaceDialogResult? result = null;
         var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
@@ -14334,26 +14237,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findBox.Focus();
             findBox.SelectAll();
         };
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new ReplaceDialogInspection(
-                        dialog,
-                        findBox,
-                        replaceBox,
-                        replaceButton,
-                        replaceAllButton,
-                        cancelButton,
-                        optionsControls,
-                        chooseFindFormatButton,
-                        clearFindFormatButton,
-                        chooseReplaceFormatButton,
-                        clearReplaceFormatButton)));
-            };
-        }
+        AttachOptionalReplaceDialogObservation(
+            dialog,
+            findBox,
+            replaceBox,
+            replaceButton,
+            replaceAllButton,
+            cancelButton,
+            optionsControls,
+            chooseFindFormatButton,
+            clearFindFormatButton,
+            chooseReplaceFormatButton,
+            clearReplaceFormatButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -14394,8 +14289,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             recentReferences: null,
             definedNames: _session.Workbook.NamedRanges.Keys);
 
-    private async Task<GoToDialogResult?> ShowGoToInputDialogAsync(
-        Action<GoToDialogInspection>? inspectionCallback = null)
+    private async Task<GoToDialogResult?> ShowGoToInputDialogAsync()
     {
         GoToDialogResult? result = null;
         var dialog = new Window
@@ -14566,21 +14460,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             AvaloniaCompactDialogChrome.FocusAndSelect(inputBox);
         };
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new GoToDialogInspection(
-                        dialog,
-                        historyList,
-                        inputBox,
-                        specialButton,
-                        acceptButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalGoToDialogObservation(
+            dialog,
+            historyList,
+            inputBox,
+            specialButton,
+            acceptButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -14679,7 +14565,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         SelectGoToSpecial(selection.Kind, selection.Options);
     }
 
-    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogInspection>? inspectionCallback = null)
+    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync()
     {
         GoToSpecialDialogResult? result = null;
         var dialog = new Window
@@ -14880,23 +14766,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ApplyGoToSpecialButtonSize(cancelButton);
             kindButtons.FirstOrDefault()?.Focus();
         };
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new GoToSpecialDialogInspection(
-                        dialog,
-                        choiceGrid,
-                        numbersBox,
-                        textBox,
-                        logicalsBox,
-                        errorsBox,
-                        okButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalGoToSpecialDialogObservation(
+            dialog,
+            choiceGrid,
+            numbersBox,
+            textBox,
+            logicalsBox,
+            errorsBox,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -15840,17 +15718,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     internal Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogAsync(
-        Action<FormatCellsDialogInspection>? inspectionCallback = null,
         int initialTabIndex = 0) =>
-        ShowFormatCellsInputDialogCoreAsync(inspectionCallback, initialTabIndex, numberFormatOverride: null);
+        ShowFormatCellsInputDialogCoreAsync(initialTabIndex, numberFormatOverride: null);
 
     internal Task<FormatCellsCompactDialogPlan?> ShowPivotNumberFormatInputDialogAsync(
-        string? currentNumberFormat,
-        Action<FormatCellsDialogInspection>? inspectionCallback = null) =>
-        ShowFormatCellsInputDialogCoreAsync(inspectionCallback, initialTabIndex: 0, currentNumberFormat);
+        string? currentNumberFormat) =>
+        ShowFormatCellsInputDialogCoreAsync(initialTabIndex: 0, currentNumberFormat);
 
     private async Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogCoreAsync(
-        Action<FormatCellsDialogInspection>? inspectionCallback = null,
         int initialTabIndex = 0,
         string? numberFormatOverride = null)
     {
@@ -17477,28 +17352,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
             target.Focus();
         };
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new FormatCellsDialogInspection(
-                        dialog,
-                        tabStrip,
-                        numberTab,
-                        alignmentTab,
-                        fontTab,
-                        fillTab,
-                        borderTab,
-                        protectionTab,
-                        numberCategoryList,
-                        numberFormatBox,
-                        numberPreview,
-                        okButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalFormatCellsDialogObservation(
+            dialog,
+            tabStrip,
+            numberTab,
+            alignmentTab,
+            fontTab,
+            fillTab,
+            borderTab,
+            protectionTab,
+            numberCategoryList,
+            numberFormatBox,
+            numberPreview,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -17805,8 +17672,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         string label,
         string initialText,
         string acceptText,
-        string automationId,
-        Action<SingleInputDialogInspection>? inspectionCallback = null)
+        string automationId)
     {
         string? result = null;
         var dialog = new Window
@@ -17886,19 +17752,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             inputBox.Focus();
             inputBox.SelectAll();
         };
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new SingleInputDialogInspection(
-                        dialog,
-                        inputBox,
-                        acceptButton,
-                        cancelButton)));
-            };
-        }
 
         await dialog.ShowDialog(this);
         return result;
@@ -18925,11 +18778,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task<SortDialogResult?> ShowSortInputDialogAsync()
     {
-        return await ShowSortInputDialogAsync(null);
-    }
-
-    private async Task<SortDialogResult?> ShowSortInputDialogAsync(Action<SortDialogInspection>? inspectionCallback)
-    {
         SortDialogResult? result = null;
         var range = _session.SelectedRange;
         var levels = SortDialogPlanner.NormalizeLevels(null).ToList();
@@ -19574,28 +19422,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         root.Children.Add(buttons);
         dialog.Content = root;
 
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new SortDialogInspection(
-                        dialog,
-                        headersCheck,
-                        levelsGrid,
-                        firstSortOnBox!,
-                        firstColorBox!,
-                        addLevelButton,
-                        deleteLevelButton,
-                        copyLevelButton,
-                        moveUpButton,
-                        moveDownButton,
-                        optionsButton,
-                        okButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalSortDialogObservation(
+            dialog,
+            headersCheck,
+            levelsGrid,
+            firstSortOnBox!,
+            firstColorBox!,
+            addLevelButton,
+            deleteLevelButton,
+            copyLevelButton,
+            moveUpButton,
+            moveDownButton,
+            optionsButton,
+            okButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -22690,11 +22530,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync()
     {
-        return await ShowDataValidationInputDialogAsync(null);
-    }
-
-    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync(Action<DataValidationDialogInspection>? inspectionCallback)
-    {
         DataValidationDialogResult? result = null;
         var summary = DataValidationPresetPlanner.CreateSelectionSummary(
             _session.Workbook,
@@ -23142,33 +22977,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
         dialog.Opened += (_, _) => typeBox.Focus();
-        if (inspectionCallback is not null)
-        {
-            dialog.Opened += (_, _) =>
-            {
-                CompleteDialogInspection(
-                    dialog,
-                    () => inspectionCallback(new DataValidationDialogInspection(
-                        dialog,
-                        summaryText,
-                        typeBox,
-                        operatorBox,
-                        formula1Box,
-                        formula2Box,
-                        allowBlankBox,
-                        showDropdownBox,
-                        showInputMessageBox,
-                        promptTitleBox,
-                        promptMessageBox,
-                        showErrorMessageBox,
-                        alertStyleBox,
-                        errorTitleBox,
-                        errorMessageBox,
-                        applyButton,
-                        clearButton,
-                        cancelButton)));
-            };
-        }
+        AttachOptionalDataValidationDialogObservation(
+            dialog,
+            summaryText,
+            typeBox,
+            operatorBox,
+            formula1Box,
+            formula2Box,
+            allowBlankBox,
+            showDropdownBox,
+            showInputMessageBox,
+            promptTitleBox,
+            promptMessageBox,
+            showErrorMessageBox,
+            alertStyleBox,
+            errorTitleBox,
+            errorMessageBox,
+            applyButton,
+            clearButton,
+            cancelButton);
 
         await dialog.ShowDialog(this);
         return result;
@@ -25128,18 +24955,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     internal void ReportStartupFileNotFound(string path) =>
         ShowOpenIssue(UiText.Format("Startup_FileArgumentNotFoundMessage", path));
-
-    private static void CompleteDialogInspection(Window dialog, Action probe)
-    {
-        try
-        {
-            probe();
-        }
-        finally
-        {
-            Dispatcher.UIThread.Post(() => dialog.Close());
-        }
-    }
 
     partial void ObserveOptionalBoldCommand(bool before, bool after);
 

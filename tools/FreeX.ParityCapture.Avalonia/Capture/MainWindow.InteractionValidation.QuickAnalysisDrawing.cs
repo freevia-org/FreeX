@@ -26,8 +26,8 @@ public sealed partial class MainWindow
     private async Task AddQuickAnalysisDrawingInteractionResultsAsync(
         List<InteractionValidationResult> results)
     {
-        var previousConditionalFormatRuleProbe = _interactionValidationConditionalFormatRuleProbe;
-        _interactionValidationConditionalFormatRuleProbe = AcceptInteractionValidationConditionalFormatRule;
+        var previousConditionalFormatRuleProbe = _conditionalFormatRuleDialogInspectionCallback;
+        _conditionalFormatRuleDialogInspectionCallback = AcceptInteractionValidationConditionalFormatRule;
         try
         {
             await AddValidationResult(results, "quick-analysis.conditional-format", "quick-analysis", async () =>
@@ -101,7 +101,7 @@ public sealed partial class MainWindow
         }
         finally
         {
-            _interactionValidationConditionalFormatRuleProbe = previousConditionalFormatRuleProbe;
+            _conditionalFormatRuleDialogInspectionCallback = previousConditionalFormatRuleProbe;
         }
     }
 

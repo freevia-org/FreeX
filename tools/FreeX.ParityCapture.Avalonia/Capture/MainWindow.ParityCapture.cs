@@ -16,6 +16,8 @@ using Free.Shared.Shell.Avalonia;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
@@ -63,6 +65,45 @@ internal sealed record ParityInteractionDialogRoute(
 /// </summary>
 public sealed partial class MainWindow
 {
+    private async Task ShowHeaderFooterPictureFormatParityDialogAsync()
+    {
+        var picture = new WorksheetHeaderFooterPicture(
+            [],
+            "image/png",
+            "QuarterlyHeader.png",
+            Width: 160,
+            Height: 80);
+        await ShowHeaderFooterPictureFormatDialogAsync(picture);
+    }
+
+    private async Task ShowUnhideWindowParityDialogAsync()
+    {
+        var hidden = new Window
+        {
+            Title = "Parity Demo:2",
+            Width = 320,
+            Height = 200,
+            ShowInTaskbar = false,
+        };
+        hidden.Show();
+        hidden.Hide();
+        HiddenWindows.Add(hidden);
+        try
+        {
+            await ShowUnhideWindowDialogAsync();
+        }
+        finally
+        {
+            HiddenWindows.Remove(hidden);
+            hidden.Close();
+        }
+    }
+
+    private Task<SelectDataSourceResult?> ShowSelectDataDialogAsync(
+        string initialRange,
+        bool firstColumnIsCategories) =>
+        ShowSelectDataSourceDialogAsync(initialRange, firstColumnIsCategories);
+
     // The capture canvas is sized to the shell's default window so ribbon/grid framing matches the WPF shell.
     private const int ParityCaptureWindowWidth = 1120;
     private const int ParityCaptureWindowHeight = 720;

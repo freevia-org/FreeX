@@ -219,11 +219,7 @@ public sealed partial class MainWindow
     private async Task ShowQuickAnalysisConditionalFormatDialogAsync(
         QuickAnalysisConditionalFormatDialogPlan dialogPlan)
     {
-        Action<ConditionalFormatRuleDialogInspection>? inspection = null;
-        ResolveQuickAnalysisConditionalFormatInspection(ref inspection);
-        var built = await ShowConditionalFormatRuleEditorAsync(
-            dialogPlan.Seed,
-            inspection);
+        var built = await ShowConditionalFormatRuleEditorAsync(dialogPlan.Seed);
         if (built is null)
             return;
 
@@ -232,9 +228,6 @@ public sealed partial class MainWindow
             ResolveConditionalFormatSelectionRanges(built.AppliesTo),
             built));
     }
-
-    partial void ResolveQuickAnalysisConditionalFormatInspection(
-        ref Action<ConditionalFormatRuleDialogInspection>? inspection);
 
     private Task ExecuteQuickAnalysisTotalAsync(QuickAnalysisHostOperation operation)
     {

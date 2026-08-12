@@ -713,15 +713,6 @@ public sealed partial class MainWindow
         return await dialog.ShowDialog<SelectDataSourceResult?>(this);
     }
 
-    /// <summary>
-    /// Parity-capture entry point for the Select Data Source dialog.  Replaced by the full series
-    /// management dialog so the captured surface now shows the complete WPF-parity UI.
-    /// </summary>
-    private Task<SelectDataSourceResult?> ShowSelectDataDialogAsync(
-        string initialRange,
-        bool firstColumnIsCategories) =>
-        ShowSelectDataSourceDialogAsync(initialRange, firstColumnIsCategories);
-
     // ---- Chart Design: layout toggles (real, SetChartLayoutCommand) -----------------------------------
 
     private async Task ShowChartTitlesDialog()
