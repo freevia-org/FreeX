@@ -850,7 +850,7 @@ public partial class MainWindow
             FormulaEditorSurfaceKind.Inline,
             _formulaEditEnteredViaEditKey,
             _options.MoveSelectionAfterEnter,
-            FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection));
+            AppOptionsEnterDirectionMapper.ToFormulaEditor(_options.AfterEnterDirection));
 
         if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
         {
@@ -1142,7 +1142,7 @@ public partial class MainWindow
                 FormulaEditorSurfaceKind.FormulaBar,
                 false,
                 _options.MoveSelectionAfterEnter,
-                FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection));
+                AppOptionsEnterDirectionMapper.ToFormulaEditor(_options.AfterEnterDirection));
 
             if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
             {

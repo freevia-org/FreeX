@@ -45,12 +45,4 @@ internal static class FormulaBarWpfInputAdapter
     public static Thickness ToWpfThickness(FormulaEditorThickness thickness) =>
         new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 
-    public static FormulaEditorEnterDirection ToFormulaEditorEnterDirection(AppOptionsEnterDirection direction) =>
-        direction switch
-        {
-            AppOptionsEnterDirection.Right => FormulaEditorEnterDirection.Right,
-            AppOptionsEnterDirection.Up => FormulaEditorEnterDirection.Up,
-            AppOptionsEnterDirection.Left => FormulaEditorEnterDirection.Left,
-            _ => FormulaEditorEnterDirection.Down
-        };
 }

@@ -29752,16 +29752,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _optionsRuntimeSession.LiveOptions.MoveSelectionAfterEnter;
 
     private FormulaEditorEnterDirection AfterEnterDirection =>
-        ToFormulaEditorEnterDirection(_optionsRuntimeSession.LiveOptions.AfterEnterDirection);
-
-    private static FormulaEditorEnterDirection ToFormulaEditorEnterDirection(AppOptionsEnterDirection direction) =>
-        direction switch
-        {
-            AppOptionsEnterDirection.Right => FormulaEditorEnterDirection.Right,
-            AppOptionsEnterDirection.Up => FormulaEditorEnterDirection.Up,
-            AppOptionsEnterDirection.Left => FormulaEditorEnterDirection.Left,
-            _ => FormulaEditorEnterDirection.Down
-        };
+        AppOptionsEnterDirectionMapper.ToFormulaEditor(_optionsRuntimeSession.LiveOptions.AfterEnterDirection);
 
     private static void AddGridChild(AvaloniaGrid grid, Control control, int row, int column)
     {

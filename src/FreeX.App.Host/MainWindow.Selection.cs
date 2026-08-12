@@ -901,7 +901,7 @@ public partial class MainWindow
                 ? ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, ExcelEditKeyPlanner.GetEnterTarget(
                     current,
                     shiftHeld,
-                    FormulaBarWpfInputAdapter.ToFormulaEditorEnterDirection(_options.AfterEnterDirection)))
+                    AppOptionsEnterDirectionMapper.ToFormulaEditor(_options.AfterEnterDirection)))
                 : current,
             Key.Tab   => ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, shiftHeld
                 ? new CellAddress(_currentSheetId, current.Row, current.Col > 1 ? current.Col - 1 : 1u)
