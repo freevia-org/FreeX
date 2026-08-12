@@ -12,6 +12,18 @@ namespace FreeP.App.Avalonia;
 public sealed partial class MainWindow
 {
     private bool _allowCloseWithoutDirtyPromptForValidation;
+    private Action? _externalAnimationPaneRequestCoordinator;
+    private Action? _externalHyperlinkAppliedObserver;
+    private Action<Hyperlink, int>? _externalSlideShowInternalHyperlinkObserver;
+
+    private void CoordinateExternalAnimationPaneRequest() =>
+        _externalAnimationPaneRequestCoordinator?.Invoke();
+
+    private void NotifyExternalHyperlinkApplied() =>
+        _externalHyperlinkAppliedObserver?.Invoke();
+
+    private void ConfigureExternalSlideShowObserver(SlideShowWindow window) =>
+        window.SetInternalHyperlinkNavigationObserver(_externalSlideShowInternalHyperlinkObserver);
 
     internal ValidationAccessAdapter CreateValidationAccessAdapter() => new(this);
 
@@ -26,6 +38,8 @@ public sealed partial class MainWindow
         internal bool IsDirty => _owner.IsDirty;
         internal int DirtyGeneration => _owner.DirtyGeneration;
         internal int SlideCount => _owner.SlideCount;
+        internal Presentation Presentation => _owner._presentation;
+        internal EditingSession Editor => _owner.Editor;
         internal IReadOnlyList<StartupDirtyTraceEntry> StartupDirtyTrace => _owner.StartupDirtyTraceForTests;
         internal LinuxNativeOutputCapabilities NativeOutputCapabilities => _owner._nativeOutputCapabilities;
         internal bool NativeOutputCapabilityDetectionCompleted => _owner._nativeOutputDetectionCompleted;
@@ -48,6 +62,28 @@ public sealed partial class MainWindow
 
         internal void InsertSlide() => _owner.Editor.InsertSlide();
 
+        internal void RefreshCanvas() => _owner.RefreshCanvas();
+
+        internal void ShowSmartArtTextPane() => _owner.ShowSmartArtTextPane();
+
+        internal void SetAnimationPaneRequestCoordinator(Action coordinator)
+        {
+            ArgumentNullException.ThrowIfNull(coordinator);
+            _owner._externalAnimationPaneRequestCoordinator = coordinator;
+        }
+
+        internal void SetHyperlinkAppliedObserver(Action observer)
+        {
+            ArgumentNullException.ThrowIfNull(observer);
+            _owner._externalHyperlinkAppliedObserver = observer;
+        }
+
+        internal void SetSlideShowInternalHyperlinkObserver(Action<Hyperlink, int> observer)
+        {
+            ArgumentNullException.ThrowIfNull(observer);
+            _owner._externalSlideShowInternalHyperlinkObserver = observer;
+        }
+
         internal async Task<SlideShowWindow.ValidationAccessAdapter> ShowSlideShowAsync()
         {
             var window = new SlideShowWindow(_owner._presentation, 0);
@@ -56,25 +92,6 @@ public sealed partial class MainWindow
             window.Show(_owner);
             await opened.Task.WaitAsync(TimeSpan.FromSeconds(8));
             return window.CreateValidationAccessAdapter();
-        }
-
-        internal void AddValidationVideo(byte[] bytes)
-        {
-            ArgumentNullException.ThrowIfNull(bytes);
-            _owner._presentation.Slides[0].Shapes.Add(new SlideShape
-            {
-                Id = 8801,
-                Name = "Physical validation video",
-                Kind = SlideShapeKind.Media,
-                ExtentCxEmu = 6096000,
-                ExtentCyEmu = 3429000,
-                Media = new MediaInfo
-                {
-                    IsVideo = true,
-                    ContentType = "video/mp4",
-                    Bytes = bytes,
-                },
-            });
         }
 
         internal Task<LinuxVideoExportResult> ExecuteVideoExportAsync(

@@ -5,19 +5,31 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class PhysicalHyperlinkFixtureSourceTests
 {
     [Fact]
-    public void PhysicalHyperlinkFixture_IsExplicitlyOptInAndCreatesTwoSlides()
+    public void PhysicalHyperlinkFixtureAndPostconditions_AreOwnedByExternalValidationHost()
     {
-        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var mainWindow = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var slideShow = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "SlideShowWindow.cs"));
+        var tool = File.ReadAllText(RepoFile(
+            "freep", "TestSupport", "Validation.Avalonia", "PhysicalFixtureValidation.cs"));
 
-        source.Should().Contain("FREEP_PHYSICAL_HYPERLINK_SEED");
-        source.Should().Contain("SeedPhysicalHyperlinkFixtureIfRequested();");
-        source.Should().Contain("Id = 9001");
-        source.Should().Contain("ExtentCxEmu = shapeWidth");
-        source.Should().Contain("new ShapeFill.Solid(new SrgbColor(0x44, 0x72, 0xC3))");
-        source.Should().Contain("Physical hyperlink fixture did not create a visible slide-1 rectangle");
-        source.Should().Contain("Editor.InsertSlide();");
-        source.Should().Contain("Editor.SelectSlide(0);");
-        source.Should().Contain("Editor.Select(linkShape.Id);");
+        mainWindow.Should().NotContain("FREEP_PHYSICAL_HYPERLINK");
+        mainWindow.Should().NotContain("Id = 9001");
+        mainWindow.Should().Contain("NotifyExternalHyperlinkApplied();");
+        slideShow.Should().NotContain("FREEP_PHYSICAL_HYPERLINK");
+        slideShow.Should().NotContain("File.WriteAllText");
+        slideShow.Should().Contain("_internalHyperlinkNavigationObserver?.Invoke");
+        tool.Should().Contain("--physical-internal-slide-hyperlink-fixture");
+        tool.Should().Contain("Id = 9001");
+        tool.Should().Contain("ExtentCxEmu = shapeWidth");
+        tool.Should().Contain("new ShapeFill.Solid(new SrgbColor(0x44, 0x72, 0xC3))");
+        tool.Should().Contain("fixture-postcondition.txt");
+        tool.Should().Contain("authoring-postcondition.txt");
+        tool.Should().Contain("activation-postcondition.txt");
+
+        var runner = File.ReadAllText(RepoFile("tools", "Run-FreePInternalSlideHyperlinkValidation.ps1"));
+        runner.Should().Contain("Host = \"Validation\"");
+        runner.Should().Contain("--physical-internal-slide-hyperlink-fixture=/work/freep-internal-slide-hyperlink");
+        runner.Should().NotContain("FREEP_PHYSICAL_HYPERLINK");
     }
 
     private static string RepoFile(params string[] parts) =>

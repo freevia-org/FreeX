@@ -4,6 +4,54 @@ namespace FreeP.App.Avalonia.Tests;
 
 public sealed class PhysicalValidationSourceTests
 {
+    [Theory]
+    [InlineData("--physical-animation-pane-fixture", "AnimationPane")]
+    [InlineData("--physical-smartart-text-pane-fixture", "SmartArtTextPane")]
+    public void Physical_fixture_option_filters_selector_from_startup_arguments(
+        string selector,
+        string expectedKind)
+    {
+        PhysicalFixtureOptions.TryParse(
+            [selector, "/documents/demo.pptx"],
+            out var options,
+            out var startupArguments,
+            out var error).Should().BeTrue(error);
+
+        options.Should().NotBeNull();
+        options!.Kind.ToString().Should().Be(expectedKind);
+        options.OutputDirectory.Should().BeNull();
+        startupArguments.Should().Equal("/documents/demo.pptx");
+        error.Should().BeNull();
+    }
+
+    [Fact]
+    public void Physical_hyperlink_fixture_option_accepts_single_token_output_directory()
+    {
+        PhysicalFixtureOptions.TryParse(
+            ["--physical-internal-slide-hyperlink-fixture=/work/hyperlink"],
+            out var options,
+            out var startupArguments,
+            out var error).Should().BeTrue(error);
+
+        options.Should().Be(new PhysicalFixtureOptions(
+            PhysicalFixtureKind.InternalSlideHyperlink,
+            "/work/hyperlink"));
+        startupArguments.Should().BeEmpty();
+        error.Should().BeNull();
+    }
+
+    [Fact]
+    public void Physical_fixture_option_rejects_multiple_fixture_owners()
+    {
+        PhysicalFixtureOptions.TryParse(
+            ["--physical-animation-pane-fixture", "--physical-smartart-text-pane-fixture"],
+            out _,
+            out _,
+            out var error).Should().BeFalse();
+
+        error.Should().Be("Exactly one physical fixture selector may be supplied.");
+    }
+
     [Fact]
     public void Physical_validation_option_filters_only_its_control_arguments()
     {

@@ -7,7 +7,12 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (!PhysicalValidationOptions.TryParse(args, out var physical, out var remaining, out var error))
+        if (!PhysicalFixtureOptions.TryParse(args, out var fixture, out var remaining, out var error))
+            return ReportError(error);
+        if (fixture is not null)
+            return Run(remaining, false, access => PhysicalFixtureCoordinator.Start(access, fixture));
+
+        if (!PhysicalValidationOptions.TryParse(args, out var physical, out remaining, out error))
             return ReportError(error);
         if (physical is not null)
             return Run(remaining, false, access => PhysicalValidationCoordinator.Start(access, physical));

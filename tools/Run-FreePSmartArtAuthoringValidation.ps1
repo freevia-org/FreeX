@@ -55,7 +55,8 @@ function Start-Session {
         "-Action", "Start", "-App", "FreeP", "-Port", "$Port", "-Width", "$Width",
         "-Height", "$Height", "-Dpi", "$Dpi", "-MemoryLimit", $MemoryLimit,
         "-OutputDir", $resolvedOutputRoot, "-DocumentPath", $DocumentPath,
-        "-AppEnvironment", "FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED=1"
+        "-Host", "Validation",
+        "-AppArgument", "--physical-smartart-text-pane-fixture"
     )
     if (-not [string]::IsNullOrWhiteSpace($PublishDir)) { $args += @("-PublishDir", $PublishDir) }
     if ($SkipPublish -or $ReusePublishedImage) { $args += "-SkipPublish" }

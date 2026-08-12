@@ -5,20 +5,25 @@ namespace FreeP.App.Avalonia.Tests;
 public sealed class PhysicalAnimationPaneFixtureSourceTests
 {
     [Fact]
-    public void PhysicalAnimationPaneFixture_IsExplicitlyOptInAndSeedsOneRealAnimation()
+    public void PhysicalAnimationPaneFixture_IsOwnedByExternalValidationHost()
     {
-        var source = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var renderer = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var tool = File.ReadAllText(RepoFile(
+            "freep", "TestSupport", "Validation.Avalonia", "PhysicalFixtureValidation.cs"));
 
-        source.Should().Contain("FREEP_PHYSICAL_ANIMATION_PANE_SEED");
-        source.Should().Contain("SeedPhysicalAnimationPaneFixtureIfRequested();");
-        source.Should().Contain("Editor.InsertTextBox(\"Animation Pane sample\")");
-        source.Should().Contain("Editor.CurrentSlide.Animations.Add(new ShapeAnimation");
-        source.Should().Contain("ShapeId = shape.Id");
-        source.Should().Contain("Preset = AnimationPreset.Fade");
+        renderer.Should().NotContain("FREEP_PHYSICAL_ANIMATION_PANE_SEED");
+        renderer.Should().NotContain("Animation Pane sample");
+        renderer.Should().Contain("CoordinateExternalAnimationPaneRequest();");
+        tool.Should().Contain("--physical-animation-pane-fixture");
+        tool.Should().Contain("access.Editor.InsertTextBox(\"Animation Pane sample\")");
+        tool.Should().Contain("slide.Animations.Add(new ShapeAnimation");
+        tool.Should().Contain("ShapeId = shape.Id");
+        tool.Should().Contain("Preset = AnimationPreset.Fade");
 
         var runner = File.ReadAllText(RepoFile("tools", "Run-FamilyLinuxInteractionValidation.ps1"));
-        runner.Should().Contain("-AppEnvironment");
-        runner.Should().Contain("FREEP_PHYSICAL_ANIMATION_PANE_SEED=1");
+        runner.Should().Contain("\"-Host\", \"Validation\"");
+        runner.Should().Contain("--physical-animation-pane-fixture");
+        runner.Should().NotContain("FREEP_PHYSICAL_ANIMATION_PANE_SEED");
     }
 
     private static string RepoFile(params string[] parts) =>

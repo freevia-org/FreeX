@@ -297,7 +297,7 @@ if [[ "$phase" == "first" ]]; then
     {
         printf 'owner-title=%s\n' "$owner_title"
         printf 'owner-geometry=%s\n' "$geometry"
-        printf 'seed=FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED=1\n'
+        printf 'fixture-host=FreeP.Validation.Avalonia --physical-smartart-text-pane-fixture\n'
         printf 'pane-row-point=%s,%s\n' "$click_x" "$click_y"
         printf 'baseline-data1=Plan|Design|Build|Test|Deploy\n'
         printf 'baseline-package-valid=%s\n' "$baseline_pass"

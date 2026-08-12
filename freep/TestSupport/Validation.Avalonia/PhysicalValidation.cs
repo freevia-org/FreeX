@@ -5,6 +5,7 @@ using Free.Shared.Drawing;
 using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
+using FreeP.Core.Model;
 
 namespace FreeP.Validation.Avalonia;
 
@@ -195,7 +196,7 @@ internal static class PhysicalValidationCoordinator
                         $"ffprobe exit={ffprobe.ExitCode}; output={ffprobe.StandardError.Trim()}.");
                 }
 
-                access.AddValidationVideo(await File.ReadAllBytesAsync(videoPath));
+                AddValidationVideo(access.Presentation, await File.ReadAllBytesAsync(videoPath));
                 var mediaShow = await access.ShowSlideShowAsync();
                 mediaShowForCleanup = mediaShow;
                 await Task.Delay(900);
@@ -309,6 +310,24 @@ internal static class PhysicalValidationCoordinator
         return path.Split(Path.PathSeparator)
             .Select(directory => Path.Combine(directory, name))
             .FirstOrDefault(File.Exists);
+    }
+
+    private static void AddValidationVideo(Presentation presentation, byte[] bytes)
+    {
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 8801,
+            Name = "Physical validation video",
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 6096000,
+            ExtentCyEmu = 3429000,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                ContentType = "video/mp4",
+                Bytes = bytes,
+            },
+        });
     }
 
     private static async Task CaptureAsync(string directory, string name)

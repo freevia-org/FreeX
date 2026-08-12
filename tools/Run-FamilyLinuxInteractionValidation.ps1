@@ -243,9 +243,9 @@ try {
         $startArguments += @("-PublishDir", $PublishDir)
     }
     if ($App -eq "FreeP") {
-        # This must be present on the application container, not only on the probe
-        # docker exec process, so the opt-in fixture hook can seed the live app.
-        $startArguments += @("-AppEnvironment", "FREEP_PHYSICAL_ANIMATION_PANE_SEED=1")
+        $startArguments += @(
+            "-Host", "Validation",
+            "-AppArgument", "--physical-animation-pane-fixture")
     }
     if ($SkipPublish) { $startArguments += "-SkipPublish" }
     if ($SkipImageBuild) { $startArguments += "-SkipImageBuild" }

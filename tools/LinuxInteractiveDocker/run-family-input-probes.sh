@@ -2528,7 +2528,7 @@ else
         printf 'pane-menu-point=%s,%s\n' "$pane_menu_x" "$pane_menu_y"
         printf 'pane-header-geometry=%s\n' "$pane_header_geometry"
         printf 'pane-row-geometry=%s\n' "$pane_row_geometry"
-        printf 'seed=FREEP_PHYSICAL_ANIMATION_PANE_SEED=1\n'
+        printf 'fixture-host=FreeP.Validation.Avalonia --physical-animation-pane-fixture\n'
         printf 'open-route=physical pointer click on Advanced Animation command then flyout item\n'
         printf 'interaction=pointer row selection plus ribbon close/reopen\n'
     } > "$output/animation-pane-calibration.txt"

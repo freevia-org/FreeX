@@ -80,6 +80,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     //  DelayedAction) register themselves here.  CancelActiveTimers() stops all of them
     // immediately — called before starting a new transition (DA2) and in Teardown (DA3).
     private readonly List<DispatcherTimer> _activeTimers = new();
+    private Action<Hyperlink, int>? _internalHyperlinkNavigationObserver;
 
     // ── Visual tree ───────────────────────────────────────────────────────────────
 
@@ -655,6 +656,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     internal void ActivateHyperlink(Hyperlink hlink)
         => _runtime.ActivateHyperlink(hlink);
 
+    internal void SetInternalHyperlinkNavigationObserver(Action<Hyperlink, int>? observer) =>
+        _internalHyperlinkNavigationObserver = observer;
+
     /// <summary>
     /// Opens an external URL in the default browser through the shared URI allowlist.
     /// Blocked schemes and launch failures are silently ignored so a bad slideshow link never crashes playback.
@@ -667,18 +671,9 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     // ── Trigger shape hit-testing ─────────────────────────────────────────────────
 
     private void RecordInternalHyperlinkNavigation(Hyperlink hyperlink)
-    {
-        var postconditionPath = Environment.GetEnvironmentVariable("FREEP_PHYSICAL_HYPERLINK_POSTCONDITION");
-        if (string.IsNullOrWhiteSpace(postconditionPath))
-        {
-            return;
-        }
-
-        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(postconditionPath)!);
-        File.WriteAllText(
-            postconditionPath,
-            $"activation=internal-slide-hyperlink\ntargetSlideId={hyperlink.TargetSlideId}\ncurrentSlideIndex={_runtime.Controller.CurrentSlideIndex}\n");
-    }
+        => _internalHyperlinkNavigationObserver?.Invoke(
+            hyperlink,
+            _runtime.Controller.CurrentSlideIndex);
 
     private SlideShowCanvasPointer CreateCanvasPointer(double canvasX, double canvasY) =>
         new(

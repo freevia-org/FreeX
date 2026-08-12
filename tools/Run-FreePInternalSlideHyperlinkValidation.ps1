@@ -16,12 +16,9 @@ $probe = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-internal-slid
 $out = [IO.Path]::GetFullPath((Join-Path $root $OutputDir))
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 $startParameters = @{
-    Action = "Start"; App = "FreeP"; Port = $Port; Width = $Width; Height = $Height; OutputDir = $out
-    AppEnvironment = @(
-        "FREEP_PHYSICAL_HYPERLINK_SEED=1",
-        "FREEP_PHYSICAL_HYPERLINK_FIXTURE_POSTCONDITION=/work/freep-internal-slide-hyperlink/fixture-postcondition.txt",
-        "FREEP_PHYSICAL_HYPERLINK_AUTHORING_POSTCONDITION=/work/freep-internal-slide-hyperlink/authoring-postcondition.txt",
-        "FREEP_PHYSICAL_HYPERLINK_POSTCONDITION=/work/freep-internal-slide-hyperlink/activation-postcondition.txt")
+    Action = "Start"; App = "FreeP"; Host = "Validation"; Port = $Port; Width = $Width; Height = $Height; OutputDir = $out
+    AppArgument = @(
+        "--physical-internal-slide-hyperlink-fixture=/work/freep-internal-slide-hyperlink")
 }
 if ($PublishDir) { $startParameters.PublishDir = $PublishDir }
 if ($SkipPublish) { $startParameters.SkipPublish = $true }; if ($SkipImageBuild) { $startParameters.SkipImageBuild = $true }; if ($Replace) { $startParameters.Replace = $true }
