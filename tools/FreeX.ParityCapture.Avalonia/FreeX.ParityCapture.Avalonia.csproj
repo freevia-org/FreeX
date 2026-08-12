@@ -2,7 +2,6 @@
   <PropertyGroup>
     <AssemblyName>FreeX.ParityCapture.Avalonia</AssemblyName>
     <ApplicationTitle>FreeX Parity Capture</ApplicationTitle>
-    <DefineConstants>$(DefineConstants);FREEX_PARITY_CAPTURE</DefineConstants>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

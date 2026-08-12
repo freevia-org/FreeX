@@ -25,7 +25,8 @@ param(
     [string]$App = "FreeX",
 
     [ValidateSet("Application", "Validation")]
-    [string]$Host = "Application",
+    [Alias("Host")]
+    [string]$HostMode = "Application",
 
     [ValidateRange(1024, 65535)]
     [int]$Port = 6080,
@@ -97,18 +98,25 @@ $appDefinitions = @{
 }
 
 $definition = $appDefinitions[$App]
-if ($Host -eq "Validation") {
-    if ($App -ne "FreeP") {
-        throw "The Validation host is currently available only for FreeP."
-    }
-    $definition = @{
-        Project = "freep/TestSupport/Validation.Avalonia/FreeP.Validation.Avalonia.csproj"
-        Executable = "FreeP.Validation.Avalonia"
-        WindowTitle = "FreeP"
+if ($HostMode -eq "Validation") {
+    if ($App -eq "FreeX") {
+        $definition = @{
+            Project = "tools/FreeX.ParityCapture.Avalonia/FreeX.ParityCapture.Avalonia.csproj"
+            Executable = "FreeX.ParityCapture.Avalonia"
+            WindowTitle = "FreeX"
+        }
+    } elseif ($App -eq "FreeP") {
+        $definition = @{
+            Project = "freep/TestSupport/Validation.Avalonia/FreeP.Validation.Avalonia.csproj"
+            Executable = "FreeP.Validation.Avalonia"
+            WindowTitle = "FreeP"
+        }
+    } else {
+        throw "The Validation host is not available for $App."
     }
 }
 $appKey = $App.ToLowerInvariant()
-$publishKey = if ($Host -eq "Validation") { "$appKey-validation" } else { $appKey }
+$publishKey = if ($HostMode -eq "Validation") { "$appKey-validation" } else { $appKey }
 $containerName = "freex-linux-interactive-$appKey-$Port"
 $appImage = "freex-linux-interactive-app-$publishKey-$workspaceKey`:current"
 $appOutputRoot = Join-Path $resolvedOutputRoot $appKey
@@ -310,7 +318,7 @@ if (-not $SkipImageBuild) {
 
 $projectPath = Join-Path $repoRoot $definition.Project
 if (-not $SkipPublish) {
-    Write-Host "Publishing $App $Host host for linux-x64..."
+    Write-Host "Publishing $App $HostMode host for linux-x64..."
     $publishArguments = @(
         "--configuration", "Release",
         "--framework", "net10.0",

@@ -53,7 +53,7 @@ public sealed partial class MainWindow
         _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.TextBox);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
-        RequestTextBoxInlinePhysicalLayoutObservation();
+        RequestOptionalTextBoxInlineLayoutObservation();
         RefreshShell("Ready");
         FocusTextBoxInlineEditor();
     }
@@ -93,13 +93,13 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(_textBoxInlineEditor, "Text box inline editor");
         AutomationProperties.SetHelpText(_textBoxInlineEditor, "Edits the selected text box in place.");
         _textBoxInlineEditor.KeyDown += TextBoxInlineEditor_KeyDown;
-        _textBoxInlineEditor.LayoutUpdated += TextBoxInlineEditor_LayoutUpdated;
         _textBoxInlineEditor.TextChanged += (_, _) =>
         {
             if (_textBoxInlineEditSession.EditingTextBoxId is { } textBoxId && _textBoxInlineEditor.IsVisible)
-                RecordTextBoxInlinePhysicalEvidence("editing", textBoxId);
+                RecordOptionalTextBoxInlineObservation("editing", textBoxId);
         };
         _textBoxInlineEditor.LostFocus += TextBoxInlineEditor_LostFocus;
+        AttachOptionalTextBoxInlineObservation();
     }
 
     private void AddTextBoxInlineEditorOverlay(
@@ -235,7 +235,7 @@ public sealed partial class MainWindow
             _textBoxInlineEditor!.Text = cancelPlan?.OriginalText ?? string.Empty;
             HideTextBoxInlineEditor(commit: false);
             if (cancelPlan is { } canceled)
-                RecordTextBoxInlinePhysicalEvidence("canceled", canceled.TextBoxId);
+                RecordOptionalTextBoxInlineObservation("canceled", canceled.TextBoxId);
             _sheetGridHost.Focus();
             args.Handled = true;
             return;
@@ -245,7 +245,7 @@ public sealed partial class MainWindow
         if (HideTextBoxInlineEditor(commit: true))
         {
             if (committedTextBoxId is { } textBoxId)
-                RecordTextBoxInlinePhysicalEvidence("committed", textBoxId);
+                RecordOptionalTextBoxInlineObservation("committed", textBoxId);
             _sheetGridHost.Focus();
         }
 

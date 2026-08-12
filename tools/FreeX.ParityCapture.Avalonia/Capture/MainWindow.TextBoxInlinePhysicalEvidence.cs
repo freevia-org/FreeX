@@ -16,11 +16,20 @@ public sealed partial class MainWindow
     private readonly List<TextBoxInlinePhysicalEvidenceEvent> _textBoxInlinePhysicalEvidenceEvents = [];
     private bool _textBoxInlinePhysicalLayoutObservationPending;
 
-    private void RequestTextBoxInlinePhysicalLayoutObservation()
+    partial void AttachOptionalTextBoxInlineObservation()
+    {
+        if (!string.IsNullOrWhiteSpace(_textBoxInlinePhysicalEvidencePath))
+            _textBoxInlineEditor!.LayoutUpdated += TextBoxInlineEditor_LayoutUpdated;
+    }
+
+    partial void RequestOptionalTextBoxInlineLayoutObservation()
     {
         if (!string.IsNullOrWhiteSpace(_textBoxInlinePhysicalEvidencePath))
             _textBoxInlinePhysicalLayoutObservationPending = true;
     }
+
+    partial void RecordOptionalTextBoxInlineObservation(string phase, Guid textBoxId) =>
+        RecordTextBoxInlinePhysicalEvidence(phase, textBoxId);
 
     private void TextBoxInlineEditor_LayoutUpdated(object? sender, EventArgs args)
     {

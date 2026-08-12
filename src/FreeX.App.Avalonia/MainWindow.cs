@@ -1393,21 +1393,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
 
-#if FREEX_PARITY_CAPTURE
-        if (startupArguments.Any(argument => string.Equals(
-                argument,
-                InteractionValidationOptions.NameBoxDropdownPhysicalFixtureArgument,
-                StringComparison.OrdinalIgnoreCase)))
-        {
-            SeedNameBoxDropdownPhysicalFixture();
-        }
-        if (startupArguments.Any(argument => string.Equals(
-                argument,
-                InteractionValidationOptions.NameBoxDropdownParityPhysicalFixtureArgument,
-                StringComparison.OrdinalIgnoreCase)))
-        {
-            SeedNameBoxDropdownParityFixture();
-        }
+        PrepareOptionalStartupState(startupArguments);
 
         Title = FormatWindowWorkbookTitle();
         ApplyWindowIcon();
@@ -1417,14 +1403,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         MinHeight = 520;
         Background = WindowBackground;
         Content = BuildContent();
-        if (startupArguments.Any(argument => string.Equals(
-                argument,
-                InteractionValidationOptions.NameBoxDropdownPhysicalFixtureArgument,
-                StringComparison.OrdinalIgnoreCase)))
-        {
-            InitializeNameBoxDropdownPhysicalEvidence();
-        }
-#endif
+        CompleteOptionalStartupState(startupArguments);
         ConfigureNativeMenu();
         if (source is not null)
             RecordStartupRecentWorkbook(source);
@@ -7663,9 +7642,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _selectionMoveSourceRange = null;
         _selectionMovePreviewRange = null;
         RevertNameBoxAfterCellSelectionDragEnd();
-#if FREEX_PARITY_CAPTURE
-        RecordNameBoxDropdownPhysicalEvidence(item: null, stage: "neutral-cell-selected");
-#endif
+        RecordOptionalNeutralCellSelection();
 
         // In Draw Border mode the drag-release triggers the border apply (mirrors WPF MouseUp behaviour).
         if (_borderDrawModeActive)
@@ -19155,67 +19132,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _cellAddressAutocompleteListBox.Focus();
     }
 
-    // The X11 lane needs stable non-defined-name entries without relying on a user-authored file.
-    // This fixture only runs behind the explicit interaction-validation argument; normal documents
-    // continue to enumerate their own workbook model unchanged.
-    private void SeedNameBoxDropdownPhysicalFixture()
-    {
-        var sheet = _session.ActiveSheet;
-        var firstCell = new CellAddress(sheet.Id, 1, 1);
-        var tableLastCell = new CellAddress(sheet.Id, 2, 2);
-        _session.Workbook.NamedRanges["PhysicalName"] = new GridRange(firstCell, firstCell);
-        sheet.StructuredTables.Add(new StructuredTableModel
-        {
-            Id = 6701,
-            Name = "PhysicalTable",
-            DisplayName = "PhysicalTable",
-            Range = new GridRange(firstCell, tableLastCell),
-            HeaderRowCount = 1,
-            TotalsRowCount = 0,
-            HasAutoFilter = true,
-        });
-        sheet.DrawingShapes.Add(new DrawingShapeModel
-        {
-            Id = Guid.Parse("67000000-0000-0000-0000-000000000001"),
-            Name = "PhysicalShape",
-            Anchor = new CellAddress(sheet.Id, 2, 4),
-            Width = 96,
-            Height = 48,
-            IsVisible = true,
-        });
-        sheet.Pictures.Add(new PictureModel
-        {
-            Id = Guid.Parse("67000000-0000-0000-0000-000000000002"),
-            Name = "PhysicalPicture",
-            Anchor = new CellAddress(sheet.Id, 3, 4),
-            Kind = PictureKind.Image,
-            ImageBytes = [1, 2, 3, 4],
-            ContentType = "image/png",
-            Width = 96,
-            Height = 48,
-            IsVisible = true,
-        });
-        sheet.TextBoxes.Add(new TextBoxModel
-        {
-            Id = Guid.Parse("67000000-0000-0000-0000-000000000003"),
-            Name = "PhysicalTextBox",
-            Anchor = new CellAddress(sheet.Id, 4, 4),
-            Text = "Physical Name Box text box",
-            Width = 120,
-            Height = 48,
-            IsVisible = true,
-        });
-        sheet.Charts.Add(new ChartModel
-        {
-            Id = Guid.Parse("67000000-0000-0000-0000-000000000004"),
-            Name = "PhysicalChart",
-            DataRange = new GridRange(
-                new CellAddress(sheet.Id, 5, 4),
-                new CellAddress(sheet.Id, 6, 5)),
-            IsVisible = true,
-        });
-    }
-
     private bool SelectCellAddressBoxItem(NameBoxNavigationItem item)
     {
         _cellAddressBoxHasPendingEdit = false;
@@ -19252,9 +19168,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
         RefreshShell($"Selected {FormatDrawingObjectKind(objectKind)}: {item.Name}");
-#if FREEX_PARITY_CAPTURE
-        RecordNameBoxDropdownPhysicalEvidence(item, "object-selected");
-#endif
+        RecordOptionalNameBoxSelection(item);
         return true;
     }
 
