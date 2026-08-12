@@ -149,7 +149,7 @@ public sealed class FreeWOptionsPlannerTests
     }
 
     [Fact]
-    public void Workflow_TryBuildResult_ProjectsAllOptionGroupsAndReplacementRows()
+    public void Workflow_ApplyExtensions_ProjectsAutoCorrectGroupsOntoSharedBasicResult()
     {
         var checkedToggles = new[]
         {
@@ -173,12 +173,15 @@ public sealed class FreeWOptionsPlannerTests
                 new("missing-value", null),
             ]);
 
-        OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation)
-            .Should().BeTrue();
+        var result = BasicApplicationOptionsDialogSession<FreeWOptions>.BuildResult(
+            recentFilesCap: 7,
+            defaultSaveFormat: input.Format,
+            uiLanguage: input.UiLanguage,
+            fallbackSaveFormat: FreeWOptions.DocxDefaultFormat);
 
-        validation.Should().BeNull();
-        result.Should().NotBeNull();
-        result!.RecentFilesCap.Should().Be(7);
+        OptionsDialogWorkflowPlanner.ApplyExtensions(result, input).Should().BeSameAs(result);
+
+        result.RecentFilesCap.Should().Be(7);
         result.UiLanguage.Should().Be("uk-UA");
         result.AutoCorrectEnabled.Should().BeTrue();
         result.AutoFormat.SmartQuotes.Should().BeTrue();
@@ -192,20 +195,6 @@ public sealed class FreeWOptionsPlannerTests
         result.AutoCorrect.CapitalizeDayNames.Should().BeFalse();
         result.AutoCorrect.ReplaceText.Should().BeTrue();
         result.AutoCorrect.Replacements.Should().Equal(new AutoCorrectReplacement("teh", "the"));
-    }
-
-    [Fact]
-    public void Workflow_TryBuildResult_ReportsRecentFilesValidationWithoutBuildingOptions()
-    {
-        var input = new OptionsDialogInput("not-a-number", null, null, [], []);
-
-        OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation)
-            .Should().BeFalse();
-
-        result.Should().BeNull();
-        validation.Should().Be(new OptionsDialogValidation(
-            OptionsDialogValidationTarget.RecentFilesCap,
-            OptionsDialogWorkflowPlanner.RecentFilesCapValidationMessage));
     }
 
     [Theory]

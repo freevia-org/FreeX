@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Options;
@@ -10,24 +11,24 @@ public sealed record OptionsDialogInitialState(
     IReadOnlyCollection<OptionsDialogToggleKind> CheckedToggles,
     IReadOnlyList<AutoCorrectReplacement> Replacements);
 
-public sealed record OptionsDialogCommitPlan(
-    bool ShouldApply,
-    bool ShouldPersist,
-    FreeWOptions? Result,
-    OptionsDialogValidation? Validation);
-
 /// <summary>
 /// Owns the renderer-neutral lifetime of the paired FreeW options dialogs. Native hosts project
 /// <see cref="Surface"/>, capture control values, and ask this session for enabled-state and commit plans.
 /// </summary>
 public sealed class OptionsDialogSession
 {
+    private readonly BasicApplicationOptionsDialogSession<FreeWOptions> _basicSession;
+
     public OptionsDialogSession(FreeWOptions? options, CultureInfo culture)
     {
-        ArgumentNullException.ThrowIfNull(culture);
-
-        InitialResult = options ?? new FreeWOptions();
-        Surface = OptionsDialogPlanner.BuildSurface(InitialResult, SystemLanguageLabel(culture));
+        _basicSession = new BasicApplicationOptionsDialogSession<FreeWOptions>(
+            options,
+            culture,
+            FreeWOptions.DocxDefaultFormat,
+            OptionsDialogWorkflowPlanner.RecentFilesCapValidationMessage);
+        Surface = OptionsDialogPlanner.BuildSurface(
+            _basicSession.InitialResult,
+            _basicSession.SystemLanguageLabel);
 
         OptionsDialogPlanner.TryParseAutoCorrectReplacements(
             Surface.AutoCorrect.ReplacementsText,
@@ -35,9 +36,9 @@ public sealed class OptionsDialogSession
             out _);
 
         InitialState = new OptionsDialogInitialState(
-            InitialResult.RecentFilesCap.ToString(culture),
-            Surface.General.FormatChoices.FirstOrDefault()?.Extension,
-            InitialResult.UiLanguage,
+            _basicSession.InitialState.RecentFilesCapText,
+            _basicSession.InitialState.SelectedFormat,
+            _basicSession.InitialState.UiLanguage,
             Surface.AutoCorrect.Toggles
                 .Concat([Surface.AutoFormat.MasterToggle])
                 .Concat(Surface.AutoFormat.RuleToggles)
@@ -47,7 +48,7 @@ public sealed class OptionsDialogSession
             replacements.ToArray());
     }
 
-    public FreeWOptions InitialResult { get; }
+    public FreeWOptions InitialResult => _basicSession.InitialResult;
 
     public OptionsDialogSurfaceSpec Surface { get; }
 
@@ -58,14 +59,18 @@ public sealed class OptionsDialogSession
         bool replaceTextEnabled) =>
         OptionsDialogWorkflowPlanner.PlanEnabledState(autoCorrectEnabled, replaceTextEnabled);
 
-    public OptionsDialogCommitPlan PlanAcceptance(OptionsDialogInput input)
+    public BasicApplicationOptionsDialogCommitPlan<FreeWOptions> PlanAcceptance(OptionsDialogInput input)
     {
-        if (!OptionsDialogWorkflowPlanner.TryBuildResult(input, out var result, out var validation))
-            return new OptionsDialogCommitPlan(false, false, null, validation);
+        ArgumentNullException.ThrowIfNull(input);
 
-        return new OptionsDialogCommitPlan(true, true, result, null);
+        var basicPlan = _basicSession.PlanAcceptance(new BasicApplicationOptionsDialogInput(
+            input.RecentFilesCapText,
+            input.Format,
+            input.UiLanguage));
+        if (!basicPlan.ShouldApply)
+            return basicPlan;
+
+        OptionsDialogWorkflowPlanner.ApplyExtensions(basicPlan.Result!, input);
+        return basicPlan;
     }
-
-    private static string SystemLanguageLabel(CultureInfo culture) =>
-        string.IsNullOrEmpty(culture.Name) ? "invariant" : culture.Name;
 }

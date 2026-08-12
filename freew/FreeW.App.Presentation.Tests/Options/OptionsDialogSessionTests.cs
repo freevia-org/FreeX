@@ -1,4 +1,5 @@
 using System.Globalization;
+using Free.Shared.AppServices;
 using FreeW.App.Presentation.Options;
 
 namespace FreeW.App.Presentation.Tests.Options;
@@ -83,8 +84,8 @@ public sealed class OptionsDialogSessionTests
         plan.ShouldApply.Should().BeFalse();
         plan.ShouldPersist.Should().BeFalse();
         plan.Result.Should().BeNull();
-        plan.Validation.Should().Be(new OptionsDialogValidation(
-            OptionsDialogValidationTarget.RecentFilesCap,
+        plan.Validation.Should().Be(new BasicApplicationOptionsDialogValidation(
+            BasicApplicationOptionsValidationTarget.RecentFilesCap,
             OptionsDialogWorkflowPlanner.RecentFilesCapValidationMessage));
     }
 

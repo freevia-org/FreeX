@@ -8,7 +8,7 @@ namespace FreeP.App.Compositor;
 /// Cross-host FreeP application settings. Both WPF and Avalonia consume the same normalized model so
 /// Backstage state and recent-file policy cannot diverge by UI framework.
 /// </summary>
-public class FreePOptions : INormalizableApplicationOptions, IApplicationOptionsSummarySource
+public class FreePOptions : IBasicApplicationOptions, IApplicationOptionsSummarySource
 {
     public const int DefaultRecentFilesCap = ApplicationOptionsNormalizer.DefaultRecentFilesCap;
     public const int MinRecentFilesCap = ApplicationOptionsNormalizer.MinRecentFilesCap;

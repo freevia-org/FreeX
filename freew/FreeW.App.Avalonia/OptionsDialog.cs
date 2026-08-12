@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using System.Globalization;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
@@ -171,7 +172,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         {
             _status.Text = plan.Validation!.Message;
             _status.IsVisible = true;
-            if (plan.Validation.Target == OptionsDialogValidationTarget.RecentFilesCap)
+            if (plan.Validation.Target == BasicApplicationOptionsValidationTarget.RecentFilesCap)
                 AvaloniaCompactDialogChrome.FocusAndSelect(_recentFilesCap);
             return;
         }

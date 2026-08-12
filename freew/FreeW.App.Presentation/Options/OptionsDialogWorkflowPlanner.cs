@@ -11,15 +11,6 @@ public sealed record OptionsDialogInput(
     IReadOnlyCollection<OptionsDialogToggleKind> CheckedToggles,
     IReadOnlyCollection<OptionsDialogReplacementInput> Replacements);
 
-public enum OptionsDialogValidationTarget
-{
-    RecentFilesCap,
-}
-
-public sealed record OptionsDialogValidation(
-    OptionsDialogValidationTarget Target,
-    string Message);
-
 public sealed record OptionsDialogEnabledState(
     bool AutoFormatRulesEnabled,
     bool ReplacementsEnabled);
@@ -38,21 +29,12 @@ public static class OptionsDialogWorkflowPlanner
         bool replaceTextEnabled) =>
         new(autoCorrectEnabled, replaceTextEnabled);
 
-    public static bool TryBuildResult(
-        OptionsDialogInput input,
-        out FreeWOptions? result,
-        out OptionsDialogValidation? validation)
+    public static FreeWOptions ApplyExtensions(
+        FreeWOptions result,
+        OptionsDialogInput input)
     {
+        ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(input);
-
-        if (!OptionsDialogPlanner.TryParseRecentFilesCap(input.RecentFilesCapText, out var cap))
-        {
-            result = null;
-            validation = new OptionsDialogValidation(
-                OptionsDialogValidationTarget.RecentFilesCap,
-                RecentFilesCapValidationMessage);
-            return false;
-        }
 
         var checkedToggles = input.CheckedToggles ?? [];
         bool IsChecked(OptionsDialogToggleKind kind) => checkedToggles.Contains(kind);
@@ -81,14 +63,10 @@ public static class OptionsDialogWorkflowPlanner
                 .ToList(),
         };
 
-        result = OptionsDialogPlanner.BuildResult(
-            cap,
-            input.Format,
-            input.UiLanguage,
-            IsChecked(OptionsDialogToggleKind.AutoCorrectEnabled),
-            autoFormat,
-            autoCorrect);
-        validation = null;
-        return true;
+        result.AutoCorrectEnabled = IsChecked(OptionsDialogToggleKind.AutoCorrectEnabled);
+        result.AutoFormat = autoFormat;
+        result.AutoCorrect = autoCorrect;
+        result.Normalize();
+        return result;
     }
 }

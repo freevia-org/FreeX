@@ -13,6 +13,18 @@ public interface INormalizableApplicationOptions
 }
 
 /// <summary>
+/// Common persisted values exposed by the sister apps' basic Options surfaces.
+/// </summary>
+public interface IBasicApplicationOptions : INormalizableApplicationOptions
+{
+    int RecentFilesCap { get; set; }
+
+    string DefaultSaveFormat { get; set; }
+
+    string UiLanguage { get; set; }
+}
+
+/// <summary>
 /// Common normalization rules for the sister apps' small persisted option models.
 /// </summary>
 public static class ApplicationOptionsNormalizer

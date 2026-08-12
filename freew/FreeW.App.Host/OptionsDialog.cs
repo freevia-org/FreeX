@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using Free.Shared.AppServices;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 
@@ -280,7 +281,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (!plan.ShouldApply)
         {
             DialogMessageHelper.ShowWarning(this, plan.Validation!.Message, Title);
-            if (plan.Validation.Target == OptionsDialogValidationTarget.RecentFilesCap)
+            if (plan.Validation.Target == BasicApplicationOptionsValidationTarget.RecentFilesCap)
                 DialogFocus.FocusAndSelect(_recentFilesCap);
             return;
         }

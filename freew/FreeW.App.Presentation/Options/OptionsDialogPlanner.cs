@@ -200,15 +200,14 @@ public static class OptionsDialogPlanner
         AutoFormatOptions autoFormat,
         AutoCorrectOptions autoCorrect)
     {
-        var result = new FreeWOptions
-        {
-            RecentFilesCap = recentFilesCap,
-            DefaultSaveFormat = string.IsNullOrWhiteSpace(format) ? FreeWOptions.DocxDefaultFormat : format!,
-            UiLanguage = uiLanguage ?? FreeWOptions.SystemDefaultLanguage,
-            AutoCorrectEnabled = autoCorrectEnabled,
-            AutoFormat = autoFormat ?? AutoFormatOptions.Default,
-            AutoCorrect = autoCorrect ?? AutoCorrectOptions.Default,
-        };
+        var result = BasicApplicationOptionsDialogSession<FreeWOptions>.BuildResult(
+            recentFilesCap,
+            format,
+            uiLanguage,
+            FreeWOptions.DocxDefaultFormat);
+        result.AutoCorrectEnabled = autoCorrectEnabled;
+        result.AutoFormat = autoFormat ?? AutoFormatOptions.Default;
+        result.AutoCorrect = autoCorrect ?? AutoCorrectOptions.Default;
         result.Normalize();
         return result;
     }

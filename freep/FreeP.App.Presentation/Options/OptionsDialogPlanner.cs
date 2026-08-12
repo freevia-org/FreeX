@@ -68,16 +68,11 @@ public static class OptionsDialogPlanner
     /// and trims everything so the result is already store-ready.
     /// </summary>
     public static FreePOptions BuildResult(int recentFilesCap, string? format, string? uiLanguage)
-    {
-        var result = new FreePOptions
-        {
-            RecentFilesCap = recentFilesCap,
-            DefaultSaveFormat = string.IsNullOrWhiteSpace(format) ? FreePOptions.FxpDefaultFormat : format!,
-            UiLanguage = uiLanguage ?? FreePOptions.SystemDefaultLanguage,
-        };
-        result.Normalize();
-        return result;
-    }
+        => BasicApplicationOptionsDialogSession<FreePOptions>.BuildResult(
+            recentFilesCap,
+            format,
+            uiLanguage,
+            FreePOptions.FxpDefaultFormat);
 }
 
 public sealed record OptionsDialogSurfaceSpec(
