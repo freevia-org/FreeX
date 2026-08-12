@@ -43,7 +43,7 @@ internal static class Program
             return 2;
         }
 
-        return FreeX.App.Avalonia.Program.RunToolHost(
+        return FreeX.App.Avalonia.Program.RunValidationToolHost(
             startupArguments,
             options.DiagnosticsDirectory,
             (window, diagnostics) => MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics));

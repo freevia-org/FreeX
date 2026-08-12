@@ -12,7 +12,10 @@
   <Import Project="..\ToolProjects.props" />
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj" />
+    <!-- These partials belong to the isolated renderer variant, not the tool assembly itself. -->
+    <Compile Remove="RendererHost\**\*.cs" />
+    <ProjectReference Include="..\..\src\FreeX.App.Avalonia\FreeX.App.Avalonia.csproj"
+                      AdditionalProperties="FreeXValidationHost=true" />
   </ItemGroup>
 
   <ItemGroup>

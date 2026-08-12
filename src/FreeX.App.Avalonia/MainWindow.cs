@@ -714,7 +714,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
     private readonly NativeMenuItem _underlineMenuItem = new();
-    private Action<RendererCommandObservation>? _rendererCommandObserver;
     private readonly NativeMenuItem _doubleUnderlineMenuItem = new();
     private readonly NativeMenuItem _strikethroughMenuItem = new();
     private readonly NativeMenuItem _increaseFontSizeMenuItem = new();
@@ -24761,8 +24760,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var before = _session.IsSelectedRangeStartBold;
         ApplySelectedRangeBold(!before);
-        ObserveRendererCommand(
-            RendererObservedCommand.Bold,
+        ObserveOptionalBoldCommand(
             before,
             _session.IsSelectedRangeStartBold);
     }
@@ -24771,8 +24769,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var before = _session.IsSelectedRangeStartItalic;
         ApplySelectedRangeItalic(!before);
-        ObserveRendererCommand(
-            RendererObservedCommand.Italic,
+        ObserveOptionalItalicCommand(
             before,
             _session.IsSelectedRangeStartItalic);
     }
@@ -24781,8 +24778,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         var before = _session.IsSelectedRangeStartUnderline;
         ApplySelectedRangeUnderline(!before);
-        ObserveRendererCommand(
-            RendererObservedCommand.Underline,
+        ObserveOptionalUnderlineCommand(
             before,
             _session.IsSelectedRangeStartUnderline);
     }
@@ -25724,8 +25720,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private void ObserveRendererCommand(RendererObservedCommand command, bool before, bool after) =>
-        _rendererCommandObserver?.Invoke(new RendererCommandObservation(command, before, after));
+    partial void ObserveOptionalBoldCommand(bool before, bool after);
+
+    partial void ObserveOptionalItalicCommand(bool before, bool after);
+
+    partial void ObserveOptionalUnderlineCommand(bool before, bool after);
+
+    partial void ObserveOptionalSelectAllCommand(bool before, bool after);
 
     private bool HasSheetTabButton(Func<Button, bool> predicate) =>
         _sheetTabsHost.Content is StackPanel panel &&
@@ -26259,8 +26260,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             e.Handled = true;
             var before = _session.SelectedRange;
             SelectCurrentRegionOrAll();
-            ObserveRendererCommand(
-                RendererObservedCommand.SelectAll,
+            ObserveOptionalSelectAllCommand(
                 before == _session.SelectedRange,
                 after: true);
         }

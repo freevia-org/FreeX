@@ -6,7 +6,7 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
-internal static class Program
+internal static partial class Program
 {
     [STAThread]
     public static int Main(string[] args)
@@ -17,20 +17,6 @@ internal static class Program
         Velopack.VelopackApp.Build().Run();
 
         return RunApplication(args, diagnosticsDirectory: null, externalStartupCoordinator: null);
-    }
-
-    internal static int RunToolHost(
-        IReadOnlyList<string> startupArguments,
-        string? diagnosticsDirectory,
-        Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator)
-    {
-        ArgumentNullException.ThrowIfNull(startupArguments);
-        ArgumentNullException.ThrowIfNull(externalStartupCoordinator);
-        return RunApplication(
-            startupArguments.ToArray(),
-            diagnosticsDirectory,
-            (window, diagnostics) =>
-                externalStartupCoordinator(window.CreateRendererValidationAccess(), diagnostics));
     }
 
     internal static int RunPivotRuntimeObservationHost(

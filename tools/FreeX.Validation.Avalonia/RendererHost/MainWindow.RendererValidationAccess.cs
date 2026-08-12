@@ -9,7 +9,24 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private Action<RendererCommandObservation>? _rendererCommandObserver;
+
     internal RendererValidationAccess CreateRendererValidationAccess() => new(this);
+
+    partial void ObserveOptionalBoldCommand(bool before, bool after) =>
+        ObserveRendererCommand(RendererObservedCommand.Bold, before, after);
+
+    partial void ObserveOptionalItalicCommand(bool before, bool after) =>
+        ObserveRendererCommand(RendererObservedCommand.Italic, before, after);
+
+    partial void ObserveOptionalUnderlineCommand(bool before, bool after) =>
+        ObserveRendererCommand(RendererObservedCommand.Underline, before, after);
+
+    partial void ObserveOptionalSelectAllCommand(bool before, bool after) =>
+        ObserveRendererCommand(RendererObservedCommand.SelectAll, before, after);
+
+    private void ObserveRendererCommand(RendererObservedCommand command, bool before, bool after) =>
+        _rendererCommandObserver?.Invoke(new RendererCommandObservation(command, before, after));
 
     internal sealed class RendererValidationAccess
     {

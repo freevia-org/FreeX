@@ -18,6 +18,15 @@ public sealed class ParityCaptureAssemblyOwnershipTests
         assembly.GetType("FreeX.App.Avalonia.MainWindow+PrintPreviewCapturePage").Should().BeNull();
         assembly.GetType("FreeX.App.Avalonia.MainWindow+PrintPreviewCaptureTextRun").Should().BeNull();
         assembly.GetType("FreeX.App.Avalonia.MainWindow+SubtotalDialogCaptureState").Should().BeNull();
+        assembly.GetType("FreeX.App.Avalonia.MainWindow+RendererValidationAccess").Should().BeNull();
+        assembly.GetType("FreeX.App.Avalonia.RendererShellObservation").Should().BeNull();
+        assembly.GetType("FreeX.App.Avalonia.RendererCommandObservation").Should().BeNull();
+        assembly.GetType("FreeX.App.Avalonia.RendererFormattingState").Should().BeNull();
+        assembly.GetType("FreeX.App.Avalonia.Program")!
+            .GetMethod(
+                "RunValidationToolHost",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
+            .Should().BeNull();
         typeof(ProductionAvalonia::FreeX.App.Avalonia.MainWindow)
             .GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
             .Select(method => method.Name)
@@ -33,6 +42,39 @@ public sealed class ParityCaptureAssemblyOwnershipTests
         assembly.GetReferencedAssemblies()
             .Select(reference => reference.Name)
             .Should().NotContain("FreeX.ParityCapture.Support");
+    }
+
+    [Fact]
+    public void ValidationProject_OwnsConditionallyCompiledRendererAccess()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var shippingDirectory = Path.Combine(root, "src", "FreeX.App.Avalonia");
+        var validationDirectory = Path.Combine(root, "tools", "FreeX.Validation.Avalonia");
+
+        File.Exists(Path.Combine(shippingDirectory, "MainWindow.RendererValidationAccess.cs"))
+            .Should().BeFalse();
+        File.Exists(Path.Combine(
+                validationDirectory,
+                "RendererHost",
+                "MainWindow.RendererValidationAccess.cs"))
+            .Should().BeTrue();
+        File.Exists(Path.Combine(validationDirectory, "RendererHost", "Program.ValidationHost.cs"))
+            .Should().BeTrue();
+
+        var shippingProject = File.ReadAllText(Path.Combine(
+            shippingDirectory,
+            "FreeX.App.Avalonia.csproj"));
+        var validationProject = File.ReadAllText(Path.Combine(
+            validationDirectory,
+            "FreeX.Validation.Avalonia.csproj"));
+        var shippingProgram = File.ReadAllText(Path.Combine(shippingDirectory, "Program.cs"));
+
+        shippingProject.Should().Contain("Condition=\"'$(FreeXValidationHost)' == 'true'\"");
+        shippingProject.Should().Contain("..\\..\\tools\\FreeX.Validation.Avalonia\\RendererHost");
+        validationProject.Should().Contain("Compile Remove=\"RendererHost\\**\\*.cs\"");
+        validationProject.Should().Contain("AdditionalProperties=\"FreeXValidationHost=true\"");
+        shippingProgram.Should().NotContain("RunValidationToolHost");
+        shippingProgram.Should().NotContain("RendererValidationAccess");
     }
 
     [Fact]

@@ -72,6 +72,16 @@
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-macos'">
     <DefineConstants>$(DefineConstants);FREEX_MACOS_SHARE_SHEET</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(FreeXValidationHost)' == 'true'">
+    <OutputPath>bin\Validation\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(FreeXValidationHost)' == 'true'">
+    <Compile Include="..\..\tools\FreeX.Validation.Avalonia\RendererHost\MainWindow.RendererValidationAccess.cs"
+             Link="MainWindow.RendererValidationAccess.cs" />
+    <Compile Include="..\..\tools\FreeX.Validation.Avalonia\RendererHost\Program.ValidationHost.cs"
+             Link="Program.ValidationHost.cs" />
+  </ItemGroup>
   <ItemGroup>
     <Using Include="Free.Shared.Drawing" />
     <Using Include="Free.Shared.Opc" />
