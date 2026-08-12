@@ -7,7 +7,7 @@ public sealed class MailMergeFinishPlannerTests
     [Fact]
     public void DestinationChoices_MirrorWordFinishMergeMenu()
     {
-        var choices = MailMergeFinishPlanner.GetDestinationChoices();
+        var choices = MailMergeFinishPlanner.CreateDialogPlan(recordCount: 1, currentIndex: 0).Destinations;
 
         choices.Select(choice => choice.Label)
             .Should()

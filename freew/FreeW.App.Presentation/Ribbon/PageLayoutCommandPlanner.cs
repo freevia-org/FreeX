@@ -179,11 +179,6 @@ public static class PageLayoutCommandPlanner
         page.DoNotHyphenateCaps = !result.HyphenateCaps;
     }
 
-    public static int CountHyphenationCandidates(TextDocument document)
-    {
-        return ManualHyphenationPlanner.CreateSession(document).CandidateCount;
-    }
-
     public static bool HasNormalMargins(PageSettings page) =>
         Nearly(page.MarginTopPt, NormalMarginPt) &&
         Nearly(page.MarginBottomPt, NormalMarginPt) &&

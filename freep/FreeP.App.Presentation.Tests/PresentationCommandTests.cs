@@ -141,17 +141,17 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
-    public void AddSlideCommand_Apply_AppendsSlide()
+    public void InsertSlideCommand_AtEnd_AppendsSlide()
     {
         var (p, bus) = Make();
         var s = new Slide { Title = "Appended" };
-        bus.Execute(new AddSlideCommand(s));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, s));
         p.Slides.Should().HaveCount(2);
         p.Slides[1].Should().BeSameAs(s);
     }
 
     [Fact]
-    public void AddSlideCommand_PreservesSectionMembershipAcrossUndoAndRedo()
+    public void InsertSlideCommand_AtEnd_PreservesSectionMembershipAcrossUndoAndRedo()
     {
         var (p, bus) = Make(2);
         var lastSlideId = p.Slides[^1].Id;
@@ -160,7 +160,7 @@ public sealed class PresentationCommandTests
         p.Sections.Add(section);
         var added = new Slide { Id = "new-slide" };
 
-        bus.Execute(new AddSlideCommand(added));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, added));
 
         p.Slides[^1].Should().BeSameAs(added);
         p.Sections[0].SlideIds.Should().Equal(lastSlideId, added.Id);
@@ -173,11 +173,11 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
-    public void AddSlideCommand_Revert_RemovesSlide()
+    public void InsertSlideCommand_AtEnd_Revert_RemovesSlide()
     {
         var (p, bus) = Make();
         var s = new Slide { Title = "Appended" };
-        bus.Execute(new AddSlideCommand(s));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, s));
         bus.Undo();
         p.Slides.Should().HaveCount(1);
     }
@@ -2017,7 +2017,7 @@ public sealed class PresentationCommandTests
     public void Bus_CanUndo_IsTrueAfterExecute()
     {
         var (p, bus) = Make();
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.CanUndo.Should().BeTrue();
     }
 
@@ -2025,7 +2025,7 @@ public sealed class PresentationCommandTests
     public void Bus_CanRedo_IsTrueAfterUndo()
     {
         var (p, bus) = Make();
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.Undo();
         bus.CanRedo.Should().BeTrue();
     }
@@ -2034,9 +2034,9 @@ public sealed class PresentationCommandTests
     public void Bus_CanRedo_IsFalseAfterNewExecute()
     {
         var (p, bus) = Make();
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.Undo();
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.CanRedo.Should().BeFalse();
     }
 
@@ -2046,7 +2046,7 @@ public sealed class PresentationCommandTests
         var (p, bus) = Make();
         int fired = 0;
         bus.Changed += () => fired++;
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         fired.Should().Be(1);
     }
 
@@ -2056,7 +2056,7 @@ public sealed class PresentationCommandTests
         var (p, bus) = Make();
         int fired = 0;
         bus.Changed += () => fired++;
-        bus.Execute(new AddSlideCommand(new Slide()));
+        bus.Execute(new InsertSlideCommand(p.Slides.Count, new Slide()));
         bus.Undo();
         bus.Redo();
         fired.Should().Be(3);

@@ -449,30 +449,6 @@ public sealed class EditingSession
             "The selected SmartArt graphic is not available.");
     }
 
-    /// <summary>
-    /// Adds a hierarchy assistant below the selected node through the shared undoable
-    /// package-refresh path. PowerPoint stores the new node as dgm:pt type="asst".
-    /// </summary>
-    public SmartArtNodeEditResult AddSmartArtAssistant(
-        uint shapeId,
-        string targetModelId,
-        string? text = null)
-    {
-        SmartArtNodeEditResult? result = null;
-        EditSmartArtWithPackageRefresh(shapeId, smartArt =>
-        {
-            result = SmartArtEditingPlanner.Apply(
-                smartArt.Data,
-                SmartArtNodeEditIntent.AddAssistant(targetModelId, text));
-            return result.Applied;
-        });
-
-        return result ?? SmartArtNodeEditResult.NotApplied(
-            SmartArtNodeEditKind.AddAssistant,
-            targetModelId,
-            "The selected SmartArt graphic is not available.");
-    }
-
     private bool EditSmartArtWithPackageRefresh(
         uint shapeId,
         Func<SmartArtShape, bool> edit,
@@ -696,13 +672,6 @@ public sealed class EditingSession
         return Presentation.Slides[slideIndex].IsHidden == isHidden;
     }
 
-    /// <summary>Sets the presentation-wide slideshow media-control visibility through the undo bus.</summary>
-    public bool SetShowMediaControls(bool show)
-    {
-        Bus.Execute(new SetShowMediaControlsCommand(Presentation.ShowMediaControls, show));
-        return Presentation.ShowMediaControls == show;
-    }
-
     /// <summary>Sets the presentation-wide slideshow playback settings through the undo bus.</summary>
     public bool SetSlideShowSettings(
         bool useSlideTimings,
@@ -847,13 +816,6 @@ public sealed class EditingSession
         return !string.Equals(before, shape.PreservedObject.RawXml, StringComparison.Ordinal);
     }
 
-    /// <summary>Applies supported properties to one selected Summary Zoom tile.</summary>
-    public bool SetSelectedSummaryZoomTileProperties(
-        string sectionId,
-        ZoomObjectProperties properties) =>
-        _selectedShapeIds.Count == 1
-        && SetSummaryZoomTileProperties(_selectedShapeIds[0], sectionId, properties);
-
     /// <summary>Sets a user-authored cover image on one Slide or Section Zoom.</summary>
     public bool SetZoomCoverImage(uint shapeId, byte[] imageBytes, string contentType)
     {
@@ -929,14 +891,6 @@ public sealed class EditingSession
         return HasSummaryTileCover(shape.PreservedObject, sectionId);
     }
 
-    /// <summary>Sets a cover image on one selected Summary Zoom tile.</summary>
-    public bool SetSelectedSummaryZoomTileCoverImage(
-        string sectionId,
-        byte[] imageBytes,
-        string contentType) =>
-        _selectedShapeIds.Count == 1
-        && SetSummaryZoomTileCoverImage(_selectedShapeIds[0], sectionId, imageBytes, contentType);
-
     /// <summary>Restores the rendered preview on one Summary Zoom tile.</summary>
     public bool ResetSummaryZoomTileCoverImage(
         uint shapeId,
@@ -962,15 +916,6 @@ public sealed class EditingSession
             useCoverImage: false));
         return HasSummaryTileImageType(shape.PreservedObject, sectionId, "preview");
     }
-
-    /// <summary>Restores the rendered preview on one selected Summary Zoom tile.</summary>
-    public bool ResetSelectedSummaryZoomTileCoverImage(
-        string sectionId,
-        byte[] previewBytes,
-        string contentType) =>
-        _selectedShapeIds.Count == 1
-        && ResetSummaryZoomTileCoverImage(
-            _selectedShapeIds[0], sectionId, previewBytes, contentType);
 
     /// <summary>Sets one Summary Zoom tile's native offset and scale factors through undo.</summary>
     public bool SetSummaryZoomTileLayout(
@@ -1006,22 +951,6 @@ public sealed class EditingSession
             && target.ScaleFactorY == scaleFactorY;
     }
 
-    /// <summary>Sets one selected Summary Zoom tile's native offset and scale factors.</summary>
-    public bool SetSelectedSummaryZoomTileLayout(
-        string sectionId,
-        int offsetFactorX,
-        int offsetFactorY,
-        int scaleFactorX,
-        int scaleFactorY) =>
-        _selectedShapeIds.Count == 1
-        && SetSummaryZoomTileLayout(
-            _selectedShapeIds[0],
-            sectionId,
-            offsetFactorX,
-            offsetFactorY,
-            scaleFactorX,
-            scaleFactorY);
-
     /// <summary>Replaces the ordered section membership of a Summary Zoom. Undoable.</summary>
     public bool SetSummaryZoomTargets(uint shapeId, IEnumerable<string> targetSectionIds)
     {
@@ -1044,10 +973,6 @@ public sealed class EditingSession
             plan.RawXml));
         return string.Equals(shape.PreservedObject.RawXml, plan.RawXml, StringComparison.Ordinal);
     }
-
-    public bool SetSelectedSummaryZoomTargets(IEnumerable<string> targetSectionIds) =>
-        _selectedShapeIds.Count == 1
-        && SetSummaryZoomTargets(_selectedShapeIds[0], targetSectionIds);
 
     private static bool HasSummaryTileCover(PreservedObjectInfo info, string sectionId)
     {
@@ -1112,9 +1037,6 @@ public sealed class EditingSession
         ClearSelection();
         CurrentSlideIndex = index;
     }
-
-    public bool AddSectionAtCurrentSlide(string? name = null) =>
-        AddSectionAtSlide(CurrentSlideIndex, name);
 
     public bool AddSectionAtSlide(int slideIndex, string? name = null)
     {
@@ -1259,14 +1181,6 @@ public sealed class EditingSession
                 plan.TargetSectionId,
                 StringComparison.Ordinal);
     }
-
-    public bool SetSelectedSlideZoomTarget(string targetSlideId) =>
-        _selectedShapeIds.Count == 1
-        && SetSlideZoomTarget(_selectedShapeIds[0], targetSlideId);
-
-    public bool SetSelectedSectionZoomTarget(string targetSectionId) =>
-        _selectedShapeIds.Count == 1
-        && SetSectionZoomTarget(_selectedShapeIds[0], targetSectionId);
 
     private bool IsSingleTargetZoom(uint shapeId) =>
         CurrentSlide is { } slide
@@ -1639,14 +1553,6 @@ public sealed class EditingSession
             if (shape?.Fill is not null && !ReferenceEquals(fill, shape.Fill))
                 Bus.Execute(new SetShapeFillCommand(_currentSlideIndex, id, fill));
         }
-    }
-
-    /// <summary>Sets outline on all selected shapes.</summary>
-    public void SetSelectedOutline(ShapeOutline? outline)
-    {
-        if (CurrentSlide is null) return;
-        foreach (var id in _selectedShapeIds)
-            Bus.Execute(new SetShapeOutlineCommand(_currentSlideIndex, id, outline));
     }
 
     /// <summary>Sets outline transparency on all selected shapes while preserving stroke geometry.</summary>
@@ -4127,10 +4033,6 @@ public sealed class EditingSession
     /// </summary>
     public void MergeTableCells(int r1, int c1, int r2, int c2)
         => ExecuteTableCommand((si, id) => new MergeTableCellsCommand(si, id, r1, c1, r2, c2));
-
-    /// <summary>Merges a named selection range. Undoable.</summary>
-    public void MergeSelectedCells(int r1, int c1, int r2, int c2)
-        => MergeTableCells(r1, c1, r2, c2);
 
     /// <summary>Merge the active cell with its right neighbor, or the cell below at a row edge.</summary>
     public bool TryMergeActiveTableCell()

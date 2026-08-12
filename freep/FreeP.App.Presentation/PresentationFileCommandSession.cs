@@ -924,16 +924,6 @@ public sealed class PresentationFileCommandSession
         return LastVideoFramePackage;
     }
 
-    public PresentationVideoExportHandoffPlan BuildVideoExportHandoffPlan(
-        PresentationVideoFramePackagePlan packagePlan,
-        PresentationVideoExportHandoffHostCapabilities? capabilities = null)
-    {
-        LastVideoExportHandoffPlan = PresentationVideoFramePackageExecutor.BuildHandoffPlan(
-            packagePlan,
-            capabilities ?? _video.Capabilities);
-        return LastVideoExportHandoffPlan;
-    }
-
     public async Task<PresentationFileCommandResult> ExportVideoAsync(
         PresentationVideoExportRequest? request = null,
         CancellationToken cancellationToken = default)

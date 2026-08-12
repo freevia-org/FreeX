@@ -26,14 +26,6 @@ internal static class WpfRgbColorAdapter
     public static Color ParseDrawingMlOrDefault(string? token, Color fallback) =>
         TryParseDrawingMl(token, out var color) ? color : fallback;
 
-    public static Color ParseDrawingMl(string? token)
-    {
-        if (TryParseDrawingMl(token, out var color))
-            return color;
-
-        throw new FormatException($"'{token}' is not a six-digit RGB color.");
-    }
-
     public static bool TryParseColorToken(string? token, out Color color)
     {
         if (TryParseDrawingMl(token, out color))

@@ -59,9 +59,6 @@ public static class MailMergeFinishPlanner
         new(MailMergeFinishDestination.Email, "Send E-mail Messages", IsSupported: true),
     ];
 
-    public static IReadOnlyList<MailMergeFinishDestinationChoice> GetDestinationChoices() =>
-        DestinationChoices;
-
     public static MailMergeFinishDialogPlan CreateDialogPlan(int recordCount, int currentIndex)
     {
         var scopes = new[]

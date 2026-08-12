@@ -987,15 +987,6 @@ public static class MergeRuleEvaluator
         return false;
     }
 
-    private static void SplitFirstToken(ReadOnlySpan<char> span, out ReadOnlySpan<char> first, out ReadOnlySpan<char> rest)
-    {
-        span = span.TrimStart();
-        var j = 0;
-        while (j < span.Length && !char.IsWhiteSpace(span[j])) j++;
-        first = span.Slice(0, j);
-        rest  = j < span.Length ? span.Slice(j + 1) : ReadOnlySpan<char>.Empty;
-    }
-
     // Unquote a double-quoted string span (or return the raw string if not quoted).
     private static string Unquote(ReadOnlySpan<char> s)
     {

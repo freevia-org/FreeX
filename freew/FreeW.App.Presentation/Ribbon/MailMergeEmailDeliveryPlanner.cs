@@ -58,12 +58,6 @@ public static class MailMergeEmailDeliveryPlanner
         new(MailMergeEmailRecordScope.SelectedRecords, "Selected records")
     ];
 
-    public static IReadOnlyList<MailMergeEmailOutputFormatChoice> GetOutputFormats() => OutputFormats;
-
-    public static IReadOnlyList<MailMergeEmailBodyFormatChoice> GetBodyFormats() => BodyFormats;
-
-    public static IReadOnlyList<MailMergeEmailRecordScopeChoice> GetRecordScopes() => RecordScopes;
-
     public static MailMergeEmailDeliveryDialogPlan CreateDialogPlan(
         MergeData data,
         int currentRecordIndex,

@@ -308,37 +308,6 @@ public sealed record DocumentTableStyle(
     // ── Rendering helpers ───────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Resolves the effective fill hex (RRGGBB, no '#') for a given cell position, honouring the
-    /// style's bands and the active <see cref="TableFormatting"/> toggles. Returns null for a
-    /// transparent (unshaded) cell.
-    /// </summary>
-    public string? ResolveBodyFill(int rowIndex, TableFormatting fmt)
-    {
-        // Header row (first row): header band fill.
-        var isHeader = fmt.HeaderRow && rowIndex == 0;
-        if (isHeader)
-            return HeaderBand?.FillHex;
-
-        // Last row: last-row band fill (checked before banding).
-        var totalIsHeader = fmt.HeaderRow ? 1 : 0;
-        if (fmt.LastRow)
-        {
-            // We don't know the total row count here; last-row fill is applied by the caller
-            // for the last row index. Return null — the caller handles the last-row check.
-        }
-
-        // Banded rows: alternate odd/even body rows.
-        if (fmt.BandedRows)
-        {
-            var bodyIndex = TableBanding.BodyRowIndex(rowIndex, fmt.HeaderRow);
-            if (bodyIndex >= 0)
-                return bodyIndex % 2 == 0 ? BandedRowOdd?.FillHex : BandedRowEven?.FillHex;
-        }
-
-        return null;
-    }
-
-    /// <summary>
     /// Resolves the effective fill hex and bold flag for a specific row position, given the active
     /// formatting toggles and the total number of rows. Returns (null, false) for a plain unstyled cell.
     /// </summary>

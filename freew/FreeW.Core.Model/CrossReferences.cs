@@ -921,9 +921,6 @@ public static class CrossReferences
         return offsets;
     }
 
-    private static string ParagraphTextAt(TextDocument doc, int blockIndex) =>
-        doc.Blocks[blockIndex] is Paragraph paragraph ? paragraph.PlainText.TrimEnd() : string.Empty;
-
     private static string NoteDisplayNumber(
         IEnumerable<int> ids, int targetId, NoteNumberingOptions options, string cached)
     {

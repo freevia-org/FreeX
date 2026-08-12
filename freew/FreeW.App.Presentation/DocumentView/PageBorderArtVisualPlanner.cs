@@ -1578,14 +1578,6 @@ public static class PageBorderArtVisualPlanner
         }
     }
 
-    private static void AddWhitePolygon(
-        List<PageBorderArtPolygon> polygons,
-        Func<double, double, PageBorderArtPoint> point,
-        params (double X, double Y)[] coordinates) =>
-        polygons.Add(new PageBorderArtPolygon(
-            coordinates.Select(coordinate => point(coordinate.X, coordinate.Y)).ToList(),
-            0xFF, 0xFF, 0xFF));
-
     private static void AddWeavingRibbonRail(
         List<PageBorderArtFillRectangle> fills,
         IReadOnlyList<byte> mask,

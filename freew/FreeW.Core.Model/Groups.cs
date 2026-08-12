@@ -169,27 +169,4 @@ public static class DrawingGroupChildPathResolver
         return false;
     }
 
-    public static bool TryGetGroup(
-        DrawingGroup root,
-        IReadOnlyList<int> groupPath,
-        out DrawingGroup group)
-    {
-        ArgumentNullException.ThrowIfNull(root);
-        ArgumentNullException.ThrowIfNull(groupPath);
-
-        group = root;
-        foreach (var index in groupPath)
-        {
-            if (index < 0 || index >= group.Children.Count
-                || group.Children[index] is not DrawingGroup nested)
-            {
-                group = null!;
-                return false;
-            }
-
-            group = nested;
-        }
-
-        return true;
-    }
 }

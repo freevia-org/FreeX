@@ -1081,9 +1081,9 @@ public static class FreePRibbonCommandWorkflow
 
     private static readonly (string CommandId, SmartArtQuickStylePreset Preset)[] SmartArtStyles =
     [
-        (SmartArtAuthoringPlanner.SimpleQuickStyleCommandId, SmartArtQuickStylePreset.Simple),
-        (SmartArtAuthoringPlanner.ModerateQuickStyleCommandId, SmartArtQuickStylePreset.Moderate),
-        (SmartArtAuthoringPlanner.IntenseQuickStyleCommandId, SmartArtQuickStylePreset.Intense),
+        (SmartArtAuthoringPlanner.SimpleQuickStyleCommandId, SmartArtQuickStylePreset.SimpleFill),
+        (SmartArtAuthoringPlanner.ModerateQuickStyleCommandId, SmartArtQuickStylePreset.ModerateEffect),
+        (SmartArtAuthoringPlanner.IntenseQuickStyleCommandId, SmartArtQuickStylePreset.IntenseEffect),
         (SmartArtAuthoringPlanner.SubtleQuickStyleCommandId, SmartArtQuickStylePreset.Subtle),
         (SmartArtAuthoringPlanner.SoftEdgeQuickStyleCommandId, SmartArtQuickStylePreset.SoftEdge),
         (SmartArtAuthoringPlanner.InsertQuickStyleCommandId, SmartArtQuickStylePreset.Insert),

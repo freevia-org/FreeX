@@ -759,12 +759,6 @@ public static class PageSetupDialogPlanner
         return value.ToString("0.##", culture);
     }
 
-    public static string FormatCompactPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value == 0 ? "0" : value.ToString("G5", culture);
-    }
-
     public static int CustomIndex(IReadOnlyList<PageSetupPaperOption> paperOptions)
     {
         ArgumentNullException.ThrowIfNull(paperOptions);

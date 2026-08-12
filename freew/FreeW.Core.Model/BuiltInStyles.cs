@@ -210,10 +210,6 @@ public static class BuiltInStyles
             ? descriptor.Role == BuiltInStyleRole.Title
             : descriptor.Role == BuiltInStyleRole.Heading && descriptor.HeadingLevel == level);
 
-    /// <summary>True when <paramref name="styleId"/> names a character (run-level) gallery style.</summary>
-    public static bool IsCharacterStyle(string styleId) =>
-        Find(styleId) is { Type: StyleType.Character };
-
     /// <summary>
     /// Ensure the gallery style <paramref name="styleId"/> exists in <paramref name="doc"/>'s catalog,
     /// seeding it (and its <c>Normal</c> base, if missing) from the built-in definition when absent.

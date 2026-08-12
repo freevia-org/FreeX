@@ -158,35 +158,6 @@ public sealed class InsertSlideCommand : IPresentationCommand
 }
 
 /// <summary>
-/// Appends a new blank slide. Kept for backward compatibility with existing callers.
-/// </summary>
-public sealed class AddSlideCommand : IPresentationCommand
-{
-    private readonly Slide _slide;
-    private PresentationSectionMembershipSnapshot? _beforeSections;
-
-    public AddSlideCommand(Slide slide) => _slide = slide;
-    public string Label => "Add Slide";
-
-    public void Apply(Presentation p)
-    {
-        _beforeSections ??= PresentationSectionMembershipSnapshot.Capture(p);
-
-        p.Slides.Add(_slide);
-        PresentationSectionMembershipSnapshot.AddInsertedSlide(
-            p,
-            p.Slides.Count - 1,
-            _slide.Id);
-    }
-
-    public void Revert(Presentation p)
-    {
-        p.Slides.Remove(_slide);
-        _beforeSections?.Restore(p);
-    }
-}
-
-/// <summary>
 /// Deletes the slide at <paramref name="index"/>. Captures the slide instance + its original
 /// index for undo.
 /// </summary>

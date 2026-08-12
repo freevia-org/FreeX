@@ -3006,11 +3006,6 @@ public static partial class ChartRenderPlanner
             or ChartType.Area
             or ChartType.AreaStacked;
 
-    public static IReadOnlyList<ChartGridLinePlan> BuildMajorGridLinePlans(
-        ChartShape chart,
-        ChartFramePlan frame) =>
-        BuildMajorGridLinePrimitivePlan(chart, frame).GridLines;
-
     public static ChartMajorGridLinePrimitivePlan BuildMajorGridLinePrimitivePlan(
         ChartShape chart,
         ChartFramePlan frame)
@@ -3919,24 +3914,6 @@ public static partial class ChartRenderPlanner
             verticalBorders,
             outlineBorders,
             ResolveDataTableBorderStroke(settings));
-    }
-
-    public static IReadOnlyList<ChartTextPlan> BuildSecondaryValueAxisLabelPlans(
-        ChartShape chart,
-        ChartPlanRect plot,
-        double boundsRight)
-    {
-        var frame = new ChartFramePlan(
-            new ChartPlanRect(0, 0, boundsRight + AxisLabelWidth + Margin, plot.Bottom + Margin),
-            plot,
-            TitleBounds: null,
-            HasLegend: false,
-            LegendRight: false,
-            LegendAreaWidth: 0,
-            LegendAreaHeight: 0,
-            ChartRenderFamily.Cartesian);
-
-        return BuildSecondaryValueAxisPrimitivePlan(chart, frame).Labels;
     }
 
     public static ChartSecondaryValueAxisPrimitivePlan BuildSecondaryValueAxisPrimitivePlan(

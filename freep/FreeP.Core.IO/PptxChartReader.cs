@@ -1009,14 +1009,6 @@ internal static class PptxChartReader
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
-    private static void ReadScatterChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
-        Dictionary<int, ChartSeries> idxMap)
-    {
-        ReadVaryColors(el, shape);
-        shape.ChartType = ChartType.Scatter;
-        ReadSeriesFromChart(el, shape, scheme, idxMap);
-    }
-
     private static void ReadDoughnutChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
         Dictionary<int, ChartSeries> idxMap)
     {

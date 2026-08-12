@@ -147,8 +147,6 @@ public sealed class ShapeEffects
     /// True when any sp3d data is present. Back-compat alias; callers should prefer
     /// checking BevelTop/BevelBottom/ExtrusionHeightEmu directly.
     /// </summary>
-    public bool HasBevel => BevelTop is not null || BevelBottom is not null;
-
     /// <summary>Top-face bevel (a:bevelT). Null = none.</summary>
     public BevelInfo? BevelTop { get; set; }
 

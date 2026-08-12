@@ -143,15 +143,6 @@ public sealed record PresentationHandoutLayoutPlan(
     IReadOnlyList<PresentationHandoutPagePlan> Pages,
     LocalizedTextDescriptor StatusText);
 
-public sealed record PresentationDeferredExportPlan(
-    PresentationExportFormat Format,
-    string CommandId,
-    string DisplayName,
-    string Description,
-    string DefaultExtensionWithDot,
-    PresentationSlideRangePlan SlideRange,
-    bool IsImplemented);
-
 public sealed record PresentationVideoQualityDescriptor(
     PresentationVideoQualityKind Quality,
     string DisplayName,
@@ -1107,24 +1098,6 @@ public static class PresentationExportPlanner
             return DefaultVideoSecondsPerSlide;
 
         return Math.Clamp(secondsPerSlide, 1, 60);
-    }
-
-    private static PresentationDeferredExportPlan BuildDeferredExportPlan(
-        PresentationExportFormat format,
-        PresentationSlideRangeRequest? range,
-        int slideCount,
-        string deferredDescription)
-    {
-        var descriptor = BuildFormatDescriptors().Single(d => d.Format == format);
-
-        return new PresentationDeferredExportPlan(
-            descriptor.Format,
-            descriptor.CommandId,
-            descriptor.DisplayName,
-            deferredDescription,
-            descriptor.DefaultExtensionWithDot ?? string.Empty,
-            BuildSlideRangePlan(range, slideCount),
-            descriptor.IsImplemented);
     }
 
     private static IReadOnlyList<int> BuildAllSlides(int slideCount) =>

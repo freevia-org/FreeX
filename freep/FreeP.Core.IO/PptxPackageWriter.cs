@@ -6514,13 +6514,6 @@ public static class PptxPackageWriter
     private static XAttribute NsAttr(string prefix, XNamespace ns) =>
         new XAttribute(XNamespace.Xmlns + prefix, ns.NamespaceName);
 
-    private static XElement CnvPr(SlideShape shape)
-    {
-        var el = CnvPrBase(shape);
-        AddDecorativeExtList(el, shape);
-        return el;
-    }
-
     private static XElement CnvPrBase(SlideShape shape)
     {
         var el = new XElement(P + "cNvPr", new XAttribute("id", shape.Id), new XAttribute("name", shape.Name));
@@ -6630,8 +6623,6 @@ public static class PptxPackageWriter
     }
 
     private static string FmtColor(SrgbColor c) => new DrawingMlRgbColor(c.R, c.G, c.B).ToHexRgb();
-
-    private static string GetShapeId(SlideShape s) => s.Id.ToString(CultureInfo.InvariantCulture);
 
     private static string ToLayoutTypeStr(SlideLayoutType type) =>
         type switch
