@@ -249,7 +249,10 @@ public sealed class PresentationPortabilityGuardTests
 
         File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionInputParser.cs"))
             .Should()
-            .BeTrue("allow-edit-range parsing should be shared by renderers");
+            .BeFalse("AllowEditRangePlanner owns the live parsing path without a narrower parser facade");
+        File.Exists(Path.Combine(presentationRoot, "Protection", "AllowEditRangePlanner.cs"))
+            .Should()
+            .BeTrue("allow-edit-range parsing and command planning should have one live shared owner");
         File.Exists(Path.Combine(presentationRoot, "Protection", "ProtectionDialogPlanner.cs"))
             .Should()
             .BeTrue("protect/unprotect result creation should be shared by renderers");

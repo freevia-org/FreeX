@@ -13,7 +13,6 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
 
         var sharedFiles = new[]
         {
-            "ConditionalFormatRulePlanner.cs",
             "ConditionalFormatRuleBuilder.cs",
             "ConditionalFormatPresetFactory.cs",
             "ConditionalFormatPresetGalleryPlanner.cs",
@@ -28,6 +27,9 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
                 .BeTrue($"{fileName} should be owned by the shared conditional-format presentation layer");
         }
 
+        File.Exists(Path.Combine(presentationRoot, "ConditionalFormatting", "ConditionalFormatRulePlanner.cs"))
+            .Should()
+            .BeFalse("rule applicability and stop-if-true behavior belong to the live evaluators, not a test-only replica");
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "ConditionalFormatRulePlanner.cs"))
             .Should()
             .BeFalse("rule ordering is portable presentation logic, not renderer logic");
@@ -81,7 +83,12 @@ public sealed class ConditionalFormatPresetFactorySourceGuardTests
         var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         var plannerSource = File.ReadAllText(Path.Combine(presentationRoot, "ConditionalFormatting", "ConditionalFormatPresetGalleryPlanner.cs"));
-        var runtimeCatalogSource = File.ReadAllText(Path.Combine(presentationRoot, "Ribbon", "RibbonRuntimeCatalogPlanner.cs"));
+        var runtimeCatalogSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "tests",
+            "SharedTestInfrastructure",
+            "FreeX",
+            "RibbonRuntimeCatalogPlanner.cs"));
         var hostSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Host", "MainWindow.HomeFormatting.cs"));
         var avaloniaMainSource = File.ReadAllText(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var avaloniaRawIdsSource = File.ReadAllText(Path.Combine(

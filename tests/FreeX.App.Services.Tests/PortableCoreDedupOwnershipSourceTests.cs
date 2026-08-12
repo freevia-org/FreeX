@@ -18,17 +18,19 @@ public sealed class PortableCoreDedupOwnershipSourceTests
     }
 
     [Fact]
-    public void PasswordAdapters_UseSharedSha256Storage()
+    public void PasswordStorage_HasOneModelOwnerOverSharedSha256Primitives()
     {
         var shared = Read("shared", "Free.Shared.IO", "Sha256PasswordStorage.cs");
-        var native = Read("shared", "Free.Shared.Opc", "NativePasswordHelper.cs");
         var model = Read("src", "FreeX.Core.Model", "ProtectionPasswordHelper.cs");
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
 
         shared.Should().Contain("SHA256.HashData");
-        native.Should().Contain("Sha256PasswordStorage.Encode");
         model.Should().Contain("Sha256PasswordStorage.Encode");
-        (native + model).Should().NotContain("IsStoredSha256Hash");
-        (native + model).Should().NotContain("Convert.FromHexString");
+        model.Should().NotContain("IsStoredSha256Hash");
+        model.Should().NotContain("Convert.FromHexString");
+        File.Exists(Path.Combine(repoRoot, "shared", "Free.Shared.Opc", "NativePasswordHelper.cs"))
+            .Should()
+            .BeFalse("ProtectionPasswordHelper supersedes the unconsumed native wrapper");
     }
 
     [Fact]

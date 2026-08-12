@@ -104,9 +104,12 @@ public sealed class ConditionalFormatDedupSourceTests
             "ConditionalFormatDialog.Catalog.cs",
             "ConditionalFormatDialog.IconSets.cs",
             "ConditionalFormatDialog.Result.cs");
-        var runtimeCatalogSource = DialogSourceTestSupport.ReadPresentationSources(
-            "Ribbon",
-            "RibbonRuntimeCatalogPlanner.cs");
+        var runtimeCatalogSource = File.ReadAllText(Path.Combine(
+            repoRoot,
+            "tests",
+            "SharedTestInfrastructure",
+            "FreeX",
+            "RibbonRuntimeCatalogPlanner.cs"));
         var presetPresentationSource = DialogSourceTestSupport.ReadPresentationSources(
             "ConditionalFormatting",
             "ConditionalFormatPresetGalleryPlanner.cs");

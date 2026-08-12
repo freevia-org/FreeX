@@ -36,5 +36,15 @@ public sealed class WorksheetEditRangePlannerDedupSourceTests
         var dataSource = DialogSourceTestSupport.ReadHostSources("MainWindow.DataCommands.cs");
         dataSource.Should().Contain("using FreeX.App.Presentation.DataTools;");
         dataSource.Should().Contain("ForecastSheetSourceRangePlanner.Create(sheet, range)");
+
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        File.Exists(Path.Combine(
+                repoRoot,
+                "src",
+                "FreeX.App.Presentation",
+                "DataTools",
+                "DataListCommandRangePlanner.cs"))
+            .Should()
+            .BeFalse("the unused current-region replica must not ship beside SelectionRangeService");
     }
 }

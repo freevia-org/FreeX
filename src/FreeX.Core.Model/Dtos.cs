@@ -56,25 +56,6 @@ public sealed record EditResult(
     IReadOnlyList<CellAddress> DirtyCells,
     bool RequiresRecalc);
 
-/// <summary>Options for creating a new workbook.</summary>
-public sealed record NewWorkbookOptions(
-    string Name = "Untitled",
-    int InitialSheetCount = 1);
-
-/// <summary>Metadata about a workbook.</summary>
-public sealed record WorkbookMeta(
-    WorkbookId Id,
-    string Name,
-    int SheetCount,
-    bool IsDirty);
-
-/// <summary>Metadata about a sheet.</summary>
-public sealed record SheetMeta(
-    SheetId Id,
-    string Name,
-    int Index,
-    int CellCount);
-
 public sealed record ViewportRequest(
     uint TopRow,
     uint LeftCol,

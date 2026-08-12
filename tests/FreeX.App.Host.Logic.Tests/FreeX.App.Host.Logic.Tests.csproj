@@ -45,6 +45,7 @@
     <Compile Include="..\FreeX.App.Host.Tests\StaTestRunner.cs" Link="StaTestRunner.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\WpfTestTree.cs" Link="WpfTestTree.cs" />
     <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="..\SharedTestInfrastructure\FreeX\RibbonRuntimeCatalogPlanner.cs" Link="TestSupport\RibbonRuntimeCatalogPlanner.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\WorkspaceFileLocator.cs" Link="WorkspaceFileLocator.cs" />
     <Compile Include="..\FreeX.App.Host.Tests\FileAssociations\WindowsFileAssociationServiceTests.cs" Link="FileAssociations\WindowsFileAssociationServiceTests.cs" />
   </ItemGroup>

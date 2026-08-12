@@ -23,6 +23,10 @@
     <Using Include="FreeX.App.Presentation.FormulaBar" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\SharedTestInfrastructure\FreeX\RibbonRuntimeCatalogPlanner.cs" Link="TestSupport\RibbonRuntimeCatalogPlanner.cs" />
+  </ItemGroup>
+
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>

@@ -1,5 +1,3 @@
-using FreeX.Core.Model;
-
 namespace FreeX.App.Presentation.ConditionalFormatting;
 
 /// <summary>
@@ -35,9 +33,3 @@ public readonly record struct IconSetResult(
     int BucketIndex,
     int IconCount,
     bool ShowValue);
-
-/// <summary>
-/// The style a highlight / top-bottom / above-average / duplicate-unique / text rule applies
-/// when its condition is met. Mirrors the model <see cref="ConditionalFormat.FormatIfTrue"/>.
-/// </summary>
-public readonly record struct HighlightResult(CellStyle Style);

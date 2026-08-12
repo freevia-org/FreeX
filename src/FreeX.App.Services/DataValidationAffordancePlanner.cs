@@ -64,13 +64,3 @@ public static class DataValidationAffordancePlanner
 
 /// <summary>Pixel bounds of the DV dropdown-arrow button (logical, unzoomed coordinates).</summary>
 public readonly record struct DvArrowButtonRect(double Left, double Top, double Width, double Height);
-
-/// <summary>
-/// Placement information for the floating DV input-message tooltip.
-/// The box should appear below-right of the active cell, clamped inside the grid viewport.
-/// </summary>
-public readonly record struct DvInputMessagePlacement(
-    double Left,
-    double Top,
-    double Width,
-    double MaxHeight);

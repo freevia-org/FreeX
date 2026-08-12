@@ -157,7 +157,9 @@ public sealed class ResidualRendererBoundaryTests
         File.Exists(Path.Combine(avalonia, "ConditionalFormatStatsCache.cs")).Should().BeFalse();
         File.Exists(Path.Combine(avalonia, "Charts", "InsertChartCommandFactory.cs")).Should().BeFalse();
         File.Exists(Path.Combine(presentation, "ConditionalFormatting", "ConditionalFormatCellRenderPlanner.cs")).Should().BeTrue();
-        File.Exists(Path.Combine(presentation, "ConditionalFormatting", "ConditionalFormatStatsCache.cs")).Should().BeTrue();
+        File.Exists(Path.Combine(presentation, "ConditionalFormatting", "ConditionalFormatStatsCache.cs"))
+            .Should()
+            .BeFalse("the live evaluators own their aggregate state without an unused public cache");
         File.Exists(Path.Combine(presentation, "Charts", "Editing", "ChartCommandWorkflowPlanner.cs")).Should().BeTrue();
         File.Exists(Path.Combine(presentation, "GridInteraction", "SelectionCornerNavigator.cs")).Should().BeTrue();
         File.Exists(Path.Combine(services, "FailedWorkbookCommand.cs")).Should().BeTrue();

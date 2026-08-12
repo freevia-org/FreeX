@@ -20,6 +20,9 @@ public sealed class AccessibilityCheckerDialogPlannerSourceGuardTests
         File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Avalonia", "AccessibilityCheckerDialogPlanner.cs"))
             .Should()
             .BeFalse("Avalonia should use the shared planner instead of carrying a renderer-local copy");
+        File.Exists(Path.Combine(repoRoot, "src", "FreeX.App.Services", "AccessibilityIssueFormatter.cs"))
+            .Should()
+            .BeFalse("the obsolete key-returning formatter must not wrap the localized presentation planner");
     }
 
     [Fact]

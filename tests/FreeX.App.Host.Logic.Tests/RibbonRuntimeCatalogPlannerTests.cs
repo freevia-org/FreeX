@@ -142,29 +142,43 @@ public sealed class RibbonRuntimeCatalogPlannerTests
     }
 
     [Fact]
-    public void PlannerLivesInPresentationAndHostDoesNotKeepCatalogProjectionCopy()
+    public void PlannerLivesInSharedTestSupportAndShippingProjectsDoNotKeepCatalogProjectionCopies()
     {
         var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
         var hostPlannerPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "RibbonRuntimeCatalogPlanner.cs");
-        var presentationSource = DialogSourceTestSupport.ReadPresentationSources(
+        var presentationPlannerPath = Path.Combine(
+            repoRoot,
+            "src",
+            "FreeX.App.Presentation",
             "Ribbon",
             "RibbonRuntimeCatalogPlanner.cs");
+        var testSupportPath = Path.Combine(
+            repoRoot,
+            "tests",
+            "SharedTestInfrastructure",
+            "FreeX",
+            "RibbonRuntimeCatalogPlanner.cs");
+        var testSupportSource = File.ReadAllText(testSupportPath);
 
         File.Exists(hostPlannerPath)
             .Should()
-            .BeFalse("runtime ribbon catalog projection should live in the shared presentation layer");
+            .BeFalse("runtime catalog evidence must not ship in the WPF renderer");
+        File.Exists(presentationPlannerPath)
+            .Should()
+            .BeFalse("runtime catalog evidence must not ship in the portable application assembly");
+        File.Exists(testSupportPath).Should().BeTrue();
 
-        presentationSource.Should().Contain("namespace FreeX.App.Presentation.Ribbon;");
-        presentationSource.Should().Contain("Func<string, string> textProvider");
-        presentationSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions");
-        presentationSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogAccountingSymbolOption> accountingSymbolOptions");
-        presentationSource.Should().Contain("HomeFontBorderPopupCatalogPlanner.FontColorPopupGroups");
-        presentationSource.Should().Contain("HomeFontBorderPopupCatalogPlanner.BorderPopupGroups");
-        presentationSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.PopupGroups");
-        presentationSource.Should().Contain("PivotStyleGalleryPlanner.BuiltInStyleNames");
-        presentationSource.Should().NotContain("namespace FreeX.App.Host");
-        presentationSource.Should().NotContain("using System.Windows");
-        presentationSource.Should().NotContain("UiText.Get(");
+        testSupportSource.Should().Contain("namespace FreeX.App.Presentation.Ribbon;");
+        testSupportSource.Should().Contain("Func<string, string> textProvider");
+        testSupportSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogNumberFormatOption> numberFormatOptions");
+        testSupportSource.Should().Contain("IReadOnlyList<RibbonRuntimeCatalogAccountingSymbolOption> accountingSymbolOptions");
+        testSupportSource.Should().Contain("HomeFontBorderPopupCatalogPlanner.FontColorPopupGroups");
+        testSupportSource.Should().Contain("HomeFontBorderPopupCatalogPlanner.BorderPopupGroups");
+        testSupportSource.Should().Contain("ConditionalFormatPresetGalleryPlanner.PopupGroups");
+        testSupportSource.Should().Contain("PivotStyleGalleryPlanner.BuiltInStyleNames");
+        testSupportSource.Should().NotContain("namespace FreeX.App.Host");
+        testSupportSource.Should().NotContain("using System.Windows");
+        testSupportSource.Should().NotContain("UiText.Get(");
     }
 
     private static IReadOnlyList<RibbonRuntimeCatalogSurface> GetSurfaces() =>
