@@ -14,7 +14,7 @@ public sealed partial class SymbolPickerDialogSourceTests
 
         var source = ReadSymbolPickerDialogSources();
 
-        source.Should().Contain("SymbolPickerCatalogPlanner.GetSymbolEntriesForSubset(subset)");
+        source.Should().Contain("SymbolPickerCatalogPlanner.PlanSymbolList(");
         source.Should().Contain("subsetBox.SelectionChanged");
         source.Should().Contain("RefreshSymbols()");
     }
@@ -80,7 +80,8 @@ public sealed partial class SymbolPickerDialogSourceTests
         source.Should().Contain("SymbolPickerCatalogPlanner.PlanSymbolList(");
         source.Should().Contain("SymbolPickerCatalogPlanner.DefaultRecentSymbols");
         source.Should().Contain("ObservableCollection<SymbolPickerCatalogEntry>");
-        source.Should().Contain("IReadOnlyList<SymbolPickerSpecialCharacter> GetSpecialCharacters()");
+        source.Should().Contain("ItemsSource = SymbolPickerCatalogPlanner.GetSpecialCharacters()");
+        source.Should().NotContain("public static IReadOnlyList<SymbolPickerSpecialCharacter>");
         source.Should().NotContain("record struct SymbolCatalogEntry");
         source.Should().NotContain("record struct SpecialCharacter");
         source.Should().NotContain("FromPresentation");

@@ -54,7 +54,7 @@ public sealed class CellShiftDialogTests
         var source = ReadCellShiftDialogSource();
 
         source.Should().Contain("CellShiftDialogPlanner.GetSurface");
-        source.Should().Contain("CellShiftDialogPlanner.ToKeyboardChoice");
+        source.Should().NotContain("public static KeyboardInsertDeleteDialogChoice ToKeyboardChoice");
         source.Should().Contain("Content = UiText.Get(option.LabelKey)");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, option.AutomationId)");
         source.Should().NotContain("GetChoiceAutomationName");

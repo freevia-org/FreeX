@@ -26,7 +26,7 @@ public sealed partial class AutoFilterDialogTests
         string expectedAscending,
         string expectedDescending)
     {
-        AutoFilterDropdownMenuPlanner.GetSortLabels(filterKind, InvariantAutoFilterMenuTextProvider.Instance)
+        AutoFilterDropdownMenuPlanner.GetSortLabels(filterKind, AutoFilterMenuResources.TextProvider)
             .Should()
             .Be((expectedAscending, expectedDescending));
     }
