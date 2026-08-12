@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Free.Shared.AppServices;
 
@@ -34,50 +33,22 @@ public static class VisualEvidenceArgumentParser
         IReadOnlyList<VisualEvidenceArgumentSpec> specs,
         StringComparison comparison = StringComparison.Ordinal)
     {
-        ArgumentNullException.ThrowIfNull(args);
         ArgumentNullException.ThrowIfNull(specs);
-
-        var specsByKey = specs.ToDictionary(spec => spec.Key, StringComparer.Ordinal);
-        if (specsByKey.Count != specs.Count)
-            throw new ArgumentException("Visual-evidence argument keys must be unique.", nameof(specs));
-
-        var values = new Dictionary<string, string?>(StringComparer.Ordinal);
-        var present = new HashSet<string>(StringComparer.Ordinal);
-        var remaining = new List<string>();
-
-        for (var index = 0; index < args.Count; index++)
-        {
-            var argument = args[index];
-            var match = FindMatch(argument, specs, comparison);
-            if (match is null)
-            {
-                remaining.Add(argument);
-                continue;
-            }
-
-            var (spec, inlineValue) = match.Value;
-            if (!present.Add(spec.Key))
-                return Result(values, present, [], spec.DuplicateMessage);
-
-            string? value;
-            if (inlineValue is not null)
-            {
-                value = inlineValue;
-            }
-            else
-            {
-                if (index + 1 >= args.Count)
-                    return Result(values, present, [], spec.MissingValueMessage);
-                value = args[++index];
-            }
-
-            if (string.IsNullOrWhiteSpace(value))
-                return Result(values, present, [], spec.BlankValueMessage);
-
-            values[spec.Key] = value;
-        }
-
-        return Result(values, present, remaining, null);
+        var parsed = CommandLineValueOptionParser.Parse(
+            args,
+            specs.Select(spec => new CommandLineValueOptionSpec(
+                spec.Key,
+                spec.Name,
+                spec.MissingValueMessage,
+                spec.BlankValueMessage,
+                spec.DuplicateMessage,
+                spec.AllowEqualsSyntax)).ToArray(),
+            comparison);
+        return new VisualEvidenceArgumentParseResult(
+            parsed.Values,
+            parsed.PresentKeys,
+            parsed.Error is null ? parsed.RemainingArguments : [],
+            parsed.Error);
     }
 
     public static VisualEvidenceArgumentValue ReadFirst(
@@ -86,65 +57,13 @@ public static class VisualEvidenceArgumentParser
         StringComparison comparison = StringComparison.Ordinal,
         bool allowEqualsSyntax = false)
     {
-        ArgumentNullException.ThrowIfNull(args);
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-
-        for (var index = 0; index < args.Count; index++)
-        {
-            if (!string.Equals(args[index], name, comparison))
-                continue;
-
-            var value = index + 1 < args.Count && !string.IsNullOrWhiteSpace(args[index + 1])
-                ? args[index + 1]
-                : null;
-            return new VisualEvidenceArgumentValue(true, value);
-        }
-
-        if (allowEqualsSyntax)
-        {
-            var prefix = name + "=";
-            foreach (var argument in args)
-            {
-                if (!argument.StartsWith(prefix, comparison))
-                    continue;
-
-                var value = argument[prefix.Length..];
-                return new VisualEvidenceArgumentValue(
-                    true,
-                    string.IsNullOrWhiteSpace(value) ? null : value);
-            }
-        }
-
-        return new VisualEvidenceArgumentValue(false, null);
+        var value = CommandLineValueOptionParser.ReadFirst(
+            args,
+            name,
+            comparison,
+            allowEqualsSyntax);
+        return new VisualEvidenceArgumentValue(value.IsPresent, value.Value);
     }
-
-    private static (VisualEvidenceArgumentSpec Spec, string? InlineValue)? FindMatch(
-        string argument,
-        IReadOnlyList<VisualEvidenceArgumentSpec> specs,
-        StringComparison comparison)
-    {
-        foreach (var spec in specs)
-        {
-            if (string.Equals(argument, spec.Name, comparison))
-                return (spec, null);
-
-            if (!spec.AllowEqualsSyntax)
-                continue;
-
-            var prefix = spec.Name + "=";
-            if (argument.StartsWith(prefix, comparison))
-                return (spec, argument[prefix.Length..]);
-        }
-
-        return null;
-    }
-
-    private static VisualEvidenceArgumentParseResult Result(
-        IReadOnlyDictionary<string, string?> values,
-        IReadOnlySet<string> present,
-        IEnumerable<string> remaining,
-        string? error) =>
-        new(values, present, remaining.ToArray(), error);
 }
 
 public static class VisualEvidencePathPolicy
@@ -271,18 +190,12 @@ public static class VisualEvidenceManifestIO
         bool propertyNameCaseInsensitive = false,
         bool camelCase = true,
         bool writeIndented = true,
-        bool stringEnums = true)
-    {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = propertyNameCaseInsensitive,
-            PropertyNamingPolicy = camelCase ? JsonNamingPolicy.CamelCase : null,
-            WriteIndented = writeIndented,
-        };
-        if (stringEnums)
-            options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
-        return options;
-    }
+        bool stringEnums = true) =>
+        JsonArtifactIO.CreateSerializerOptions(
+            propertyNameCaseInsensitive,
+            camelCase,
+            writeIndented,
+            stringEnums);
 
     public static T Read<T>(
         string path,
@@ -292,40 +205,32 @@ public static class VisualEvidenceManifestIO
         Func<Exception>? invalidExceptionFactory = null)
         where T : class
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(options);
-        if (missingMessage is not null && !File.Exists(path))
-            throw new FileNotFoundException(missingMessage, path);
-
-        var value = JsonSerializer.Deserialize<T>(File.ReadAllText(path), options);
-        return value ?? throw (invalidExceptionFactory?.Invoke() ?? new InvalidDataException(
-            invalidMessage ?? $"Visual-evidence manifest could not be read: {Path.GetFileName(path)}"));
+        return JsonArtifactIO.Read<T>(
+            path,
+            options,
+            missingMessage,
+            invalidMessage ?? $"Visual-evidence manifest could not be read: {Path.GetFileName(path)}",
+            invalidExceptionFactory);
     }
 
     public static T? ReadIfExists<T>(string path, JsonSerializerOptions options)
         where T : class
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
         ArgumentNullException.ThrowIfNull(options);
-        return File.Exists(path)
-            ? JsonSerializer.Deserialize<T>(File.ReadAllText(path), options)
-            : null;
+        return JsonArtifactIO.ReadIfExists<T>(path, options);
     }
 
     public static string Serialize<T>(T value, JsonSerializerOptions options)
     {
-        ArgumentNullException.ThrowIfNull(value);
         ArgumentNullException.ThrowIfNull(options);
-        return JsonSerializer.Serialize(value, options);
+        return JsonArtifactIO.Serialize(value, options);
     }
 
     public static void Write<T>(string path, T value, JsonSerializerOptions options)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (directory is not null)
-            Directory.CreateDirectory(directory);
-        File.WriteAllText(path, Serialize(value, options), new UTF8Encoding(false));
+        ArgumentNullException.ThrowIfNull(options);
+        JsonArtifactIO.Write(path, value, options);
     }
 }
 

@@ -1,11 +1,19 @@
-using System.Text.Json;
+using Free.Shared.AppServices;
 using FreeX.App.Avalonia;
 
 namespace FreeX.Validation.Avalonia;
 
 internal sealed record PivotRuntimeEvidenceOptions(string Path)
 {
+    private const string PathKey = "path";
     internal const string Argument = "--freex-pivot-runtime-evidence";
+
+    private static readonly CommandLineValueOptionSpec PathOption = new(
+        PathKey,
+        Argument,
+        $"{Argument} requires a non-empty evidence path.",
+        $"{Argument} requires a non-empty evidence path.",
+        $"{Argument} was specified more than once.");
 
     internal static bool TryParse(
         IReadOnlyList<string> arguments,
@@ -13,36 +21,16 @@ internal sealed record PivotRuntimeEvidenceOptions(string Path)
         out string[] startupArguments,
         out string error)
     {
-        options = null;
-        error = "";
-        var filtered = new List<string>();
-        for (var index = 0; index < arguments.Count; index++)
-        {
-            if (!string.Equals(arguments[index], Argument, StringComparison.OrdinalIgnoreCase))
-            {
-                filtered.Add(arguments[index]);
-                continue;
-            }
-
-            if (options is not null)
-            {
-                startupArguments = [];
-                error = $"{Argument} was specified more than once.";
-                return false;
-            }
-
-            if (index + 1 >= arguments.Count || string.IsNullOrWhiteSpace(arguments[index + 1]))
-            {
-                startupArguments = [];
-                error = $"{Argument} requires a non-empty evidence path.";
-                return false;
-            }
-
-            options = new PivotRuntimeEvidenceOptions(arguments[++index]);
-        }
-
-        startupArguments = filtered.ToArray();
-        return true;
+        var parsed = CommandLineValueOptionParser.Parse(
+            arguments,
+            [PathOption],
+            StringComparison.OrdinalIgnoreCase);
+        options = parsed.Error is null && parsed.IsPresent(PathKey)
+            ? new PivotRuntimeEvidenceOptions(parsed.Value(PathKey)!)
+            : null;
+        startupArguments = parsed.Error is null ? parsed.RemainingArguments : [];
+        error = parsed.Error ?? "";
+        return parsed.Error is null;
     }
 }
 
@@ -63,10 +51,6 @@ internal static class PivotRuntimeEvidenceCoordinator
     {
         try
         {
-            var directory = Path.GetDirectoryName(path);
-            if (!string.IsNullOrWhiteSpace(directory))
-                Directory.CreateDirectory(directory);
-
             var payload = new
             {
                 utc = DateTimeOffset.UtcNow,
@@ -98,7 +82,7 @@ internal static class PivotRuntimeEvidenceCoordinator
                 paneWidth = observation.PaneWidth,
                 userHidden = observation.UserHidden,
             };
-            File.AppendAllText(path, JsonSerializer.Serialize(payload) + Environment.NewLine);
+            JsonArtifactIO.AppendLine(path, payload);
         }
         catch
         {

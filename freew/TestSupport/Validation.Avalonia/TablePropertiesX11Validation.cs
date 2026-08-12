@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Free.Shared.AppServices;
 using FreeW.App.Avalonia;
 using FreeW.Core.Model;
 
@@ -6,7 +7,16 @@ namespace FreeW.Validation.Avalonia;
 
 internal sealed record TablePropertiesX11ValidationOptions(string ResultPath)
 {
+    private const string ResultPathKey = "resultPath";
     public const string Argument = "--table-properties-x11-validation";
+
+    private static readonly CommandLineValueOptionSpec ResultPathOption = new(
+        ResultPathKey,
+        Argument,
+        $"{Argument} requires one non-empty result path and may appear once.",
+        $"{Argument} requires one non-empty result path and may appear once.",
+        $"{Argument} requires one non-empty result path and may appear once.",
+        AllowEqualsSyntax: true);
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -14,43 +24,13 @@ internal sealed record TablePropertiesX11ValidationOptions(string ResultPath)
         out string[] startupArguments,
         out string? error)
     {
-        var filtered = new List<string>(args.Count);
-        options = null;
-        error = null;
-        for (var index = 0; index < args.Count; index++)
-        {
-            var argument = args[index];
-            if (argument.StartsWith(Argument + "=", StringComparison.Ordinal))
-            {
-                if (options is not null || argument.Length == Argument.Length + 1)
-                {
-                    error = $"{Argument} requires one non-empty result path and may appear once.";
-                    startupArguments = filtered.ToArray();
-                    return false;
-                }
-
-                options = new TablePropertiesX11ValidationOptions(argument[(Argument.Length + 1)..]);
-                continue;
-            }
-
-            if (!string.Equals(argument, Argument, StringComparison.Ordinal))
-            {
-                filtered.Add(argument);
-                continue;
-            }
-
-            if (options is not null || index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[index + 1]))
-            {
-                error = $"{Argument} requires one non-empty result path and may appear once.";
-                startupArguments = filtered.ToArray();
-                return false;
-            }
-
-            options = new TablePropertiesX11ValidationOptions(args[++index]);
-        }
-
-        startupArguments = filtered.ToArray();
-        return true;
+        var parsed = CommandLineValueOptionParser.Parse(args, [ResultPathOption]);
+        options = parsed.Error is null && parsed.IsPresent(ResultPathKey)
+            ? new TablePropertiesX11ValidationOptions(parsed.Value(ResultPathKey)!)
+            : null;
+        startupArguments = parsed.RemainingArguments;
+        error = parsed.Error;
+        return parsed.Error is null;
     }
 }
 
@@ -101,8 +81,6 @@ internal static class TablePropertiesX11ValidationCoordinator
             values = observation.Values,
             focusTrace = observation.FocusTrace,
         };
-        var resultPath = Path.GetFullPath(options.ResultPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(resultPath)!);
-        File.WriteAllText(resultPath, JsonSerializer.Serialize(result, JsonOptions));
+        JsonArtifactIO.Write(Path.GetFullPath(options.ResultPath), result, JsonOptions);
     }
 }

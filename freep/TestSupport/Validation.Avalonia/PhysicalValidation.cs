@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using Free.Shared.AppServices;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Drawing;
 using FreeP.App.Avalonia;
@@ -11,7 +11,16 @@ namespace FreeP.Validation.Avalonia;
 
 internal sealed record PhysicalValidationOptions(string OutputDirectory)
 {
+    private const string OutputDirectoryKey = "outputDirectory";
     public const string Argument = "--physical-validation";
+
+    private static readonly CommandLineValueOptionSpec OutputDirectoryOption = new(
+        OutputDirectoryKey,
+        Argument,
+        $"{Argument} requires one non-empty output directory and may appear once.",
+        $"{Argument} requires one non-empty output directory and may appear once.",
+        $"{Argument} requires one non-empty output directory and may appear once.",
+        AllowEqualsSyntax: true);
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -19,43 +28,13 @@ internal sealed record PhysicalValidationOptions(string OutputDirectory)
         out string[] startupArguments,
         out string? error)
     {
-        var filtered = new List<string>(args.Count);
-        options = null;
-        error = null;
-        for (var index = 0; index < args.Count; index++)
-        {
-            var argument = args[index];
-            if (argument.StartsWith(Argument + "=", StringComparison.Ordinal))
-            {
-                if (options is not null || argument.Length == Argument.Length + 1)
-                {
-                    error = $"{Argument} requires one non-empty output directory and may appear once.";
-                    startupArguments = filtered.ToArray();
-                    return false;
-                }
-
-                options = new PhysicalValidationOptions(argument[(Argument.Length + 1)..]);
-                continue;
-            }
-
-            if (!string.Equals(argument, Argument, StringComparison.Ordinal))
-            {
-                filtered.Add(args[index]);
-                continue;
-            }
-
-            if (options is not null || index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[index + 1]))
-            {
-                error = $"{Argument} requires one non-empty output directory and may appear once.";
-                startupArguments = filtered.ToArray();
-                return false;
-            }
-
-            options = new PhysicalValidationOptions(args[++index]);
-        }
-
-        startupArguments = filtered.ToArray();
-        return true;
+        var parsed = CommandLineValueOptionParser.Parse(args, [OutputDirectoryOption]);
+        options = parsed.Error is null && parsed.IsPresent(OutputDirectoryKey)
+            ? new PhysicalValidationOptions(parsed.Value(OutputDirectoryKey)!)
+            : null;
+        startupArguments = parsed.RemainingArguments;
+        error = parsed.Error;
+        return parsed.Error is null;
     }
 }
 
@@ -82,12 +61,8 @@ internal sealed record PhysicalValidationManifest(
 internal static class PhysicalValidationCoordinator
 {
     private static readonly IProcessRunner ProcessRunner = new SystemProcessRunner();
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    private static readonly JsonSerializerOptions JsonOptions =
+        JsonArtifactIO.CreateSerializerOptions(ignoreNullValues: true);
 
     public static void Start(MainWindow.ValidationAccessAdapter access, PhysicalValidationOptions options)
     {
@@ -280,9 +255,10 @@ internal static class PhysicalValidationCoordinator
                 ffprobePath,
                 summary,
                 rows);
-            File.WriteAllText(
+            JsonArtifactIO.Write(
                 Path.Combine(outputDirectory, "freep-physical-linux-wave13b.json"),
-                JsonSerializer.Serialize(manifest, JsonOptions));
+                manifest,
+                JsonOptions);
             mediaShowForCleanup?.Close();
             access.CloseWithoutDirtyPrompt();
         }

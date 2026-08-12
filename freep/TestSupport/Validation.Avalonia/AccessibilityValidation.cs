@@ -1,12 +1,21 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using Free.Shared.AppServices;
 using FreeP.App.Avalonia;
 
 namespace FreeP.Validation.Avalonia;
 
 internal sealed record AccessibilityValidationOptions(string OutputDirectory)
 {
+    private const string OutputDirectoryKey = "outputDirectory";
     public const string Argument = "--accessibility-validation";
+
+    private static readonly CommandLineValueOptionSpec OutputDirectoryOption = new(
+        OutputDirectoryKey,
+        Argument,
+        $"{Argument} requires one non-empty output directory and may appear once.",
+        $"{Argument} requires one non-empty output directory and may appear once.",
+        $"{Argument} requires one non-empty output directory and may appear once.",
+        AllowEqualsSyntax: true);
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -14,43 +23,13 @@ internal sealed record AccessibilityValidationOptions(string OutputDirectory)
         out string[] startupArguments,
         out string? error)
     {
-        var filtered = new List<string>(args.Count);
-        options = null;
-        error = null;
-        for (var index = 0; index < args.Count; index++)
-        {
-            var argument = args[index];
-            if (argument.StartsWith(Argument + "=", StringComparison.Ordinal))
-            {
-                if (options is not null || argument.Length == Argument.Length + 1)
-                {
-                    error = $"{Argument} requires one non-empty output directory and may appear once.";
-                    startupArguments = filtered.ToArray();
-                    return false;
-                }
-
-                options = new AccessibilityValidationOptions(argument[(Argument.Length + 1)..]);
-                continue;
-            }
-
-            if (!string.Equals(argument, Argument, StringComparison.Ordinal))
-            {
-                filtered.Add(argument);
-                continue;
-            }
-
-            if (options is not null || index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[index + 1]))
-            {
-                error = $"{Argument} requires one non-empty output directory and may appear once.";
-                startupArguments = filtered.ToArray();
-                return false;
-            }
-
-            options = new AccessibilityValidationOptions(args[++index]);
-        }
-
-        startupArguments = filtered.ToArray();
-        return true;
+        var parsed = CommandLineValueOptionParser.Parse(args, [OutputDirectoryOption]);
+        options = parsed.Error is null && parsed.IsPresent(OutputDirectoryKey)
+            ? new AccessibilityValidationOptions(parsed.Value(OutputDirectoryKey)!)
+            : null;
+        startupArguments = parsed.RemainingArguments;
+        error = parsed.Error;
+        return parsed.Error is null;
     }
 }
 
@@ -66,12 +45,8 @@ internal sealed record LivePaneAccessibilityManifest(
 
 internal static class AccessibilityValidationCoordinator
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    private static readonly JsonSerializerOptions JsonOptions =
+        JsonArtifactIO.CreateSerializerOptions(ignoreNullValues: true);
 
     public static void Start(MainWindow.ValidationAccessAdapter access, AccessibilityValidationOptions options)
     {
@@ -104,9 +79,7 @@ internal static class AccessibilityValidationCoordinator
             observations,
             "Avalonia AutomationProperties are observed from live controls. The companion AT-SPI probe is the OS-level check; current Avalonia/X11 builds may not publish these controls to the AT-SPI desktop.");
         var manifestPath = Path.Combine(outputDirectory, "live-pane-accessibility.json");
-        var temporaryManifestPath = manifestPath + ".tmp";
-        await File.WriteAllTextAsync(temporaryManifestPath, JsonSerializer.Serialize(manifest, JsonOptions));
-        File.Move(temporaryManifestPath, manifestPath, overwrite: true);
+        await JsonArtifactIO.WriteAtomicAsync(manifestPath, manifest, JsonOptions);
 
         var atSpiResultPath = Path.Combine(outputDirectory, "atspi-result.json");
         var atSpiReadyPath = Path.Combine(outputDirectory, "atspi-ready.json");

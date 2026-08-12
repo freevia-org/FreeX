@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Avalonia.Threading;
+using Free.Shared.AppServices;
 using FreeP.App.Avalonia;
 
 namespace FreeP.Validation.Avalonia;
@@ -78,13 +79,10 @@ internal static class StartupDirtyTraceCoordinator
 
     private static void WriteReport(string path, StartupDirtyTraceReport report)
     {
-        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
-        if (!string.IsNullOrEmpty(directory))
-            Directory.CreateDirectory(directory);
-
-        File.WriteAllText(
+        JsonArtifactIO.Write(
             path,
-            JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+            report,
+            new JsonSerializerOptions { WriteIndented = true });
         Console.Out.WriteLine($"startup-dirty-trace={(report.IsPassed ? "passed" : "failed")}");
         Console.Out.Flush();
     }

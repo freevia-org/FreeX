@@ -26,8 +26,10 @@ public sealed class PivotRuntimeEvidenceOwnershipSourceTests
         var program = Read("tools", "FreeX.Validation.Avalonia", "Program.cs");
 
         source.Should().Contain("--freex-pivot-runtime-evidence");
-        source.Should().Contain("JsonSerializer.Serialize(payload)");
-        source.Should().Contain("File.AppendAllText(path");
+        source.Should().Contain("CommandLineValueOptionParser.Parse(");
+        source.Should().Contain("JsonArtifactIO.AppendLine(path, payload)");
+        source.Should().NotContain("JsonSerializer.Serialize(payload)");
+        source.Should().NotContain("File.AppendAllText(path");
         program.Should().Contain("PivotRuntimeEvidenceOptions.TryParse(");
         program.Should().Contain("RunPivotRuntimeObservationHost(");
     }

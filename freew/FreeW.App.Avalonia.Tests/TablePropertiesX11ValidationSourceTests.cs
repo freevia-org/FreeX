@@ -36,7 +36,9 @@ public sealed class TablePropertiesX11ValidationSourceTests
         adapter.Should().NotContain("File.WriteAllText");
         adapter.Should().NotContain("InsertTable(2, 2)");
         coordinator.Should().Contain("InsertTable(2, 2)");
-        coordinator.Should().Contain("JsonSerializer.Serialize");
+        coordinator.Should().Contain("CommandLineValueOptionParser.Parse");
+        coordinator.Should().Contain("JsonArtifactIO.Write");
+        coordinator.Should().NotContain("JsonSerializer.Serialize");
         coordinator.Should().Contain("freew.table-properties.x11-result.v1");
     }
 
