@@ -265,7 +265,7 @@ jobs:
           } >> "$evidence_path"
 
           # Headless packaging smoke (no display required).
-          "$published/FreeX" --packaging-smoke | tee "$smoke_log"
+          "$validation_published/FreeX.Validation.Avalonia" --packaging-smoke | tee "$smoke_log"
           grep -q "Packaging smoke opened" "$smoke_log"
           grep -q "drawing_object_previews=3" "$smoke_log"
           grep -q "roundtrip_drawing_object_previews=3" "$smoke_log"
@@ -274,7 +274,7 @@ jobs:
 
           smoke_file="$RUNNER_TEMP/freex-$runtime-smoke.csv"
           printf 'Name,Amount\nFreeX,42\n' > "$smoke_file"
-          "$published/FreeX" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
+          "$validation_published/FreeX.Validation.Avalonia" --packaging-smoke "$smoke_file" | tee -a "$smoke_log"
           format_cells_style_roundtrip_count="$(grep -c "format_cells_style_roundtrip=true" "$smoke_log")"
           test "$format_cells_style_roundtrip_count" -ge 2
           {

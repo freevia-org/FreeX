@@ -464,12 +464,15 @@ public sealed class MacOsBundleMetadataTests
     }
 
     [Fact]
-    public void Program_RunsPackagingSmokeBeforeAvaloniaLifetime()
+    public void PackagingSmoke_IsOwnedByValidationHostBeforeAvaloniaLifetime()
     {
         var program = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Program.cs"));
+        var validationProgram = File.ReadAllText(
+            RepositoryFileLocator.Find("tools", "FreeX.Validation.Avalonia", "Program.cs"));
 
-        program.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
-        program.Should().Contain("return smokeExitCode;");
+        program.Should().NotContain("PackagingSmokeCommand");
+        validationProgram.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode)");
+        validationProgram.Should().Contain("return packagingExitCode;");
         program.Should().NotContain("MacOsLaunchSmokeOptions.TryParse(");
         program.Should().Contain("internal static int RunToolHost(");
         program.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");

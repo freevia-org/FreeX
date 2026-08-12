@@ -14,6 +14,7 @@
 
   <ItemGroup>
     <Compile Include="..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="..\..\tools\FreeX.Validation.Avalonia\PackagingSmokeValidation.cs" Link="Validation\PackagingSmokeValidation.cs" />
   </ItemGroup>
 
   <ItemGroup>

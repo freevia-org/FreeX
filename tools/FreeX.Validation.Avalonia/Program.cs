@@ -7,6 +7,9 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode))
+            return packagingExitCode;
+
         if (!PivotRuntimeEvidenceOptions.TryParse(
                 args,
                 out var pivotOptions,

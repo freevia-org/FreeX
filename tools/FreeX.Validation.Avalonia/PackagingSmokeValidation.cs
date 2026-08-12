@@ -2,15 +2,18 @@ using FreeX.Core.Calc;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using Free.Shared.AppServices;
+using Free.Shared.Opc;
 
-namespace FreeX.App.Services;
+using FreeX.App.Services;
 
-public sealed record WorkbookStartupSmokeResult(bool Success, string Message)
+namespace FreeX.Validation.Avalonia;
+
+internal sealed record WorkbookStartupSmokeResult(bool Success, string Message)
 {
     public int ExitCode => Success ? 0 : 1;
 }
 
-public sealed class WorkbookStartupSmokeService
+internal sealed class WorkbookStartupSmokeService
 {
     private const double SmokeViewportHeight = 240;
     private const double SmokeViewportWidth = 320;
@@ -397,7 +400,7 @@ public sealed class WorkbookStartupSmokeService
     }
 }
 
-public static class PackagingSmokeCommand
+internal static class PackagingSmokeCommand
 {
     public const string Argument = SisterAppPackagingSmoke.Argument;
 

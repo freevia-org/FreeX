@@ -613,7 +613,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("native_freeze_top_row_menu_item=true");
         script.Should().Contain("native_freeze_first_column_menu_item=true");
         script.Should().Contain("native_unfreeze_panes_menu_item=true");
-        script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)");
+        script.Should().Contain("PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode)");
         script.Should().Contain("PortPreviewWorkbookFactory.PreviewShapeName");
         script.Should().Contain("_sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true)");
         script.Should().Contain("StartWithClassicDesktopLifetime(startupArguments)");
@@ -1860,9 +1860,6 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public static int Main(string[] args)
                 {
-                    if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
-                        return smokeExitCode;
-
                     var startupArguments = args;
                     var diagnostics = LocalAppDiagnostics.Create(
                         AppHelpInfo.GetVersionText(typeof(Program).Assembly),
@@ -1934,6 +1931,9 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 public static int Main(string[] args)
                 {
+                    if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode))
+                        return packagingExitCode;
+
                     MacOsLaunchSmokeOptions.TryParse(args, out var options, out var startupArguments, out var error);
                     return FreeX.App.Avalonia.Program.RunToolHost(
                         startupArguments,
@@ -4711,9 +4711,9 @@ public sealed class MacOsAppReadinessPreflightTests
 
         WriteFile(
             root,
-            "src/FreeX.App.Services/WorkbookStartupSmokeService.cs",
+            "tools/FreeX.Validation.Avalonia/PackagingSmokeValidation.cs",
             """
-            namespace FreeX.App.Services;
+            namespace FreeX.Validation.Avalonia;
 
             internal sealed class WorkbookStartupSmokeService
             {

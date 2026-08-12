@@ -1095,7 +1095,6 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\Program.cs"
             Markers = @(
-                "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)",
                 "LocalAppDiagnostics.Create(",
                 "AppHelpInfo.GetVersionText(typeof(Program).Assembly)",
                 "internal static int RunToolHost(",
@@ -1111,12 +1110,7 @@ function Test-SourceWiring {
                 "CompletedExitCode = 0",
                 "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)"
             )
-            OrderedPairs = @(
-                @{
-                    First = "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)"
-                    Second = "BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)"
-                }
-            )
+            OrderedPairs = @()
         },
         @{
             Path = "shared\Free.Shared.Shell.Avalonia\SisterAvaloniaApplicationStartupRunner.cs"
@@ -1146,6 +1140,7 @@ function Test-SourceWiring {
         @{
             Path = "tools\FreeX.Validation.Avalonia\Program.cs"
             Markers = @(
+                "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var packagingExitCode)",
                 "MacOsLaunchSmokeOptions.TryParse(",
                 "FreeX.App.Avalonia.Program.RunToolHost(",
                 "MacOsLaunchSmokeCoordinator.Start(window, options, diagnostics)"
@@ -3170,7 +3165,7 @@ function Test-SourceWiring {
             OrderedPairs = @()
         },
         @{
-            Path = "src\FreeX.App.Services\WorkbookStartupSmokeService.cs"
+            Path = "tools\FreeX.Validation.Avalonia\PackagingSmokeValidation.cs"
             Markers = @(
                 "private const string RoundTripExtension = `".fxl`";",
                 "_sessionFactory.Create(source, SmokeViewportHeight, SmokeViewportWidth, includeObjects: true)",
@@ -3182,7 +3177,7 @@ function Test-SourceWiring {
                 "ApplyFormatCellsStartupSmokeStyle(",
                 "VerifyFormatCellsStartupSmokeStyle(",
                 "PortPreviewWorkbookFactory.PreviewShapeName",
-                "public static class PackagingSmokeCommand",
+                "internal static class PackagingSmokeCommand",
                 "public const string Argument = SisterAppPackagingSmoke.Argument;",
                 "Packaging smoke opened",
                 "edited, saved, and reopened"

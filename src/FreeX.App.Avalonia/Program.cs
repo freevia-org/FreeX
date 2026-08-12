@@ -16,9 +16,6 @@ internal static class Program
         // Info.plist, so no install hooks are wired here.
         Velopack.VelopackApp.Build().Run();
 
-        if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
-            return smokeExitCode;
-
         return RunApplication(args, diagnosticsDirectory: null, externalStartupCoordinator: null);
     }
 

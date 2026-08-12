@@ -26,6 +26,8 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $outFull = if ([System.IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path $repoRoot $OutputDir }
 $publishDir = Join-Path $outFull "linux-x64"
 $project = Join-Path $repoRoot "src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj"
+$validationPublishDir = Join-Path $outFull "linux-x64-validation"
+$validationProject = Join-Path $repoRoot "tools/FreeX.Validation.Avalonia/FreeX.Validation.Avalonia.csproj"
 
 New-Item -ItemType Directory -Path $outFull -Force | Out-Null
 
@@ -34,8 +36,12 @@ if (-not $SkipPublish) {
     dotnet publish $project -c Release -f net10.0 -r linux-x64 --self-contained true `
         -p:UseAppHost=true -p:PublishReadyToRun=false -p:PublishSingleFile=false -o $publishDir
     if ($LASTEXITCODE -ne 0) { throw "Publish failed." }
+    dotnet publish $validationProject -c Release -f net10.0 -r linux-x64 --self-contained true `
+        -p:UseAppHost=true -p:PublishReadyToRun=false -p:PublishSingleFile=false -o $validationPublishDir
+    if ($LASTEXITCODE -ne 0) { throw "Validation host publish failed." }
 }
 if (-not (Test-Path (Join-Path $publishDir "FreeX"))) { throw "Published apphost not found at $publishDir/FreeX." }
+if (-not (Test-Path (Join-Path $validationPublishDir "FreeX.Validation.Avalonia"))) { throw "Published validation host not found at $validationPublishDir/FreeX.Validation.Avalonia." }
 
 $screenshotBlock = if ($NoScreenshot) { 'echo "screenshot skipped"' } else { @'
 printf 'Region,Q1,Q2,Total\nNorth,120,135,255\nSouth,98,110,208\nEast,143,150,293\nWest,87,92,179\n' > /tmp/demo.csv
@@ -62,13 +68,15 @@ apt-get install -y -qq \
   libgl1 libegl1 libicu74 libssl3 zlib1g xvfb fonts-dejavu fonts-noto-cjk \
   imagemagick procps >/dev/null
 cp -a /work/linux-x64 /opt/freex
+cp -a /work/linux-x64-validation /opt/freex-validation
 cd /opt/freex
 chmod +x FreeX
+chmod +x /opt/freex-validation/FreeX.Validation.Avalonia
 echo "=== PROOF 1: headless packaging smoke ==="
-./FreeX --packaging-smoke || echo "packaging-smoke exit=`$?"
+/opt/freex-validation/FreeX.Validation.Avalonia --packaging-smoke || echo "packaging-smoke exit=`$?"
 echo "=== PROOF 2: Xvfb GUI launch smoke ==="
 printf 'Name,Amount\nFreeX on Linux,42\n' > /tmp/launch.csv
-xvfb-run -a ./FreeX --launch-smoke /tmp/report.txt /tmp/launch.csv || echo "launch-smoke exit=`$?"
+xvfb-run -a /opt/freex-validation/FreeX.Validation.Avalonia --launch-smoke /tmp/report.txt /tmp/launch.csv || echo "launch-smoke exit=`$?"
 grep -E "^macos_launch_smoke=|^window_shown=|^viewport_rows=|^viewport_columns=|^native_file_menu=|^find_dialog=|^format_cells_dialog=|^macos_accessibility_smoke=" /tmp/report.txt 2>/dev/null || echo "(no report)"
 echo "=== PROOF 3: screenshot ==="
 $screenshotBlock

@@ -13,9 +13,6 @@ internal static class Program
     {
         Velopack.VelopackApp.Build().Run();
 
-        if (PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode))
-            return smokeExitCode;
-
         var startupArguments = args;
 
         if (!ParityCaptureOptions.TryParse(

@@ -38,24 +38,23 @@ public sealed class SisterAppPackagingSmokeTests
     }
 
     [Fact]
-    public void AppSmokeAdaptersConsumeSharedDefaultsAndArgumentScanning()
+    public void FreeXPackagingSmoke_ConsumesSharedArgumentScanningFromValidationTool()
     {
         var root = FindRepositoryRoot();
-        var freeP = Read(root, "freep", "FreeP.App.Avalonia", "Smoke", "LaunchSmoke.cs");
-        var freeW = Read(root, "freew", "FreeW.App.Avalonia", "Smoke", "LaunchSmoke.cs");
-        var freeX = Read(root, "src", "FreeX.App.Services", "WorkbookStartupSmokeService.cs");
-
-        foreach (var launchSmoke in new[] { freeP, freeW })
-        {
-            launchSmoke.Should().Contain("SisterAppLaunchSmokeCoordinator.Start(")
-                .And.NotContain("MaxAttempts")
-                .And.NotContain("PollMilliseconds");
-        }
+        var freeX = Read(root, "tools", "FreeX.Validation.Avalonia", "PackagingSmokeValidation.cs");
+        var shippingProgram = Read(root, "src", "FreeX.App.Avalonia", "Program.cs");
+        var parityProgram = Read(root, "tools", "FreeX.ParityCapture.Avalonia", "Capture", "Program.cs");
+        var validationProgram = Read(root, "tools", "FreeX.Validation.Avalonia", "Program.cs");
 
         freeX.Should().Contain("public const string Argument = SisterAppPackagingSmoke.Argument;")
             .And.Contain("SisterAppPackagingSmoke.HasArgument(args)")
             .And.Contain("SisterAppPackagingSmoke.RemoveArgumentTokens(args)")
             .And.NotContain("public const string Argument = \"--packaging-smoke\"");
+        shippingProgram.Should().NotContain("PackagingSmokeCommand");
+        parityProgram.Should().NotContain("PackagingSmokeCommand");
+        validationProgram.Should().Contain("PackagingSmokeCommand.TryRun(");
+        File.Exists(Path.Combine(root, "src", "FreeX.App.Services", "WorkbookStartupSmokeService.cs"))
+            .Should().BeFalse();
     }
 
     [Fact]
