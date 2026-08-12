@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using Free.Shared.AppServices;
+using Free.ToolsShared;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Formula;
@@ -163,8 +164,10 @@ internal static class Program
             return;
         }
 
-        using var temporaryOutput = options.OutputPath is null ? TemporaryOutputFile.Create(".xlsx") : null;
-        var savePath = options.OutputPath ?? temporaryOutput!.Path;
+        using var temporaryOutput = options.OutputPath is null
+            ? new ToolTemporaryDirectory("freex-app-io-bench-")
+            : null;
+        var savePath = options.OutputPath ?? temporaryOutput!.GetPath("output.xlsx");
         var saveProgress = new ThrottledProgress<WorkbookSaveProgressUpdate>(
             options,
             iteration,
@@ -761,34 +764,6 @@ internal static class Program
                 "none" => false,
                 _ => throw new ArgumentException($"Unsupported prewarm mode: {value}")
             };
-    }
-
-    private sealed class TemporaryOutputFile : IDisposable
-    {
-        private readonly string _directory;
-
-        private TemporaryOutputFile(string directory, string path)
-        {
-            _directory = directory;
-            Path = path;
-        }
-
-        public string Path { get; }
-
-        public static TemporaryOutputFile Create(string extension)
-        {
-            var directory = System.IO.Path.Combine(
-                System.IO.Path.GetTempPath(),
-                $"freex-app-io-bench-{Guid.NewGuid():N}");
-            Directory.CreateDirectory(directory);
-            return new TemporaryOutputFile(directory, System.IO.Path.Combine(directory, $"output{extension}"));
-        }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(_directory))
-                Directory.Delete(_directory, recursive: true);
-        }
     }
 
     private enum AppIoBenchEditMode

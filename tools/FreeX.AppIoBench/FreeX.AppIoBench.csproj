@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
+    <ProjectReference Include="..\Free.ToolsShared\Free.ToolsShared.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

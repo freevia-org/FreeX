@@ -5,40 +5,16 @@ namespace Free.ToolsShared;
 
 public sealed class VisualEvidenceRunDirectory : IDisposable
 {
-    private const int MaximumAttempts = 60;
-    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(50);
+    private readonly ToolTemporaryDirectory _directory;
 
     public VisualEvidenceRunDirectory(string prefix)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(prefix);
-        if (prefix.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
-            throw new ArgumentException("The temporary-directory prefix must be a valid file-name prefix.", nameof(prefix));
-
-        Path = System.IO.Path.Combine(
-            System.IO.Path.GetTempPath(),
-            string.Concat(prefix, System.IO.Path.GetRandomFileName()));
-        Directory.CreateDirectory(Path);
+        _directory = new ToolTemporaryDirectory(prefix);
     }
 
-    public string Path { get; }
+    public string Path => _directory.Path;
 
-    public void Dispose()
-    {
-        for (var attempt = 1; attempt <= MaximumAttempts; attempt++)
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                    Directory.Delete(Path, recursive: true);
-                return;
-            }
-            catch (Exception exception) when (
-                (exception is IOException or UnauthorizedAccessException) && attempt < MaximumAttempts)
-            {
-                Thread.Sleep(RetryDelay);
-            }
-        }
-    }
+    public void Dispose() => _directory.Dispose();
 }
 
 public sealed record VisualEvidenceHostOutputPlan(
