@@ -322,6 +322,25 @@ function Assert-ToolSourceCentralization {
         }
     }
 
+    $externalToolSupportProjects = @(
+        "..\freep\TestSupport\VisualEvidence\FreeP.VisualEvidence.csproj",
+        "..\freep\TestSupport\VisualEvidence.Avalonia\FreeP.VisualEvidence.Avalonia.csproj",
+        "..\freep\TestSupport\VisualEvidence.Wpf\FreeP.VisualEvidence.Wpf.csproj",
+        "..\freew\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj",
+        "..\freew\tools\FreeW.VisualEvidenceSummary\FreeW.VisualEvidenceSummary.csproj"
+    )
+    foreach ($relativeProjectPath in $externalToolSupportProjects) {
+        $projectPath = Join-Path $ToolRoot $relativeProjectPath
+        $projectText = Get-Content -LiteralPath $projectPath -Raw
+        if (-not $projectText.Contains('Import Project="..\..\..\tools\ToolProjects.props"')) {
+            throw "$projectPath does not import tools/ToolProjects.props."
+        }
+
+        if ($projectText -match '<Nullable>\s*enable\s*</Nullable>|<ImplicitUsings>\s*enable\s*</ImplicitUsings>') {
+            throw "$projectPath redeclares metadata centralized in tools/ToolProjects.props."
+        }
+    }
+
     Write-Host "Validated shared tooling source guards."
 }
 

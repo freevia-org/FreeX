@@ -14,9 +14,8 @@
 
   <PropertyGroup>
     <AssemblyName>FreeX.ParityCapture.Support</AssemblyName>
-    <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
-    <Nullable>enable</Nullable>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
+  <Import Project="..\ToolProjects.props" />
 </Project>
