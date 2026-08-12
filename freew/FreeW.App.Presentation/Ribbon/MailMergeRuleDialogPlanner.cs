@@ -224,6 +224,16 @@ public static class MailMergeRuleDialogPlanner
             .Select(text => text.ResourceKey)
             .ToArray();
 
+    public static string ResolveInteractivePromptTitle(
+        MailMergeInteractivePromptKind kind,
+        Func<string, string?>? getText = null) =>
+        Titles[kind switch
+        {
+            MailMergeInteractivePromptKind.FillIn => MailMergeRuleKind.FillIn,
+            MailMergeInteractivePromptKind.Ask => MailMergeRuleKind.Ask,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+        }].Resolve(getText);
+
     public static MailMergeRuleDialogRequest CreateRequest(
         MailMergeRuleKind kind,
         IEnumerable<string>? fieldNames = null,

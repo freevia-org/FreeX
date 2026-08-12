@@ -2323,7 +2323,7 @@ public sealed partial class MainWindow : Window
         {
             try
             {
-                var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+                var title = MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(prompt.Kind, UiText.Get);
                 completion.SetResult(await MailMergeDialogs.AskMergeRulePromptAsync(
                     this,
                     title,
@@ -2346,7 +2346,7 @@ public sealed partial class MainWindow : Window
         var state = new MergeState();
         foreach (var prompt in _mailMerge.GetInteractiveFinishPrompts())
         {
-            var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+            var title = MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(prompt.Kind, UiText.Get);
             var answer = await MailMergeDialogs.AskMergeRulePromptAsync(
                 this, title, prompt.Prompt, prompt.DefaultAnswer);
             if (answer is null)

@@ -5993,15 +5993,21 @@ internal static class FreeWRibbonCommands
                 Window.GetWindow(editor),
                 preview.CurrentIndex,
                 session.Data!.Count);
-            switch (action.Kind)
+            switch (action)
             {
-                case PreviewAction.Move:
-                    Realize(editor, workflow.MovePreviewTo(editor.Model, action.TargetIndex));
+                case MailMergePreviewDialogAction.MovePrevious:
+                case MailMergePreviewDialogAction.MoveNext:
+                    Realize(editor, workflow.MovePreviewTo(
+                        editor.Model,
+                        MailMergePreviewDialogPlanner.Move(
+                            preview.CurrentIndex,
+                            session.Data.Count,
+                            next: action == MailMergePreviewDialogAction.MoveNext)));
                     break;
-                case PreviewAction.Done:
+                case MailMergePreviewDialogAction.Done:
                     Realize(editor, workflow.TogglePreview(editor.Model));
                     break;
-                case PreviewAction.Cancel:
+                case MailMergePreviewDialogAction.Cancel:
                     // Leave whatever is currently shown; do not change the session.
                     break;
             }
@@ -6259,7 +6265,7 @@ internal static class FreeWRibbonCommands
             }
             mergeState.RecordPromptResolver = (prompt, _) => _askInteractivePrompt(
                 owner,
-                prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask",
+                MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(prompt.Kind, UiText.Get),
                 prompt.Prompt,
                 prompt.DefaultAnswer);
 
@@ -6288,7 +6294,7 @@ internal static class FreeWRibbonCommands
         {
             foreach (var prompt in MailMergeInteractivePromptPlanner.Plan(template))
             {
-                var title = prompt.Kind == MailMergeInteractivePromptKind.FillIn ? "Fill-in" : "Ask";
+                var title = MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(prompt.Kind, UiText.Get);
                 var answer = _askInteractivePrompt(
                     owner, title, prompt.Prompt, prompt.DefaultAnswer);
                 if (answer is null)
@@ -6761,21 +6767,17 @@ internal static class FreeWRibbonCommands
         editor.Focus();
     }
 
-    // The user's choice from the preview navigation dialog.
-    private enum PreviewAction { Move, Done, Cancel }
-
-    private readonly record struct PreviewChoice(PreviewAction Kind, int TargetIndex);
-
     // A small modeless-feeling modal that shows the current record and offers Previous / Next / Done.
-    // Returns a Move (to a new index), Done (end preview, restore template), or Cancel (no change).
+    // Returns the shared action; Presentation owns navigation bounds and target calculation.
     private static class PreviewNavigationDialog
     {
-        public static PreviewChoice Ask(Window? owner, int index, int count)
+        public static MailMergePreviewDialogAction Ask(Window? owner, int index, int count)
         {
-            var result = new PreviewChoice(PreviewAction.Cancel, index);
+            var plan = MailMergePreviewDialogPlanner.CreatePlan(index, count);
+            var result = MailMergePreviewDialogAction.Cancel;
             var dialog = new Window
             {
-                Title = "Preview Results",
+                Title = MailMergeDialogMetadata.PreviewResultsTitle,
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -6785,18 +6787,18 @@ internal static class FreeWRibbonCommands
 
             var label = new System.Windows.Controls.TextBlock
             {
-                Text = $"Record {index + 1} of {count}",
+                Text = plan.RecordLabel,
                 Margin = new Thickness(0, 0, 0, 12)
             };
 
-            var prev = new System.Windows.Controls.Button { Content = "◀ Previous", MinWidth = 88, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index > 0 };
-            var next = new System.Windows.Controls.Button { Content = "Next ▶", MinWidth = 88, Margin = new Thickness(0, 0, 8, 0), IsEnabled = index < count - 1 };
-            var done = new System.Windows.Controls.Button { Content = "Done", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var prev = new System.Windows.Controls.Button { Content = $"\u25c0 {MailMergeDialogMetadata.PreviousLabel}", MinWidth = 88, Margin = new Thickness(0, 0, 8, 0), IsEnabled = plan.CanGoPrevious };
+            var next = new System.Windows.Controls.Button { Content = $"{MailMergeDialogMetadata.NextLabel} \u25b6", MinWidth = 88, Margin = new Thickness(0, 0, 8, 0), IsEnabled = plan.CanGoNext };
+            var done = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.DoneLabel, IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = MailMergeDialogMetadata.CancelLabel, IsCancel = true, MinWidth = 72 };
 
-            prev.Click += (_, _) => { result = new PreviewChoice(PreviewAction.Move, index - 1); dialog.DialogResult = true; };
-            next.Click += (_, _) => { result = new PreviewChoice(PreviewAction.Move, index + 1); dialog.DialogResult = true; };
-            done.Click += (_, _) => { result = new PreviewChoice(PreviewAction.Done, index); dialog.DialogResult = true; };
+            prev.Click += (_, _) => { result = MailMergePreviewDialogAction.MovePrevious; dialog.DialogResult = true; };
+            next.Click += (_, _) => { result = MailMergePreviewDialogAction.MoveNext; dialog.DialogResult = true; };
+            done.Click += (_, _) => { result = MailMergePreviewDialogAction.Done; dialog.DialogResult = true; };
 
             var buttons = new System.Windows.Controls.StackPanel
             {
@@ -6813,9 +6815,8 @@ internal static class FreeWRibbonCommands
             panel.Children.Add(buttons);
             dialog.Content = panel;
 
-            if (dialog.ShowDialog() == true)
-                return result;
-            return new PreviewChoice(PreviewAction.Cancel, index);
+            dialog.ShowDialog();
+            return result;
         }
     }
 

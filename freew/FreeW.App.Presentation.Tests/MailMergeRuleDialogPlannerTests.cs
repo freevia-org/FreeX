@@ -160,6 +160,28 @@ public sealed class MailMergeRuleDialogPlannerTests
             conditionRequest.FieldNames.Should().Equal("City", "Region");
     }
 
+    [Theory]
+    [InlineData(MailMergeInteractivePromptKind.FillIn, "Fill-in", "MailMerge_Rule_FillIn_Title")]
+    [InlineData(MailMergeInteractivePromptKind.Ask, "Ask", "MailMerge_Rule_Ask_Title")]
+    public void ResolveInteractivePromptTitle_UsesExistingLocalizedRuleTitle(
+        MailMergeInteractivePromptKind kind,
+        string fallback,
+        string resourceKey)
+    {
+        MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(kind).Should().Be(fallback);
+        MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(kind, key => $"localized:{key}")
+            .Should().Be($"localized:{resourceKey}");
+    }
+
+    [Fact]
+    public void ResolveInteractivePromptTitle_RejectsUnknownPromptKind()
+    {
+        var act = () => MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(
+            (MailMergeInteractivePromptKind)99);
+
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
     [Fact]
     public async Task AuthoringWorkflow_CancelDoesNotInsert()
     {

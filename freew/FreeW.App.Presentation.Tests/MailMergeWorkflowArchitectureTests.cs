@@ -149,6 +149,36 @@ public sealed class MailMergeWorkflowArchitectureTests
         avalonia.Should().Contain("_editor.LoadDocument(document)");
     }
 
+    [Fact]
+    public void RenderersConsumeSharedPreviewAndInteractivePromptDialogContracts()
+    {
+        var wpf = ReadSource(
+            "freew",
+            "FreeW.App.Host",
+            "Ribbon",
+            "FreeWRibbonCommands.cs");
+        var avalonia = ReadSource(
+            "freew",
+            "FreeW.App.Avalonia",
+            "MainWindow.cs");
+
+        wpf.Should().Contain("MailMergePreviewDialogPlanner.CreatePlan(index, count)");
+        wpf.Should().Contain("MailMergePreviewDialogPlanner.Move(");
+        wpf.Should().Contain("MailMergePreviewDialogAction Ask(");
+        wpf.Should().Contain("MailMergeDialogMetadata.PreviewResultsTitle");
+        wpf.Should().Contain("MailMergeDialogMetadata.PreviousLabel");
+        wpf.Should().Contain("MailMergeDialogMetadata.NextLabel");
+        wpf.Should().NotContain("private enum PreviewAction");
+        wpf.Should().NotContain("PreviewChoice");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("MailMergeRuleDialogPlanner.ResolveInteractivePromptTitle(prompt.Kind, UiText.Get)");
+            source.Should().NotContain(
+                "prompt.Kind == MailMergeInteractivePromptKind.FillIn ? \"Fill-in\" : \"Ask\"");
+        }
+    }
+
     private static string ReadSource(params string[] parts)
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
