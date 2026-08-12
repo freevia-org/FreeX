@@ -362,8 +362,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("var dataMenu = CreateNativeMenu(NativeMenuTopLevelId.Data);");
         script.Should().Contain("[NativeMenuTopLevelId.Data] = dataMenu,");
         script.Should().Contain("[NativeMenuTopLevelId.Review] = reviewMenu,");
-        script.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);");
-        script.Should().Contain("var hasNativeReviewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Review);");
+        script.Should().Contain("var hasNativeDataMenu = HasNativeTopLevelMenu(nativeMenu, NativeMenuTopLevelId.Data);");
+        script.Should().Contain("var hasNativeReviewMenu = HasNativeTopLevelMenu(nativeMenu, NativeMenuTopLevelId.Review);");
         script.Should().Contain("HasNativeDataMenu: hasNativeDataMenu");
         script.Should().Contain("HasNativeReviewMenu: hasNativeReviewMenu");
         script.Should().Contain("private readonly NativeMenuItem _flashFillMenuItem = new();");
@@ -745,13 +745,13 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("await _platformClipboard.ReadImageAsync()");
         script.Should().Contain("image.PngBytes");
         script.Should().Contain("_session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight)");
-        script.Should().Contain("internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()");
+        script.Should().Contain("internal async Task<bool> TryPasteExternalClipboardImageAsync()");
         script.Should().Contain("return await TryPasteClipboardImageAsync();");
         script.Should().Contain("ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length");
         script.Should().Contain("ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length)");
         script.Should().Contain("VerifyImageClipboardPasteArgument");
         script.Should().Contain("VerifyLiveCommandKeysArgument");
-        script.Should().Contain("await access.TryPasteClipboardImageAsync();");
+        script.Should().Contain("await access.TryPasteExternalClipboardImageAsync();");
         script.Should().Contain("BeginLaunchSmokeLiveCommandKeyProbe");
         script.Should().Contain("live_command_key_smoke_required=");
         script.Should().Contain("external_image_clipboard_paste_required=");
@@ -1889,7 +1889,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 internal static int RunToolHost(
                     IReadOnlyList<string> startupArguments,
                     string? diagnosticsDirectory,
-                    Action<MainWindow.LaunchSmokeAccessAdapter, LocalAppDiagnostics?> externalStartupCoordinator)
+                    Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator)
                 {
                     App.StartupArguments = startupArguments;
                     App.ExternalStartupCoordinator = externalStartupCoordinator;
@@ -2365,7 +2365,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     await clipboard.TryGetBitmapAsync()
                     bitmap.Save(stream)
                     _session.PasteClipboardImageAtActiveCell(pngBytes, pixelWidth, pixelHeight);
-                    internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()
+                    internal async Task<bool> TryPasteExternalClipboardImageAsync()
                     return await TryPasteClipboardImageAsync(clipboard);
                     private async Task PastePictureFromClipboardAsync(string label, bool linkedPicture)
                     _session.PastePictureFromClipboardAtActiveCell(text, linkedPicture);
@@ -2646,17 +2646,17 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, "Next Comment", requireGesture: false)
                     HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, "Previous Comment", requireGesture: false)
                     private async Task ShowFindDialogAsync()
-                    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
+                    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogDialogInspection>? launchDialogInspection = null)
                     private void NavigateToFindAllMatch(WorkbookFindAllMatch match)
                     FindOptions? options = null,
                     private Task ShowReplaceDialogAsync()
                     {
                         return ShowFindReplaceTabbedDialogAsync(replaceMode: true);
                     }
-                    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
+                    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogDialogInspection>? launchDialogInspection = null)
                     private async Task ShowGoToDialogAsync()
                     private async Task ShowGoToSpecialDialogAsync()
-                    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)
+                    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogDialogInspection>? launchDialogInspection = null)
                     private static AvaloniaGrid CreateGoToSpecialChoiceGrid(
                     private static GoToSpecialChoice[] CreateGoToSpecialChoices()
                     private bool SelectGoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
@@ -3271,7 +3271,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private bool IsAnyToolbarControlFocused() => true;
                 private bool IsAnySheetTabFocused() => true;
                 private static bool FocusControl(Control control) => true;
-                internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
+                internal MacOsLaunchSmokeSnapshot CaptureSnapshot()
                 {
                     ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length;
                     ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length);
@@ -3540,12 +3540,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     startupArguments = filteredArguments.ToArray();
                 }
 
-                public static void Start(MainWindow.LaunchSmokeAccessAdapter access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics = null)
+                public static void Start(MainWindow.RendererValidationAccess access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics = null)
                 {
                     RunAsync(access, options, diagnostics);
                 }
 
-                private static void RunAsync(MainWindow.LaunchSmokeAccessAdapter access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
+                private static void RunAsync(MainWindow.RendererValidationAccess access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
                 {
                     diagnostics?.RecordEvent("macos_launch_smoke");
                     diagnostics?.RecordCrash(ex, "macos_launch_smoke");
@@ -3919,23 +3919,23 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal sealed class MacOsLaunchSmokeCoordinator
             {
-                private static async Task RunAsync(MainWindow.LaunchSmokeAccessAdapter access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
+                private static async Task RunAsync(MainWindow.RendererValidationAccess access, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
                 {
                     var snapshot = access.CreateSnapshot();
                     var initialExternalImageClipboardPictureCount = snapshot.ExternalImageClipboardPictureCount;
                     var commandKeyEvidence = CaptureCommandKeyEvidence(access);
-                    var liveCommandKeyEvidence = access.BeginLiveCommandKeyProbe();
+                    var liveCommandKeyEvidence = access.BeginCommandObservation();
                     liveCommandKeyEvidence.IsPassed.ToString();
-                    await access.TryPasteClipboardImageAsync();
+                    await access.TryPasteExternalClipboardImageAsync();
                     IsPassed(snapshot, options, initialExternalImageClipboardPictureCount).ToString();
                     HasExternalImageClipboardPasteEvidence(snapshot, initialExternalImageClipboardPictureCount).ToString();
                 }
 
-                private static MacOsLaunchSmokeCommandKeySnapshot CaptureCommandKeyEvidence(MainWindow.LaunchSmokeAccessAdapter access) => new()
+                private static MacOsLaunchSmokeCommandKeySnapshot CaptureCommandKeyEvidence(MainWindow.RendererValidationAccess access) => new()
                 {
-                    HasFindDirectRouteSourceGuard = MainWindow.LaunchSmokeAccessAdapter.HasMethods("MainWindow_KeyDown"),
-                    HasPageUpDirectRouteSourceGuard = MainWindow.LaunchSmokeAccessAdapter.HasMethods("SelectAdjacentVisibleSheetFromKeyboard"),
-                    HasPageDownDirectRouteSourceGuard = MainWindow.LaunchSmokeAccessAdapter.HasMethods("SelectAdjacentVisibleSheetFromKeyboard")
+                    HasFindDirectRouteSourceGuard = MainWindow.RendererValidationAccess.HasMethods("MainWindow_KeyDown"),
+                    HasPageUpDirectRouteSourceGuard = MainWindow.RendererValidationAccess.HasMethods("SelectAdjacentVisibleSheetFromKeyboard"),
+                    HasPageDownDirectRouteSourceGuard = MainWindow.RendererValidationAccess.HasMethods("SelectAdjacentVisibleSheetFromKeyboard")
                 };
             }
             """);

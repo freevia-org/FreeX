@@ -106,7 +106,7 @@ public sealed partial class MainWindow
     }
 
     private static void AcceptInteractionValidationConditionalFormatRule(
-        ConditionalFormatRuleDialogSmokeProbe probe)
+        ConditionalFormatRuleDialogInspection probe)
     {
         var dataBarPresetIndex = ConditionalFormatPresetChoices
             .ToList()

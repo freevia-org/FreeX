@@ -46,8 +46,8 @@ public sealed partial class MainWindow
             .Select(preset => (preset, ConditionalFormatPresetFactory.DisplayName(preset)))
             .ToList();
 
-    /// <summary>Controls the rule editor exposes to the launch-smoke probe.</summary>
-    private sealed record ConditionalFormatRuleDialogSmokeProbe(
+    /// <summary>Controls exposed for dialog inspection.</summary>
+    internal sealed record ConditionalFormatRuleDialogInspection(
         Window Dialog,
         ComboBox RuleTypeBox,
         ComboBox PresetBox,
@@ -64,8 +64,8 @@ public sealed partial class MainWindow
         Button OkButton,
         Button CancelButton);
 
-    /// <summary>Controls the Manage Rules dialog exposes to the launch-smoke probe.</summary>
-    internal sealed record ManageConditionalFormatsDialogSmokeProbe(
+    /// <summary>Controls exposed for Manage Rules dialog inspection.</summary>
+    internal sealed record ManageConditionalFormatsDialogInspection(
         Window Dialog,
         ComboBox ScopeBox,
         ListBox ListBox,
@@ -226,7 +226,7 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null, startRuleType, launchSmokeProbe: null);
+        var built = await ShowConditionalFormatRuleEditorAsync(existingRule: null, startRuleType, inspectionCallback: null);
         if (built is null)
             return;
 
@@ -238,20 +238,20 @@ public sealed partial class MainWindow
     }
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(ConditionalFormat? existingRule) =>
-        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, launchSmokeProbe: null);
+        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, inspectionCallback: null);
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
         ConditionalFormat? existingRule,
-        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe) =>
-        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, launchSmokeProbe);
+        Action<ConditionalFormatRuleDialogInspection>? inspectionCallback) =>
+        ShowConditionalFormatRuleEditorAsync(existingRule, startRuleType: null, inspectionCallback);
 
     private Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
         QuickAnalysisConditionalFormatDialogSeed seed,
-        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe = null) =>
+        Action<ConditionalFormatRuleDialogInspection>? inspectionCallback = null) =>
         ShowConditionalFormatRuleEditorAsync(
             existingRule: null,
             startRuleType: seed.RuleType,
-            launchSmokeProbe,
+            inspectionCallback,
             initialSeed: seed);
 
     /// <summary>
@@ -263,7 +263,7 @@ public sealed partial class MainWindow
     private async Task<ConditionalFormat?> ShowConditionalFormatRuleEditorAsync(
         ConditionalFormat? existingRule,
         CfRuleType? startRuleType,
-        Action<ConditionalFormatRuleDialogSmokeProbe>? launchSmokeProbe,
+        Action<ConditionalFormatRuleDialogInspection>? inspectionCallback,
         QuickAnalysisConditionalFormatDialogSeed? initialSeed = null)
     {
         ConditionalFormat? result = null;
@@ -758,13 +758,13 @@ public sealed partial class MainWindow
         ConfigureNativeDialogInitialFocus(dialog, root, ruleTypeBox);
         dialog.Content = root;
 
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new ConditionalFormatRuleDialogSmokeProbe(
+                    () => inspectionCallback(new ConditionalFormatRuleDialogInspection(
                         dialog,
                         ruleTypeBox,
                         presetBox,
@@ -1008,7 +1008,7 @@ public sealed partial class MainWindow
     }
 
     private Task ShowManageConditionalFormatsDialogAsync() =>
-        ShowManageConditionalFormatsDialogAsync(launchSmokeProbe: null);
+        ShowManageConditionalFormatsDialogAsync(inspectionCallback: null);
 
     /// <summary>
     /// The Manage Rules dialog: lists the selection's overlapping rules (or every sheet rule when the
@@ -1021,7 +1021,7 @@ public sealed partial class MainWindow
     /// <c>ObservableCollection&lt;ConditionalFormat&gt;</c>).
     /// </summary>
     internal async Task ShowManageConditionalFormatsDialogAsync(
-        Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe)
+        Action<ManageConditionalFormatsDialogInspection>? inspectionCallback)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -1435,13 +1435,13 @@ public sealed partial class MainWindow
         // target, so Tab and Shift+Tab both start from the same predictable control.
         dialog.Opened += (_, _) => scopeBox.Focus();
 
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new ManageConditionalFormatsDialogSmokeProbe(
+                    () => inspectionCallback(new ManageConditionalFormatsDialogInspection(
                         dialog,
                         scopeBox,
                         listBox,

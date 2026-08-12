@@ -20,7 +20,7 @@ public sealed partial class MainWindow
 {
     private Flyout? _quickAnalysisFlyout;
     private readonly QuickAnalysisShellSession _quickAnalysisSession = new();
-    private Action<ConditionalFormatRuleDialogSmokeProbe>? _interactionValidationConditionalFormatRuleProbe;
+    private Action<ConditionalFormatRuleDialogInspection>? _interactionValidationConditionalFormatRuleProbe;
 
     /// <summary>
     /// Opens the Quick Analysis popup for the current multi-cell selection. The UI-free

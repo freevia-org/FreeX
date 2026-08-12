@@ -327,7 +327,7 @@ public sealed partial class MainWindow
     internal Func<Task>? PasteSpecialWorkflowOverrideForTest { get; set; }
 
     /// <summary>
-    /// Test-only hook (matching the established SmokeProbe convention used by
+    /// Test-only hook (matching the established DialogInspection convention used by
     /// <c>ShowFormatCellsInputDialogAsync</c>/<c>ShowFindDialogAsync</c>/etc. in MainWindow.cs) exposing
     /// the real, production content-kind radios / checkboxes / operation radios / footer buttons of the
     /// ribbon's Paste Special dialog so a headless test can drive them directly -- the OS clipboard itself
@@ -336,7 +336,7 @@ public sealed partial class MainWindow
     /// dialog's own <c>Opened</c> event, before any clipboard access happens, so it can still exercise the
     /// real dialog end-to-end for everything up to (and including) the OK-click selection decision.
     /// </summary>
-    internal sealed record PasteSpecialDialogSmokeProbe(
+    internal sealed record PasteSpecialDialogInspection(
         Window Dialog,
         IReadOnlyList<RadioButton> ContentRadios,
         CheckBox SkipBlanksBox,
@@ -352,7 +352,7 @@ public sealed partial class MainWindow
     /// catalog supplies content order, action policy, labels, stable identities, and default state.
     /// </summary>
     internal async Task<PasteSpecialDialogSelection?> PromptPasteSpecialModeAsync(
-        Action<PasteSpecialDialogSmokeProbe>? launchSmokeProbe = null)
+        Action<PasteSpecialDialogInspection>? inspectionCallback = null)
     {
         PasteSpecialDialogSelection? result = null;
         var surface = PasteSpecialPlanner.Surface;
@@ -525,13 +525,13 @@ public sealed partial class MainWindow
 
         dialog.Content = root;
         dialog.Opened += (_, _) => okButton.Focus();
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new PasteSpecialDialogSmokeProbe(
+                    () => inspectionCallback(new PasteSpecialDialogInspection(
                         dialog, radios, skipBlanksBox, transposeBox, keepColumnWidthsBox, operationRadios, pasteLinkButton, okButton, cancelButton)));
             };
         }

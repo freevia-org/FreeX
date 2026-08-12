@@ -2,7 +2,6 @@
   <PropertyGroup>
     <AssemblyName>FreeX.ParityCapture.Avalonia</AssemblyName>
     <ApplicationTitle>FreeX Parity Capture</ApplicationTitle>
-    <DefineConstants>$(DefineConstants);FREEX_RENDERER_CONTRACTS</DefineConstants>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -17,8 +16,6 @@
              Exclude="..\..\src\FreeX.App.Avalonia\bin\**;..\..\src\FreeX.App.Avalonia\obj\**;..\..\src\FreeX.App.Avalonia\MacOs\**\*.cs;..\..\src\FreeX.App.Avalonia\Program.cs"
              LinkBase="Renderer" />
     <Compile Include="Capture\**\*.cs" />
-    <Compile Include="..\FreeX.Validation.Avalonia\MacOsLaunchSmoke.cs"
-             Link="Renderer\ValidationAccess\LaunchSmokeObservationContracts.cs" />
   </ItemGroup>
 
   <ItemGroup>

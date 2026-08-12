@@ -142,14 +142,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         bool MatchEntireCell,
         StyleDiff? ReplacementFormat);
 
-    private sealed record FindOptionsControls(
+    internal sealed record FindOptionsControls(
         ComboBox WithinBox,
         ComboBox SearchBox,
         ComboBox LookInBox,
         CheckBox MatchCaseBox,
         CheckBox MatchEntireCellBox,
         Control Panel);
-    private sealed record FindDialogSmokeProbe(
+    internal sealed record FindDialogInspection(
         Window Dialog,
         TextBox FindBox,
         Button FindNextButton,
@@ -158,7 +158,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         FindOptionsControls OptionsControls,
         Button ChooseFormatButton,
         Button ClearFormatButton);
-    private sealed record ReplaceDialogSmokeProbe(
+    internal sealed record ReplaceDialogInspection(
         Window Dialog,
         TextBox FindBox,
         TextBox ReplaceBox,
@@ -170,12 +170,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Button ClearFindFormatButton,
         Button ChooseReplaceFormatButton,
         Button ClearReplaceFormatButton);
-    private sealed record SingleInputDialogSmokeProbe(
+    private sealed record SingleInputDialogInspection(
         Window Dialog,
         TextBox InputBox,
         Button AcceptButton,
         Button CancelButton);
-    private sealed record GoToDialogSmokeProbe(
+    internal sealed record GoToDialogInspection(
         Window Dialog,
         ListBox HistoryList,
         TextBox InputBox,
@@ -186,7 +186,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         string? Reference,
         GoToSpecialKind? SpecialKind,
         GoToSpecialOptions? SpecialOptions);
-    private sealed record GoToSpecialDialogSmokeProbe(
+    internal sealed record GoToSpecialDialogInspection(
         Window Dialog,
         Control KindBox,
         CheckBox NumbersBox,
@@ -196,7 +196,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Button OkButton,
         Button CancelButton);
     private sealed record GoToSpecialDialogResult(GoToSpecialKind Kind, GoToSpecialOptions Options);
-    private sealed record SortDialogSmokeProbe(
+    internal sealed record SortDialogInspection(
         Window Dialog,
         CheckBox HeadersCheckBox,
         Control LevelsGrid,
@@ -214,7 +214,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         DataValidationDialogAction Action,
         DataValidation? Rule,
         bool ApplyToSameSettings = false);
-    private sealed record DataValidationDialogSmokeProbe(
+    internal sealed record DataValidationDialogInspection(
         Window Dialog,
         TextBlock SummaryText,
         ComboBox TypeBox,
@@ -246,7 +246,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         public override string ToString() => Label;
     }
-    internal sealed record FormatCellsDialogSmokeProbe(
+    internal sealed record FormatCellsDialogInspection(
         Window Dialog,
         TabControl TabStrip,
         TabItem NumberTab,
@@ -714,7 +714,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly NativeMenuItem _boldMenuItem = new();
     private readonly NativeMenuItem _italicMenuItem = new();
     private readonly NativeMenuItem _underlineMenuItem = new();
-    private MacOsLaunchSmokeLiveCommandKeySnapshot _launchSmokeLiveCommandKeySnapshot = MacOsLaunchSmokeLiveCommandKeySnapshot.Empty;
+    private Action<RendererCommandObservation>? _rendererCommandObserver;
     private readonly NativeMenuItem _doubleUnderlineMenuItem = new();
     private readonly NativeMenuItem _strikethroughMenuItem = new();
     private readonly NativeMenuItem _increaseFontSizeMenuItem = new();
@@ -1158,7 +1158,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     internal void RaisePointerWheelChangedForTest(PointerWheelEventArgs e) => SheetScrollViewer_PointerWheelChanged(_sheetGridHost, e);
 
     private readonly RecentColorsStore _recentColors = new();
-    private MacOsLaunchSmokeDialogSnapshot _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
     private ComboBox? _activeDataValidationDropdown;
     private CellAddress? _cellDragSelectionAnchor;
     // Set whenever SelectRangeFromAnchor switches the Name Box to the live "{rows}R x {cols}C"
@@ -2735,11 +2734,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         _clearHyperlinksMenuItem.Click += (_, _) => RemoveSelectedRangeHyperlinks();
 
-        _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);
+        _boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold();
 
-        _italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);
+        _italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic();
 
-        _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);
+        _underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline();
 
         _doubleUnderlineMenuItem.Click += (_, _) => ToggleSelectedRangeDoubleUnderline();
 
@@ -14546,7 +14545,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return Task.CompletedTask;
     }
 
-    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
+    private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogInspection>? inspectionCallback = null)
     {
         FindDialogResult? result = null;
         var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
@@ -14680,13 +14679,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findBox.Focus();
             findBox.SelectAll();
         };
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new FindDialogSmokeProbe(
+                    () => inspectionCallback(new FindDialogInspection(
                         dialog,
                         findBox,
                         findNextButton,
@@ -14745,7 +14744,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return ShowFindReplaceTabbedDialogAsync(replaceMode: true);
     }
 
-    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
+    private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogInspection>? inspectionCallback = null)
     {
         ReplaceDialogResult? result = null;
         var selectionScopeAtOpen = CaptureFindReplaceSelectionScopeAtOpen();
@@ -14904,13 +14903,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             findBox.Focus();
             findBox.SelectAll();
         };
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new ReplaceDialogSmokeProbe(
+                    () => inspectionCallback(new ReplaceDialogInspection(
                         dialog,
                         findBox,
                         replaceBox,
@@ -14965,7 +14964,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             definedNames: _session.Workbook.NamedRanges.Keys);
 
     private async Task<GoToDialogResult?> ShowGoToInputDialogAsync(
-        Action<GoToDialogSmokeProbe>? launchSmokeProbe = null)
+        Action<GoToDialogInspection>? inspectionCallback = null)
     {
         GoToDialogResult? result = null;
         var dialog = new Window
@@ -15136,13 +15135,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             AvaloniaCompactDialogChrome.FocusAndSelect(inputBox);
         };
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new GoToDialogSmokeProbe(
+                    () => inspectionCallback(new GoToDialogInspection(
                         dialog,
                         historyList,
                         inputBox,
@@ -15249,7 +15248,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         SelectGoToSpecial(selection.Kind, selection.Options);
     }
 
-    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogSmokeProbe>? launchSmokeProbe = null)
+    private async Task<GoToSpecialDialogResult?> ShowGoToSpecialInputDialogAsync(Action<GoToSpecialDialogInspection>? inspectionCallback = null)
     {
         GoToSpecialDialogResult? result = null;
         var dialog = new Window
@@ -15450,13 +15449,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ApplyGoToSpecialButtonSize(cancelButton);
             kindButtons.FirstOrDefault()?.Focus();
         };
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new GoToSpecialDialogSmokeProbe(
+                    () => inspectionCallback(new GoToSpecialDialogInspection(
                         dialog,
                         choiceGrid,
                         numbersBox,
@@ -16410,17 +16409,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     internal Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogAsync(
-        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
+        Action<FormatCellsDialogInspection>? inspectionCallback = null,
         int initialTabIndex = 0) =>
-        ShowFormatCellsInputDialogCoreAsync(launchSmokeProbe, initialTabIndex, numberFormatOverride: null);
+        ShowFormatCellsInputDialogCoreAsync(inspectionCallback, initialTabIndex, numberFormatOverride: null);
 
     internal Task<FormatCellsCompactDialogPlan?> ShowPivotNumberFormatInputDialogAsync(
         string? currentNumberFormat,
-        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null) =>
-        ShowFormatCellsInputDialogCoreAsync(launchSmokeProbe, initialTabIndex: 0, currentNumberFormat);
+        Action<FormatCellsDialogInspection>? inspectionCallback = null) =>
+        ShowFormatCellsInputDialogCoreAsync(inspectionCallback, initialTabIndex: 0, currentNumberFormat);
 
     private async Task<FormatCellsCompactDialogPlan?> ShowFormatCellsInputDialogCoreAsync(
-        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
+        Action<FormatCellsDialogInspection>? inspectionCallback = null,
         int initialTabIndex = 0,
         string? numberFormatOverride = null)
     {
@@ -18047,13 +18046,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
             target.Focus();
         };
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new FormatCellsDialogSmokeProbe(
+                    () => inspectionCallback(new FormatCellsDialogInspection(
                         dialog,
                         tabStrip,
                         numberTab,
@@ -18376,7 +18375,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         string initialText,
         string acceptText,
         string automationId,
-        Action<SingleInputDialogSmokeProbe>? launchSmokeProbe = null)
+        Action<SingleInputDialogInspection>? inspectionCallback = null)
     {
         string? result = null;
         var dialog = new Window
@@ -18456,13 +18455,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             inputBox.Focus();
             inputBox.SelectAll();
         };
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new SingleInputDialogSmokeProbe(
+                    () => inspectionCallback(new SingleInputDialogInspection(
                         dialog,
                         inputBox,
                         acceptButton,
@@ -19498,7 +19497,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return await ShowSortInputDialogAsync(null);
     }
 
-    private async Task<SortDialogResult?> ShowSortInputDialogAsync(Action<SortDialogSmokeProbe>? launchSmokeProbe)
+    private async Task<SortDialogResult?> ShowSortInputDialogAsync(Action<SortDialogInspection>? inspectionCallback)
     {
         SortDialogResult? result = null;
         var range = _session.SelectedRange;
@@ -20144,13 +20143,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         root.Children.Add(buttons);
         dialog.Content = root;
 
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new SortDialogSmokeProbe(
+                    () => inspectionCallback(new SortDialogInspection(
                         dialog,
                         headersCheck,
                         levelsGrid,
@@ -23263,7 +23262,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return await ShowDataValidationInputDialogAsync(null);
     }
 
-    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync(Action<DataValidationDialogSmokeProbe>? launchSmokeProbe)
+    private async Task<DataValidationDialogResult?> ShowDataValidationInputDialogAsync(Action<DataValidationDialogInspection>? inspectionCallback)
     {
         DataValidationDialogResult? result = null;
         var summary = DataValidationPresetPlanner.CreateSelectionSummary(
@@ -23712,13 +23711,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
         dialog.Opened += (_, _) => typeBox.Focus();
-        if (launchSmokeProbe is not null)
+        if (inspectionCallback is not null)
         {
             dialog.Opened += (_, _) =>
             {
-                RunLaunchSmokeDialogProbe(
+                CompleteDialogInspection(
                     dialog,
-                    () => launchSmokeProbe(new DataValidationDialogSmokeProbe(
+                    () => inspectionCallback(new DataValidationDialogInspection(
                         dialog,
                         summaryText,
                         typeBox,
@@ -24359,7 +24358,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return true;
     }
 
-    internal async Task<bool> TryPasteLaunchSmokeClipboardImageAsync()
+    internal async Task<bool> TryPasteExternalClipboardImageAsync()
     {
         if (_isOpening || _isSaving)
             return false;
@@ -24760,41 +24759,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ToggleSelectedRangeBold()
     {
-        ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: false);
-    }
-
-    private void ToggleSelectedRangeBold(bool trackLaunchSmokeLiveCommandKey)
-    {
         var before = _session.IsSelectedRangeStartBold;
         ApplySelectedRangeBold(!before);
-        if (trackLaunchSmokeLiveCommandKey)
-            RecordLaunchSmokeLiveCommandKey(Key.B, before, _session.IsSelectedRangeStartBold);
+        ObserveRendererCommand(
+            RendererObservedCommand.Bold,
+            before,
+            _session.IsSelectedRangeStartBold);
     }
 
     private void ToggleSelectedRangeItalic()
     {
-        ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: false);
-    }
-
-    private void ToggleSelectedRangeItalic(bool trackLaunchSmokeLiveCommandKey)
-    {
         var before = _session.IsSelectedRangeStartItalic;
         ApplySelectedRangeItalic(!before);
-        if (trackLaunchSmokeLiveCommandKey)
-            RecordLaunchSmokeLiveCommandKey(Key.I, before, _session.IsSelectedRangeStartItalic);
+        ObserveRendererCommand(
+            RendererObservedCommand.Italic,
+            before,
+            _session.IsSelectedRangeStartItalic);
     }
 
     private void ToggleSelectedRangeUnderline()
     {
-        ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: false);
-    }
-
-    private void ToggleSelectedRangeUnderline(bool trackLaunchSmokeLiveCommandKey)
-    {
         var before = _session.IsSelectedRangeStartUnderline;
         ApplySelectedRangeUnderline(!before);
-        if (trackLaunchSmokeLiveCommandKey)
-            RecordLaunchSmokeLiveCommandKey(Key.U, before, _session.IsSelectedRangeStartUnderline);
+        ObserveRendererCommand(
+            RendererObservedCommand.Underline,
+            before,
+            _session.IsSelectedRangeStartUnderline);
     }
 
     private void ToggleSelectedRangeDoubleUnderline()
@@ -25722,366 +25712,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     internal void ReportStartupFileNotFound(string path) =>
         ShowOpenIssue(UiText.Format("Startup_FileArgumentNotFoundMessage", path));
 
-    internal async Task<MacOsLaunchSmokeDialogSnapshot> CaptureLaunchSmokeDialogEvidenceAsync()
-    {
-        _launchSmokeDialogEvidence = MacOsLaunchSmokeDialogSnapshot.Empty;
-
-        var hasFindDialog = false;
-        var hasFindDialogTextBox = false;
-        var hasFindDialogActionButtons = false;
-        var hasFindDialogOptions = false;
-        var hasFindDialogFormatControls = false;
-        var hasFindDialogCompactLayout = false;
-        var findDialogResult = await ShowFindInputDialogAsync(probe =>
-        {
-            hasFindDialog = HasLaunchSmokeDialog(probe.Dialog, "Find");
-            hasFindDialogTextBox = HasLaunchSmokeAutomationId(probe.FindBox, "FindTextBox") &&
-                probe.FindBox.MinWidth >= 300;
-            hasFindDialogActionButtons =
-                HasLaunchSmokeButton(probe.FindNextButton, "FindNextButton", "Find Next") &&
-                HasLaunchSmokeButton(probe.FindAllButton, "FindAllButton", "Find All") &&
-                HasLaunchSmokeButton(probe.CancelButton, "FindCancelButton", "Cancel");
-            hasFindDialogOptions = HasLaunchSmokeFindOptions(probe.OptionsControls, "Find", defaultLookInIndex: 0);
-            hasFindDialogFormatControls =
-                HasLaunchSmokeButton(probe.ChooseFormatButton, "FindChooseFormatFromCellButton", "Choose From Cell") &&
-                HasLaunchSmokeButton(probe.ClearFormatButton, "FindClearFormatButton", "Clear Format") &&
-                !probe.ClearFormatButton.IsVisible;
-            hasFindDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 430, minWidth: 360, minHeight: 390);
-        });
-
-        var hasReplaceDialog = false;
-        var hasReplaceDialogTextBoxes = false;
-        var hasReplaceDialogActionButtons = false;
-        var hasReplaceDialogOptions = false;
-        var hasReplaceDialogFormatControls = false;
-        var hasReplaceDialogCompactLayout = false;
-        var replaceDialogResult = await ShowReplaceInputDialogAsync(probe =>
-        {
-            hasReplaceDialog = HasLaunchSmokeDialog(probe.Dialog, "Replace");
-            hasReplaceDialogTextBoxes =
-                HasLaunchSmokeAutomationId(probe.FindBox, "ReplaceFindTextBox") &&
-                HasLaunchSmokeAutomationId(probe.ReplaceBox, "ReplaceWithTextBox") &&
-                probe.FindBox.MinWidth >= 300 &&
-                probe.ReplaceBox.MinWidth >= 300;
-            hasReplaceDialogActionButtons =
-                HasLaunchSmokeButton(probe.ReplaceButton, "ReplaceButton", "Replace") &&
-                HasLaunchSmokeButton(probe.ReplaceAllButton, "ReplaceAllButton", "Replace All") &&
-                HasLaunchSmokeButton(probe.CancelButton, "ReplaceCancelButton", "Cancel");
-            hasReplaceDialogOptions = HasLaunchSmokeFindOptions(probe.OptionsControls, "Replace", defaultLookInIndex: 1);
-            hasReplaceDialogFormatControls =
-                HasLaunchSmokeButton(probe.ChooseFindFormatButton, "ReplaceFindChooseFormatFromCellButton", "Choose From Cell") &&
-                HasLaunchSmokeButton(probe.ClearFindFormatButton, "ReplaceFindClearFormatButton", "Clear Format") &&
-                !probe.ClearFindFormatButton.IsVisible &&
-                HasLaunchSmokeButton(probe.ChooseReplaceFormatButton, "ReplaceWithChooseFormatFromCellButton", "Choose From Cell") &&
-                HasLaunchSmokeButton(probe.ClearReplaceFormatButton, "ReplaceWithClearFormatButton", "Clear Format") &&
-                !probe.ClearReplaceFormatButton.IsVisible;
-            hasReplaceDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 520, minWidth: 360, minHeight: 480);
-        });
-
-        var hasGoToDialog = false;
-        var hasGoToDialogReferenceControls = false;
-        var hasGoToDialogHistoryControls = false;
-        var hasGoToDialogSpecialControl = false;
-        var hasGoToDialogCompactLayout = false;
-        var goToDialogResult = await ShowGoToInputDialogAsync(
-            probe =>
-            {
-                hasGoToDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To");
-                hasGoToDialogReferenceControls =
-                    HasLaunchSmokeAutomationId(probe.InputBox, "GoToReferenceBox") &&
-                    HasLaunchSmokeButton(probe.AcceptButton, "GoToReferenceBoxAcceptButton", "OK") &&
-                    HasLaunchSmokeButton(probe.CancelButton, "GoToReferenceBoxCancelButton", "Cancel");
-                hasGoToDialogHistoryControls =
-                    HasLaunchSmokeAutomationId(probe.HistoryList, "GoToHistoryList") &&
-                    string.Equals(AutomationProperties.GetName(probe.HistoryList), "Go To", StringComparison.Ordinal) &&
-                    probe.HistoryList.ItemCount > 0;
-                hasGoToDialogSpecialControl =
-                    HasLaunchSmokeButton(probe.SpecialButton, "GoToSpecialButton", "Special...");
-                hasGoToDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 420, height: 320, minWidth: 420, minHeight: 320);
-            });
-
-        var hasGoToSpecialDialog = false;
-        var hasGoToSpecialKindControls = false;
-        var hasGoToSpecialValueTypeControls = false;
-        var hasGoToSpecialDialogCompactLayout = false;
-        var goToSpecialDialogResult = await ShowGoToSpecialInputDialogAsync(probe =>
-        {
-            hasGoToSpecialDialog = HasLaunchSmokeDialog(probe.Dialog, "Go To Special");
-            var hasSelectedKind =
-                probe.KindBox is AvaloniaGrid kindGrid &&
-                kindGrid.Children.OfType<RadioButton>().Any(button => button.IsChecked == true);
-            hasGoToSpecialKindControls =
-                HasLaunchSmokeAutomationId(probe.KindBox, "GoToSpecialKindBox") &&
-                hasSelectedKind &&
-                HasLaunchSmokeButton(probe.OkButton, "GoToSpecialOkButton", "OK") &&
-                HasLaunchSmokeButton(probe.CancelButton, "GoToSpecialCancelButton", "Cancel");
-            hasGoToSpecialValueTypeControls =
-                HasLaunchSmokeCheckBox(probe.NumbersBox, "GoToSpecialNumbersBox", "Numbers") &&
-                HasLaunchSmokeCheckBox(probe.TextBox, "GoToSpecialTextBox", "Text") &&
-                HasLaunchSmokeCheckBox(probe.LogicalsBox, "GoToSpecialLogicalsBox", "Logicals") &&
-                HasLaunchSmokeCheckBox(probe.ErrorsBox, "GoToSpecialErrorsBox", "Errors");
-            hasGoToSpecialDialogCompactLayout = HasLaunchSmokeCompactDialog(
-                probe.Dialog,
-                width: GoToSpecialDialogPlanner.Width,
-                height: GoToSpecialDialogPlanner.Height,
-                minWidth: GoToSpecialDialogPlanner.Width,
-                minHeight: GoToSpecialDialogPlanner.Height);
-        });
-
-        var hasFormatCellsDialog = false;
-        var hasFormatCellsDialogTabStrip = false;
-        var hasFormatCellsDialogDefaultNumberTab = false;
-        var hasFormatCellsDialogNumberControls = false;
-        var hasFormatCellsDialogActionButtons = false;
-        var hasFormatCellsDialogCompactLayout = false;
-        var formatCellsDialogResult = await ShowFormatCellsInputDialogAsync(probe =>
-        {
-            hasFormatCellsDialog = HasLaunchSmokeDialog(probe.Dialog, "Format Cells");
-            hasFormatCellsDialogTabStrip =
-                HasLaunchSmokeAutomationId(probe.TabStrip, "FormatCellsTabStrip") &&
-                HasLaunchSmokeAutomationId(probe.NumberTab, "FormatCellsNumberTab") &&
-                HasLaunchSmokeAutomationId(probe.AlignmentTab, "FormatCellsAlignmentTab") &&
-                HasLaunchSmokeAutomationId(probe.FontTab, "FormatCellsFontTab") &&
-                HasLaunchSmokeAutomationId(probe.FillTab, "FormatCellsFillTab") &&
-                HasLaunchSmokeAutomationId(probe.BorderTab, "FormatCellsBorderTab") &&
-                HasLaunchSmokeAutomationId(probe.ProtectionTab, "FormatCellsProtectionTab");
-            hasFormatCellsDialogDefaultNumberTab =
-                probe.TabStrip.SelectedIndex == 0 &&
-                HasLaunchSmokeAutomationId(probe.NumberTab, "FormatCellsNumberTab");
-            hasFormatCellsDialogNumberControls =
-                HasLaunchSmokeAutomationId(probe.NumberCategoryList, "FormatCellsNumberCategoryList") &&
-                HasLaunchSmokeAutomationId(probe.NumberFormatBox, "FormatCellsNumberFormatBox") &&
-                HasLaunchSmokeAutomationId(probe.NumberPreview, "FormatCellsNumberPreview") &&
-                probe.NumberFormatBox.MinWidth >= 260;
-            hasFormatCellsDialogActionButtons =
-                HasLaunchSmokeButton(probe.OkButton, "FormatCellsOkButton", "OK") &&
-                HasLaunchSmokeButton(probe.CancelButton, "FormatCellsCancelButton", "Cancel");
-            hasFormatCellsDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 690, height: 660, minWidth: 620, minHeight: 560);
-        });
-
-        var hasSortDialog = false;
-        var hasSortDialogSortOnControls = false;
-        var hasSortDialogColorControls = false;
-        var hasSortDialogActionButtons = false;
-        var hasSortDialogCompactLayout = false;
-        var sortDialogResult = await ShowSortInputDialogAsync(probe =>
-        {
-            hasSortDialog = HasLaunchSmokeDialog(probe.Dialog, "Custom Sort");
-            hasSortDialogSortOnControls =
-                HasLaunchSmokeComboBox(probe.SortOnBox, "SortLevel1SortOnBox", "Sort On") &&
-                probe.SortOnBox.MinWidth >= 120 &&
-                string.Equals(probe.SortOnBox.SelectedItem?.ToString(), SortDialogPlannerText.Default.SortOnCellValues, StringComparison.Ordinal);
-            hasSortDialogColorControls =
-                HasLaunchSmokeComboBox(probe.ColorBox, "SortLevel1ColorBox", "Color") &&
-                probe.ColorBox.MinWidth >= 105 &&
-                !probe.ColorBox.IsEnabled &&
-                string.Equals(probe.ColorBox.SelectedItem?.ToString(), "None", StringComparison.Ordinal);
-            hasSortDialogActionButtons =
-                HasLaunchSmokeCheckBox(probe.HeadersCheckBox, "SortHeadersCheckBox", "My data has headers") &&
-                HasLaunchSmokeAutomationId(probe.LevelsGrid, "SortLevelsGrid") &&
-                HasLaunchSmokeButton(probe.AddLevelButton, "SortAddLevelButton", "Add Level") &&
-                HasLaunchSmokeButton(probe.DeleteLevelButton, "SortDeleteLevelButton", "Delete Level") &&
-                HasLaunchSmokeButton(probe.CopyLevelButton, "SortCopyLevelButton", "Copy Level") &&
-                HasLaunchSmokeButton(probe.MoveUpButton, "SortMoveUpButton", "Move Up") &&
-                HasLaunchSmokeButton(probe.MoveDownButton, "SortMoveDownButton", "Move Down") &&
-                HasLaunchSmokeButton(probe.OptionsButton, "SortOptionsButton", "Options...") &&
-                HasLaunchSmokeButton(probe.OkButton, "SortOkButton", "OK") &&
-                HasLaunchSmokeButton(probe.CancelButton, "SortCancelButton", "Cancel");
-            hasSortDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 760, height: 500, minWidth: 680, minHeight: 420);
-        });
-
-        var dvPlan = new DataValidationDropdownPlan(
-            ["Yes", "No"],
-            "Yes",
-            new DataValidationDropdownBounds(12, 16, 48, 18));
-        var dropdown = CreateDataValidationDropdown(
-            dvPlan,
-            DataValidationAffordancePlanner.ArrowButtonWidth,
-            Math.Max(DataValidationDropdownPlanner.MinimumHeight, dvPlan.Bounds.Height));
-        var hasDataValidationDropdownControl =
-            HasLaunchSmokeComboBox(dropdown, "WorksheetDataValidationDropdown", "Data validation list") &&
-            string.Equals(
-                AutomationProperties.GetHelpText(dropdown),
-                "Pick a permitted value for the active cell.",
-                StringComparison.Ordinal) &&
-            dropdown.Width == DataValidationAffordancePlanner.ArrowButtonWidth &&
-            dropdown.Height == Math.Max(DataValidationDropdownPlanner.MinimumHeight, dvPlan.Bounds.Height) &&
-            dropdown.MinWidth == DataValidationDropdownPlanner.MinimumWidth &&
-            dropdown.MinHeight == DataValidationDropdownPlanner.MinimumHeight;
-        var hasDataValidationDropdownItems =
-            dropdown.ItemsSource is IEnumerable<string> dropdownItems &&
-            dropdownItems.SequenceEqual(["Yes", "No"], StringComparer.Ordinal) &&
-            string.Equals(dropdown.SelectedItem?.ToString(), "Yes", StringComparison.Ordinal);
-
-        var hasDataValidationDialog = false;
-        var hasDataValidationDialogCriteriaControls = false;
-        var hasDataValidationDialogMessageControls = false;
-        var hasDataValidationDialogActionButtons = false;
-        var hasDataValidationDialogCompactLayout = false;
-        var dataValidationDialogResult = await ShowDataValidationInputDialogAsync(probe =>
-        {
-            hasDataValidationDialog = HasLaunchSmokeDialog(probe.Dialog, "Data Validation");
-            hasDataValidationDialogCriteriaControls =
-                HasLaunchSmokeAutomationId(probe.SummaryText, "DataValidationSelectionSummaryText") &&
-                HasLaunchSmokeComboBox(probe.TypeBox, "DataValidationTypeBox", "Allow") &&
-                HasLaunchSmokeComboBox(probe.OperatorBox, "DataValidationOperatorBox", "Data") &&
-                HasLaunchSmokeAutomationId(probe.Formula1Box, "DataValidationFormula1Box") &&
-                HasLaunchSmokeAutomationId(probe.Formula2Box, "DataValidationFormula2Box") &&
-                HasLaunchSmokeCheckBox(probe.AllowBlankBox, "DataValidationAllowBlankBox", UiText.Get("DataValidation_IgnoreBlank")) &&
-                HasLaunchSmokeCheckBox(probe.ShowDropdownBox, "DataValidationShowDropdownBox", UiText.Get("DataValidation_InCellDropdown")) &&
-                !probe.ShowDropdownBox.IsVisible &&
-                string.Equals(probe.TypeBox.SelectedItem?.ToString(), "Whole number", StringComparison.Ordinal) &&
-                string.Equals(probe.Formula1Box.Text, "1", StringComparison.Ordinal) &&
-                string.Equals(probe.Formula2Box.Text, "100", StringComparison.Ordinal);
-            hasDataValidationDialogMessageControls =
-                HasLaunchSmokeCheckBox(probe.ShowInputMessageBox, "DataValidationShowInputMessageBox", UiText.Get("DataValidation_ShowInputMessageWhenCellIsSelected")) &&
-                HasLaunchSmokeAutomationId(probe.PromptTitleBox, "DataValidationPromptTitleBox") &&
-                HasLaunchSmokeAutomationId(probe.PromptMessageBox, "DataValidationPromptMessageBox") &&
-                HasLaunchSmokeCheckBox(probe.ShowErrorMessageBox, "DataValidationShowErrorMessageBox", UiText.Get("DataValidation_ShowErrorAlertAfterInvalidDataIsEntered")) &&
-                HasLaunchSmokeComboBox(probe.AlertStyleBox, "DataValidationAlertStyleBox", "Style") &&
-                HasLaunchSmokeAutomationId(probe.ErrorTitleBox, "DataValidationErrorTitleBox") &&
-                HasLaunchSmokeAutomationId(probe.ErrorMessageBox, "DataValidationErrorMessageBox") &&
-                string.Equals(probe.AlertStyleBox.SelectedItem?.ToString(), "Stop", StringComparison.Ordinal);
-            hasDataValidationDialogActionButtons =
-                HasLaunchSmokeButton(probe.ApplyButton, "DataValidationApplyButton", UiText.Get("Common_Ok")) &&
-                HasLaunchSmokeButton(probe.ClearButton, "DataValidationClearButton", UiText.Get("DataValidation_ClearAll")) &&
-                HasLaunchSmokeButton(probe.CancelButton, "DataValidationCancelButton", UiText.Get("Common_Cancel"));
-            hasDataValidationDialogCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 520, height: 560, minWidth: 480, minHeight: 460);
-        });
-
-        var hasConditionalFormatRuleDialog = false;
-        var hasConditionalFormatRuleTypeControls = false;
-        var hasConditionalFormatRulePresetControls = false;
-        var hasConditionalFormatRuleValueControls = false;
-        var hasConditionalFormatRuleActionButtons = false;
-        var hasConditionalFormatRuleCompactLayout = false;
-        var conditionalFormatRuleDialogResult = await ShowConditionalFormatRuleEditorAsync(
-            existingRule: null,
-            launchSmokeProbe: probe =>
-            {
-                hasConditionalFormatRuleDialog = HasLaunchSmokeDialog(probe.Dialog, "New Formatting Rule");
-                hasConditionalFormatRuleTypeControls =
-                    HasLaunchSmokeComboBox(probe.RuleTypeBox, "ConditionalFormatRuleTypeBox", "Rule type") &&
-                    probe.RuleTypeBox.SelectedIndex == 0 &&
-                    HasLaunchSmokeComboBox(probe.TopBottomBox, "ConditionalFormatTopBottomBox", "Top or bottom") &&
-                    HasLaunchSmokeAutomationId(probe.IconSetBox, "ConditionalFormatIconSetBox");
-                hasConditionalFormatRulePresetControls =
-                    HasLaunchSmokeComboBox(probe.PresetBox, "ConditionalFormatPresetBox", "Preset") &&
-                    probe.PresetBox.ItemCount > 0 &&
-                    HasLaunchSmokeAutomationId(probe.HighlightBox, "ConditionalFormatHighlightBox") &&
-                    probe.HighlightBox.SelectedIndex == 0;
-                hasConditionalFormatRuleValueControls =
-                    HasLaunchSmokeAutomationId(probe.OperatorBox, "ConditionalFormatOperatorBox") &&
-                    HasLaunchSmokeAutomationId(probe.Value1Box, "ConditionalFormatValue1Box") &&
-                    HasLaunchSmokeAutomationId(probe.FormulaBox, "ConditionalFormatFormulaBox") &&
-                    HasLaunchSmokeAutomationId(probe.TextBox, "ConditionalFormatTextBox") &&
-                    HasLaunchSmokeAutomationId(probe.RankBox, "ConditionalFormatRankBox") &&
-                    HasLaunchSmokeAutomationId(probe.MinColorBox, "ConditionalFormatMinColorBox") &&
-                    HasLaunchSmokeAutomationId(probe.MaxColorBox, "ConditionalFormatMaxColorBox");
-                hasConditionalFormatRuleActionButtons =
-                    HasLaunchSmokeButton(probe.OkButton, "ConditionalFormatOkButton", "OK") &&
-                    HasLaunchSmokeButton(probe.CancelButton, "ConditionalFormatCancelButton", "Cancel");
-                hasConditionalFormatRuleCompactLayout = HasLaunchSmokeCompactDialog(
-                    probe.Dialog,
-                    width: ConditionalFormatDialogCatalog.RuleEditorCaptureWidth,
-                    height: ConditionalFormatDialogCatalog.RuleEditorCaptureHeight,
-                    minWidth: ConditionalFormatDialogCatalog.RuleEditorMinWidth,
-                    minHeight: ConditionalFormatDialogCatalog.RuleEditorMinHeight);
-            });
-
-        var hasManageConditionalFormatsDialog = false;
-        var hasManageConditionalFormatsListControls = false;
-        var hasManageConditionalFormatsReorderControls = false;
-        var hasManageConditionalFormatsAppliesToControls = false;
-        var hasManageConditionalFormatsActionButtons = false;
-        var hasManageConditionalFormatsCompactLayout = false;
-        var manageConditionalFormatsClosedWithoutAccept = false;
-        await ShowManageConditionalFormatsDialogAsync(probe =>
-        {
-            hasManageConditionalFormatsDialog = HasLaunchSmokeDialog(probe.Dialog, UiText.Get("ManageConditionalFormats_ConditionalFormattingRulesManager"));
-            hasManageConditionalFormatsListControls =
-                HasLaunchSmokeAutomationId(probe.ListBox, "ManageConditionalFormatsListBox") &&
-                HasLaunchSmokeText(AutomationProperties.GetName(probe.ListBox), UiText.Get("ManageConditionalFormats_ConditionalFormattingRules"));
-            hasManageConditionalFormatsReorderControls =
-                HasLaunchSmokeNamedButton(probe.MoveUpButton, "ManageConditionalFormatsMoveUpButton", UiText.Get("ManageConditionalFormats_MoveUp")) &&
-                HasLaunchSmokeNamedButton(probe.MoveDownButton, "ManageConditionalFormatsMoveDownButton", UiText.Get("ManageConditionalFormats_MoveDown"));
-            hasManageConditionalFormatsAppliesToControls =
-                HasLaunchSmokeAutomationId(probe.AppliesToBox, "ManageConditionalFormatsAppliesToBox") &&
-                HasLaunchSmokeButton(probe.ApplyAppliesToButton, "ManageConditionalFormatsApplyAppliesToButton", UiText.Get("ManageConditionalFormats_Apply"));
-            hasManageConditionalFormatsActionButtons =
-                HasLaunchSmokeButton(probe.NewButton, "ManageConditionalFormatsNewButton", UiText.Get("ManageConditionalFormats_NewRule")) &&
-                HasLaunchSmokeButton(probe.EditButton, "ManageConditionalFormatsEditButton", UiText.Get("ManageConditionalFormats_EditRule")) &&
-                HasLaunchSmokeButton(probe.DeleteButton, "ManageConditionalFormatsDeleteButton", UiText.Get("ManageConditionalFormats_DeleteRule")) &&
-                HasLaunchSmokeButton(probe.CloseButton, "ManageConditionalFormatsCloseButton", UiText.Get("Common_Ok"));
-            hasManageConditionalFormatsCompactLayout = HasLaunchSmokeCompactDialog(probe.Dialog, width: 560, height: 460, minWidth: 480, minHeight: 360);
-            manageConditionalFormatsClosedWithoutAccept = true;
-        });
-
-        _launchSmokeDialogEvidence = new MacOsLaunchSmokeDialogSnapshot(
-            hasFindDialog,
-            hasFindDialogTextBox,
-            hasFindDialogActionButtons,
-            hasFindDialogOptions,
-            hasFindDialogFormatControls,
-            hasFindDialogCompactLayout,
-            hasReplaceDialog,
-            hasReplaceDialogTextBoxes,
-            hasReplaceDialogActionButtons,
-            hasReplaceDialogOptions,
-            hasReplaceDialogFormatControls,
-            hasReplaceDialogCompactLayout,
-            hasGoToDialog,
-            hasGoToDialogReferenceControls,
-            hasGoToDialogHistoryControls,
-            hasGoToDialogSpecialControl,
-            hasGoToDialogCompactLayout,
-            hasGoToSpecialDialog,
-            hasGoToSpecialKindControls,
-            hasGoToSpecialValueTypeControls,
-            hasGoToSpecialDialogCompactLayout,
-            findDialogResult is null,
-            replaceDialogResult is null,
-            goToDialogResult is null,
-            goToSpecialDialogResult is null,
-            hasFormatCellsDialog,
-            hasFormatCellsDialogTabStrip,
-            hasFormatCellsDialogDefaultNumberTab,
-            hasFormatCellsDialogNumberControls,
-            hasFormatCellsDialogActionButtons,
-            hasFormatCellsDialogCompactLayout,
-            formatCellsDialogResult is null,
-            hasSortDialog,
-            hasSortDialogSortOnControls,
-            hasSortDialogColorControls,
-            hasSortDialogActionButtons,
-            hasSortDialogCompactLayout,
-            sortDialogResult is null,
-            hasDataValidationDropdownControl,
-            hasDataValidationDropdownItems,
-            hasDataValidationDialog,
-            hasDataValidationDialogCriteriaControls,
-            hasDataValidationDialogMessageControls,
-            hasDataValidationDialogActionButtons,
-            hasDataValidationDialogCompactLayout,
-            dataValidationDialogResult is null,
-            hasConditionalFormatRuleDialog,
-            hasConditionalFormatRuleTypeControls,
-            hasConditionalFormatRulePresetControls,
-            hasConditionalFormatRuleValueControls,
-            hasConditionalFormatRuleActionButtons,
-            hasConditionalFormatRuleCompactLayout,
-            conditionalFormatRuleDialogResult is null,
-            hasManageConditionalFormatsDialog,
-            hasManageConditionalFormatsListControls,
-            hasManageConditionalFormatsReorderControls,
-            hasManageConditionalFormatsAppliesToControls,
-            hasManageConditionalFormatsActionButtons,
-            hasManageConditionalFormatsCompactLayout,
-            manageConditionalFormatsClosedWithoutAccept);
-        return _launchSmokeDialogEvidence;
-    }
-
-    private static void RunLaunchSmokeDialogProbe(Window dialog, Action probe)
+    private static void CompleteDialogInspection(Window dialog, Action probe)
     {
         try
         {
@@ -26093,467 +25724,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
     }
 
-    private static bool HasLaunchSmokeDialog(Window dialog, string title) =>
-        dialog.IsVisible &&
-        string.Equals(dialog.Title, title, StringComparison.Ordinal);
-
-    private static bool HasLaunchSmokeCompactDialog(
-        Window dialog,
-        double width,
-        double height,
-        double minWidth,
-        double minHeight) =>
-        dialog.Width <= width &&
-        dialog.Height <= height &&
-        dialog.MinWidth <= minWidth &&
-        dialog.MinHeight <= minHeight;
-
-    private static bool HasLaunchSmokeButton(Button button, string automationId, string content) =>
-        HasLaunchSmokeAutomationId(button, automationId) &&
-        HasLaunchSmokeText(button.Content?.ToString(), content);
-
-    private static bool HasLaunchSmokeNamedButton(Button button, string automationId, string name) =>
-        HasLaunchSmokeAutomationId(button, automationId) &&
-        HasLaunchSmokeText(AutomationProperties.GetName(button), name);
-
-    private static bool HasLaunchSmokeCheckBox(CheckBox checkBox, string automationId, string content) =>
-        HasLaunchSmokeAutomationId(checkBox, automationId) &&
-        HasLaunchSmokeText(checkBox.Content?.ToString(), content);
-
-    private static bool HasLaunchSmokeComboBox(ComboBox comboBox, string automationId, string name) =>
-        HasLaunchSmokeAutomationId(comboBox, automationId) &&
-        HasLaunchSmokeText(AutomationProperties.GetName(comboBox), name);
-
-    private static bool HasLaunchSmokeText(string? actual, string expected) =>
-        string.Equals(NormalizeLaunchSmokeText(actual), NormalizeLaunchSmokeText(expected), StringComparison.Ordinal);
-
-    private static string NormalizeLaunchSmokeText(string? text) =>
-        (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);
-
-    private static bool HasLaunchSmokeAutomationId(Control control, string automationId) =>
-        string.Equals(AutomationProperties.GetAutomationId(control), automationId, StringComparison.Ordinal);
-
-    private static bool HasLaunchSmokeFindOptions(
-        FindOptionsControls controls,
-        string automationPrefix,
-        int defaultLookInIndex) =>
-        HasLaunchSmokeAutomationId(controls.Panel, $"{automationPrefix}OptionsPanel") &&
-        HasLaunchSmokeAutomationId(controls.WithinBox, $"{automationPrefix}WithinBox") &&
-        HasLaunchSmokeAutomationId(controls.SearchBox, $"{automationPrefix}SearchBox") &&
-        HasLaunchSmokeAutomationId(controls.LookInBox, $"{automationPrefix}LookInBox") &&
-        HasLaunchSmokeAutomationId(controls.MatchCaseBox, $"{automationPrefix}MatchCaseBox") &&
-        HasLaunchSmokeAutomationId(controls.MatchEntireCellBox, $"{automationPrefix}MatchEntireCellBox") &&
-        controls.WithinBox.SelectedIndex == 0 &&
-        controls.SearchBox.SelectedIndex == 0 &&
-        controls.LookInBox.SelectedIndex == defaultLookInIndex;
-
-    internal MacOsLaunchSmokeLiveCommandKeySnapshot BeginLaunchSmokeLiveCommandKeyProbe()
-    {
-        FocusShellRegion(ShellFocusTarget.Worksheet);
-        _launchSmokeLiveCommandKeySnapshot = MacOsLaunchSmokeLiveCommandKeySnapshot.Ready(
-            _session.IsSelectedRangeStartBold,
-            _session.IsSelectedRangeStartItalic,
-            _session.IsSelectedRangeStartUnderline);
-        return _launchSmokeLiveCommandKeySnapshot;
-    }
-
-    internal MacOsLaunchSmokeLiveCommandKeySnapshot CreateLaunchSmokeLiveCommandKeySnapshot() =>
-        _launchSmokeLiveCommandKeySnapshot;
-
-    private void RecordLaunchSmokeLiveCommandKey(Key key, bool before, bool after)
-    {
-        if (!_launchSmokeLiveCommandKeySnapshot.IsReady)
-            return;
-
-        var changed = before != after;
-        _launchSmokeLiveCommandKeySnapshot = key switch
-        {
-            Key.B => _launchSmokeLiveCommandKeySnapshot with
-            {
-                HasBoldCommandKey = true,
-                HasBoldStateChange = _launchSmokeLiveCommandKeySnapshot.HasBoldStateChange || changed,
-                CurrentBoldState = after
-            },
-            Key.I => _launchSmokeLiveCommandKeySnapshot with
-            {
-                HasItalicCommandKey = true,
-                HasItalicStateChange = _launchSmokeLiveCommandKeySnapshot.HasItalicStateChange || changed,
-                CurrentItalicState = after
-            },
-            Key.U => _launchSmokeLiveCommandKeySnapshot with
-            {
-                HasUnderlineCommandKey = true,
-                HasUnderlineStateChange = _launchSmokeLiveCommandKeySnapshot.HasUnderlineStateChange || changed,
-                CurrentUnderlineState = after
-            },
-            _ => _launchSmokeLiveCommandKeySnapshot
-        };
-    }
-
-    private void RecordLaunchSmokeLiveSelectAllCommandKey(GridRange before, GridRange after)
-    {
-        if (!_launchSmokeLiveCommandKeySnapshot.IsReady)
-            return;
-
-        _launchSmokeLiveCommandKeySnapshot = _launchSmokeLiveCommandKeySnapshot with
-        {
-            HasSelectAllCommandKey = true,
-            HasSelectAllStateChange = _launchSmokeLiveCommandKeySnapshot.HasSelectAllStateChange || before != after
-        };
-    }
-
-    internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()
-    {
-        var nativeTopLevelMenuOrder = GetNativeTopLevelMenuOrder(_nativeMenu);
-        var nativeDockMenu = Application.Current is { } app
-            ? NativeDock.GetMenu(app)
-            : null;
-        var nativeDockTopLevelMenuOrder = GetNativeTopLevelMenuOrder(nativeDockMenu);
-        var hasNativeDockMenu = nativeDockMenu is not null;
-        var hasNativeDockFileMenu = HasNativeTopLevelMenu(nativeDockMenu, NativeMenuTopLevelId.File);
-        var nativeDockFileMenuItemCount = CountNativeTopLevelMenuItems(nativeDockMenu, NativeMenuTopLevelId.File);
-        var hasNativeFileMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.File);
-        var hasNativeHomeMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Home);
-        var hasNativeInsertMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Insert);
-        var hasNativePageLayoutMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.PageLayout);
-        var hasNativeFormulasMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Formulas);
-        var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);
-        var hasNativeReviewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Review);
-        var hasNativeViewMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.View);
-        var hasNativeSheetMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Sheet);
-        var hasNativeWindowMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Window);
-        var hasNativeHelpMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Help);
-        var nativeCellStylesPresetCount = _cellStylesMenuItem.Menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Count(item => item.Header is not null) ?? 0;
-        var nativeOpenRecentItemCount = CountNativeOpenRecentItems(_openRecentMenuItem.Menu);
-        var nativeFillColorSwatchCount = CountNativeColorPaletteSwatches(_fillColorMenuItem.Menu);
-        var nativeFontColorSwatchCount = CountNativeColorPaletteSwatches(_fontColorMenuItem.Menu);
-        var nativeBordersPresetCount = _bordersMenuItem.Menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Count(item => item.Header is not null) ?? 0;
-        var nativeTabColorSwatchCount = CountNativeColorPaletteSwatches(_tabColorMenuItem.Menu);
-        var externalImageClipboardPictures = _session.ActiveSheet.Pictures
-            .Where(static picture =>
-                picture.Kind == PictureKind.Image &&
-                string.Equals(picture.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) &&
-                picture.ImageBytes is { Length: > 0 })
-            .ToArray();
-
-        return new MacOsLaunchSmokeSnapshot(
-            WindowShown: IsVisible,
-            WindowTitle: Title ?? "",
-            DisplayName: _session.DisplayName,
-            ActiveSheetName: _session.ActiveSheet.Name,
-            SheetTabCount: _session.SheetTabs.Count,
-            ViewportRowCount: _session.Viewport.RowMetrics.Count,
-            ViewportColumnCount: _session.Viewport.ColMetrics.Count,
-            ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length,
-            ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length),
-            DialogEvidence: _launchSmokeDialogEvidence,
-            OpenedSourcePath: _session.CurrentFilePath,
-            IsOpening: _isOpening,
-            HasNewSheetButton: _newSheetButton.Content?.ToString() == "+",
-            HasFormatPainterButton: _formatPainterButton.Content?.ToString() == UiText.Get("MainWindow_TooltipTitle_FormatPainter") &&
-                string.Equals(AutomationProperties.GetAutomationId(_formatPainterButton), "HomeFormatPainterButton", StringComparison.Ordinal) &&
-                string.Equals(
-                    AutomationProperties.GetHelpText(_formatPainterButton),
-                    UiText.Get("MainWindow_TooltipDescription_CopyFormattingFromOnePlaceAndApplyItToAnother"),
-                    StringComparison.Ordinal),
-            HasAutoSumButton: _autoSumButton.Content?.ToString() == "AutoSum" &&
-                _autoSumButton.Flyout is MenuFlyout &&
-                string.Equals(AutomationProperties.GetAutomationId(_autoSumButton), "HomeAutoSumButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_autoSumButton), "Insert a formula using nearby numeric cells.", StringComparison.Ordinal),
-            HasAutoSumSumMenuItem: HasToolbarMenuItem(_autoSumSumFlyoutItem, "Sum"),
-            HasAutoSumAverageMenuItem: HasToolbarMenuItem(_autoSumAverageFlyoutItem, "Average"),
-            HasAutoSumCountNumbersMenuItem: HasToolbarMenuItem(_autoSumCountNumbersFlyoutItem, "Count Numbers"),
-            HasAutoSumCountAllMenuItem: HasToolbarMenuItem(_autoSumCountAllFlyoutItem, "Count All"),
-            HasAutoSumMaxMenuItem: HasToolbarMenuItem(_autoSumMaxFlyoutItem, "Max"),
-            HasAutoSumMinMenuItem: HasToolbarMenuItem(_autoSumMinFlyoutItem, "Min"),
-            HasFillCellsButton: _fillCellsButton.Content?.ToString() == "Fill Cells" &&
-                _fillCellsButton.Flyout is MenuFlyout &&
-                string.Equals(AutomationProperties.GetAutomationId(_fillCellsButton), "HomeFillCellsButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_fillCellsButton), "Copy the edge cells across the selected range.", StringComparison.Ordinal),
-            HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, "Down"),
-            HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, "Right"),
-            HasFillUpMenuItem: HasToolbarMenuItem(_fillUpFlyoutItem, "Up"),
-            HasFillLeftMenuItem: HasToolbarMenuItem(_fillLeftFlyoutItem, "Left"),
-            HasClearButton: _clearButton.Content?.ToString() == "Clear" &&
-                _clearButton.Flyout is MenuFlyout &&
-                string.Equals(AutomationProperties.GetAutomationId(_clearButton), "HomeClearButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_clearButton), "Clear contents, formatting, comments, hyperlinks, or all cell state from the selected range.", StringComparison.Ordinal),
-            HasClearAllMenuItem: HasToolbarMenuItem(_clearAllFlyoutItem, "Clear All"),
-            HasClearFormatsMenuItem: HasToolbarMenuItem(_clearFormatsFlyoutItem, "Clear Formats"),
-            HasClearContentsMenuItem: HasToolbarMenuItem(_clearContentsFlyoutItem, "Clear Contents"),
-            HasClearCommentsMenuItem: HasToolbarMenuItem(_clearCommentsFlyoutItem, "Clear Comments and Notes"),
-            HasClearHyperlinksMenuItem: HasToolbarMenuItem(_clearHyperlinksFlyoutItem, "Clear Hyperlinks"),
-            HasBordersButton: _bordersButton.Content?.ToString() == "Borders" &&
-                string.Equals(AutomationProperties.GetAutomationId(_bordersButton), "HomeBordersButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_bordersButton), "Apply or change borders on the selected cells.", StringComparison.Ordinal),
-            HasWrapTextButton: _wrapTextButton.Content?.ToString() == "Wrap" &&
-                string.Equals(AutomationProperties.GetAutomationId(_wrapTextButton), "HomeWrapTextButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_wrapTextButton), "Wrap text within the selected cells.", StringComparison.Ordinal),
-            HasMergeAndCenterButton: _mergeAndCenterButton.Content?.ToString() == "Merge & Center" &&
-                string.Equals(AutomationProperties.GetAutomationId(_mergeAndCenterButton), "HomeMergeAndCenterButton", StringComparison.Ordinal) &&
-                string.Equals(AutomationProperties.GetHelpText(_mergeAndCenterButton), "Merge and center the selected cells.", StringComparison.Ordinal),
-            HasFormulaBoxAutomationName: string.Equals(
-                AutomationProperties.GetName(_formulaBox),
-                FormulaBarText(FormulaBarChromePlanner.FormulaBox.AutomationNameResourceKey),
-                StringComparison.Ordinal),
-            HasFormulaBoxAutomationHelp: string.Equals(
-                AutomationProperties.GetHelpText(_formulaBox),
-                FormulaBarText(FormulaBarChromePlanner.FormulaBox.HelpTextResourceKey),
-                StringComparison.Ordinal),
-            HasFormulaBoxAutomationId: string.Equals(AutomationProperties.GetAutomationId(_formulaBox), "FormulaBox", StringComparison.Ordinal),
-            HasStatusTextAutomationName: string.Equals(AutomationProperties.GetName(_statusText), "Status", StringComparison.Ordinal),
-            HasStatusTextAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_statusText), "Shows the current workbook status.", StringComparison.Ordinal),
-            HasStatusTextAutomationId: string.Equals(AutomationProperties.GetAutomationId(_statusText), "StatusText", StringComparison.Ordinal),
-            HasStatusTextValue: HasStatusBarAccessibleValue(),
-            HasCellAddressAutomationName: string.Equals(AutomationProperties.GetName(_cellAddressText), "Cell address", StringComparison.Ordinal),
-            HasCellAddressAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_cellAddressText), "Shows the active cell address.", StringComparison.Ordinal),
-            HasCellAddressAutomationId: string.Equals(AutomationProperties.GetAutomationId(_cellAddressText), "CellAddressText", StringComparison.Ordinal),
-            HasSelectionStatsAutomationName: string.Equals(AutomationProperties.GetName(_selectionStatsText), "Selection statistics", StringComparison.Ordinal),
-            HasSelectionStatsAutomationHelp: string.Equals(AutomationProperties.GetHelpText(_selectionStatsText), "Shows statistics for the current selection.", StringComparison.Ordinal),
-            HasSelectionStatsAutomationId: string.Equals(AutomationProperties.GetAutomationId(_selectionStatsText), "SelectionStatsText", StringComparison.Ordinal),
-            HasFocusableSheetTab: HasSheetTabButton(button => button.Focusable),
-            HasFocusableActiveSheetTab: FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true,
-            HasShellFocusCycleTargets: _sheetGridHost.Focusable &&
-                GetToolbarFocusTargets().Any(control => control.Focusable) &&
-                _formulaBox.Focusable &&
-                FindSheetTabButton(_session.ActiveSheet.Id)?.Focusable == true &&
-                _zoomText.Focusable,
-            HasSheetTabContextKeyboardHelp: HasSheetTabButton(button =>
-                string.Equals(AutomationProperties.GetHelpText(button), SheetTabContextHelpText, StringComparison.Ordinal)),
-            HasSheetTabContextRenameMenuItem: HasSheetTabContextMenuItem("Rename..."),
-            HasSheetTabContextTabColorMenuItem: HasSheetTabContextMenuItem("Tab Color"),
-            HasSheetTabContextNoColorMenuItem: HasSheetTabContextSubmenuItem("Tab Color", "No Color"),
-            HasSheetTabContextSelectAllSheetsMenuItem: HasSheetTabContextMenuItem("Select All Sheets"),
-            HasSheetTabContextUngroupSheetsMenuItem: HasSheetTabContextMenuItem("Ungroup Sheets"),
-            NativeTopLevelMenuOrder: nativeTopLevelMenuOrder,
-            NativeDockTopLevelMenuOrder: nativeDockTopLevelMenuOrder,
-            HasNativeDockMenu: hasNativeDockMenu,
-            HasNativeDockFileMenu: hasNativeDockFileMenu,
-            NativeDockFileMenuItemCount: nativeDockFileMenuItemCount,
-            HasNativeFileMenu: hasNativeFileMenu,
-            HasNativeHomeMenu: hasNativeHomeMenu,
-            HasNativeInsertMenu: hasNativeInsertMenu,
-            HasNativePageLayoutMenu: hasNativePageLayoutMenu,
-            HasNativeFormulasMenu: hasNativeFormulasMenu,
-            HasNativeDataMenu: hasNativeDataMenu,
-            HasNativeReviewMenu: hasNativeReviewMenu,
-            HasNativeViewMenu: hasNativeViewMenu,
-            HasNativeSheetMenu: hasNativeSheetMenu,
-            HasNativeWindowMenu: hasNativeWindowMenu,
-            HasNativeHelpMenu: hasNativeHelpMenu,
-            HasNativeNewWorkbookMenuItem: HasNativeFileMenuItem(_newWorkbookMenuItem, NativeFileMenuItemId.NewWorkbook),
-            HasNativeOpenMenuItem: HasNativeFileMenuItem(_openMenuItem, NativeFileMenuItemId.Open),
-            HasNativeOpenRecentMenuItem: HasNativeFileMenuItem(_openRecentMenuItem, NativeFileMenuItemId.OpenRecent),
-            NativeOpenRecentItemCount: nativeOpenRecentItemCount,
-            HasNativeSaveMenuItem: HasNativeFileMenuItem(_saveMenuItem, NativeFileMenuItemId.Save),
-            HasNativeSaveAsMenuItem: HasNativeFileMenuItem(_saveAsMenuItem, NativeFileMenuItemId.SaveAs),
-            HasNativeExportPdfMenuItem: HasNativeFileMenuItem(_exportPdfMenuItem, NativeFileMenuItemId.ExportPdf),
-            HasNativeShareWorkbookMenuItem: HasEnabledNativeFileMenuItem(_shareWorkbookMenuItem, NativeFileMenuItemId.ShareWorkbook),
-            HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics),
-            HasNativeCloseWorkbookMenuItem: HasNativeFileMenuItem(_closeWorkbookMenuItem, NativeFileMenuItemId.CloseWorkbook),
-            HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, NativeMenuItemId.NewSheet),
-            HasNativeRenameSheetMenuItem: HasNativeMenuItem(_renameSheetMenuItem, NativeMenuItemId.RenameSheet),
-            HasNativeDuplicateSheetMenuItem: HasNativeMenuItem(_duplicateSheetMenuItem, NativeMenuItemId.DuplicateSheet),
-            HasNativeMoveSheetLeftMenuItem: HasNativeMenuItem(_moveSheetLeftMenuItem, NativeMenuItemId.MoveSheetLeft),
-            HasNativeMoveSheetRightMenuItem: HasNativeMenuItem(_moveSheetRightMenuItem, NativeMenuItemId.MoveSheetRight),
-            HasNativeTabColorMenuItem: HasNativeMenuItem(_tabColorMenuItem, NativeMenuItemId.TabColor),
-            HasNativeClearTabColorMenuItem: HasNativeSubmenuItem(_tabColorMenuItem.Menu, "No Color"),
-            NativeTabColorSwatchCount: nativeTabColorSwatchCount,
-            HasNativeSelectAllSheetsMenuItem: HasNativeMenuItem(_selectAllSheetsMenuItem, NativeMenuItemId.SelectAllSheets),
-            HasNativeUngroupSheetsMenuItem: HasNativeMenuItem(_ungroupSheetsMenuItem, NativeMenuItemId.UngroupSheets),
-            HasNativeHideSheetMenuItem: HasNativeMenuItem(_hideSheetMenuItem, NativeMenuItemId.HideSheet),
-            HasNativeUnhideSheetMenuItem: HasNativeMenuItem(_unhideSheetMenuItem, NativeMenuItemId.UnhideSheet),
-            HasNativeDeleteSheetMenuItem: HasNativeMenuItem(_deleteSheetMenuItem, NativeMenuItemId.DeleteSheet),
-            HasNativeUndoMenuItem: HasNativeMenuItem(_undoMenuItem, NativeMenuItemId.Undo),
-            HasNativeRedoMenuItem: HasNativeMenuItem(_redoMenuItem, NativeMenuItemId.Redo),
-            HasNativeCutMenuItem: HasNativeMenuItem(_cutMenuItem, NativeMenuItemId.Cut),
-            HasNativeCopyMenuItem: HasNativeMenuItem(_copyMenuItem, NativeMenuItemId.Copy),
-            HasNativePasteMenuItem: HasNativeMenuItem(_pasteMenuItem, NativeMenuItemId.Paste),
-            HasNativePasteSpecialMenuItem: HasNativeMenuItem(_pasteSpecialMenuItem, NativeMenuItemId.PasteSpecial),
-            HasNativeFormatPainterMenuItem: HasNativeMenuItem(_formatPainterMenuItem, NativeMenuItemId.FormatPainter),
-            HasNativePasteSpecialCommentsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Comments and Notes"),
-            HasNativePasteSpecialValidationMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Validation"),
-            HasNativePasteSpecialAllExceptBordersMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "All Except Borders"),
-            HasNativePasteSpecialAllMergingConditionalFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "All Merging Conditional Formats"),
-            HasNativePasteSpecialColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Column Widths"),
-            HasNativePasteSpecialFormulasAndNumberFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Formulas and Number Formats"),
-            HasNativePasteSpecialValuesAndNumberFormatsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Values and Number Formats"),
-            HasNativePasteSpecialValuesAndSourceFormattingMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Values and Source Formatting"),
-            HasNativePasteSpecialKeepSourceColumnWidthsMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Keep Source Column Widths"),
-            HasNativePasteSpecialPasteLinkMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Paste Link"),
-            HasNativePasteSpecialTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Text"),
-            HasNativePasteSpecialUnicodeTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Unicode Text"),
-            HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture"),
-            HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture"),
-            HasNativeSelectAllMenuItem: HasNativeMenuItem(_selectAllMenuItem, NativeMenuItemId.SelectAll),
-            HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, NativeMenuItemId.Find),
-            HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, NativeMenuItemId.FindNext),
-            HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, NativeMenuItemId.Replace),
-            HasNativeGoToMenuItem: HasNativeMenuItem(_goToMenuItem, NativeMenuItemId.GoTo),
-            HasNativeGoToSpecialMenuItem: HasNativeMenuItem(_goToSpecialMenuItem, NativeMenuItemId.GoToSpecial),
-            HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, NativeMenuItemId.SortAscending),
-            HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, NativeMenuItemId.SortDescending),
-            HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill),
-            HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, NativeMenuItemId.AdvancedFilter),
-            HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, NativeMenuItemId.RemoveDuplicates),
-            HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, NativeMenuItemId.Subtotal),
-            HasNativeDataValidationPreviewMenuItem: HasNativeMenuItem(_dataValidationPreviewMenuItem, NativeMenuItemId.DataValidationPreview),
-            HasNativeDataValidationMenuItem: HasNativeMenuItem(_dataValidationMenuItem, NativeMenuItemId.DataValidation),
-            HasNativeWhatIfAnalysisMenuItem: HasNativeMenuItem(_whatIfAnalysisMenuItem, NativeMenuItemId.WhatIfAnalysis),
-            HasNativeGoalSeekMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.GoalSeek),
-            HasNativeDataTableMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.DataTable),
-            HasNativeScenarioManagerMenuItem: HasNativeSubmenuItem(_whatIfAnalysisMenuItem.Menu, NativeMenuItemId.ScenarioManager),
-            HasNativeForecastSheetMenuItem: HasNativeMenuItem(_forecastSheetMenuItem, NativeMenuItemId.ForecastSheet),
-            HasNativeReviewSummaryMenuItem: HasNativeMenuItem(_reviewSummaryMenuItem, NativeMenuItemId.ReviewSummary),
-            HasNativeCheckAccessibilityMenuItem: HasNativeMenuItem(_checkAccessibilityMenuItem, NativeMenuItemId.CheckAccessibility),
-            HasNativeNextNoteMenuItem: HasNativeMenuItem(_nextNoteMenuItem, NativeMenuItemId.NextNote),
-            HasNativePreviousNoteMenuItem: HasNativeMenuItem(_previousNoteMenuItem, NativeMenuItemId.PreviousNote),
-            HasNativeNextCommentMenuItem: HasNativeMenuItem(_nextCommentMenuItem, NativeMenuItemId.NextComment),
-            HasNativePreviousCommentMenuItem: HasNativeMenuItem(_previousCommentMenuItem, NativeMenuItemId.PreviousComment),
-            HasNativeFormatCellsMenuItem: HasNativeMenuItem(_formatCellsMenuItem, NativeMenuItemId.FormatCells),
-            HasNativeAutoSumMenuItem: HasNativeMenuItem(_autoSumMenuItem, NativeMenuItemId.AutoSum),
-            HasNativeAutoSumSumMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumSum),
-            HasNativeAutoSumAverageMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumAverage),
-            HasNativeAutoSumCountNumbersMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumCountNumbers),
-            HasNativeAutoSumCountAllMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumCountAll),
-            HasNativeAutoSumMaxMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumMax),
-            HasNativeAutoSumMinMenuItem: HasNativeSubmenuItem(_autoSumMenuItem.Menu, NativeMenuItemId.AutoSumMin),
-            HasNativeFillCellsMenuItem: HasNativeMenuItem(_fillCellsMenuItem, NativeMenuItemId.FillCells),
-            HasNativeFillDownMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillDown),
-            HasNativeFillRightMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillRight),
-            HasNativeFillUpMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillUp),
-            HasNativeFillLeftMenuItem: HasNativeSubmenuItem(_fillCellsMenuItem.Menu, NativeMenuItemId.FillLeft),
-            HasNativeClearMenuItem: HasNativeMenuItem(_clearMenuItem, NativeMenuItemId.Clear),
-            HasNativeClearAllMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearAll),
-            HasNativeClearFormatsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearFormats),
-            HasNativeClearContentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearContents),
-            HasNativeClearCommentsMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearComments),
-            HasNativeClearHyperlinksMenuItem: HasNativeSubmenuItem(_clearMenuItem.Menu, NativeMenuItemId.ClearHyperlinks),
-            HasNativeBoldMenuItem: HasNativeMenuItem(_boldMenuItem, NativeMenuItemId.Bold),
-            HasNativeItalicMenuItem: HasNativeMenuItem(_italicMenuItem, NativeMenuItemId.Italic),
-            HasNativeUnderlineMenuItem: HasNativeMenuItem(_underlineMenuItem, NativeMenuItemId.Underline),
-            HasNativeDoubleUnderlineMenuItem: HasNativeMenuItem(_doubleUnderlineMenuItem, NativeMenuItemId.DoubleUnderline),
-            HasNativeStrikethroughMenuItem: HasNativeMenuItem(_strikethroughMenuItem, NativeMenuItemId.Strikethrough),
-            HasNativeIncreaseFontSizeMenuItem: HasNativeMenuItem(_increaseFontSizeMenuItem, NativeMenuItemId.IncreaseFontSize),
-            HasNativeDecreaseFontSizeMenuItem: HasNativeMenuItem(_decreaseFontSizeMenuItem, NativeMenuItemId.DecreaseFontSize),
-            HasNativeFillColorMenuItem: HasNativeMenuItem(_fillColorMenuItem, NativeMenuItemId.FillColor),
-            HasNativeClearFillMenuItem: HasNativeMenuItem(_clearFillMenuItem, NativeMenuItemId.ClearFill),
-            HasNativeFontColorMenuItem: HasNativeMenuItem(_fontColorMenuItem, NativeMenuItemId.FontColor),
-            NativeFillColorSwatchCount: nativeFillColorSwatchCount,
-            NativeFontColorSwatchCount: nativeFontColorSwatchCount,
-            HasNativeBordersMenuItem: HasNativeMenuItem(_bordersMenuItem, NativeMenuItemId.Borders),
-            NativeBordersPresetCount: nativeBordersPresetCount,
-            HasNativeCellStylesMenuItem: HasNativeMenuItem(_cellStylesMenuItem, NativeMenuItemId.CellStyles),
-            NativeCellStylesPresetCount: nativeCellStylesPresetCount,
-            HasNativeHorizontalTextMenuItem: HasNativeMenuItem(_horizontalTextMenuItem, NativeMenuItemId.HorizontalText),
-            HasNativeAngleCounterclockwiseMenuItem: HasNativeMenuItem(_angleCounterclockwiseMenuItem, NativeMenuItemId.AngleCounterclockwise),
-            HasNativeAngleClockwiseMenuItem: HasNativeMenuItem(_angleClockwiseMenuItem, NativeMenuItemId.AngleClockwise),
-            HasNativeVerticalTextMenuItem: HasNativeMenuItem(_verticalTextMenuItem, NativeMenuItemId.VerticalText),
-            HasNativeRotateTextUpMenuItem: HasNativeMenuItem(_rotateTextUpMenuItem, NativeMenuItemId.RotateTextUp),
-            HasNativeRotateTextDownMenuItem: HasNativeMenuItem(_rotateTextDownMenuItem, NativeMenuItemId.RotateTextDown),
-            HasNativeCurrencyFormatMenuItem: HasNativeMenuItem(_currencyFormatMenuItem, NativeMenuItemId.CurrencyFormat),
-            HasNativePercentFormatMenuItem: HasNativeMenuItem(_percentFormatMenuItem, NativeMenuItemId.PercentFormat),
-            HasNativeCommaStyleMenuItem: HasNativeMenuItem(_commaStyleMenuItem, NativeMenuItemId.CommaStyle),
-            HasNativeIncreaseDecimalMenuItem: HasNativeMenuItem(_increaseDecimalMenuItem, NativeMenuItemId.IncreaseDecimal),
-            HasNativeDecreaseDecimalMenuItem: HasNativeMenuItem(_decreaseDecimalMenuItem, NativeMenuItemId.DecreaseDecimal),
-            HasNativeAlignTopMenuItem: HasNativeMenuItem(_alignTopMenuItem, NativeMenuItemId.AlignTop),
-            HasNativeAlignMiddleMenuItem: HasNativeMenuItem(_alignMiddleMenuItem, NativeMenuItemId.AlignMiddle),
-            HasNativeAlignBottomMenuItem: HasNativeMenuItem(_alignBottomMenuItem, NativeMenuItemId.AlignBottom),
-            HasNativeWrapTextMenuItem: HasNativeMenuItem(_wrapTextMenuItem, NativeMenuItemId.WrapText),
-            HasNativeMergeAndCenterMenuItem: HasNativeMenuItem(_mergeAndCenterMenuItem, NativeMenuItemId.MergeAndCenter),
-            HasNativeUnmergeCellsMenuItem: HasNativeMenuItem(_unmergeCellsMenuItem, NativeMenuItemId.UnmergeCells),
-            HasNativeShowGridlinesMenuItem: HasNativeMenuItem(_showGridlinesMenuItem, NativeMenuItemId.ShowGridlines),
-            HasNativeShowHeadingsMenuItem: HasNativeMenuItem(_showHeadingsMenuItem, NativeMenuItemId.ShowHeadings),
-            HasNativeZoomInMenuItem: HasNativeMenuItem(_zoomInMenuItem, NativeMenuItemId.ZoomIn),
-            HasNativeZoomOutMenuItem: HasNativeMenuItem(_zoomOutMenuItem, NativeMenuItemId.ZoomOut),
-            HasNativeZoom100MenuItem: HasNativeMenuItem(_zoom100MenuItem, NativeMenuItemId.Zoom100),
-            HasNativeZoomToSelectionMenuItem: HasNativeMenuItem(_zoomToSelectionMenuItem, NativeMenuItemId.ZoomToSelection),
-            HasNativeFreezePanesMenuItem: HasNativeMenuItem(_freezePanesMenuItem, NativeMenuItemId.FreezePanes),
-            HasNativeFreezeTopRowMenuItem: HasNativeMenuItem(_freezeTopRowMenuItem, NativeMenuItemId.FreezeTopRow),
-            HasNativeFreezeFirstColumnMenuItem: HasNativeMenuItem(_freezeFirstColumnMenuItem, NativeMenuItemId.FreezeFirstColumn),
-            HasNativeUnfreezePanesMenuItem: HasNativeMenuItem(_unfreezePanesMenuItem, NativeMenuItemId.UnfreezePanes),
-            HasNativeDecreaseIndentMenuItem: HasNativeMenuItem(_decreaseIndentMenuItem, NativeMenuItemId.DecreaseIndent),
-            HasNativeIncreaseIndentMenuItem: HasNativeMenuItem(_increaseIndentMenuItem, NativeMenuItemId.IncreaseIndent),
-            HasNativeAlignLeftMenuItem: HasNativeMenuItem(_alignLeftMenuItem, NativeMenuItemId.AlignLeft),
-            HasNativeAlignCenterMenuItem: HasNativeMenuItem(_alignCenterMenuItem, NativeMenuItemId.AlignCenter),
-            HasNativeAlignRightMenuItem: HasNativeMenuItem(_alignRightMenuItem, NativeMenuItemId.AlignRight),
-            HasNativeShowFormulasMenuItem: HasNativeMenuItem(_showFormulasMenuItem, NativeMenuItemId.ShowFormulas),
-            HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, NativeMenuItemId.MinimizeWindow),
-            HasNativeZoomWindowMenuItem: HasNativeMenuItem(_zoomWindowMenuItem, NativeMenuItemId.ZoomWindow),
-            HasNativeBringAllToFrontMenuItem: HasNativeMenuItem(_bringAllToFrontMenuItem, NativeMenuItemId.BringAllToFront),
-            HasNativeHelpOnlineMenuItem: HasNativeMenuItem(_helpOnlineMenuItem, NativeMenuItemId.HelpOnline),
-            HasNativeSendFeedbackMenuItem: HasNativeMenuItem(_sendFeedbackMenuItem, NativeMenuItemId.SendFeedback),
-            HasNativeCheckForUpdatesMenuItem: HasNativeMenuItem(_checkForUpdatesMenuItem, NativeMenuItemId.CheckForUpdates),
-            HasNativeAboutMenuItem: HasNativeMenuItem(_aboutMenuItem, NativeMenuItemId.About),
-            HasNativeLegalNoticesMenuItem: HasNativeMenuItem(_legalNoticesMenuItem, NativeMenuItemId.LegalNotices),
-            HasNativeQuitMenuItem: HasNativeFileMenuItem(_quitMenuItem, NativeFileMenuItemId.Quit));
-    }
-
-    private bool HasStatusBarAccessibleValue() =>
-        !string.IsNullOrWhiteSpace(_statusText.Text) ||
-        !string.IsNullOrWhiteSpace(_selectionStatsText.Text);
-
-    private static bool HasToolbarMenuItem(MenuItem item, string expectedHeader) =>
-        string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal);
-
-    private bool HasNativeTopLevelMenu(NativeMenuTopLevelId id) =>
-        HasNativeTopLevelMenu(_nativeMenu, id);
-
-    private static bool HasNativeTopLevelMenu(NativeMenu? menu, NativeMenuTopLevelId id) =>
-        HasNativeTopLevelMenu(menu, GetNativeTopLevelHeader(id));
-
-    private static bool HasNativeTopLevelMenu(NativeMenu? menu, string expectedHeader) =>
-        FindNativeTopLevelSubmenu(menu, expectedHeader) is not null;
-
-    private static string GetNativeTopLevelMenuOrder(NativeMenu? menu) =>
-        string.Join("|", menu?.Items.OfType<NativeMenuItem>()
-            .Select(static item => item.Header?.ToString())
-            .Where(static header => !string.IsNullOrWhiteSpace(header)) ?? []);
-
-    private static NativeMenu? FindNativeTopLevelSubmenu(NativeMenu? menu, string expectedHeader) =>
-        menu?.Items.OfType<NativeMenuItem>().FirstOrDefault(item =>
-            string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
-            item.Menu is not null)?.Menu;
-
-    private static int CountNativeTopLevelMenuItems(NativeMenu? menu, NativeMenuTopLevelId id) =>
-        CountNativeTopLevelMenuItems(menu, GetNativeTopLevelHeader(id));
-
-    private static int CountNativeTopLevelMenuItems(NativeMenu? menu, string expectedHeader) =>
-        FindNativeTopLevelSubmenu(menu, expectedHeader)?.Items.OfType<NativeMenuItem>()
-            .Count(static item => !string.IsNullOrWhiteSpace(item.Header?.ToString())) ?? 0;
-
-    private static string GetNativeTopLevelHeader(NativeMenuTopLevelId id) =>
-        NativeMenuCatalog.TopLevelMenus.First(plan => plan.Id == id).Header;
-
-    private static bool HasNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
-        string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal) &&
-        (!requireGesture || item.Gesture is not null);
-
-    private static bool HasNativeMenuItem(NativeMenuItem item, NativeMenuItemId id)
-    {
-        var plan = NativeMenuCatalog.GetMenuItem(id);
-        return HasNativeMenuItem(item, GetNativeMenuItemHeader(plan), plan.RequiresGestureInSmoke);
-    }
-
-    private static bool HasNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id)
-    {
-        var plan = NativeMenuCatalog.GetFileMenuItem(id);
-        return HasNativeMenuItem(item, GetNativeFileMenuItemHeader(plan), plan.RequiresGestureInSmoke);
-    }
-
-    private static bool HasEnabledNativeMenuItem(NativeMenuItem item, string expectedHeader, bool requireGesture = true) =>
-        item.IsEnabled &&
-        HasNativeMenuItem(item, expectedHeader, requireGesture);
-
-    private static bool HasEnabledNativeFileMenuItem(NativeMenuItem item, NativeFileMenuItemId id) =>
-        item.IsEnabled &&
-        HasNativeFileMenuItem(item, id);
+    private void ObserveRendererCommand(RendererObservedCommand command, bool before, bool after) =>
+        _rendererCommandObserver?.Invoke(new RendererCommandObservation(command, before, after));
 
     private bool HasSheetTabButton(Func<Button, bool> predicate) =>
         _sheetTabsHost.Content is StackPanel panel &&
@@ -26583,27 +25755,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     .Any(item =>
                         item.ItemsSource is IEnumerable<MenuItem> submenuItems &&
                         submenuItems.Any(submenuItem => string.Equals(submenuItem.Header?.ToString(), expectedHeader, StringComparison.Ordinal))));
-
-    private static bool HasNativeSubmenuItem(NativeMenu? menu, string expectedHeader) =>
-        menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Any(item => string.Equals(item.Header?.ToString(), expectedHeader, StringComparison.Ordinal)) == true;
-
-    private static bool HasNativeSubmenuItem(NativeMenu? menu, NativeMenuItemId id) =>
-        HasNativeSubmenuItem(menu, GetNativeMenuItemHeader(id));
-
-    private static int CountNativeColorPaletteSwatches(NativeMenu? menu) =>
-        menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Count(item => item.Header?.ToString()?.StartsWith("#", StringComparison.Ordinal) == true) ?? 0;
-
-    private static int CountNativeOpenRecentItems(NativeMenu? menu) =>
-        menu?
-            .Items
-            .OfType<NativeMenuItem>()
-            .Count(item => item.IsEnabled && !string.Equals(item.Header?.ToString(), "(No Recent Workbooks)", StringComparison.Ordinal)) ?? 0;
 
     private void RefreshNativeOpenRecentMenu(bool isIdle)
     {
@@ -27108,7 +26259,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             e.Handled = true;
             var before = _session.SelectedRange;
             SelectCurrentRegionOrAll();
-            RecordLaunchSmokeLiveSelectAllCommandKey(before, _session.SelectedRange);
+            ObserveRendererCommand(
+                RendererObservedCommand.SelectAll,
+                before == _session.SelectedRange,
+                after: true);
         }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {

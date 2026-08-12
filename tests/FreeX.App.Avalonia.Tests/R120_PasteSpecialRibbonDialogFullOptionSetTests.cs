@@ -26,8 +26,8 @@ namespace FreeX.App.Avalonia.Tests;
 /// MainWindow-partial dialog fix of this exact "reachable via one surface but not another" shape).
 ///
 /// The remaining tests drive the REAL, unmodified production dialog end-to-end via the new
-/// <c>PasteSpecialDialogSmokeProbe</c> test seam (same convention as
-/// <c>ShowFormatCellsInputDialogAsync</c>'s <c>launchSmokeProbe</c>): <c>PromptPasteSpecialModeAsync</c>
+/// <c>PasteSpecialDialogInspection</c> test seam (same convention as
+/// <c>ShowFormatCellsInputDialogAsync</c>'s <c>inspectionCallback</c>): <c>PromptPasteSpecialModeAsync</c>
 /// itself never touches the OS clipboard (only the caller, <c>ShowPasteSpecialDialogAsync</c>, does,
 /// after the dialog closes -- see its <c>Cells</c>-family clipboard dispatch), so the dialog's real
 /// RadioButtons/CheckBoxes/Buttons can be exercised directly with headless input, proving the composed

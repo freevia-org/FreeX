@@ -25,7 +25,7 @@ internal static class Program
     internal static int RunToolHost(
         IReadOnlyList<string> startupArguments,
         string? diagnosticsDirectory,
-        Action<MainWindow.LaunchSmokeAccessAdapter, LocalAppDiagnostics?> externalStartupCoordinator)
+        Action<MainWindow.RendererValidationAccess, LocalAppDiagnostics?> externalStartupCoordinator)
     {
         ArgumentNullException.ThrowIfNull(startupArguments);
         ArgumentNullException.ThrowIfNull(externalStartupCoordinator);
@@ -33,7 +33,7 @@ internal static class Program
             startupArguments.ToArray(),
             diagnosticsDirectory,
             (window, diagnostics) =>
-                externalStartupCoordinator(window.CreateLaunchSmokeAccessAdapter(), diagnostics));
+                externalStartupCoordinator(window.CreateRendererValidationAccess(), diagnostics));
     }
 
     internal static int RunPivotRuntimeObservationHost(

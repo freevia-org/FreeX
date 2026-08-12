@@ -233,8 +233,8 @@ internal static class ParityCaptureCoordinator
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(ShellReadyWaitMilliseconds);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
-            if (snapshot.WindowShown && !snapshot.IsOpening && snapshot.ViewportRowCount > 0)
+            var shell = mainWindow.CreateRendererValidationAccess().ObserveShell();
+            if (shell.WindowShown && !shell.IsOpening && shell.ViewportRowCount > 0)
                 return;
             await Task.Delay(PollDelayMilliseconds);
         }
@@ -468,8 +468,8 @@ internal static class GridCaptureCoordinator
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(ShellReadyWaitMilliseconds);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            var snapshot = mainWindow.CreateLaunchSmokeSnapshot();
-            if (snapshot.WindowShown && !snapshot.IsOpening && snapshot.ViewportRowCount > 0)
+            var shell = mainWindow.CreateRendererValidationAccess().ObserveShell();
+            if (shell.WindowShown && !shell.IsOpening && shell.ViewportRowCount > 0)
                 return;
             await Task.Delay(PollDelayMilliseconds);
         }

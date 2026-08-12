@@ -63,14 +63,11 @@ public partial class MainWindow
             FormatPainter = Handled<WorkbookApplicationCommandInvocation>(invocation =>
                 FormatPainterButton_Click(NativeSource(invocation), RoutedArgs(invocation))),
             ToggleBold = Handled<WorkbookApplicationCommandInvocation, WorkbookApplicationCommandVariant>(
-                (invocation, variant) => ToggleSelectedRangeBold(
-                    trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.B)),
+                (_, _) => ToggleSelectedRangeBold()),
             ToggleItalic = Handled<WorkbookApplicationCommandInvocation, WorkbookApplicationCommandVariant>(
-                (invocation, variant) => ToggleSelectedRangeItalic(
-                    trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.I)),
+                (_, _) => ToggleSelectedRangeItalic()),
             ToggleUnderline = Handled<WorkbookApplicationCommandInvocation, WorkbookApplicationCommandVariant>(
-                (invocation, variant) => ToggleSelectedRangeUnderline(
-                    trackLaunchSmokeLiveCommandKey: KeyArgs(invocation)?.Key == Key.U)),
+                (_, _) => ToggleSelectedRangeUnderline()),
             ToggleStrikethrough = Handled(() => ToggleSelectedRangeStrikethrough()),
             OpenFillColor = Handled<WorkbookApplicationCommandInvocation>(invocation =>
                 _fillColorButton.Flyout?.ShowAt(invocation.NativeSource as Control ?? _fillColorButton)),

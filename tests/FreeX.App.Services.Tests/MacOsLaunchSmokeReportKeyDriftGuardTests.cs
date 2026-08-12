@@ -209,7 +209,8 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeCommandKeySnapshot(");
         smokeSource.Should().Contain("internal sealed record MacOsLaunchSmokeLiveCommandKeySnapshot(");
         smokeSource.Should().Contain("commandKeyEvidence = CaptureCommandKeyEvidence(access);");
-        smokeSource.Should().Contain("liveCommandKeyEvidence = access.BeginLiveCommandKeyProbe();");
+        smokeSource.Should().Contain("access.BeginCommandObservation(observation =>");
+        smokeSource.Should().Contain("liveCommandKeyEvidence = RecordCommandObservation(");
         smokeSource.Should().Contain("commandKeyEvidence.IsPassed");
         smokeSource.Should().Contain("liveCommandKeyEvidence.IsPassed");
         smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_newWorkbookMenuItem\", Key.N, KeyModifiers.Meta)");
@@ -223,9 +224,9 @@ public sealed class MacOsLaunchSmokeReportKeyDriftGuardTests
         smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_boldMenuItem\", Key.B, KeyModifiers.Meta)");
         smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_italicMenuItem\", Key.I, KeyModifiers.Meta)");
         smokeSource.Should().Contain("access.HasNativeMenuItemGesture(\"_underlineMenuItem\", Key.U, KeyModifiers.Meta)");
-        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
-        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
-        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: MainWindow.LaunchSmokeAccessAdapter.HasMethods(");
+        smokeSource.Should().Contain("HasFindDirectRouteSourceGuard: MainWindow.RendererValidationAccess.HasMethods(");
+        smokeSource.Should().Contain("HasPageUpDirectRouteSourceGuard: MainWindow.RendererValidationAccess.HasMethods(");
+        smokeSource.Should().Contain("HasPageDownDirectRouteSourceGuard: MainWindow.RendererValidationAccess.HasMethods(");
         smokeSource.Should().Contain("cmd_find_direct_route_source_guard={FormatBool(commandKeyEvidence.HasFindDirectRouteSourceGuard)}");
         smokeSource.Should().Contain("cmd_page_up_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageUpDirectRouteSourceGuard)}");
         smokeSource.Should().Contain("cmd_page_down_direct_route_source_guard={FormatBool(commandKeyEvidence.HasPageDownDirectRouteSourceGuard)}");

@@ -78,8 +78,8 @@ public sealed partial class MainWindow
         _selectionStatsText.Foreground = StatusBarForeground;
         _selectionStatsText.IsVisible = rendererPlan.VisibleReadoutTextVisible;
         // Keep the accessible NAME a stable label ("Selection statistics"); the dynamic readouts are the
-        // element's Text (value/content). Overwriting Name with the readouts broke the launch-smoke /
-        // accessibility contract (GetName must equal "Selection statistics") whenever a selection had stats.
+        // element's Text (value/content). Overwriting Name with the readouts broke the accessibility
+        // contract (GetName must equal "Selection statistics") whenever a selection had stats.
         AutomationProperties.SetName(
             _selectionStatsText,
             UiText.Get("Toolbar_SelectionStatisticsAutomationName"));
@@ -156,11 +156,8 @@ public sealed partial class MainWindow
     // NotifyStatusStatisticAutomationChanged, which re-raises AutomationElementIdentifiers.NameProperty
     // with the new value text). Avalonia renders all readouts into a single _selectionStatsText
     // TextBlock whose accessible NAME and HelpText must both stay their fixed, static values —
-    // "Selection statistics" / "Shows statistics for the current selection." — because the launch-smoke
-    // source-contract check (MainWindow.cs's BuildLaunchSmokeSnapshot / HasSelectionStatsAutomationName
-    // and HasSelectionStatsAutomationHelp, pinned by tests/FreeX.App.Host.Tests/
-    // MacOsAppReadinessPreflightTests.cs and tests/FreeX.App.Services.Tests/AvaloniaShellSourceTests.cs)
-    // asserts both hold their static values at any point after construction, not just at startup —
+    // "Selection statistics" / "Shows statistics for the current selection." because accessibility
+    // clients require both to remain stable after construction, not just at startup.
     // so, unlike WPF, neither Name nor HelpText is a safe carrier for the live value here.
     //
     // Mark the control as an AT-SPI/UIA live region (LiveSetting="Polite") so any backend that
