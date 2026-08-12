@@ -17,15 +17,14 @@ namespace FreeW.App.Avalonia.Ribbon;
 /// WPF shell's <c>FreeWRibbonCommands.cs</c>.
 ///
 /// <para>
-/// Every ribbon command id declared in <see cref="FreeWRibbon.BuildDefinition()"/> must have a
+/// Every ribbon command id declared by <see cref="FreeW.Ribbon.Definitions.FreeWRibbon"/> must have a
 /// corresponding <see cref="RibbonCommandRegistry.Register"/> call here. Commands are grouped by
 /// functional area (mirroring the ribbon tab/group structure) for readability.
 /// </para>
 ///
 /// <para>
-/// <b>Design rule:</b> This file owns all command wiring. <see cref="FreeWRibbon.BuildRegistry"/>
-/// delegates here. Shell-level callbacks (open/save/clipboard) are routed through the typed
-/// <see cref="RibbonHostCallbacks"/> record so that <c>MainWindow</c> stays thin.
+/// <b>Design rule:</b> This file owns all Avalonia command wiring. Shell-level callbacks are routed
+/// through the typed <see cref="FreeWRibbonHostExecutionPorts"/> record so that <c>MainWindow</c> stays thin.
 /// </para>
 ///
 /// <para>
@@ -36,7 +35,7 @@ namespace FreeW.App.Avalonia.Ribbon;
 ///   <item><c>freew.shrink-font</c> — bump font size down one ladder step</item>
 ///   <item><c>freew.clear-formatting</c> — reset run formatting to default</item>
 ///   <item><c>freew.font-color</c> — dropdown opener for the colour palette (no-op on click; colour is set by per-colour sub-commands)</item>
-///   <item><c>freew.font-color.*</c> — per-colour sub-commands (automatic, black, red, …) registered from <see cref="FreeWRibbon.FontColors"/></item>
+///   <item><c>freew.font-color.*</c> — per-colour sub-commands registered from <see cref="FreeWRibbonDefinitionData.FontColors"/></item>
 ///   <item><c>freew.change-case</c> — cycle text case lower → Title → UPPER</item>
 ///   <item><c>freew.select-all</c> — select the whole document</item>
 ///   <item><c>freew.show-hide-para</c> — toggle paragraph mark display</item>
@@ -59,7 +58,7 @@ internal static class FreeWAvaloniaRibbonCommands
     /// <summary>
     /// Build and return the complete command registry for the Avalonia ribbon.
     /// </summary>
-    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks) =>
+    public static RibbonCommandRegistry Build(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks) =>
         Build(editor, callbacks, out _);
 
     /// <summary>
@@ -67,7 +66,7 @@ internal static class FreeWAvaloniaRibbonCommands
     /// (AV-MAIL), so the shell can drive its dialog-bound commands (Select Recipients / Insert Merge Field)
     /// with the async file-picker / prompt and keep the same session the ribbon commands use.
     /// </summary>
-    public static RibbonCommandRegistry Build(DocumentView editor, RibbonHostCallbacks callbacks, out MailMergeEngine mailMerge)
+    public static RibbonCommandRegistry Build(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks, out MailMergeEngine mailMerge)
     {
         ArgumentNullException.ThrowIfNull(editor);
         ArgumentNullException.ThrowIfNull(callbacks);
@@ -414,13 +413,13 @@ internal static class FreeWAvaloniaRibbonCommands
                 ReadMode: new ViewRibbonReadModeBindings(
                     Toggle: callbacks.ToggleReadMode is { } toggle && callbacks.IsReadModeActive is { } isActive
                         ? new ViewRibbonToggleBinding(toggle, isActive)
-                        : new ViewRibbonToggleBinding(FallbackCommand: FreeWRibbonExecutionProfile.UnavailableCommand),
+                        : new ViewRibbonToggleBinding(AvailabilityWhenUnbound: ViewRibbonBindingAvailability.Disabled),
                     ColumnWidth: new ViewRibbonChoiceBinding(
                         callbacks.ApplyReadModeColumnWidth,
-                        FreeWRibbonExecutionProfile.UnavailableCommand),
+                        ViewRibbonBindingAvailability.Disabled),
                     PageColor: new ViewRibbonChoiceBinding(
                         callbacks.ApplyReadModePageColor,
-                        FreeWRibbonExecutionProfile.UnavailableCommand)),
+                        ViewRibbonBindingAvailability.Disabled)),
                 Modes: new ViewRibbonModeBindings(
                     PrintLayout: new ViewRibbonToggleBinding(
                         callbacks.SetPrintLayout,
@@ -597,13 +596,13 @@ internal static class FreeWAvaloniaRibbonCommands
         editor.SetSpaceAfter(paragraph.SpaceAfterPt > 0 ? 0 : ParagraphSpacingTogglePoints);
     }
 
-    private static void ToggleNormalNarrowMargins(DocumentView editor, RibbonHostCallbacks callbacks)
+    private static void ToggleNormalNarrowMargins(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
     {
         var page = editor.Document.Page;
         callbacks.ApplyMarginPreset(PageLayoutCommandPlanner.HasNormalMargins(page) ? "narrow" : "normal");
     }
 
-    private static void ToggleLetterA4Paper(DocumentView editor, RibbonHostCallbacks callbacks)
+    private static void ToggleLetterA4Paper(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
     {
         var page = editor.Document.Page;
         callbacks.ApplyPaperSize(PageLayoutCommandPlanner.HasLetterPaperSize(page) ? "a4" : "letter");
@@ -644,7 +643,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private static IRibbonCommand HeaderFooterTextCommand(
         DocumentView editor,
-        RibbonHostCallbacks callbacks,
+        FreeWRibbonHostExecutionPorts callbacks,
         bool footer) =>
         callbacks.AskHeaderFooterText is { } ask
             ? new ActionRibbonCommand(() => _ = ApplyHeaderFooterTextAsync(editor, ask, footer))
@@ -701,7 +700,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private static void ExecutePageNumberFormat(
         DocumentView editor,
-        RibbonHostCallbacks callbacks,
+        FreeWRibbonHostExecutionPorts callbacks,
         RibbonCommandContext context)
     {
         if (PageNumberFormatDialogPlanner.TryBuildResultFromCommandValue(context.SelectedValue, out var result))
@@ -853,7 +852,7 @@ internal static class FreeWAvaloniaRibbonCommands
             new(Value: DocumentStyleSet.FindMatching(editor.Document)?.Name);
     }
 
-    private sealed class ProofingLanguageCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand
+    private sealed class ProofingLanguageCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -870,7 +869,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
     /// <summary>
     /// Registers the per-colour sub-commands for the Font Color palette dropdown.
-    /// Each command id matches an entry in <see cref="FreeWRibbon.FontColors"/> and calls
+    /// Each command id matches an entry in <see cref="FreeWRibbonDefinitionData.FontColors"/> and calls
     /// <see cref="DocumentView.SetFontColor"/> with the appropriate RRGGBB hex string
     /// (or <c>null</c> for the "Automatic" entry, which restores the default run colour).
     /// </summary>
@@ -974,11 +973,11 @@ internal static class FreeWAvaloniaRibbonCommands
     /// Drop Cap, Quick Parts (document-property fields + snippet), Equation, and Text from File. Each
     /// resolves to a model-backed, undoable <see cref="DocumentView"/> insert method; the dialog-driven
     /// commands (Hyperlink / Bookmark / Quick-Part snippet / Text-from-File) route through the optional
-    /// <see cref="RibbonHostCallbacks"/> launchers and safely no-op when the shell did not supply one (so
+    /// <see cref="FreeWRibbonHostExecutionPorts"/> launchers and safely no-op when the shell did not supply one (so
     /// the registry stays complete and existing test call sites keep compiling).
     /// </summary>
     private static void RegisterInsertDepth2Commands(
-        IRibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
+        IRibbonCommandRegistry r, DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
     {
         // ── Links ────────────────────────────────────────────────────────────
         // Hyperlink / Bookmark open small dialogs (shell callbacks) that call the model-backed editor methods.
@@ -1109,7 +1108,7 @@ internal static class FreeWAvaloniaRibbonCommands
         Add(r, editor, FreeWRibbonCommandAction.CellAlignBottomRight,   TableCellVerticalAlignment.Bottom, TextAlignment.Right);
     }
 
-    private sealed class ShowMarkupBalloonsCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonStatefulCommand
+    private sealed class ShowMarkupBalloonsCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
@@ -1141,7 +1140,7 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void ConfigureReferenceCommandFamily(
         FreeWRibbonEditorCommandFamilyBuilder family,
         DocumentView editor,
-        RibbonHostCallbacks callbacks)
+        FreeWRibbonHostExecutionPorts callbacks)
     {
         // Footnotes & Endnotes — insert an empty note + reference marker at the caret.
         var footnote = new ActionRibbonCommand(
@@ -1234,7 +1233,7 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void RegisterNativeFloatingCommands(
         IRibbonCommandRegistry r,
         DocumentView editor,
-        RibbonHostCallbacks callbacks)
+        FreeWRibbonHostExecutionPorts callbacks)
     {
         RegisterFloatingPositionCommands(r, editor, "image", "Image", callbacks.OpenImagePositionDialog);
         r.Bind(FreeWRibbonCommandAction.ImageAdjustDialog, new SelectedImageDialogCommand(
@@ -1283,7 +1282,7 @@ internal static class FreeWAvaloniaRibbonCommands
     private static void RegisterImageAdjustmentCommands(
         IRibbonCommandRegistry r,
         DocumentView editor,
-        RibbonHostCallbacks callbacks)
+        FreeWRibbonHostExecutionPorts callbacks)
     {
         // These IDs are the WPF authority's Picture Format > Adjust routes. Keep the
         // value-preserving mutations in DocumentView so both hosts use the shared model commands.
@@ -1724,7 +1723,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private static FreeWRibbonImageExecutionPorts CreateImageExecutionPorts(
         DocumentView editor,
-        RibbonHostCallbacks callbacks) =>
+        FreeWRibbonHostExecutionPorts callbacks) =>
         new(
             PrepareExecution: () => editor.Focus(),
             CompleteExecution: () => editor.Focus(),
@@ -1739,7 +1738,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private static FreeWRibbonTableExecutionPorts CreateTableExecutionPorts(
         DocumentView editor,
-        RibbonHostCallbacks callbacks) =>
+        FreeWRibbonHostExecutionPorts callbacks) =>
         new(
             PrepareExecution: () => editor.Focus(),
             CompleteExecution: () => editor.Focus(),
@@ -1757,7 +1756,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private static FreeWRibbonChartSmartArtExecutionPorts CreateChartSmartArtExecutionPorts(
         DocumentView editor,
-        RibbonHostCallbacks callbacks) =>
+        FreeWRibbonHostExecutionPorts callbacks) =>
         new(
             PrepareExecution: () => editor.Focus(),
             CompleteExecution: () => editor.Focus(),
@@ -1803,8 +1802,8 @@ internal static class FreeWAvaloniaRibbonCommands
     ///
     /// <para>
     /// The two dialog-driven entry points (recipient CSV + field-name picker) are supplied as <b>optional</b>
-    /// host callbacks (<see cref="RibbonHostCallbacks.AskRecipientCsv"/> /
-    /// <see cref="RibbonHostCallbacks.AskMergeFieldName"/>); when the shell didn't supply them (tests,
+    /// host callbacks (<see cref="FreeWRibbonHostExecutionPorts.AskRecipientCsv"/> /
+    /// <see cref="FreeWRibbonHostExecutionPorts.AskMergeFieldName"/>); when the shell didn't supply them (tests,
     /// parallel waves) those two commands degrade to safe no-ops while the rest of the tab stays usable
     /// (a recipient list can also be loaded directly via <see cref="MailMergeEngine.LoadRecipientsCsv"/>).
     /// </para>
@@ -1874,11 +1873,11 @@ internal static class FreeWAvaloniaRibbonCommands
     /// top-level dropdown ids either consume the selected combo value or act as menu openers; the
     /// per-item ids resolve to a model-backed, undoable
     /// <see cref="DocumentView"/> Design method. Page Borders + Custom Watermark route through the optional
-    /// <see cref="RibbonHostCallbacks"/> dialog launchers and safely no-op when the shell did not supply one
+    /// <see cref="FreeWRibbonHostExecutionPorts"/> dialog launchers and safely no-op when the shell did not supply one
     /// (so the registry-completeness guard passes and parallel waves / tests keep compiling).
     /// </summary>
     private static void RegisterDesignCommands(
-        IRibbonCommandRegistry r, DocumentView editor, RibbonHostCallbacks callbacks)
+        IRibbonCommandRegistry r, DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
     {
         // ── Themes ───────────────────────────────────────────────────────────
         r.Bind(FreeWRibbonCommandAction.Theme, new ThemeCommand(editor));
@@ -1911,7 +1910,7 @@ internal static class FreeWAvaloniaRibbonCommands
         foreach (var spacingSet in DocumentParagraphSpacingSet.Catalog)
         {
             var s = spacingSet;
-            r.Register($"freew.para-spacing.{FreeWRibbon.ParaSpacingId(s.Name)}",
+            r.Register($"freew.para-spacing.{FreeWRibbonDefinitionData.ParaSpacingId(s.Name)}",
                 new ActionRibbonCommand(() => editor.ApplyParagraphSpacingSet(s)));
         }
         r.Bind(FreeWRibbonCommandAction.CustomParagraphSpacing,
@@ -1948,7 +1947,7 @@ internal static class FreeWAvaloniaRibbonCommands
 
     /// <summary>
     /// AV-DESIGN: Registers the per-swatch sub-commands for the Page Color palette. Each id matches an entry
-    /// in <see cref="FreeWRibbon.PageColors"/> and calls <see cref="DocumentView.SetPageColor"/> with the
+    /// in <see cref="FreeWRibbonDefinitionData.PageColors"/> and calls <see cref="DocumentView.SetPageColor"/> with the
     /// swatch hex (or null for "No Color", which clears the background back to white).
     /// </summary>
     private static void RegisterPageColorPalette(IRibbonCommandRegistry r, DocumentView editor)
@@ -1968,7 +1967,7 @@ internal static class FreeWAvaloniaRibbonCommands
         }
     }
 
-    private static void ExecuteSortCommand(DocumentView editor, RibbonHostCallbacks callbacks)
+    private static void ExecuteSortCommand(DocumentView editor, FreeWRibbonHostExecutionPorts callbacks)
     {
         if (callbacks.OpenSortDialog is not null)
         {

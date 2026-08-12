@@ -267,7 +267,7 @@ public sealed class HomeDialogDepthTests
     [Fact]
     public void FreeWRibbon_ExposesNewHomeCommandIds()
     {
-        var def = FreeWRibbon.Build();
+        var def = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var homeTab = def.FindTab("home");
         homeTab.Should().NotBeNull();
 

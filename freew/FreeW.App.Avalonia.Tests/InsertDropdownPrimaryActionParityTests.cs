@@ -16,7 +16,7 @@ public sealed class InsertDropdownPrimaryActionParityTests
         document.Blocks.Add(new Paragraph("Before table"));
         var view = new DocumentView();
         view.LoadDocument(document);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.table"), out var command)
             .Should().BeTrue("the shared WPF command id must be registered");
@@ -34,7 +34,7 @@ public sealed class InsertDropdownPrimaryActionParityTests
         document.Properties.Title = "Primary action title";
         var view = new DocumentView();
         view.LoadDocument(document);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.cover-page"), out var command)
             .Should().BeTrue("the shared WPF command id must be registered");
@@ -49,7 +49,7 @@ public sealed class InsertDropdownPrimaryActionParityTests
         var document = TextDocument.CreateEmpty();
         var view = new DocumentView();
         view.LoadDocument(document);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.equation"), out var command)
             .Should().BeTrue("the shared WPF command id must be registered");
@@ -70,7 +70,7 @@ public sealed class InsertDropdownPrimaryActionParityTests
         var document = TextDocument.CreateEmpty();
         var view = new DocumentView();
         view.LoadDocument(document);
-        var registry = FreeWRibbon.BuildRegistry(
+        var registry = FreeWAvaloniaRibbonCommands.Build(
             view,
             NoopCallbacks(() => view.InsertCaption(CaptionLabel.Figure, "Primary caption")));
 
@@ -90,7 +90,7 @@ public sealed class InsertDropdownPrimaryActionParityTests
         var before = document.Blocks.ToArray();
         var view = new DocumentView();
         view.LoadDocument(document);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.caption"), out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
@@ -98,7 +98,7 @@ public sealed class InsertDropdownPrimaryActionParityTests
         view.Document.Blocks.Should().Equal(before);
     }
 
-    private static RibbonHostCallbacks NoopCallbacks(Action? openCaptionDialog = null) =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks(Action? openCaptionDialog = null) =>
         new(
             Open: () => { },
             Save: () => { },

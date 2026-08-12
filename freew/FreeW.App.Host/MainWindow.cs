@@ -26,6 +26,7 @@ using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.Panes;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Ribbon.Definitions;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
 
@@ -510,7 +511,10 @@ public sealed class MainWindow : Window
         _titleBinder = new SisterWpfWindowTitleBinder(this, titleBar.TitleText);
         AddQuickAccessButtons(titleBar.QatHost);
 
-        var (ribbon, ribbonTabs) = BuildRibbon(FreeWRibbon.Build(), commands, stateStore);
+        var (ribbon, ribbonTabs) = BuildRibbon(
+            FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeWRibbonCapabilities.Wpf),
+            commands,
+            stateStore);
         _ribbon = ribbon;
         _ribbonTabs = ribbonTabs;
         chromeStack.Children.Add(ribbon);

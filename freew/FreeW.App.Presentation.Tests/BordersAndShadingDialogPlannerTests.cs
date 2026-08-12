@@ -125,6 +125,54 @@ public sealed class BordersAndShadingDialogPlannerTests
         error.Should().Be(BordersAndShadingDialogPlanner.WidthValidationMessage);
     }
 
+    [Fact]
+    public void PageBorders_contract_projects_initial_state_and_submits_without_paragraph_placeholders()
+    {
+        var current = new PageBorder("#7030A0", 2.5)
+        {
+            LineStyle = BorderLineStyle.Double,
+            ArtId = 84,
+        };
+
+        var state = BordersAndShadingDialogPlanner.BuildPageBordersInitialState(
+            current,
+            CultureInfo.InvariantCulture);
+
+        state.SettingIndex.Should().Be(1);
+        state.LineStyleIndex.Should().Be(3);
+        state.ColorIndex.Should().Be(BordersAndShadingDialogPlanner.PaletteIndex("#7030A0"));
+        state.WidthText.Should().Be("2.5");
+        state.ArtIndex.Should().Be(BordersAndShadingDialogPlanner.ArtIndexFor(84));
+
+        var acceptance = BordersAndShadingDialogPlanner.SubmitPageBorders(
+            new PageBordersDialogInput(
+                state.SettingIndex,
+                state.LineStyleIndex,
+                state.ColorIndex,
+                state.WidthText,
+                state.ArtIndex),
+            CultureInfo.InvariantCulture);
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.PageBorder.Should().BeEquivalentTo(current);
+    }
+
+    [Fact]
+    public void PageBorders_contract_distinguishes_none_from_invalid_width()
+    {
+        var none = BordersAndShadingDialogPlanner.SubmitPageBorders(
+            new PageBordersDialogInput(0, 0, 0, "1", 0),
+            CultureInfo.InvariantCulture);
+        none.IsAccepted.Should().BeTrue();
+        none.PageBorder.Should().BeNull();
+
+        var invalid = BordersAndShadingDialogPlanner.SubmitPageBorders(
+            new PageBordersDialogInput(1, 0, 0, "wide", 0),
+            CultureInfo.InvariantCulture);
+        invalid.IsAccepted.Should().BeFalse();
+        invalid.ValidationMessage.Should().Be(BordersAndShadingDialogPlanner.WidthValidationMessage);
+    }
+
     private static BordersAndShadingDialogInput ValidInput() => new(
         ParagraphSettingIndex: 1,
         ParagraphLineStyleIndex: 0,

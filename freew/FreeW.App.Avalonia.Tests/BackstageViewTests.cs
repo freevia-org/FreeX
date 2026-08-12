@@ -1104,10 +1104,13 @@ public class BackstageViewTests : IDisposable
             "FreeW.App.Avalonia",
             "SafetyDialogs.cs"));
         safetySource.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        safetySource.Should().Contain("RestrictEditingDialogPlanner.BuildPlan(current)");
+        safetySource.Should().Contain("new RestrictEditingDialogSession(current)");
+        safetySource.Should().Contain("_session.InitialPlan");
         safetySource.Should().Contain("RestrictEditingDialogPlanner.ModeOptions");
-        safetySource.Should().Contain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
-        safetySource.Should().Contain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
+        safetySource.Should().Contain("_session.Start(");
+        safetySource.Should().Contain("_session.StopAsync(");
+        safetySource.Should().NotContain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
+        safetySource.Should().NotContain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
         safetySource.Should().Contain("RestrictEditingDialogPlanner.StartButtonText");
         safetySource.Should().Contain("RestrictEditingDialogPlanner.StopButtonText");
     }

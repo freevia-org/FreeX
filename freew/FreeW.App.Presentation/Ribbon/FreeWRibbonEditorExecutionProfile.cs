@@ -49,6 +49,35 @@ public sealed class FreeWRibbonEditorCommandFamilyBuilder
             _bindings.AdapterBindings.ToDictionary(static pair => pair.Key, static pair => pair.Value));
 }
 
+public sealed record FreeWRibbonFloatingFeedback(string Title, string Message);
+
+public static class FreeWRibbonFloatingFeedbackCatalog
+{
+    public static readonly FreeWRibbonFloatingFeedback EditShape = new(
+        "Edit Shape",
+        "Choose 'Convert to Freeform' or 'Edit Points' from the menu.");
+
+    public static readonly FreeWRibbonFloatingFeedback TextDirection = new(
+        "Text Direction",
+        "Choose a text direction from the dropdown.");
+
+    public static readonly FreeWRibbonFloatingFeedback ShapeEffects = new(
+        "Shape Effects",
+        "Choose an effect from the dropdown.");
+
+    public static readonly FreeWRibbonFloatingFeedback ShapeStyles = new(
+        "Shape Styles",
+        "Choose a shape style from the gallery.");
+
+    public static readonly FreeWRibbonFloatingFeedback GroupSelectionRequired = new(
+        "Group",
+        "Select two or more floating objects first (Shift-click or Ctrl-click).");
+
+    public static readonly FreeWRibbonFloatingFeedback UngroupSelectionRequired = new(
+        "Ungroup",
+        "Select a group first.");
+}
+
 public sealed record FreeWRibbonFloatingExecutionPorts(
     Action PrepareExecution,
     Func<ObjectFormatTarget, bool> HasSelection,
@@ -73,7 +102,7 @@ public sealed record FreeWRibbonFloatingExecutionPorts(
     Action Group,
     Func<bool> CanUngroup,
     Action Ungroup,
-    IReadOnlyDictionary<FreeWRibbonCommandAction, IRibbonCommand>? NativeCanonicalCommands = null);
+    Action<FreeWRibbonFloatingFeedback>? ShowFeedback = null);
 
 public sealed record FreeWRibbonChartSmartArtExecutionPorts(
     Action PrepareExecution,
@@ -333,8 +362,8 @@ public static class FreeWRibbonEditorExecutionProfile
         BindArrangeCommands(bindings, ports, ObjectFormatTarget.Shape);
 
         bindings.Bind(FreeWRibbonCommandAction.ShapeEditShape, Stateful(
-            static () => { },
-            () => ports.SelectedShape() is not null,
+            () => ports.ShowFeedback?.Invoke(FreeWRibbonFloatingFeedbackCatalog.EditShape),
+            () => ports.ShowFeedback is not null || ports.SelectedShape() is not null,
             ports.PrepareExecution));
         bindings.Bind(FreeWRibbonCommandAction.ShapeConvertFreeform, Stateful(
             ports.ConvertShapeToFreeform,
@@ -359,8 +388,8 @@ public static class FreeWRibbonEditorExecutionProfile
             ports.PrepareExecution));
 
         bindings.Bind(FreeWRibbonCommandAction.ShapeTextDirection, Stateful(
-            static () => { },
-            () => ports.SelectedShape() is not null,
+            () => ports.ShowFeedback?.Invoke(FreeWRibbonFloatingFeedbackCatalog.TextDirection),
+            () => ports.ShowFeedback is not null || ports.SelectedShape() is not null,
             ports.PrepareExecution));
         BindShapeTextDirection(bindings, ports, FreeWRibbonCommandAction.ShapeTextHorizontal, ShapeTextDirection.Horizontal);
         BindShapeTextDirection(bindings, ports, FreeWRibbonCommandAction.ShapeTextRotate90, ShapeTextDirection.Rotate90);
@@ -372,12 +401,18 @@ public static class FreeWRibbonEditorExecutionProfile
         bindings.Bind(FreeWRibbonCommandAction.ShapeStylesGallery, new FreeWRibbonStatefulPortCommand(
             context =>
             {
+                if (ports.ShowFeedback is not null)
+                {
+                    ports.ShowFeedback(FreeWRibbonFloatingFeedbackCatalog.ShapeStyles);
+                    return;
+                }
+
                 var preset = ShapeStylePreset.Catalog.FirstOrDefault(item =>
                     string.Equals(item.Id, context.SelectedValue, StringComparison.OrdinalIgnoreCase));
                 if (preset is not null)
                     ports.ApplyShapeStyle(preset);
             },
-            () => new RibbonCommandState(IsEnabled: CanFormatShape(ports)),
+            () => new RibbonCommandState(IsEnabled: ports.ShowFeedback is not null || CanFormatShape(ports)),
             ports.PrepareExecution));
         foreach (var preset in ShapeStylePreset.Catalog)
         {
@@ -389,19 +424,21 @@ public static class FreeWRibbonEditorExecutionProfile
         }
 
         bindings.Bind(FreeWRibbonCommandAction.ObjectGroup, Stateful(
-            ports.Group,
-            ports.CanGroup,
+            () => ExecuteOrShowFeedback(
+                ports.CanGroup,
+                ports.Group,
+                ports.ShowFeedback,
+                FreeWRibbonFloatingFeedbackCatalog.GroupSelectionRequired),
+            () => ports.ShowFeedback is not null || ports.CanGroup(),
             ports.PrepareExecution));
         bindings.Bind(FreeWRibbonCommandAction.ObjectUngroup, Stateful(
-            ports.Ungroup,
-            ports.CanUngroup,
+            () => ExecuteOrShowFeedback(
+                ports.CanUngroup,
+                ports.Ungroup,
+                ports.ShowFeedback,
+                FreeWRibbonFloatingFeedbackCatalog.UngroupSelectionRequired),
+            () => ports.ShowFeedback is not null || ports.CanUngroup(),
             ports.PrepareExecution));
-
-        if (ports.NativeCanonicalCommands is not null)
-        {
-            foreach (var (action, command) in ports.NativeCanonicalCommands)
-                bindings.Bind(action, command);
-        }
 
     }
 
@@ -762,7 +799,16 @@ public static class FreeWRibbonEditorExecutionProfile
         FreeWRibbonCommandBindingPorts bindings,
         FreeWRibbonFloatingExecutionPorts ports)
     {
-        BindShapeEffect(bindings, ports, FreeWRibbonCommandAction.ShapeEffects, null);
+        bindings.Bind(FreeWRibbonCommandAction.ShapeEffects, Stateful(
+            () =>
+            {
+                if (ports.ShowFeedback is not null)
+                    ports.ShowFeedback(FreeWRibbonFloatingFeedbackCatalog.ShapeEffects);
+                else
+                    ports.SetShapeEffects(null);
+            },
+            () => ports.ShowFeedback is not null || ports.SelectedShape() is not null,
+            ports.PrepareExecution));
         BindShapeEffect(bindings, ports, FreeWRibbonCommandAction.ShapeEffectsNone, null);
         BindShapeEffect(bindings, ports, FreeWRibbonCommandAction.ShapeEffectShadow, new ShapeEffectLst { HasShadow = true });
         BindShapeEffect(bindings, ports, FreeWRibbonCommandAction.ShapeEffectGlow, new ShapeEffectLst { HasGlow = true });
@@ -900,6 +946,18 @@ public static class FreeWRibbonEditorExecutionProfile
             _ => execute(),
             () => new RibbonCommandState(IsEnabled: isEnabled()),
             prepareExecution);
+
+    private static void ExecuteOrShowFeedback(
+        Func<bool> canExecute,
+        Action execute,
+        Action<FreeWRibbonFloatingFeedback>? showFeedback,
+        FreeWRibbonFloatingFeedback feedback)
+    {
+        if (canExecute())
+            execute();
+        else
+            showFeedback?.Invoke(feedback);
+    }
 
     private static IRibbonStatefulCommand AsyncStateful(
         Func<RibbonCommandContext, ValueTask> executeAsync,

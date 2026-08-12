@@ -364,7 +364,7 @@ public sealed class DocumentViewReviewTests
             doc.Blocks.Add(new Paragraph("Hello world"));
             var view = Build(doc);
             view.SetSelectionRangePublic(0, 6, 0, 11);
-            var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
             registry.TryGet(new RibbonCommandId("freew.track-changes"), out var command).Should().BeTrue();
             var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
 
@@ -412,7 +412,7 @@ public sealed class DocumentViewReviewTests
             doc.Blocks.Clear();
             doc.Blocks.Add(new Paragraph("Hello world"));
             var view = Build(doc);
-            var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
             registry.TryGet(new RibbonCommandId("freew.track-changes"), out var command).Should().BeTrue();
             var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
 
@@ -1327,7 +1327,7 @@ public sealed class DocumentViewReviewTests
     [Fact]
     public void Review_command_ids_are_declared_in_the_ribbon_definition()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var ids = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
@@ -1459,7 +1459,7 @@ public sealed class DocumentViewReviewTests
         calls.Should().Equal("reply", "show:1");
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },

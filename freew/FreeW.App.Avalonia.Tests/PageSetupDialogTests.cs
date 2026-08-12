@@ -28,7 +28,7 @@ public sealed class PageSetupDialogTests
         return doc;
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },
@@ -86,7 +86,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Page_setup_dialog_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.page-setup"), out _)
             .Should().BeTrue("freew.page-setup must be the shared registered command");
         registry.TryGet(new RibbonCommandId("freew.page-setup-dialog"), out _)
@@ -100,7 +100,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Page_orientation_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.orientation"), out _)
             .Should().BeTrue("freew.orientation must be the shared registered command");
         registry.TryGet(new RibbonCommandId("freew.page-orientation"), out _)
@@ -110,7 +110,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Page_margin_normal_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.page-margins-normal"), out _)
             .Should().BeTrue("freew.page-margins-normal must be registered");
     }
@@ -118,7 +118,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Page_margin_narrow_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.page-margins-narrow"), out _)
             .Should().BeTrue("freew.page-margins-narrow must be registered");
     }
@@ -126,7 +126,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Page_margin_wide_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.page-margins-wide"), out _)
             .Should().BeTrue("freew.page-margins-wide must be registered");
     }
@@ -134,7 +134,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Page_size_letter_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.page-size-letter"), out _)
             .Should().BeTrue("freew.page-size-letter must be registered");
     }
@@ -142,7 +142,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Page_size_a4_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.page-size-a4"), out _)
             .Should().BeTrue("freew.page-size-a4 must be registered");
     }
@@ -150,7 +150,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Shared_layout_page_setup_registry_commands_are_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         foreach (var commandId in new[]
         {
@@ -196,7 +196,7 @@ public sealed class PageSetupDialogTests
 
         var editor = new DocumentView();
         editor.LoadDocument(document);
-        var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
 
         Stateful(registry, "freew.indent-left").GetState().Value.Should().Be("18");
         Stateful(registry, "freew.indent-right").GetState().Value.Should().Be("24");
@@ -238,7 +238,7 @@ public sealed class PageSetupDialogTests
             ApplyPaperSize = size => paperSizes.Add(size),
         };
         var view = new DocumentView();
-        var registry = FreeWRibbon.BuildRegistry(view, callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
         Execute(registry, "freew.page-setup");
         Execute(registry, "freew.page-setup-dialog");
@@ -263,7 +263,7 @@ public sealed class PageSetupDialogTests
         var doc = MakeDoc();
         var view = new DocumentView();
         view.LoadDocument(doc);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.columns-three");
         view.Document.Page.ColumnCount.Should().Be(3);
@@ -288,7 +288,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Ribbon_definition_contains_layout_tab()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         definition.Tabs.Should().Contain(t => t.Id == "layout",
             "the ribbon must declare a Layout tab");
     }
@@ -296,7 +296,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Layout_tab_contains_page_setup_group()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var layoutTab = definition.Tabs.FirstOrDefault(t => t.Id == "layout");
         layoutTab.Should().NotBeNull();
         layoutTab!.Groups.Should().Contain(g => g.Id == "page-setup",
@@ -306,7 +306,7 @@ public sealed class PageSetupDialogTests
     [Fact]
     public void Layout_tab_page_setup_group_uses_shared_command_ids()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var layoutTab = definition.Tabs.First(t => t.Id == "layout");
         var group = layoutTab.Groups.First(g => g.Id == "page-setup");
         var ids = CommandIds(group).ToList();

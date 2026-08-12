@@ -426,7 +426,7 @@ public sealed class PageViewModesTests
     [Fact]
     public void ViewZoom_ExposesMultiplePagesAndSideToSide()
     {
-        var zoom = FreeWRibbon.Build().FindTab("view")!.FindGroup("zoom");
+        var zoom = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("view")!.FindGroup("zoom");
 
         zoom.Should().NotBeNull();
         zoom!.Controls.Select(c => c.CommandId.Value)
@@ -440,7 +440,7 @@ public sealed class PageViewModesTests
     [Fact]
     public void ViewWindow_ExposesSplitWindow()
     {
-        var view = FreeWRibbon.Build().FindTab("view");
+        var view = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("view");
         var window = view!.FindGroup("window");
 
         window.Should().NotBeNull("View > Window group must exist");
@@ -452,7 +452,7 @@ public sealed class PageViewModesTests
     [Fact]
     public void ViewZoomLabels_MatchWordLabels()
     {
-        var zoom = FreeWRibbon.Build().FindTab("view")!.FindGroup("zoom");
+        var zoom = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("view")!.FindGroup("zoom");
 
         zoom.Should().NotBeNull();
         zoom!.Controls.Select(c => c.Label)
@@ -465,7 +465,7 @@ public sealed class PageViewModesTests
     [Fact]
     public void ViewWindowLabels_ContainSplit()
     {
-        var window = FreeWRibbon.Build().FindTab("view")!.FindGroup("window");
+        var window = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("view")!.FindGroup("window");
 
         window.Should().NotBeNull();
         window!.Controls.Select(c => c.Label)

@@ -21,7 +21,7 @@ public sealed class MailingsTabTests
 
     // Callbacks that supply the two optional dialog hooks from canned values so the engine's dialog-driven
     // commands run end-to-end without a real UI.
-    private static RibbonHostCallbacks Callbacks(
+    private static FreeWRibbonHostExecutionPorts Callbacks(
         string? recipientCsv = null,
         string? mergeFieldName = null,
         List<string>? infoSink = null,
@@ -752,7 +752,7 @@ public sealed class MailingsTabTests
     [Fact]
     public void Mailings_tab_definition_exposes_groups_and_email_merge_plan_command()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var mailings = definition.FindTab("mailings");
         mailings.Should().NotBeNull();
 
@@ -767,7 +767,7 @@ public sealed class MailingsTabTests
     [Fact]
     public void Mailings_tab_definition_uses_canonical_shared_command_ids()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var mailings = definition.FindTab("mailings");
         mailings.Should().NotBeNull();
         var commandIds = mailings!.Groups
@@ -825,7 +825,7 @@ public sealed class MailingsTabTests
     [Fact]
     public void Mailings_tab_definition_exposes_start_merge_and_rules_dropdown_depth()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var mailings = definition.FindTab("mailings");
         mailings.Should().NotBeNull();
 
@@ -868,7 +868,7 @@ public sealed class MailingsTabTests
     public void Start_mail_merge_commands_set_output_mode_and_clear_session()
     {
         var view = ViewWith(new Paragraph("Dear Â«FirstNameÂ»"));
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks(), out var engine);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks(), out var engine);
         engine.LoadRecipientsCsv(SampleCsv);
 
         Execute(registry, "freew.start-mail-merge-directory");
@@ -899,7 +899,7 @@ public sealed class MailingsTabTests
         var nameValue = MailMergeRuleDialogPlanner.CreateNameValueResult("CustomerCode", "Enter code");
 
         var view = ViewWith(new Paragraph(""));
-        var registry = FreeWRibbon.BuildRegistry(
+        var registry = FreeWAvaloniaRibbonCommands.Build(
             view,
             Callbacks(
                 ruleIf: ifResult,
@@ -995,7 +995,7 @@ public sealed class MailingsTabTests
     public void Canonical_mailings_commands_execute_via_registry()
     {
         var view = ViewWith(new Paragraph("«FirstName»"));
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks(), out var engine);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks(), out var engine);
         engine.LoadRecipientsCsv(SampleCsv);
 
         Execute(registry, "freew.merge-preview");
@@ -1026,7 +1026,7 @@ public sealed class MailingsTabTests
     public void MergeData_command_executes_via_registry_callback()
     {
         var view = ViewWith();
-        var registry = FreeWRibbon.BuildRegistry(view, Callbacks(recipientCsv: SampleCsv), out var engine);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, Callbacks(recipientCsv: SampleCsv), out var engine);
 
         Execute(registry, "freew.merge-data");
 

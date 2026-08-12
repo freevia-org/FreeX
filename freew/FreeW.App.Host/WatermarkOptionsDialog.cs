@@ -49,7 +49,7 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private StackPanel? _textPanel;
     private StackPanel? _picturePanel;
 
-    private byte[]? _pendingImageBytes; // loaded from the picked file
+    private readonly WatermarkOptionsDialogSession _session;
 
     private WatermarkOptions? _result;
     private bool _accepted;
@@ -65,7 +65,8 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
-        var state = WatermarkOptionsDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
+        _session = new WatermarkOptionsDialogSession(current, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
 
         // Mode radios.
         _textRadio    = new RadioButton { Content = WatermarkOptionsDialogPlanner.TextModeLabel,    GroupName = "WmMode", IsChecked = !state.IsPicture };
@@ -80,7 +81,6 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _semitransparentCheck = new CheckBox { Content = WatermarkOptionsDialogPlanner.SemitransparentLabel, IsChecked = state.TextIsSemitransparent };
 
         // Picture controls.
-        _pendingImageBytes   = current?.ImageBytes;
         _pathBox             = new TextBox { Text = state.PicturePathText, MinWidth = 200, IsReadOnly = true };
         _scaleBox            = new TextBox { Text = state.ScaleText, MinWidth = 80 };
         _washoutCheck        = new CheckBox { Content = WatermarkOptionsDialogPlanner.WashoutLabel, IsChecked = state.PictureWashout };
@@ -167,7 +167,13 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         var ok = new Button { Content = okPlan.Label, MinWidth = 72, IsDefault = okPlan.IsDefault, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Accept();
         var remove = new Button { Content = actionPlans[1].Label, MinWidth = 130, Margin = new Thickness(0, 0, 8, 0) };
-        remove.Click += (_, _) => { _removeClicked = true; Close(); };
+        remove.Click += (_, _) =>
+        {
+            var acceptance = _session.Remove();
+            _removeClicked = acceptance.RemoveRequested;
+            _accepted = acceptance.IsAccepted;
+            Close();
+        };
         var cancelPlan = actionPlans[2];
         var cancel = new Button { Content = cancelPlan.Label, MinWidth = 72, IsCancel = cancelPlan.IsCancel };
         buttonRow.Children.Add(ok);
@@ -183,6 +189,7 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         if (_textPanel is null || _picturePanel is null)
             return;
         var isPicture = _pictureRadio.IsChecked == true;
+        _session.SelectMode(isPicture ? WatermarkDialogMode.Picture : WatermarkDialogMode.Text);
         _textPanel.Visibility    = isPicture ? Visibility.Collapsed : Visibility.Visible;
         _picturePanel.Visibility = isPicture ? Visibility.Visible   : Visibility.Collapsed;
     }
@@ -212,10 +219,9 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         try
         {
-            var import = WatermarkOptionsDialogPlanner.BuildImageImportPlan(
+            var import = _session.ImportImage(
                 fileName,
                 File.ReadAllBytes(fileName));
-            _pendingImageBytes = import.ImageBytes;
             _pathBox.Text = import.DisplayLabel;
         }
         catch (Exception ex)
@@ -229,52 +235,28 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
     private void Accept()
     {
-        if (_pictureRadio.IsChecked == true)
-            AcceptPicture();
-        else
-            AcceptText();
-    }
-
-    private void AcceptText()
-    {
-        if (!WatermarkOptionsDialogPlanner.TryBuildTextResult(
-                new WatermarkTextDialogInput(
-                    _textBox.Text,
-                    _fontBox.Text,
-                    _colorBox.Text,
-                    _horizontalRadio.IsChecked == true,
-                    _semitransparentCheck.IsChecked == true),
-                out var result,
-                out var validation))
+        _session.SelectMode(
+            _pictureRadio.IsChecked == true ? WatermarkDialogMode.Picture : WatermarkDialogMode.Text);
+        var acceptance = _session.Submit(new WatermarkOptionsDialogSubmission(
+            _textBox.Text,
+            _fontBox.Text,
+            _colorBox.Text,
+            _horizontalRadio.IsChecked == true,
+            _semitransparentCheck.IsChecked == true,
+            _scaleBox.Text,
+            _picHorizontalRadio.IsChecked == true,
+            _washoutCheck.IsChecked == true));
+        if (!acceptance.IsAccepted)
         {
-            DialogMessageHelper.ShowWarning(this, validation?.Message ?? WatermarkOptionsDialogPlanner.TextValidationMessage, Title);
-            FocusValidationTarget(validation?.Target);
+            DialogMessageHelper.ShowWarning(
+                this,
+                acceptance.Validation?.Message ?? WatermarkOptionsDialogPlanner.TextValidationMessage,
+                Title);
+            FocusValidationTarget(acceptance.Validation?.Target);
             return;
         }
 
-        _result = result;
-        _accepted = true;
-        Close();
-    }
-
-    private void AcceptPicture()
-    {
-        if (!WatermarkOptionsDialogPlanner.TryBuildPictureResult(
-                new WatermarkPictureDialogInput(
-                    _pendingImageBytes,
-                    _scaleBox.Text,
-                    _picHorizontalRadio.IsChecked == true,
-                    _washoutCheck.IsChecked == true),
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var validation))
-        {
-            DialogMessageHelper.ShowWarning(this, validation?.Message ?? WatermarkOptionsDialogPlanner.ImageValidationMessage, Title);
-            FocusValidationTarget(validation?.Target);
-            return;
-        }
-
-        _result = result;
+        _result = acceptance.Result;
         _accepted = true;
         Close();
     }

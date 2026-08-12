@@ -44,6 +44,88 @@ public sealed record WatermarkImageImportPlan(
     byte[] ImageBytes,
     string DisplayLabel);
 
+public enum WatermarkDialogMode
+{
+    Text,
+    Picture,
+}
+
+public sealed record WatermarkOptionsDialogSubmission(
+    string? Text,
+    string? FontFamily,
+    string? ColorText,
+    bool TextIsHorizontal,
+    bool TextIsSemitransparent,
+    string? PictureScaleText,
+    bool PictureIsHorizontal,
+    bool PictureIsWashout);
+
+public sealed record WatermarkOptionsDialogAcceptance(
+    bool IsAccepted,
+    WatermarkOptions? Result = null,
+    WatermarkOptionsDialogValidation? Validation = null,
+    bool RemoveRequested = false);
+
+public sealed class WatermarkOptionsDialogSession
+{
+    private readonly CultureInfo _culture;
+    private byte[]? _pendingImageBytes;
+
+    public WatermarkOptionsDialogSession(WatermarkOptions? current, CultureInfo culture)
+    {
+        ArgumentNullException.ThrowIfNull(culture);
+        _culture = culture;
+        _pendingImageBytes = current?.ImageBytes;
+        InitialState = WatermarkOptionsDialogPlanner.BuildInitialState(current, culture);
+        Mode = InitialState.IsPicture ? WatermarkDialogMode.Picture : WatermarkDialogMode.Text;
+    }
+
+    public WatermarkOptionsDialogInitialState InitialState { get; }
+
+    public WatermarkDialogMode Mode { get; private set; }
+
+    public void SelectMode(WatermarkDialogMode mode) => Mode = mode;
+
+    public WatermarkImageImportPlan ImportImage(string? fileName, byte[] imageBytes)
+    {
+        var plan = WatermarkOptionsDialogPlanner.BuildImageImportPlan(fileName, imageBytes);
+        _pendingImageBytes = plan.ImageBytes;
+        return plan;
+    }
+
+    public WatermarkOptionsDialogAcceptance Submit(WatermarkOptionsDialogSubmission submission)
+    {
+        ArgumentNullException.ThrowIfNull(submission);
+
+        WatermarkOptions? result;
+        WatermarkOptionsDialogValidation? validation;
+        var accepted = Mode == WatermarkDialogMode.Picture
+            ? WatermarkOptionsDialogPlanner.TryBuildPictureResult(
+                new WatermarkPictureDialogInput(
+                    _pendingImageBytes,
+                    submission.PictureScaleText,
+                    submission.PictureIsHorizontal,
+                    submission.PictureIsWashout),
+                _culture,
+                out result,
+                out validation)
+            : WatermarkOptionsDialogPlanner.TryBuildTextResult(
+                new WatermarkTextDialogInput(
+                    submission.Text,
+                    submission.FontFamily,
+                    submission.ColorText,
+                    submission.TextIsHorizontal,
+                    submission.TextIsSemitransparent),
+                out result,
+                out validation);
+
+        return new WatermarkOptionsDialogAcceptance(accepted, result, validation);
+    }
+
+    public WatermarkOptionsDialogAcceptance Remove() =>
+        new(IsAccepted: true, RemoveRequested: true);
+}
+
 public static class WatermarkOptionsDialogPlanner
 {
     public const string Title = "Printed Watermark";

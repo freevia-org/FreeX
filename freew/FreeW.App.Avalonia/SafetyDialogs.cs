@@ -17,7 +17,7 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
             CompactRadioButtonHeight = RestrictEditingDialogPlanner.Presentation.RadioButtonHeight,
             TextBoxHeight = RestrictEditingDialogPlanner.Presentation.TextBoxHeight,
         };
-    private readonly ProtectionSettings _currentProtection;
+    private readonly RestrictEditingDialogSession _session;
     private readonly RestrictEditingDialogPlan _plan;
     private readonly RadioButton[] _radios;
     private readonly TextBox _passwordBox = CreatePasswordBox();
@@ -36,8 +36,8 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
         ProtectionSettings current,
         Func<Window, string, string, Task<string?>> askPassword)
     {
-        _currentProtection = current;
-        _plan = RestrictEditingDialogPlanner.BuildPlan(current);
+        _session = new RestrictEditingDialogSession(current);
+        _plan = _session.InitialPlan;
         _askPassword = askPassword ?? throw new ArgumentNullException(nameof(askPassword));
         var presentation = RestrictEditingDialogPlanner.Presentation;
 
@@ -131,7 +131,11 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
 
         var cancel = new Button { Content = RestrictEditingDialogPlanner.CancelButtonText, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
-        cancel.Click += (_, _) => Close();
+        cancel.Click += (_, _) =>
+        {
+            _session.Cancel();
+            Close();
+        };
 
         cancel.Margin = new Thickness(0, presentation.CancelActionTopMargin, 0, 0);
         cancel.HorizontalAlignment = HorizontalAlignment.Right;
@@ -151,60 +155,48 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
 
     private void StartProtection()
     {
-        if (!RestrictEditingDialogPlanner.TryCreateStartSettings(
-            SelectedMode(),
+        var outcome = _session.Start(
+            SelectedModeIndex(),
             _passwordBox.Text,
-            _confirmBox.Text,
-            out var settings,
-            out var validationMessage))
+            _confirmBox.Text);
+        if (!outcome.IsAccepted)
         {
-            ShowValidation(validationMessage);
+            ShowValidation(outcome.ValidationMessage);
             _passwordBox.Focus();
             return;
         }
 
-        Result = settings;
+        Result = outcome.Settings;
         Close();
     }
 
     private async Task StopProtectionAsync()
     {
-        string? password = null;
-        if (_currentProtection.HasPassword)
+        var outcome = await _session.StopAsync(async (title, prompt) =>
+            await _askPassword(this, title, prompt));
+        if (outcome.Kind == RestrictEditingDialogOutcomeKind.Cancelled)
+            return;
+        if (!outcome.IsAccepted)
         {
-            password = await _askPassword(
-                this,
-                "Stop Protection",
-                RestrictEditingDialogPlanner.StopPasswordPrompt);
-            if (password is null)
-                return;
-        }
-
-        if (!RestrictEditingDialogPlanner.TryCreateStopSettings(
-            _currentProtection,
-            password,
-            out var settings,
-            out var validationMessage))
-        {
-            ShowValidation(validationMessage);
+            ShowValidation(outcome.ValidationMessage);
             return;
         }
 
-        Result = settings;
+        Result = outcome.Settings;
         Close();
     }
 
     internal Task StopProtectionForTestAsync() => StopProtectionAsync();
 
-    private ProtectionMode SelectedMode()
+    private int SelectedModeIndex()
     {
         for (var i = 0; i < _radios.Length; i++)
         {
             if (_radios[i].IsChecked == true)
-                return RestrictEditingDialogPlanner.ModeOptions[i].Mode;
+                return i;
         }
 
-        return ProtectionMode.ReadOnly;
+        return -1;
     }
 
     private void ShowValidation(string? message)

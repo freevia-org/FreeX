@@ -36,7 +36,11 @@ public sealed class DesignDialogParityTests
         spacingSource.Should().NotContain("CustomParagraphSpacingDialogPlanner.TryBuildResult(");
 
         var borderSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogs.cs"));
-        borderSource.Should().Contain("BordersAndShadingDialogPlanner.TryBuildResult(");
+        borderSource.Should().Contain("BordersAndShadingDialogPlanner.BuildPageBordersInitialState(");
+        borderSource.Should().Contain("BordersAndShadingDialogPlanner.SubmitPageBorders(");
+        borderSource.Should().Contain("new PageBordersDialogInput(");
+        borderSource.Should().NotContain("new BordersAndShadingDialogInput(");
+        borderSource.Should().NotContain("private static int ColorIndex(");
         borderSource.Should().Contain("BordersAndShadingDialogPlanner.ArtBorders");
 
         var styleSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "StyleDialog.cs"));

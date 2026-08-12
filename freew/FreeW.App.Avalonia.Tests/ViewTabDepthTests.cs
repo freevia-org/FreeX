@@ -40,7 +40,7 @@ public sealed class ViewTabDepthTests
         }
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
@@ -80,7 +80,7 @@ public sealed class ViewTabDepthTests
     [Fact]
     public void View_tab_commands_are_all_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         foreach (var id in new[]
                  {
@@ -101,7 +101,7 @@ public sealed class ViewTabDepthTests
     [Fact]
     public void View_tab_new_commands_appear_in_ribbon_definition()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var viewTab = definition.Tabs.Single(t => t.Id == "view");
         var ids = viewTab.Groups.SelectMany(g => g.Controls)
             .Select(c => c.CommandId.Value)
@@ -141,7 +141,7 @@ public sealed class ViewTabDepthTests
             ZoomOnePage = () => onePage++,
             ZoomPageWidth = () => pageWidth++,
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.zoom-one-page"), out var onePageCommand)
             .Should().BeTrue();
@@ -167,7 +167,7 @@ public sealed class ViewTabDepthTests
             ToggleSideToSide = () => sideToSide = !sideToSide,
             IsSideToSideActive = () => sideToSide,
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.zoom-multiple-pages"), out var multiplePagesCommand)
             .Should().BeTrue();
@@ -195,7 +195,7 @@ public sealed class ViewTabDepthTests
             ToggleSplit = () => split = !split,
             IsSplitActive = () => split,
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.split"), out var splitCommand)
             .Should().BeTrue();
@@ -546,7 +546,7 @@ public sealed class ViewTabDepthTests
     [Fact]
     public void Layout_tab_contains_print_preview_command()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var layoutTab = definition.Tabs.Single(t => t.Id == "layout");
         var ids = layoutTab.Groups.SelectMany(g => g.Controls)
             .Select(c => c.CommandId.Value)
@@ -560,7 +560,7 @@ public sealed class ViewTabDepthTests
     {
         var invoked = false;
         var callbacks = NoopCallbacks() with { OpenPrintPreview = () => invoked = true };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.print-preview"), out var command)
             .Should().BeTrue();
@@ -575,7 +575,7 @@ public sealed class ViewTabDepthTests
     {
         var invoked = false;
         var callbacks = NoopCallbacks() with { SetPrintLayout = () => invoked = true };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.print-layout"), out var command)
             .Should().BeTrue();
@@ -607,7 +607,7 @@ public sealed class ViewTabDepthTests
             IsRevealFormattingVisible = () => revealVisible,
             IsReviewingPaneVisible = () => reviewingVisible,
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         AssertChecked(registry, "freew.print-layout", expected: true);
         AssertChecked(registry, "freew.web-layout", expected: false);
@@ -682,7 +682,7 @@ public sealed class ViewTabDepthTests
             IsWebLayoutActive = () => active == DocumentViewMode.WebLayout,
             IsDraftViewActive = () => active == DocumentViewMode.Draft,
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         var print = Stateful(registry, "freew.print-layout");
         var web = Stateful(registry, "freew.web-layout");
@@ -720,7 +720,7 @@ public sealed class ViewTabDepthTests
             IsReviewingPaneVisible = () => reviewingVisible,
             IsRevealFormattingVisible = () => revealVisible,
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         var navigation = Stateful(registry, "freew.nav-pane");
         var reviewing = Stateful(registry, "freew.reviewing-pane");
@@ -748,7 +748,7 @@ public sealed class ViewTabDepthTests
     [Fact]
     public void Window_group_exists_on_view_tab()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var viewTab = definition.Tabs.Single(t => t.Id == "view");
         viewTab.Groups.Should().Contain(g => g.Id == "window",
             "AV-VIEW must add a Window group to the View tab");
@@ -759,7 +759,7 @@ public sealed class ViewTabDepthTests
     {
         var invoked = 0;
         var callbacks = NoopCallbacks() with { ArrangeAll = () => invoked++ };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.arrange-all"), out var command)
             .Should().BeTrue();
@@ -791,7 +791,7 @@ public sealed class ViewTabDepthTests
         view.LoadDocument(MakeDoc());
         view.ShowGridlines.Should().BeFalse("gridlines off by default");
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.gridlines"), out var cmd).Should().BeTrue();
         var state = cmd.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
         state.GetState().IsChecked.Should().BeFalse("gridlines start unchecked");
@@ -812,7 +812,7 @@ public sealed class ViewTabDepthTests
         view.LoadDocument(MakeDoc());
         view.ShowRuler.Should().BeFalse("ruler off by default");
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.ruler"), out var cmd).Should().BeTrue();
         var state = cmd.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
         state.GetState().IsChecked.Should().BeFalse("the ruler starts unchecked");
@@ -829,7 +829,7 @@ public sealed class ViewTabDepthTests
     [Fact]
     public void Legacy_view_ids_remain_aliases_for_canonical_wpf_ids()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.gridlines"), out var gridlines).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.view-gridlines"), out var viewGridlines).Should().BeTrue();

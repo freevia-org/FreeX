@@ -3,19 +3,26 @@ using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Presentation.Ribbon;
 
+public enum ViewRibbonBindingAvailability
+{
+    Omitted,
+    Disabled,
+    EnabledNoOp,
+}
+
 public sealed record ViewRibbonActionBinding(
     Action? Execute = null,
-    IRibbonCommand? FallbackCommand = null);
+    ViewRibbonBindingAvailability AvailabilityWhenUnbound = ViewRibbonBindingAvailability.Omitted);
 
 public sealed record ViewRibbonToggleBinding(
     Action? Toggle = null,
     Func<bool>? IsChecked = null,
-    IRibbonCommand? FallbackCommand = null,
+    ViewRibbonBindingAvailability AvailabilityWhenUnbound = ViewRibbonBindingAvailability.Omitted,
     Action? PrepareExecution = null);
 
 public sealed record ViewRibbonChoiceBinding(
     Action<string>? Apply = null,
-    IRibbonCommand? FallbackCommand = null);
+    ViewRibbonBindingAvailability AvailabilityWhenUnbound = ViewRibbonBindingAvailability.Omitted);
 
 public sealed record ViewRibbonReadModeBindings(
     ViewRibbonToggleBinding? Toggle = null,
@@ -158,7 +165,7 @@ public static class ViewRibbonWorkflow
     {
         var command = binding?.Execute is { } execute
             ? new ActionRibbonCommand(execute)
-            : binding?.FallbackCommand;
+            : CommandFor(binding?.AvailabilityWhenUnbound);
         if (command is not null)
             registry.Register(commandId, command);
         return command;
@@ -171,7 +178,7 @@ public static class ViewRibbonWorkflow
     {
         IRibbonCommand? command = binding?.Toggle is { } toggle && binding.IsChecked is { } isChecked
             ? new FreeWStatefulToggleCommand(toggle, isChecked, binding.PrepareExecution)
-            : binding?.FallbackCommand;
+            : CommandFor(binding?.AvailabilityWhenUnbound);
         if (command is not null)
             registry.Register(commandId, command);
         return command as IRibbonStatefulCommand;
@@ -185,7 +192,7 @@ public static class ViewRibbonWorkflow
     {
         var command = binding?.Apply is { } apply
             ? new ActionRibbonCommand(() => apply(token))
-            : binding?.FallbackCommand;
+            : CommandFor(binding?.AvailabilityWhenUnbound);
         if (command is not null)
             registry.Register(commandId, command);
     }
@@ -198,4 +205,12 @@ public static class ViewRibbonWorkflow
         if (command is not null)
             registry.Register(alias, command);
     }
+
+    private static IRibbonCommand? CommandFor(ViewRibbonBindingAvailability? availability) =>
+        availability switch
+        {
+            ViewRibbonBindingAvailability.Disabled => FreeWRibbonExecutionProfile.UnavailableCommand,
+            ViewRibbonBindingAvailability.EnabledNoOp => EmptyRibbonCommand.Instance,
+            _ => null,
+        };
 }

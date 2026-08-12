@@ -23,7 +23,7 @@ namespace FreeW.App.Avalonia.Tests;
 /// </summary>
 public sealed class DesignTabTests
 {
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { },
@@ -143,7 +143,7 @@ public sealed class DesignTabTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.style-set"), out var command).Should().BeTrue();
         var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
         stateful.GetState().Value.Should().Be("Office");
@@ -345,7 +345,7 @@ public sealed class DesignTabTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         var ids = new[]
         {
@@ -369,7 +369,7 @@ public sealed class DesignTabTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.theme.berlin"), out var cmd).Should().BeTrue();
         cmd!.Execute(RibbonCommandContext.Empty);
@@ -382,7 +382,7 @@ public sealed class DesignTabTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.theme"), out var command).Should().BeTrue();
         var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
         stateful.GetState().Value.Should().Be("Office");
@@ -411,7 +411,7 @@ public sealed class DesignTabTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.page-color.light-blue"), out var cmd).Should().BeTrue();
         cmd!.Execute(RibbonCommandContext.Empty);
@@ -424,7 +424,7 @@ public sealed class DesignTabTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.watermark.confidential"), out var cmd).Should().BeTrue();
         cmd!.Execute(RibbonCommandContext.Empty);
@@ -439,7 +439,7 @@ public sealed class DesignTabTests
         // null; executing them with the no-op callbacks must not throw and must not mutate the document.
         var view = new DocumentView();
         view.LoadDocument(MakeDoc());
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.page-borders"), out var borders).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.watermark.custom"), out var custom).Should().BeTrue();

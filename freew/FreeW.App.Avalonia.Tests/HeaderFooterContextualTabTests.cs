@@ -18,7 +18,7 @@ public sealed class HeaderFooterContextualTabTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },
@@ -47,7 +47,7 @@ public sealed class HeaderFooterContextualTabTests
     [Fact]
     public void Avalonia_definition_exposes_header_footer_design_contextual_tab()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
 
         var tab = definition.FindTab("header-footer-design");
 
@@ -60,7 +60,7 @@ public sealed class HeaderFooterContextualTabTests
     [Fact]
     public void Header_footer_contextual_commands_are_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         var expected = new[]
         {
@@ -97,7 +97,7 @@ public sealed class HeaderFooterContextualTabTests
         initial.Page.FooterDistancePt = 31;
         var view = new DocumentView();
         view.LoadDocument(initial);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         State(registry, "freew.hf-different-first-page").IsChecked.Should().BeTrue();
         State(registry, "freew.hf-different-odd-even").IsChecked.Should().BeFalse();
@@ -154,7 +154,7 @@ public sealed class HeaderFooterContextualTabTests
     public void Header_footer_contextual_commands_mutate_existing_model_state()
     {
         var view = new DocumentView();
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.hf-edit-header");
         view.IsHeaderFooterCaretActive.Should().BeTrue("Edit Header should enter the editable header region");
@@ -175,7 +175,7 @@ public sealed class HeaderFooterContextualTabTests
     public void Header_footer_distance_combo_commands_update_page_settings()
     {
         var view = new DocumentView();
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.hf-header-from-top", RibbonCommandContext.ForSelectedValue("54"));
         Execute(registry, "freew.hf-footer-from-bottom", RibbonCommandContext.ForSelectedValue("72"));
@@ -219,7 +219,7 @@ public sealed class HeaderFooterContextualTabTests
     public void Insert_page_number_format_command_updates_page_settings()
     {
         var view = new DocumentView();
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.page-number-format", RibbonCommandContext.ForSelectedValue(
             PageNumberFormatDialogPlanner.BuildCommandValue(PageNumberFormat.UpperLetter, 5)));
@@ -234,7 +234,7 @@ public sealed class HeaderFooterContextualTabTests
         var view = new DocumentView();
         view.Document.Page.PageNumberFormat = PageNumberFormat.UpperRoman;
         view.Document.Page.PageNumberStartAt = 4;
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.page-number-current");
 

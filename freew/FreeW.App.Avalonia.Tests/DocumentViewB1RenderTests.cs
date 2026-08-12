@@ -64,12 +64,12 @@ public sealed class DocumentViewB1RenderTests
     [Fact]
     public void B1_commands_are_all_registered_in_the_registry()
     {
-        var callbacks = new RibbonHostCallbacks(
+        var callbacks = new FreeWRibbonHostExecutionPorts(
             () => { }, () => { }, () => { }, () => { }, () => { },
             () => { }, () => { }, () => { }, () => { }, () => { },
             () => { }, () => { }, () => { }, () => { }, () => { },
             () => { }, () => { }, () => { }, _ => { }, _ => { }, () => { }, () => { }, (_, _) => { });
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         var expected = new[]
         {
@@ -88,7 +88,7 @@ public sealed class DocumentViewB1RenderTests
     [Fact]
     public void B1_ribbon_definition_includes_all_new_paragraph_controls()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var home = definition.FindTab("home");
         home.Should().NotBeNull();
 

@@ -28,7 +28,7 @@ public sealed class CommandRegistryTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },
@@ -69,8 +69,8 @@ public sealed class CommandRegistryTests
     [Fact]
     public void Registry_resolves_all_ribbon_definition_command_ids()
     {
-        var definition = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         var ids = definition.Tabs
             .SelectMany(t => t.Groups)
@@ -185,7 +185,7 @@ public sealed class CommandRegistryTests
     [Fact]
     public void Developer_controls_profile_commands_are_registered()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var developer = definition.Tabs.SingleOrDefault(tab => tab.Id == "developer");
         var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
@@ -244,7 +244,7 @@ public sealed class CommandRegistryTests
     [Fact]
     public void Home_definition_uses_wpf_command_ids_for_editing_and_paragraph_slice()
     {
-        var home = FreeWRibbon.BuildDefinition().FindTab("home");
+        var home = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("home");
         home.Should().NotBeNull();
 
         var ids = home!.Groups
@@ -297,7 +297,7 @@ public sealed class CommandRegistryTests
     public void Find_replace_ids_and_compat_alias_open_same_dialog_callback()
     {
         var calls = 0;
-        var registry = FreeWRibbon.BuildRegistry(
+        var registry = FreeWAvaloniaRibbonCommands.Build(
             new DocumentView(),
             NoopCallbacks() with { OpenFindReplaceDialog = () => calls++ });
 
@@ -313,7 +313,7 @@ public sealed class CommandRegistryTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc("Select me"));
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.select");
         view.SelectedText.Should().Be("Select me");
@@ -327,7 +327,7 @@ public sealed class CommandRegistryTests
     public void Formatting_marks_command_is_stateful_and_keeps_old_alias()
     {
         var view = new DocumentView();
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.formatting-marks"), out var command)
             .Should().BeTrue("WPF formatting marks id must be registered");
@@ -350,7 +350,7 @@ public sealed class CommandRegistryTests
         var view = new DocumentView();
         view.LoadDocument(doc);
         view.SetSelectionRangePublic(0, 0, 0, 6);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.font-family"), out var familyCommand).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.font-size"), out var sizeCommand).Should().BeTrue();
@@ -381,7 +381,7 @@ public sealed class CommandRegistryTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc("Spacing"));
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.line-spacing"), out var command).Should().BeTrue();
         var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
         stateful.GetState().Value.Should().Be("1.15");
@@ -416,7 +416,7 @@ public sealed class CommandRegistryTests
             SpaceAfterIsSet = true
         };
         view.LoadDocument(doc);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.space-before-toggle");
         paragraph.Formatting.SpaceBeforePt.Should().Be(12);
@@ -436,7 +436,7 @@ public sealed class CommandRegistryTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc("Flow"));
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         var paragraph = (Paragraph)view.Document.Blocks[0];
 
         Execute(registry, "freew.keep-with-next");
@@ -460,7 +460,7 @@ public sealed class CommandRegistryTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc("Decorated"));
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         var paragraph = (Paragraph)view.Document.Blocks[0];
 
         Execute(registry, "freew.para-border");
@@ -513,7 +513,7 @@ public sealed class CommandRegistryTests
             OpenBordersAndShadingDialog = () => calls.Add("borders"),
             OpenSortDialog = () => calls.Add("sort")
         };
-        var registry = FreeWRibbon.BuildRegistry(view, callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
         Execute(registry, "freew.tabs-dialog");
         Execute(registry, "freew.borders-shading");
@@ -532,7 +532,7 @@ public sealed class CommandRegistryTests
             PasteMergeFormatting = () => calls.Add("merge"),
             OpenPasteSpecial = () => calls.Add("special"),
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
         Execute(registry, "freew.paste-plain");
         Execute(registry, "freew.paste-merge");
@@ -553,7 +553,7 @@ public sealed class CommandRegistryTests
         view.LoadDocument(doc);
         view.SelectAll();
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         Execute(registry, "freew.sort");
 
         doc.Blocks.OfType<Paragraph>().Select(p => p.PlainText)
@@ -565,7 +565,7 @@ public sealed class CommandRegistryTests
     {
         var view = new DocumentView();
         view.LoadDocument(MakeDoc("Outline"));
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         var paragraph = (Paragraph)view.Document.Blocks[0];
 
         Execute(registry, "freew.multilevel-list");
@@ -591,7 +591,7 @@ public sealed class CommandRegistryTests
         });
         var view = new DocumentView();
         view.LoadDocument(doc);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         var paragraph = (Paragraph)view.Document.Blocks[0];
 
         Execute(registry, "freew.multilevel-preset-0");
@@ -629,7 +629,7 @@ public sealed class CommandRegistryTests
         document.Blocks.Add(paragraph);
         var view = new DocumentView();
         view.LoadDocument(document);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.multilevel-preset-1");
 
@@ -647,7 +647,7 @@ public sealed class CommandRegistryTests
     [Fact]
     public void Ribbon_definition_now_has_37_or_more_commands()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var count = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
@@ -712,7 +712,7 @@ public sealed class CommandRegistryTests
         view.LoadDocument(doc);
         view.SelectAll();
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.char-border.black"), out var borderCommand)
             .Should().BeTrue("the Character Border palette must register its WPF-authority default swatch");
         registry.TryGet(new RibbonCommandId("freew.char-shading.light-yellow"), out var shadingCommand)
@@ -885,7 +885,7 @@ public sealed class CommandRegistryTests
         doc.Blocks.Add(new Paragraph("Target"));
         var view = new DocumentView();
         view.LoadDocument(doc);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         view.SetSelectionRangePublic(0, 0, 0, 6);
         Execute(registry, "freew.format-painter");
@@ -1033,7 +1033,7 @@ public sealed class CommandRegistryTests
         // This test asserts:
         //   (a) The ribbon definition exposes freew.font-color as a Dropdown, not a Button.
         //   (b) Executing freew.font-color directly does NOT clear any existing colour.
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var fontColorControl = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
@@ -1052,7 +1052,7 @@ public sealed class CommandRegistryTests
         view.SelectAll();
         view.SetFontColor("#FF0000");   // pre-apply a colour
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.font-color"), out var cmd)
             .Should().BeTrue("freew.font-color must be registered");
         cmd!.Execute(RibbonCommandContext.Empty);   // simulate button click with no SelectedValue
@@ -1071,7 +1071,7 @@ public sealed class CommandRegistryTests
         view.LoadDocument(doc);
         view.SelectAll();
 
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         // Verify the red sub-command applies red.
         registry.TryGet(new RibbonCommandId("freew.font-color.red"), out var redCmd)

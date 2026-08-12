@@ -33,7 +33,6 @@ public sealed class RibbonCommandIconAssetTests
         Directory.Exists(iconDirectory).Should().BeTrue("FreeW command SVG assets should be copied to the test output");
 
         var commandIds = WpfCommandIds()
-            .Concat(AvaloniaCommandIds())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -203,7 +202,7 @@ public sealed class RibbonCommandIconAssetTests
     }
 
     private static IEnumerable<string> WpfCommandIds() =>
-        CommandIds(FreeWRibbon.Build())
+        CommandIds(FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf))
             .Select(id => id.Value)
             .Where(id => !string.IsNullOrWhiteSpace(id));
 
@@ -242,21 +241,6 @@ public sealed class RibbonCommandIconAssetTests
             foreach (var child in MenuCommandIds(item.Children))
                 yield return child;
         }
-    }
-
-    private static IEnumerable<string> AvaloniaCommandIds()
-    {
-        var sourcePath = Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
-            "freew",
-            "FreeW.App.Avalonia",
-            "Ribbon",
-            "FreeWRibbon.cs");
-
-        var source = File.ReadAllText(sourcePath);
-        return Regex
-            .Matches(source, "\"(freew\\.[a-z0-9.-]+)\"")
-            .Select(match => match.Groups[1].Value);
     }
 
     private static string ToCommandIconSlug(string commandId)

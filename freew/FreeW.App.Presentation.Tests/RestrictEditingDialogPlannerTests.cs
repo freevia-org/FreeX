@@ -137,4 +137,60 @@ public sealed class RestrictEditingDialogPlannerTests
         settings.Should().Be(ProtectionSettings.Unprotected);
         validationMessage.Should().BeNull();
     }
+
+    [Fact]
+    public void Session_start_owns_mode_fallback_and_validation_sequence()
+    {
+        var session = new RestrictEditingDialogSession(ProtectionSettings.Unprotected);
+
+        var invalid = session.Start(-1, "one", "two");
+        invalid.Kind.Should().Be(RestrictEditingDialogOutcomeKind.ValidationFailed);
+        invalid.Settings.Should().BeNull();
+        invalid.ValidationMessage.Should().Be(RestrictEditingDialogPlanner.PasswordMismatchMessage);
+
+        var accepted = session.Start(-1, string.Empty, string.Empty);
+        accepted.IsAccepted.Should().BeTrue();
+        accepted.Settings!.Mode.Should().Be(ProtectionMode.ReadOnly);
+    }
+
+    [Fact]
+    public async Task Session_stop_routes_password_prompt_and_accepts_verified_password()
+    {
+        var current = ProtectionPasswordHelper.CreateWithPassword(ProtectionMode.CommentsOnly, "secret");
+        var session = new RestrictEditingDialogSession(current);
+        var prompts = new List<(string Title, string Prompt)>();
+
+        var outcome = await session.StopAsync((title, prompt) =>
+        {
+            prompts.Add((title, prompt));
+            return ValueTask.FromResult<string?>("secret");
+        });
+
+        outcome.IsAccepted.Should().BeTrue();
+        outcome.Settings.Should().Be(ProtectionSettings.Unprotected);
+        prompts.Should().Equal((
+            RestrictEditingDialogPlanner.StopButtonText,
+            RestrictEditingDialogPlanner.StopPasswordPrompt));
+    }
+
+    [Fact]
+    public async Task Session_stop_preserves_prompt_cancellation_and_skips_prompt_without_password()
+    {
+        var protectedSession = new RestrictEditingDialogSession(
+            ProtectionPasswordHelper.CreateWithPassword(ProtectionMode.ReadOnly, "secret"));
+        var cancelled = await protectedSession.StopAsync((_, _) => ValueTask.FromResult<string?>(null));
+        cancelled.Kind.Should().Be(RestrictEditingDialogOutcomeKind.Cancelled);
+
+        var promptCalled = false;
+        var unprotectedPasswordSession = new RestrictEditingDialogSession(
+            new ProtectionSettings(ProtectionMode.TrackChangesOnly));
+        var accepted = await unprotectedPasswordSession.StopAsync((_, _) =>
+        {
+            promptCalled = true;
+            return ValueTask.FromResult<string?>(null);
+        });
+
+        accepted.IsAccepted.Should().BeTrue();
+        promptCalled.Should().BeFalse();
+    }
 }

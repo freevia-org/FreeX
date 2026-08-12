@@ -25,13 +25,13 @@ namespace FreeW.App.Avalonia.Ribbon;
 internal sealed class MailMergeEngine
 {
     private readonly DocumentView _editor;
-    private readonly RibbonHostCallbacks _callbacks;
+    private readonly FreeWRibbonHostExecutionPorts _callbacks;
     private readonly Func<string, string?>? _getText;
     private readonly MailMergeSessionWorkflow _workflow = new();
 
     public MailMergeEngine(
         DocumentView editor,
-        RibbonHostCallbacks callbacks,
+        FreeWRibbonHostExecutionPorts callbacks,
         Func<string, string?>? getText = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));

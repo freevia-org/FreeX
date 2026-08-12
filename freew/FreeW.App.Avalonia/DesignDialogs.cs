@@ -33,7 +33,11 @@ public sealed class PageBordersDialog : FreeWDialogWindow
 
     public PageBordersDialog(PageBorder? current)
     {
-        Title = "Borders and Shading";
+        var state = BordersAndShadingDialogPlanner.BuildPageBordersInitialState(
+            current,
+            CultureInfo.CurrentCulture);
+
+        Title = BordersAndShadingDialogPlanner.Title;
         Width = 430;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -41,14 +45,14 @@ public sealed class PageBordersDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         _setting.ItemsSource = BordersAndShadingDialogPlanner.SettingNames;
-        _setting.SelectedIndex = current is null ? 0 : 1;
+        _setting.SelectedIndex = state.SettingIndex;
         _style.ItemsSource = BordersAndShadingDialogPlanner.LineStyleNames;
-        _style.SelectedIndex = BordersAndShadingDialogPlanner.IndexOfLineStyle(current?.LineStyle ?? BorderLineStyle.Single);
+        _style.SelectedIndex = state.LineStyleIndex;
         _art.ItemsSource = BordersAndShadingDialogPlanner.ArtBorders.Select(option => option.Label).ToArray();
-        _art.SelectedIndex = BordersAndShadingDialogPlanner.ArtIndexFor(current?.ArtId ?? 0);
+        _art.SelectedIndex = state.ArtIndex;
         _color.ItemsSource = BordersAndShadingDialogPlanner.Palette;
-        _color.SelectedIndex = ColorIndex(current?.ColorHex);
-        _width.Text = BordersAndShadingDialogPlanner.FormatPoints(current?.WidthPt ?? 1.0, CultureInfo.CurrentCulture);
+        _color.SelectedIndex = state.ColorIndex;
+        _width.Text = state.WidthText;
         AvaloniaCompactDialogChrome.ApplyComboBox(_style, InsertDialogLayout.ChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_setting, InsertDialogLayout.ChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_art, InsertDialogLayout.ChromeStyle);
@@ -59,50 +63,39 @@ public sealed class PageBordersDialog : FreeWDialogWindow
         var grid = new Grid { Margin = new Thickness(14, 12, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Setting:", _setting);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Style:", _style);
-        InsertDialogLayout.AddLabeledRow(grid, 2, "Art border:", _art);
-        InsertDialogLayout.AddLabeledRow(grid, 3, "Color:", _color);
-        InsertDialogLayout.AddLabeledRow(grid, 4, "Width (pt):", _width);
+        InsertDialogLayout.AddLabeledRow(grid, 0, BordersAndShadingDialogPlanner.SettingLabel, _setting);
+        InsertDialogLayout.AddLabeledRow(grid, 1, BordersAndShadingDialogPlanner.StyleLabel, _style);
+        InsertDialogLayout.AddLabeledRow(grid, 2, BordersAndShadingDialogPlanner.ArtBorderLabel, _art);
+        InsertDialogLayout.AddLabeledRow(grid, 3, BordersAndShadingDialogPlanner.ColorLabel, _color);
+        InsertDialogLayout.AddLabeledRow(grid, 4, BordersAndShadingDialogPlanner.WidthLabel, _width);
 
-        var okButton = InsertDialogLayout.MakeButton("OK", (_, _) =>
+        var okButton = InsertDialogLayout.MakeButton(BordersAndShadingDialogPlanner.AcceptButtonLabel, (_, _) =>
         {
-            if (!BordersAndShadingDialogPlanner.TryBuildResult(
-                    new BordersAndShadingDialogInput(
-                        ParagraphSettingIndex: 0,
-                        ParagraphLineStyleIndex: 0,
-                        ParagraphColorHex: null,
-                        ParagraphWidthText: "1",
-                        Top: false,
-                        Left: false,
-                        Bottom: false,
-                        Right: false,
-                        PageSettingIndex: _setting.SelectedIndex,
-                        PageLineStyleIndex: _style.SelectedIndex,
-                        PageColorHex: SelectedColor(),
-                        PageWidthText: _width.Text,
-                        PageArtIndex: _art.SelectedIndex,
-                        ShadingColorHex: null,
-                        ShadingPatternIndex: 0),
-                    CultureInfo.CurrentCulture,
-                    out var planned,
-                    out var error))
+            var acceptance = BordersAndShadingDialogPlanner.SubmitPageBorders(
+                new PageBordersDialogInput(
+                    _setting.SelectedIndex,
+                    _style.SelectedIndex,
+                    _color.SelectedIndex,
+                    _width.Text,
+                    _art.SelectedIndex),
+                CultureInfo.CurrentCulture);
+            if (!acceptance.IsAccepted)
             {
-                _status.Text = error ?? BordersAndShadingDialogPlanner.WidthValidationMessage;
+                _status.Text = acceptance.ValidationMessage ?? BordersAndShadingDialogPlanner.WidthValidationMessage;
                 _status.IsVisible = true;
                 _width.Focus();
                 return;
             }
 
-            Result = planned?.PageBorder;
+            Result = acceptance.PageBorder;
             Close();
         });
-        var noneButton = InsertDialogLayout.MakeButton("None", (_, _) =>
+        var noneButton = InsertDialogLayout.MakeButton(BordersAndShadingDialogPlanner.RemovePageBorderButtonLabel, (_, _) =>
         {
             RemoveRequested = true;
             Close();
         });
-        var cancelButton = InsertDialogLayout.MakeButton("Cancel", (_, _) => Close());
+        var cancelButton = InsertDialogLayout.MakeButton(BordersAndShadingDialogPlanner.CancelButtonLabel, (_, _) => Close());
         var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, noneButton, cancelButton], new Thickness(14, 12, 14, 12));
 
         var outer = new StackPanel();
@@ -112,20 +105,6 @@ public sealed class PageBordersDialog : FreeWDialogWindow
         Content = outer;
     }
 
-    private string? SelectedColor() =>
-        _color.SelectedIndex >= 0 && _color.SelectedIndex < BordersAndShadingDialogPlanner.Palette.Count
-            ? BordersAndShadingDialogPlanner.Palette[_color.SelectedIndex]
-            : null;
-
-    private static int ColorIndex(string? hex)
-    {
-        for (var i = 0; i < BordersAndShadingDialogPlanner.Palette.Count; i++)
-        {
-            if (string.Equals(BordersAndShadingDialogPlanner.Palette[i], hex, StringComparison.OrdinalIgnoreCase))
-                return i;
-        }
-        return 0;
-    }
 }
 
 /// <summary>
@@ -157,7 +136,7 @@ public sealed class WatermarkDialog : FreeWDialogWindow
     private readonly StackPanel _textPanel;
     private readonly StackPanel _picturePanel;
 
-    private byte[]? _pendingImageBytes;
+    private readonly WatermarkOptionsDialogSession _session;
 
     /// <summary>The watermark to apply (OK), or null when cancelled / Remove was clicked.</summary>
     public WatermarkOptions? Result { get; private set; }
@@ -167,7 +146,8 @@ public sealed class WatermarkDialog : FreeWDialogWindow
 
     public WatermarkDialog(WatermarkOptions? current)
     {
-        var state = WatermarkOptionsDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture);
+        _session = new WatermarkOptionsDialogSession(current, CultureInfo.CurrentCulture);
+        var state = _session.InitialState;
 
         Title = WatermarkOptionsDialogPlanner.Title;
         Width = 460;
@@ -176,7 +156,6 @@ public sealed class WatermarkDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        _pendingImageBytes = current?.ImageBytes;
         _textMode = new RadioButton
         {
             Content = WatermarkOptionsDialogPlanner.TextModeLabel,
@@ -296,7 +275,9 @@ public sealed class WatermarkDialog : FreeWDialogWindow
         okButton.IsDefault = okPlan.IsDefault;
         var noneButton = InsertDialogLayout.MakeButton(actionPlans[1].Label, (_, _) =>
         {
-            RemoveRequested = true;
+            var acceptance = _session.Remove();
+            RemoveRequested = acceptance.RemoveRequested;
+            Result = acceptance.Result;
             Close();
         });
         var cancelPlan = actionPlans[2];
@@ -390,6 +371,7 @@ public sealed class WatermarkDialog : FreeWDialogWindow
     private void SyncModePanels()
     {
         var isPicture = _pictureMode.IsChecked == true;
+        _session.SelectMode(isPicture ? WatermarkDialogMode.Picture : WatermarkDialogMode.Text);
         _textPanel.IsVisible = !isPicture;
         _picturePanel.IsVisible = isPicture;
     }
@@ -419,60 +401,33 @@ public sealed class WatermarkDialog : FreeWDialogWindow
 
     private void LoadPictureImage(string fileName, byte[] imageBytes)
     {
-        var import = WatermarkOptionsDialogPlanner.BuildImageImportPlan(fileName, imageBytes);
-        _pendingImageBytes = import.ImageBytes;
+        var import = _session.ImportImage(fileName, imageBytes);
         _pathBox.Text = import.DisplayLabel;
         ClearValidation();
     }
 
     private bool Accept(bool closeOnSuccess)
     {
-        if (_pictureMode.IsChecked == true)
-            return AcceptPicture(closeOnSuccess);
-
-        return AcceptText(closeOnSuccess);
-    }
-
-    private bool AcceptText(bool closeOnSuccess)
-    {
-        if (!WatermarkOptionsDialogPlanner.TryBuildTextResult(
-                new WatermarkTextDialogInput(
-                    _text.Text,
-                    _font.Text,
-                    _color.Text,
-                    _horizontal.IsChecked == true,
-                    _semitransparent.IsChecked == true),
-                out var result,
-                out var validation))
+        _session.SelectMode(
+            _pictureMode.IsChecked == true ? WatermarkDialogMode.Picture : WatermarkDialogMode.Text);
+        var acceptance = _session.Submit(new WatermarkOptionsDialogSubmission(
+            _text.Text,
+            _font.Text,
+            _color.Text,
+            _horizontal.IsChecked == true,
+            _semitransparent.IsChecked == true,
+            _scaleBox.Text,
+            _pictureHorizontal.IsChecked == true,
+            _washout.IsChecked == true));
+        if (!acceptance.IsAccepted)
         {
-            ShowValidation(validation?.Message ?? WatermarkOptionsDialogPlanner.TextValidationMessage, FocusTarget(validation?.Target));
+            ShowValidation(
+                acceptance.Validation?.Message ?? WatermarkOptionsDialogPlanner.TextValidationMessage,
+                FocusTarget(acceptance.Validation?.Target));
             return false;
         }
 
-        Result = result;
-        ClearValidation();
-        if (closeOnSuccess)
-            Close();
-        return true;
-    }
-
-    private bool AcceptPicture(bool closeOnSuccess)
-    {
-        if (!WatermarkOptionsDialogPlanner.TryBuildPictureResult(
-                new WatermarkPictureDialogInput(
-                    _pendingImageBytes,
-                    _scaleBox.Text,
-                    _pictureHorizontal.IsChecked == true,
-                    _washout.IsChecked == true),
-                CultureInfo.CurrentCulture,
-                out var result,
-                out var validation))
-        {
-            ShowValidation(validation?.Message ?? WatermarkOptionsDialogPlanner.ImageValidationMessage, FocusTarget(validation?.Target));
-            return false;
-        }
-
-        Result = result;
+        Result = acceptance.Result;
         ClearValidation();
         if (closeOnSuccess)
             Close();

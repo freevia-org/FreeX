@@ -35,7 +35,7 @@ public sealed class ChartSmartArtContextualTabTests
         catch (Exception) { return false; }
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { },
@@ -87,7 +87,7 @@ public sealed class ChartSmartArtContextualTabTests
     [Fact]
     public void Ribbon_definition_includes_chart_and_smartart_contextual_tabs()
     {
-        var def = FreeWRibbon.BuildDefinition();
+        var def = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var ctx = def.ContextualTabs.ToList();
 
         ctx.Any(t => t.Id == "chart-design").Should().BeTrue("chart-design tab must be defined");
@@ -231,8 +231,8 @@ public sealed class ChartSmartArtContextualTabTests
     [Fact]
     public void Every_contextual_ribbon_command_is_registered()
     {
-        var def = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var def = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
 
         var ids = def.Tabs
             .SelectMany(t => t.Groups)
@@ -880,7 +880,7 @@ public sealed class ChartSmartArtContextualTabTests
     [Fact]
     public void SmartArt_contextual_tab_exposes_all_shared_commands_and_style_catalog()
     {
-        var tab = FreeWRibbon.BuildDefinition().FindTab("smartart-design")!;
+        var tab = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("smartart-design")!;
         var commandIds = tab.Groups.SelectMany(group => group.Controls)
             .Select(GetCommandId)
             .Where(id => id is not null)

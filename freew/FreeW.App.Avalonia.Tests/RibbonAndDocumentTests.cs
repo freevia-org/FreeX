@@ -18,14 +18,14 @@ public class RibbonAndDocumentTests
     [Fact]
     public void Ribbon_definition_has_file_and_home_tabs()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         definition.Tabs.Select(t => t.Id).Should().Contain(new[] { "file", "home" });
     }
 
     [Fact]
     public void Ribbon_home_tab_has_the_expected_groups()
     {
-        var home = FreeWRibbon.BuildDefinition().FindTab("home");
+        var home = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("home");
         home.Should().NotBeNull();
         home!.Groups.Select(g => g.Id)
             .Should().Contain(new[] { "clipboard", "font", "paragraph", "editing" });
@@ -34,7 +34,7 @@ public class RibbonAndDocumentTests
     [Fact]
     public void Ribbon_file_tab_exposes_explicit_pdf_text_import()
     {
-        var file = FreeWRibbon.BuildDefinition().FindTab("file");
+        var file = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("file");
 
         file.Should().NotBeNull();
         file!.Groups
@@ -48,8 +48,8 @@ public class RibbonAndDocumentTests
     [Fact]
     public void Avalonia_file_shell_and_WPF_authority_legal_notice_commands_are_backed()
     {
-        var definition = FreeWRibbon.BuildDefinition();
-        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), NoopCallbacks());
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), NoopCallbacks());
         var commandIds = CommandIds(definition).Select(id => id.Value).ToArray();
 
         commandIds.Should().Contain(new[]
@@ -104,7 +104,7 @@ public class RibbonAndDocumentTests
             ImportPdfText = () => calls.Add("import-pdf-text"),
             Save = () => calls.Add("save"),
         };
-        var routedRegistry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), routedCallbacks);
+        var routedRegistry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), routedCallbacks);
         foreach (var id in new[]
                  {
                      "freew.backstage",
@@ -137,7 +137,7 @@ public class RibbonAndDocumentTests
             CopyDiagnostics = () => calls.Add("copy-diagnostics"),
             CheckForUpdates = () => calls.Add("check-updates"),
         };
-        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), callbacks);
 
         foreach (var id in new[]
                  {
@@ -153,7 +153,7 @@ public class RibbonAndDocumentTests
 
         calls.Should().Equal("help-online", "feedback", "copy-diagnostics", "check-updates");
 
-        var unavailable = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), NoopCallbacks());
+        var unavailable = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), NoopCallbacks());
         foreach (var id in new[]
                  {
                      "freew.help-online",
@@ -171,9 +171,9 @@ public class RibbonAndDocumentTests
     [Fact]
     public void Every_ribbon_command_id_is_registered()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var callbacks = NoopCallbacks();
-        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), callbacks);
 
         foreach (var id in CommandIds(definition))
             registry.TryGet(id, out _).Should().BeTrue($"command '{id.Value}' should be wired");
@@ -281,7 +281,7 @@ public class RibbonAndDocumentTests
     {
         var invoked = 0;
         var callbacks = NoopCallbacks() with { ImportPdfText = () => invoked++ };
-        var registry = FreeWRibbon.BuildRegistry(new Editing.DocumentView(), callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new Editing.DocumentView(), callbacks);
 
         registry.TryGet(new RibbonCommandId("freew.import-pdf-text"), out var command).Should().BeTrue();
         command!.Execute(RibbonCommandContext.Empty);
@@ -323,7 +323,7 @@ public class RibbonAndDocumentTests
     public void Avalonia_protect_toggles_read_state_from_shared_protection_state_planner()
     {
         var editor = new Editing.DocumentView();
-        var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks());
 
         registry.TryGet(new RibbonCommandId("freew.mark-as-final"), out var markAsFinal).Should().BeTrue();
         registry.TryGet(new RibbonCommandId("freew.restrict-editing"), out var restrictEditing).Should().BeTrue();
@@ -409,6 +409,6 @@ public class RibbonAndDocumentTests
         Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), Path.Combine(parts));
 
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(() => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, () => { }, _ => { }, _ => { }, () => { }, () => { }, (_, _) => { });
 }

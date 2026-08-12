@@ -305,7 +305,7 @@ public sealed class TableStyleGalleryTests
     [Fact]
     public void RibbonDefinition_TableDesign_HasTableStyleGroup()
     {
-        var ribbon = FreeWRibbon.Build();
+        var ribbon = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var tableDesign = ribbon.FindTab("table-design");
 
         tableDesign.Should().NotBeNull("the table-design contextual tab must exist");

@@ -303,7 +303,7 @@ public sealed class InsertDepthCommandTests
     [StaFact]
     public void InsertTab_TextGroup_ExposesNewTextboxAndDropCapMenuItems()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var textGroup = definition.FindTab("insert")!.FindGroup("text");
 
         textGroup.Should().NotBeNull();

@@ -30,7 +30,7 @@ public sealed class ReferencesTabTests
     private static Task RunOnUiThread(Action action) =>
         Session.Dispatch(action, CancellationToken.None);
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },
@@ -947,7 +947,7 @@ public sealed class ReferencesTabTests
             }
         });
         var calls = 0;
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks() with
         {
             OpenInsertIndexDialog = () =>
             {
@@ -981,7 +981,7 @@ public sealed class ReferencesTabTests
                 DocumentIndex.MarkRun(new IndexMark("Ada", Identifier: "People"))
             }
         });
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.index-insert");
 
@@ -1016,7 +1016,7 @@ public sealed class ReferencesTabTests
             Runs = { DocumentIndex.MarkRun(new IndexMark("Grace", Identifier: "People")) }
         });
         var calls = 0;
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks() with
         {
             OpenUpdateIndexDialog = () =>
             {
@@ -1063,7 +1063,7 @@ public sealed class ReferencesTabTests
                 DocumentIndex.MarkRun(new IndexMark("Grace", Identifier: "People"))
             }
         });
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.index-refresh");
 
@@ -1378,7 +1378,7 @@ public sealed class ReferencesTabTests
     {
         var view = ViewWith(new Paragraph("Transport"));
         var calls = 0;
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks() with
         {
             OpenMarkIndexEntryDialog = () =>
             {
@@ -1823,7 +1823,7 @@ public sealed class ReferencesTabTests
     [Fact]
     public void References_tab_definition_exposes_groups()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var references = definition.FindTab("references");
         references.Should().NotBeNull();
 
@@ -1842,7 +1842,7 @@ public sealed class ReferencesTabTests
     [Fact]
     public void References_tab_definition_uses_canonical_shared_command_ids()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var references = definition.FindTab("references");
         references.Should().NotBeNull();
         var commandIds = references!.Groups
@@ -1897,7 +1897,7 @@ public sealed class ReferencesTabTests
         var expected = Enum.GetValues<CitationStyle>().Select(Citations.StyleName).ToArray();
         expected.Should().Equal(FreeW.Ribbon.Definitions.FreeWRibbonDefinitionData.CitationStyleNames);
 
-        var avalonia = FreeWRibbon.BuildDefinition();
+        var avalonia = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var wpf = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
 
         CitationStyleItems(avalonia).Should().Equal(expected);
@@ -1909,7 +1909,7 @@ public sealed class ReferencesTabTests
     public void Citation_style_command_accepts_every_profile_value_and_reports_selected_state(string styleName)
     {
         var view = ViewWith(new Paragraph("Body"));
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.citation-style", RibbonCommandContext.ForSelectedValue(styleName));
 
@@ -1924,8 +1924,8 @@ public sealed class ReferencesTabTests
     {
         var view = ViewWith(new Paragraph("Body"));
         view.Document.BibliographyStyle = CitationStyle.Harvard;
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
-        var references = FreeWRibbon.BuildDefinition().FindTab("references");
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+        var references = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia).FindTab("references");
 
         var content = AvaloniaRibbonRenderer.BuildTabContent(references!, registry);
         var combo = content.GetLogicalDescendants()
@@ -1943,7 +1943,7 @@ public sealed class ReferencesTabTests
     public void Canonical_references_commands_execute_via_registry()
     {
         var view = ViewWith();
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.footnote");
         view.Document.Footnotes.Should().ContainKey(1, "executing the canonical command inserts a footnote");
@@ -1952,7 +1952,7 @@ public sealed class ReferencesTabTests
         view.Document.Endnotes.Should().ContainKey(1, "executing the canonical command inserts an endnote");
 
         var tocView = ViewWith(Heading("First", 1), new Paragraph("body"));
-        var tocRegistry = FreeWRibbon.BuildRegistry(tocView, NoopCallbacks());
+        var tocRegistry = FreeWAvaloniaRibbonCommands.Build(tocView, NoopCallbacks());
 
         Execute(tocRegistry, "freew.toc");
         tocView.Document.Blocks.Count(TableOfContents.IsTocParagraph)
@@ -1965,7 +1965,7 @@ public sealed class ReferencesTabTests
             .Should().Contain("Second\t1", "executing the canonical refresh updates the TOC in place");
 
         var indexView = ViewWith(new Paragraph("Alpha"));
-        var indexRegistry = FreeWRibbon.BuildRegistry(indexView, NoopCallbacks());
+        var indexRegistry = FreeWAvaloniaRibbonCommands.Build(indexView, NoopCallbacks());
         Execute(indexRegistry, "freew.index-mark");
         Execute(indexRegistry, "freew.index-insert");
         indexView.Document.Blocks.OfType<Paragraph>()
@@ -1975,7 +1975,7 @@ public sealed class ReferencesTabTests
             .Contain("Alpha, 1");
 
         var authoritiesView = ViewWith(new Paragraph("Brown v. Board"));
-        var authoritiesRegistry = FreeWRibbon.BuildRegistry(authoritiesView, NoopCallbacks() with
+        var authoritiesRegistry = FreeWAvaloniaRibbonCommands.Build(authoritiesView, NoopCallbacks() with
         {
             OpenMarkCitationDialog = () => authoritiesView.MarkCitation(
                 new Citation("Brown v. Board", CitationCategory.Cases, "Brown"))
@@ -1995,7 +1995,7 @@ public sealed class ReferencesTabTests
         var view = ViewWith(new Paragraph("See "));
         var source = new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" };
         view.Document.Sources.Add(source);
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks() with
         {
             OpenCitationDialog = () => view.InsertCitation(source),
         });
@@ -2022,7 +2022,7 @@ public sealed class ReferencesTabTests
             Year = "2024",
             Publisher = "Press"
         });
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.citation-style", RibbonCommandContext.ForSelectedValue("Chicago"));
         Execute(registry, "freew.bibliography");
@@ -2053,7 +2053,7 @@ public sealed class ReferencesTabTests
         });
         view.Document.Sources.Add(source);
         view.Document.Blocks.AddRange(Citations.BuildBibliography(view.Document, CitationStyle.Apa));
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.citation-style", RibbonCommandContext.ForSelectedValue("IEEE"));
 
@@ -2078,7 +2078,7 @@ public sealed class ReferencesTabTests
             Heading("Second", 1),
             new Paragraph("See "));
         view.Document.Sources.Add(new Source { Tag = "Sm24", Author = "Smith", Title = "A Work", Year = "2024" });
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.cross-reference");
         Execute(registry, "freew.citation");
@@ -2135,7 +2135,7 @@ public sealed class ReferencesTabTests
             OpenMarkCitationDialog = () => view.MarkCitation(
                 new Citation("17 U.S.C. 107", CitationCategory.Statutes, "fair use"))
         };
-        var registry = FreeWRibbon.BuildRegistry(view, callbacks);
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
 
         Execute(registry, "freew.cross-reference");
         Execute(registry, "freew.citation");
@@ -2164,7 +2164,7 @@ public sealed class ReferencesTabTests
         RunOnUiThread(() =>
     {
         var view = ViewWith(new Paragraph("Brown v. Board"));
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks() with
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks() with
         {
             OpenMarkCitationDialog = () => view.MarkCitation(
                 new Citation("Brown v. Board", CitationCategory.Cases, "Brown")),
@@ -2193,7 +2193,7 @@ public sealed class ReferencesTabTests
     public void Legacy_caption_label_commands_remain_backed()
     {
         var view = ViewWith();
-        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
 
         Execute(registry, "freew.insert-caption.figure");
         Execute(registry, "freew.insert-caption.table");

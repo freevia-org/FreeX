@@ -1245,10 +1245,10 @@ internal static class FreeWRibbonCommands
                     Toggle: new ViewRibbonToggleBinding(onToggleReadMode, isReadModeActive),
                     ColumnWidth: new ViewRibbonChoiceBinding(
                         onReadModeColumnWidth,
-                        EmptyRibbonCommand.Instance),
+                        ViewRibbonBindingAvailability.EnabledNoOp),
                     PageColor: new ViewRibbonChoiceBinding(
                         onReadModePageColor,
-                        EmptyRibbonCommand.Instance)),
+                        ViewRibbonBindingAvailability.EnabledNoOp)),
                 Modes: new ViewRibbonModeBindings(
                     PrintLayout: new ViewRibbonToggleBinding(onTogglePrintLayout, isPrintLayoutActive),
                     WebLayout: new ViewRibbonToggleBinding(onWebLayout, isWebLayoutActive),
@@ -1276,8 +1276,12 @@ internal static class FreeWRibbonCommands
                         onToggleSideToSide,
                         isSideToSideActive)),
                 Window: new ViewRibbonWindowBindings(
-                    NewWindow: new ViewRibbonActionBinding(onNewWindow, EmptyRibbonCommand.Instance),
-                    ArrangeAll: new ViewRibbonActionBinding(onArrangeAll, EmptyRibbonCommand.Instance),
+                    NewWindow: new ViewRibbonActionBinding(
+                        onNewWindow,
+                        ViewRibbonBindingAvailability.EnabledNoOp),
+                    ArrangeAll: new ViewRibbonActionBinding(
+                        onArrangeAll,
+                        ViewRibbonBindingAvailability.EnabledNoOp),
                     Split: new ViewRibbonToggleBinding(onToggleSplitWindow, isSplitWindowActive))));
 
         // Home > Paragraph — Show Formatting Marks: a stateful toggle over the editor's display-only pilcrow /
@@ -1497,47 +1501,10 @@ internal static class FreeWRibbonCommands
             Group: editor.GroupSelectedFloatingObjects,
             CanUngroup: () => editor.IsGroupSelected,
             Ungroup: editor.UngroupSelectedFloatingObject,
-            NativeCanonicalCommands: CreateNativeFloatingCommands(editor));
-
-    private static IReadOnlyDictionary<FreeWRibbonCommandAction, IRibbonCommand> CreateNativeFloatingCommands(
-        DocumentView editor) =>
-        new Dictionary<FreeWRibbonCommandAction, IRibbonCommand>
-        {
-            [FreeWRibbonCommandAction.ShapeEditShape] = new ActionRibbonCommand(() =>
-            {
-                editor.Focus();
-                DialogMessageHelper.ShowInfo(
-                    Window.GetWindow(editor),
-                    "Choose 'Convert to Freeform' or 'Edit Points' from the menu.",
-                    "Edit Shape");
-            }),
-            [FreeWRibbonCommandAction.ShapeTextDirection] = new ActionRibbonCommand(() =>
-            {
-                editor.Focus();
-                DialogMessageHelper.ShowInfo(
-                    Window.GetWindow(editor),
-                    "Choose a text direction from the dropdown.",
-                    "Text Direction");
-            }),
-            [FreeWRibbonCommandAction.ShapeEffects] = new ActionRibbonCommand(() =>
-            {
-                editor.Focus();
-                DialogMessageHelper.ShowInfo(
-                    Window.GetWindow(editor),
-                    "Choose an effect from the dropdown.",
-                    "Shape Effects");
-            }),
-            [FreeWRibbonCommandAction.ShapeStylesGallery] = new ActionRibbonCommand(() =>
-            {
-                editor.Focus();
-                DialogMessageHelper.ShowInfo(
-                    Window.GetWindow(editor),
-                    "Choose a shape style from the gallery.",
-                    "Shape Styles");
-            }),
-            [FreeWRibbonCommandAction.ObjectGroup] = new ObjectGroupCommand(editor),
-            [FreeWRibbonCommandAction.ObjectUngroup] = new ObjectUngroupCommand(editor),
-        };
+            ShowFeedback: feedback => DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
+                feedback.Message,
+                feedback.Title));
 
     private static FreeWRibbonImageExecutionPorts CreateImageExecutionPorts(DocumentView editor) =>
         new(
@@ -3536,37 +3503,6 @@ internal static class FreeWRibbonCommands
                 return;
             }
             editor.SetSelectedImageArtisticEffect(effect);
-        }
-    }
-
-    private sealed class ObjectGroupCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            if (!editor.HasMultipleFloatingObjectsSelected)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    "Select two or more floating objects first (Shift-click or Ctrl-click).", "Group");
-                return;
-            }
-            editor.GroupSelectedFloatingObjects();
-        }
-    }
-
-    // Drawing Format / Picture Format > Arrange > Ungroup: ungroup a selected DrawingGroup.
-    private sealed class ObjectUngroupCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            if (!editor.IsGroupSelected)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    "Select a group first.", "Ungroup");
-                return;
-            }
-            editor.UngroupSelectedFloatingObject();
         }
     }
 

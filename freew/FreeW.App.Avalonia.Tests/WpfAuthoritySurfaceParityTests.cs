@@ -517,7 +517,7 @@ public sealed class WpfAuthoritySurfaceParityTests
                 OpenLegalNotices = () => legal++,
                 CompareDocuments = () => compare++,
             };
-            var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+            var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
 
             Execute(registry, "freew.symbol");
             Execute(registry, "freew.screenshot");
@@ -527,7 +527,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             Execute(registry, "freew.compare");
             (symbol, clips, about, legal, compare).Should().Be((1, 2, 1, 1, 1));
 
-            var unavailable = FreeWRibbon.BuildRegistry(new DocumentView(), Callbacks());
+            var unavailable = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), Callbacks());
             foreach (var id in new[]
                      {
                          "freew.symbol", "freew.screenshot", "freew.screen-clipping",
@@ -590,7 +590,7 @@ public sealed class WpfAuthoritySurfaceParityTests
     private static byte[] OnePixelPng() => Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
-    private static RibbonHostCallbacks Callbacks() => new(
+    private static FreeWRibbonHostExecutionPorts Callbacks() => new(
         Open: () => { },
         Save: () => { },
         Cut: () => { },

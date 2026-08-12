@@ -90,7 +90,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void Build_OrdersImplementedTopLevelTabsLikeWord()
     {
-        FreeWRibbon.Build().VisibleTabs.Select(tab => tab.Id)
+        FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).VisibleTabs.Select(tab => tab.Id)
             .Should()
             .Equal("home", "insert", "design", "layout", "references", "mailings", "review", "view", "help", "developer");
     }
@@ -98,7 +98,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void Wpf_profile_uses_backstage_shell_instead_of_avalonia_file_command_strip()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var allCommandIds = definition.Tabs
             .SelectMany(CommandIds)
             .Concat(definition.Tabs.SelectMany(MenuCommandIds))
@@ -132,7 +132,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void HelpTab_ExposesOnlyBackedFreeWLocalSupportCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var help = definition.FindTab("help");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(
@@ -174,7 +174,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void Build_ExposesReferencesAsAWordStyleTopLevelTab()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
 
         definition.VisibleTabs.Select(tab => tab.Id)
             .Should()
@@ -246,7 +246,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void InsertTab_GroupsBackedCommandsLikeWord()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var insert = definition.FindTab("insert");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -335,7 +335,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void InsertPages_ExposesBackedWordStyleBlankPage()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var pages = definition.FindTab("insert")!.FindGroup("pages");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -358,7 +358,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void ReferencesTab_GroupsImplementedReferenceCommandsLikeWord()
     {
-        var references = FreeWRibbon.Build().FindTab("references");
+        var references = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("references");
 
         references.Should().NotBeNull();
         references!.Groups.Select(group => group.Id)
@@ -396,7 +396,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ReferencesCaptions_ExposeLabelMenusAndUpdateFieldsRefreshesTableOfFigures()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var captions = definition.FindTab("references")!.FindGroup("captions");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -529,7 +529,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ReferencesIndex_ExposesBackedWordStyleUpdateIndex()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var index = definition.FindTab("references")!.FindGroup("index");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -565,7 +565,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ReferencesCitations_ExposesBackedWordStyleManageSources()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var citations = definition.FindTab("references")!.FindGroup("citations");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -611,7 +611,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ReferencesFootnotes_ExposesBackedWordStyleNavigationAndShowNotes()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var footnotes = definition.FindTab("references")!.FindGroup("footnotes");
         var next = footnotes!.Controls
             .OfType<RibbonDropdown>()
@@ -666,7 +666,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ReferencesTableOfContents_AddTextExposesBackedHeadingLevelCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var tocGroup = definition.FindTab("references")!.FindGroup("table-of-contents");
         var addText = tocGroup!.Controls
             .OfType<RibbonDropdown>()
@@ -709,7 +709,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void HomeFont_ExposesAndRegistersStrikethrough()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var font = definition.FindTab("home")!.FindGroup("font");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -725,7 +725,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void HomeEditing_ExposesFindReplaceAndSelect()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var editing = definition.FindTab("home")!.FindGroup("editing");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(
@@ -749,7 +749,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void HomeStyles_ExposesBackedQuickStyleAndClearStyleCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var styles = definition.FindTab("home")!.FindGroup("styles");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -771,7 +771,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void HomeFormattingVisibility_ExposesBackedWordStyleToggles()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var home = definition.FindTab("home");
         var paragraph = home!.FindGroup("paragraph");
         var formatting = home.FindGroup("formatting");
@@ -809,7 +809,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void HomeParagraph_MultilevelListDropdownExposesBackedLevelCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var paragraph = definition.FindTab("home")!.FindGroup("paragraph");
         var multilevel = paragraph!.Controls
             .OfType<RibbonDropdown>()
@@ -837,7 +837,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ReviewComments_ExposesAndRegistersWordStyleThreadActions()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var comments = definition.FindTab("review")!.FindGroup("comments");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -871,7 +871,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ReviewProofing_CommandsRouteToBackedActions()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var proofing = definition.FindTab("review")!.FindGroup("proofing");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -904,7 +904,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ReviewTab_GroupsBackedCommandsLikeWord()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var review = definition.FindTab("review");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(
@@ -1019,7 +1019,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DesignPageBackground_ExposesWordStyleWatermarkPageColorAndPageBorders()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var pageBackground = definition.FindTab("design")!.FindGroup("page-background");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -1039,7 +1039,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DesignDocumentFormatting_ExposesBackedWordStyleThemeAndColorsSurfaces()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var design = definition.FindTab("design");
         var documentFormatting = design!.FindGroup("themes");
         var editor = new DocumentView();
@@ -1066,7 +1066,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void LayoutTab_DoesNotExposeDesignPageBackgroundCommands()
     {
-        var layout = FreeWRibbon.Build().FindTab("layout");
+        var layout = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("layout");
 
         layout.Should().NotBeNull();
         layout!.Groups.Select(group => group.Id)
@@ -1084,7 +1084,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void LayoutParagraph_ExposesBackedWordStyleParagraphCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var layout = definition.FindTab("layout");
         var paragraph = layout!.FindGroup("paragraph");
         var editor = new DocumentView();
@@ -1129,7 +1129,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void LayoutPageSetup_LineNumbersDropdownExposesBackedWordModeCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var pageSetup = definition.FindTab("layout")!.FindGroup("page-setup");
         var lineNumbers = pageSetup!.Controls
             .OfType<RibbonDropdown>()
@@ -1168,7 +1168,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void LayoutPageSetup_ColumnsDropdownExposesBackedWordPresetCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var pageSetup = definition.FindTab("layout")!.FindGroup("page-setup");
         var columns = pageSetup!.Controls
             .OfType<RibbonDropdown>()
@@ -1220,7 +1220,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void MailingsTab_UsesWordStyleMergeCommandLabels()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var mailings = definition.FindTab("mailings");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -1575,7 +1575,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ViewShow_ExposesWordStyleRulerToggle()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var show = definition.FindTab("view")!.FindGroup("show");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(
@@ -1607,7 +1607,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ViewZoom_ExposesBackedWordStyleQuickControls()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var zoom = definition.FindTab("view")!.FindGroup("zoom");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(
@@ -1647,7 +1647,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DeveloperControls_ExposesAndRegistersImplementedContentControlCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var developer = definition.FindTab("developer");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -1678,7 +1678,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void InsertTab_DoesNotExposeContentControlsOutsideDeveloper()
     {
-        var insert = FreeWRibbon.Build().FindTab("insert");
+        var insert = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("insert");
 
         insert.Should().NotBeNull();
         insert!.Groups.Select(group => group.Id)
@@ -1699,7 +1699,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void Build_ExposesWordStyleTableDesignAndTableLayoutContextualTabs()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
 
         definition.ContextualTabs.Select(tab => tab.Id)
             .Should()
@@ -1720,7 +1720,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void Build_ExposesWordStyleChartDesignAndChartFormatContextualTabs()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
 
         foreach (var tabId in new[] { "chart-design", "chart-format" })
         {
@@ -1737,7 +1737,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ChartDesign_ContextualTabContainsBackedChartCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var chartDesign = definition.FindTab("chart-design");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -1789,7 +1789,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void ChartFormat_ContextualTabContainsBackedSizeCommand()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var chartFormat = definition.FindTab("chart-format");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -2105,7 +2105,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void TableDesign_ContextualTabContainsOnlyImplementedStyleCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var tableDesign = definition.FindTab("table-design");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -2136,7 +2136,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void PictureFormat_ContextualTabExposesBackedWrapTextMenu()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var picture = definition.FindTab("picture-format");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -2242,7 +2242,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void TableLayout_ContextualTabContainsImplementedTableLayoutCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var tableLayout = definition.FindTab("table-layout");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -2309,7 +2309,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void InsertTab_DoesNotExposeTableMutationToolsOutsideTableContext()
     {
-        var insert = FreeWRibbon.Build().FindTab("insert");
+        var insert = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf).FindTab("insert");
 
         insert.Should().NotBeNull();
         insert!.Groups.Select(group => group.Id)
@@ -2538,7 +2538,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void LayoutPageSetup_BreaksDropdownExposesBackedSectionBreakCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var pageSetup = definition.FindTab("layout")!.FindGroup("page-setup");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -2582,7 +2582,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DrawingFormat_ContextualTabExposesBackedShapeCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var drawing = definition.FindTab("drawing-format");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -2694,7 +2694,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void SmartArtDesignContextualTab_ExposesAllBackedNodeMutationCommands()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
 
@@ -2858,7 +2858,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void Build_ExposesHeaderFooterDesignContextualTab()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
 
         var tab = definition.FindTab("header-footer-design");
         tab.Should().NotBeNull("header-footer-design contextual tab must be declared");
@@ -2871,7 +2871,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void HeaderFooterDesign_ContextualTabHasExpectedGroups()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var tab = definition.FindTab("header-footer-design");
 
         tab.Should().NotBeNull();
@@ -2883,7 +2883,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void HeaderFooterDesign_AllTabCommandsAreBacked()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var tab = definition.FindTab("header-footer-design");
         var editor = new DocumentView();
         var registry = FreeWRibbonCommands.Build(editor, new RibbonStateStore());
@@ -3151,7 +3151,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void PictureArrange_AlignToPageAndMargin_AreBacked()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var arrange = definition.FindTab("picture-format")!.FindGroup("picture-arrange");
 
         var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
@@ -3170,7 +3170,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DrawingArrange_AlignToPageAndMargin_AreBacked()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
 
         var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
@@ -3238,7 +3238,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DrawingArrange_ZOrder_CommandsExistInRibbonAndRegistry()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
         var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
         ids.Should().Contain("freew.shape-bring-to-front",  "Drawing Tools > Arrange must expose Bring to Front");
@@ -3256,7 +3256,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DrawingArrange_WrapText_CommandsExistInRibbonAndRegistry()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
         var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
         ids.Should().Contain("freew.shape-wrap", "Drawing Tools > Arrange must expose Wrap Text dropdown");
@@ -3273,7 +3273,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DrawingArrange_Position_CommandExistsInRibbonAndRegistry()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
         var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
         ids.Should().Contain("freew.shape-position", "Drawing Tools > Arrange must expose Position");
@@ -3285,7 +3285,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DrawingArrange_Rotate_CommandsExistInRibbonAndRegistry()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
         var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
         ids.Should().Contain("freew.shape-rotate", "Drawing Tools > Arrange must expose Rotate dropdown");
@@ -3325,7 +3325,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void View_ReadModeOptions_AreBacked()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var views = definition.FindTab("view")!.FindGroup("views");
         // Read Mode must now carry a dropdown menu with column width and page color items.
         var readMode = views!.Controls.FirstOrDefault(c => c.CommandId.Value == "freew.read-mode");
@@ -3364,7 +3364,7 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void View_Window_NewWindowAndArrangeAll_AreBacked()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var window = definition.FindTab("view")!.FindGroup("window");
         var ids = window!.Controls.Select(c => c.CommandId.Value).ToList();
         ids.Should().Contain("freew.new-window",  "View > Window must expose New Window");
@@ -3423,7 +3423,7 @@ public sealed class FreeWRibbonParityTests
     [Fact]
     public void TableDesignTab_DrawBordersGroup_ExposesDrawTableAndEraser()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var tableDesign = definition.FindTab("table-design");
         tableDesign.Should().NotBeNull();
 

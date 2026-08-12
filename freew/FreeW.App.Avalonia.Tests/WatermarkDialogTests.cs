@@ -16,17 +16,17 @@ public sealed class WatermarkDialogTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
     [Fact]
-    public void WatermarkDialog_UsesSharedPlannerForTextAndPicturePolicy()
+    public void WatermarkDialog_UsesSharedSessionForTextAndPicturePolicy()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogs.cs"));
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("WatermarkOptionsDialogPlanner.BuildInitialState(current, CultureInfo.CurrentCulture)");
-        source.Should().Contain("WatermarkOptionsDialogPlanner.TryBuildTextResult(");
-        source.Should().Contain("new WatermarkTextDialogInput(");
-        source.Should().Contain("WatermarkOptionsDialogPlanner.TryBuildPictureResult(");
-        source.Should().Contain("new WatermarkPictureDialogInput(");
-        source.Should().Contain("WatermarkOptionsDialogPlanner.BuildImageImportPlan(");
+        source.Should().Contain("new WatermarkOptionsDialogSession(current, CultureInfo.CurrentCulture)");
+        source.Should().Contain("_session.InitialState");
+        source.Should().Contain("_session.Submit(");
+        source.Should().Contain("_session.ImportImage(");
+        source.Should().NotContain("WatermarkOptionsDialogPlanner.TryBuildTextResult(");
+        source.Should().NotContain("WatermarkOptionsDialogPlanner.TryBuildPictureResult(");
         source.Should().Contain("WatermarkOptionsDialogPlanner.FormatImageReadFailure(");
         source.Should().Contain("WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle");
         source.Should().NotContain("new WatermarkOptions(text)");

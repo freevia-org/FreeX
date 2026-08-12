@@ -176,4 +176,59 @@ public sealed class WatermarkOptionsDialogPlannerTests
     {
         WatermarkOptionsDialogPlanner.FormatImageReadFailure(detail).Should().Be(expected);
     }
+
+    [Fact]
+    public void Session_owns_mode_pending_image_and_picture_submission_sequence()
+    {
+        var session = new WatermarkOptionsDialogSession(null, CultureInfo.InvariantCulture);
+        var image = new byte[] { 1, 2, 3, 4 };
+
+        session.Mode.Should().Be(WatermarkDialogMode.Text);
+        session.SelectMode(WatermarkDialogMode.Picture);
+        session.ImportImage("art/logo.png", image)
+            .Should().Be(new WatermarkImageImportPlan(image, "logo.png (0 KB)"));
+
+        var acceptance = session.Submit(ValidSubmission() with
+        {
+            PictureScaleText = "125",
+            PictureIsHorizontal = true,
+            PictureIsWashout = false,
+        });
+
+        acceptance.IsAccepted.Should().BeTrue();
+        acceptance.Validation.Should().BeNull();
+        acceptance.Result!.ImageBytes.Should().BeSameAs(image);
+        acceptance.Result.ScalePct.Should().Be(125);
+        acceptance.Result.Layout.Should().Be(WatermarkLayout.Horizontal);
+        acceptance.Result.Opacity.Should().Be(1.0);
+    }
+
+    [Fact]
+    public void Session_routes_active_mode_validation_and_remove_outcome()
+    {
+        var session = new WatermarkOptionsDialogSession(null, CultureInfo.InvariantCulture);
+
+        var textValidation = session.Submit(ValidSubmission() with { Text = string.Empty });
+        textValidation.IsAccepted.Should().BeFalse();
+        textValidation.Validation!.Target.Should().Be(WatermarkDialogValidationTarget.Text);
+
+        session.SelectMode(WatermarkDialogMode.Picture);
+        var pictureValidation = session.Submit(ValidSubmission());
+        pictureValidation.IsAccepted.Should().BeFalse();
+        pictureValidation.Validation!.Target.Should().Be(WatermarkDialogValidationTarget.Image);
+
+        session.Remove().Should().Be(new WatermarkOptionsDialogAcceptance(
+            IsAccepted: true,
+            RemoveRequested: true));
+    }
+
+    private static WatermarkOptionsDialogSubmission ValidSubmission() => new(
+        Text: "DRAFT",
+        FontFamily: "Calibri",
+        ColorText: "#808080",
+        TextIsHorizontal: false,
+        TextIsSemitransparent: true,
+        PictureScaleText: "100",
+        PictureIsHorizontal: false,
+        PictureIsWashout: true);
 }

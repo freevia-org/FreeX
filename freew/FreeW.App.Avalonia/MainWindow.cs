@@ -38,6 +38,7 @@ using FreeW.App.Presentation.Editing;
 using FreeW.App.Presentation.Options;
 using FreeW.App.Presentation.QuickParts;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.Ribbon.Definitions;
 using FreeW.App.Presentation.Shell;
 using FreeW.App.Presentation.Speech;
 using FreeW.Core.IO;
@@ -1816,7 +1817,7 @@ public sealed partial class MainWindow : Window
 
     private Control BuildRibbon()
     {
-        var callbacks = new RibbonHostCallbacks(
+        var callbacks = new FreeWRibbonHostExecutionPorts(
             Open: () => _applicationCommands.Execute(FreeWKeyboardCommand.OpenDocument),
             Save: () => _applicationCommands.Execute(FreeWKeyboardCommand.SaveDocument),
             ImportPdfText: () => _ = ImportPdfTextAsync(),
@@ -1996,7 +1997,7 @@ public sealed partial class MainWindow : Window
 
         // AV-MAIL: capture the Mailings engine so the shell can drive dialog-bound commands with async
         // Avalonia dialogs over the same session the ribbon commands share.
-        var registry = FreeWRibbon.BuildRegistry(_editor, callbacks, out var mailMerge);
+        var registry = FreeWAvaloniaRibbonCommands.Build(_editor, callbacks, out var mailMerge);
         _ribbonRegistry = registry;
         _mailMerge = mailMerge;
         registry.Register(new RibbonCommandId("freew.start-mail-merge"),
@@ -2056,7 +2057,7 @@ public sealed partial class MainWindow : Window
         // through the same Backstage callback as FreeP. FreeW's canonical definition keeps
         // its Avalonia-only File command group for the portable catalog, but it must not be
         // rendered a second time beside the shell tab.
-        var canonicalDefinition = FreeWRibbon.BuildDefinition();
+        var canonicalDefinition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeWRibbonCapabilities.Avalonia);
         var definition = canonicalDefinition with
         {
             Tabs = canonicalDefinition.Tabs

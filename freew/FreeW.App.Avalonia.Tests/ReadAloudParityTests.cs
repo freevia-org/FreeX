@@ -63,7 +63,7 @@ public sealed class ReadAloudParityTests
             ToggleReadAloud = () => active = !active,
             IsReadAloudActive = () => active,
         };
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks, out _);
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks, out _);
 
         registry.TryGet(new RibbonCommandId("freew.read-aloud"), out var command).Should().BeTrue();
         var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
@@ -456,7 +456,7 @@ public sealed class ReadAloudParityTests
     private static Task OnUiThread(Action action) =>
         Session.Dispatch(action, CancellationToken.None);
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { }, Save: () => { }, Cut: () => { }, Copy: () => { }, Paste: () => { },
             Backstage: () => { }, NewDocument: () => { }, ToggleNavigationPane: () => { },

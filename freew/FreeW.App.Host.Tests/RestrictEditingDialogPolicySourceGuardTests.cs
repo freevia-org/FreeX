@@ -10,10 +10,13 @@ public sealed class RestrictEditingDialogPolicySourceGuardTests
         var source = ReadHostSource("RestrictEditingDialog.cs");
 
         source.Should().Contain("using FreeW.App.Presentation.Dialogs;");
-        source.Should().Contain("RestrictEditingDialogPlanner.BuildPlan(current)");
+        source.Should().Contain("new RestrictEditingDialogSession(current)");
+        source.Should().Contain("_session.InitialPlan");
         source.Should().Contain("RestrictEditingDialogPlanner.ModeOptions");
-        source.Should().Contain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
-        source.Should().Contain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
+        source.Should().Contain("_session.Start(");
+        source.Should().Contain("_session.StopAsync(");
+        source.Should().NotContain("RestrictEditingDialogPlanner.TryCreateStartSettings(");
+        source.Should().NotContain("RestrictEditingDialogPlanner.TryCreateStopSettings(");
         source.Should().Contain("RestrictEditingDialogPlanner.StartButtonText");
         source.Should().Contain("RestrictEditingDialogPlanner.StopButtonText");
         source.Should().NotContain("ProtectionPasswordHelper.CreateWithPassword");

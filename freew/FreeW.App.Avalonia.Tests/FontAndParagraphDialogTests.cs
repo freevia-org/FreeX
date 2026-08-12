@@ -29,7 +29,7 @@ public sealed class FontAndParagraphDialogTests
         return doc;
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() =>
         new(
             Open: () => { },
             Save: () => { },
@@ -60,7 +60,7 @@ public sealed class FontAndParagraphDialogTests
     [Fact]
     public void Font_dialog_launcher_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.font-dialog"), out _)
             .Should().BeTrue("freew.font-dialog must be registered in the ribbon command registry");
     }
@@ -68,7 +68,7 @@ public sealed class FontAndParagraphDialogTests
     [Fact]
     public void Paragraph_dialog_launcher_command_is_registered()
     {
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks());
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.paragraph-dialog"), out _)
             .Should().BeTrue("freew.paragraph-dialog must be registered in the ribbon command registry");
     }
@@ -76,7 +76,7 @@ public sealed class FontAndParagraphDialogTests
     [Fact]
     public void Ribbon_definition_contains_font_dialog_button()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var allIds = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)
@@ -95,7 +95,7 @@ public sealed class FontAndParagraphDialogTests
     [Fact]
     public void Ribbon_definition_contains_paragraph_dialog_button()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var allIds = definition.Tabs
             .SelectMany(t => t.Groups)
             .SelectMany(g => g.Controls)

@@ -150,7 +150,7 @@ public sealed class IconCatalogTests
     [StaFact]
     public void InsertInsertIcon_IsInIllustrationsGroupAndBacked()
     {
-        var definition = FreeWRibbon.Build();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
         var illustrations = definition.FindTab("insert")!.FindGroup("illustrations");
 
         illustrations.Should().NotBeNull();

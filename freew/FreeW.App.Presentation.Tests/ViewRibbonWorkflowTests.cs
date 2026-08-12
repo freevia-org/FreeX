@@ -128,27 +128,29 @@ public sealed class ViewRibbonWorkflowTests
     }
 
     [Fact]
-    public void Register_preserves_optional_absence_and_renderer_fallback_commands()
+    public void Register_preserves_optional_absence_and_typed_unbound_availability()
     {
         var registry = new RibbonCommandRegistry();
-        var unavailable = new UnavailableCommand();
 
         ViewRibbonWorkflow.Register(
             registry,
             new ViewRibbonCommandBindings(
                 ReadMode: new ViewRibbonReadModeBindings(
-                    Toggle: new ViewRibbonToggleBinding(FallbackCommand: unavailable),
-                    ColumnWidth: new ViewRibbonChoiceBinding(FallbackCommand: unavailable),
-                    PageColor: new ViewRibbonChoiceBinding(FallbackCommand: unavailable)),
+                    Toggle: new ViewRibbonToggleBinding(
+                        AvailabilityWhenUnbound: ViewRibbonBindingAvailability.Disabled),
+                    ColumnWidth: new ViewRibbonChoiceBinding(
+                        AvailabilityWhenUnbound: ViewRibbonBindingAvailability.Disabled),
+                    PageColor: new ViewRibbonChoiceBinding(
+                        AvailabilityWhenUnbound: ViewRibbonBindingAvailability.Disabled)),
                 Modes: new ViewRibbonModeBindings(
                     PrintLayout: new ViewRibbonToggleBinding(static () => { }, IsChecked: null)),
                 Window: new ViewRibbonWindowBindings(
-                    NewWindow: new ViewRibbonActionBinding(FallbackCommand: EmptyRibbonCommand.Instance))));
+                    NewWindow: new ViewRibbonActionBinding(
+                        AvailabilityWhenUnbound: ViewRibbonBindingAvailability.EnabledNoOp))));
 
-        Command(registry, "freew.read-mode").Should().BeSameAs(unavailable);
         Stateful(registry, "freew.read-mode").GetState().IsEnabled.Should().BeFalse();
-        Command(registry, "freew.read-mode-column-default").Should().BeSameAs(unavailable);
-        Command(registry, "freew.read-mode-color-inverse").Should().BeSameAs(unavailable);
+        Stateful(registry, "freew.read-mode-column-default").GetState().IsEnabled.Should().BeFalse();
+        Stateful(registry, "freew.read-mode-color-inverse").GetState().IsEnabled.Should().BeFalse();
         Command(registry, "freew.new-window").Should().BeSameAs(EmptyRibbonCommand.Instance);
 
         registry.TryGet("freew.print-preview", out _).Should().BeFalse();
@@ -196,11 +198,4 @@ public sealed class ViewRibbonWorkflowTests
         return File.ReadAllText(relativePath.Aggregate(root, Path.Combine));
     }
 
-    private sealed class UnavailableCommand : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context) =>
-            throw new InvalidOperationException("Unavailable commands cannot execute.");
-
-        public RibbonCommandState GetState() => new(IsEnabled: false);
-    }
 }

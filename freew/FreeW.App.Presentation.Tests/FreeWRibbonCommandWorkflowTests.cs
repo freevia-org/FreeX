@@ -558,6 +558,7 @@ public sealed class FreeWRibbonCommandWorkflowTests
         ShapeFill? fill = null;
         ObjectFormatSizeDimension? sizeDimension = null;
         double? sizePoints = null;
+        var feedback = new List<FreeWRibbonFloatingFeedback>();
         var bindings = new FreeWRibbonCommandBindingPorts();
 
         FreeWRibbonEditorExecutionProfile.RegisterFloating(
@@ -589,7 +590,16 @@ public sealed class FreeWRibbonCommandWorkflowTests
                 CanGroup: () => false,
                 Group: () => { },
                 CanUngroup: () => false,
-                Ungroup: () => { }));
+                Ungroup: () => { },
+                ShowFeedback: feedback.Add));
+
+        bindings.TryGet("freew.shape-edit-shape", out var editShape).Should().BeTrue();
+        editShape!.Execute(RibbonCommandContext.Empty);
+        feedback.Should().ContainSingle().Which.Should().Be(FreeWRibbonFloatingFeedbackCatalog.EditShape);
+
+        bindings.TryGet("freew.object-group", out var group).Should().BeTrue();
+        group!.Execute(RibbonCommandContext.Empty);
+        feedback.Should().Contain(FreeWRibbonFloatingFeedbackCatalog.GroupSelectionRequired);
 
         bindings.TryGet("freew.shape-fill-gradient-blue", out var gradient).Should().BeTrue();
         gradient.Should().BeAssignableTo<IRibbonStatefulCommand>()
@@ -618,11 +628,6 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "FreeW.App.Avalonia",
             "Ribbon",
             "FreeWAvaloniaRibbonCommands.cs");
-        var avaloniaRibbon = ReadSource(
-            "freew",
-            "FreeW.App.Avalonia",
-            "Ribbon",
-            "FreeWRibbon.cs");
         var wpfMainWindow = ReadSource("freew", "FreeW.App.Host", "MainWindow.cs");
         var wpfNativePorts = ReadSource(
             "freew",
@@ -660,9 +665,15 @@ public sealed class FreeWRibbonCommandWorkflowTests
         avalonia.Should().NotContain(".Build().Registry");
         wpf.Should().NotContain("FreeWRibbonCommandWorkflow.Register(");
         avalonia.Should().NotContain("FreeWRibbonCommandWorkflow.Register(");
-        avaloniaRibbon.Should().Contain(
-            "global using RibbonHostCallbacks = FreeW.App.Presentation.Ribbon.FreeWRibbonHostExecutionPorts;");
-        avaloniaRibbon.Should().NotContain("record RibbonHostCallbacks");
+        File.Exists(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew", "FreeW.App.Avalonia", "Ribbon", "FreeWRibbon.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
+            "freew", "FreeW.App.Host", "FreeWRibbon.cs")).Should().BeFalse();
+        wpf.Should().NotContain("NativeCanonicalCommands");
+        wpf.Should().NotContain("CreateNativeFloatingCommands");
+        avalonia.Should().NotContain("RibbonHostCallbacks");
         avalonia.Should().Contain(
             "FreeWRibbonHostExecutionProfile.Register(r, callbacks, registerFileAdapterCommands: true);");
         wpf.Should().Contain("FreeWRibbonHostExecutionPorts hostPorts");

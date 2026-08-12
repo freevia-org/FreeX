@@ -16,7 +16,7 @@ public sealed class FinalFiveCommandParityTests
     [Fact]
     public void AvaloniaProfile_UsesTheFiveWpfCommandIdsInEquivalentGroups()
     {
-        var definition = FreeWRibbon.BuildDefinition();
+        var definition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Avalonia);
         var text = definition.FindTab("insert")!.FindGroup("text")!;
         var draw = definition.FindTab("table-design")!.FindGroup("draw-borders")!;
 
@@ -41,7 +41,7 @@ public sealed class FinalFiveCommandParityTests
     public void InsertTextCommandRoutes_InvokeTheirRealShellWorkflows()
     {
         var calls = new List<string>();
-        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), NoopCallbacks() with
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), NoopCallbacks() with
         {
             OpenFieldDialog = () => calls.Add("field"),
             SaveQuickPartSelection = () => calls.Add("save"),
@@ -107,7 +107,7 @@ public sealed class FinalFiveCommandParityTests
             var editor = new DocumentView();
             editor.LoadDocument(document);
             editor.Measure(new Size(800, 1200));
-            var registry = FreeWRibbon.BuildRegistry(editor, NoopCallbacks() with
+            var registry = FreeWAvaloniaRibbonCommands.Build(editor, NoopCallbacks() with
             {
                 OpenDrawTableDialog = () => editor.InsertTable(2, 3),
             });
@@ -140,7 +140,7 @@ public sealed class FinalFiveCommandParityTests
         command!.Execute(RibbonCommandContext.Empty);
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() => new(
+    private static FreeWRibbonHostExecutionPorts NoopCallbacks() => new(
         Open: () => { },
         Save: () => { },
         Cut: () => { },

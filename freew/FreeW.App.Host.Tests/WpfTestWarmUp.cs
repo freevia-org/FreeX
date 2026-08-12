@@ -193,7 +193,7 @@ internal static class WpfTestWarmUp
             // or FreeWRibbonCommands touch on first call.  After this point the first real ribbon-
             // parity test (which runs on its own per-class STA thread) skips the cold-JIT path
             // entirely and runs from cached types — eliminating the intermittent cold-start flake.
-            _keepAliveRibbonDefinition = FreeWRibbon.Build();
+            _keepAliveRibbonDefinition = FreeW.Ribbon.Definitions.FreeWRibbon.Build(FreeW.Ribbon.Definitions.FreeWRibbonCapabilities.Wpf);
             _keepAliveRibbonCommands   = FreeWRibbonCommands.Build(dv, new RibbonStateStore());
         }
         catch (Exception ex)
