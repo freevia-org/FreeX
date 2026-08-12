@@ -10,12 +10,15 @@ public sealed class DocumentDesignCommandOwnershipSourceGuardTests
         var source = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
 
         source.Should().Contain("DocumentDesignEditingCoordinator DesignEdits");
-        source.Should().Contain("DesignEdits.SetPageSettings(settings)");
+        source.Should().Contain("DesignEdits.SetPageSettings(settings, CurrentPageSettingsSectionIndex())");
         source.Should().Contain("DesignEdits.ApplyDocumentProperties(values)");
         source.Should().Contain("DesignEdits.ApplyTheme(theme)");
-        source.Should().Contain("DesignEdits.SetPageColor(colorHex)");
-        source.Should().Contain("DesignEdits.SetPageBorder(border)");
-        source.Should().Contain("DesignEdits.SetWatermark(options)");
+        source.Should().Contain("DesignEdits.SetPageColor(colorHex, CurrentPageSettingsSectionIndex())");
+        source.Should().Contain("DesignEdits.SetPageBorder(border, CurrentPageSettingsSectionIndex())");
+        source.Should().Contain("DesignEdits.SetWatermark(options, CurrentPageSettingsSectionIndex())");
+        source.Should().Contain("DesignEdits.TogglePageBorder(colorHex, widthPt, CurrentPageSettingsSectionIndex())");
+        source.Should().Contain("DesignEdits.SetWatermarkText(text, CurrentPageSettingsSectionIndex())");
+        source.Should().Contain("PageSettingsSectionResolver.ResolveSectionIndex(_doc, _caret.Block)");
         source.Should().Contain("DocumentObjectEditingCoordinator.PlanWordArtInsertion(wordArt)");
         source.Should().Contain("ObjectEdits.InsertObjectRun(index, run)");
         source.Should().Contain("_caret = new DocPosition(index, BlockLength(index))");
