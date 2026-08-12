@@ -24,7 +24,7 @@ public sealed class TablePropertiesX11ValidationSourceTests
     {
         var mainWindow = File.ReadAllText(RepoFile("freew/FreeW.App.Avalonia/MainWindow.cs"));
         var adapter = File.ReadAllText(RepoFile(
-            "freew/FreeW.App.Avalonia/MainWindow.ValidationAccessAdapter.cs"));
+            "freew/TestSupport/Validation.Avalonia/MainWindow.ValidationAccessAdapter.cs"));
         var coordinator = File.ReadAllText(RepoFile(
             "freew/TestSupport/Validation.Avalonia/TablePropertiesX11Validation.cs"));
 

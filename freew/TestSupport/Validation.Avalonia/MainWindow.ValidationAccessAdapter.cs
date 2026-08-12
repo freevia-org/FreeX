@@ -1,6 +1,6 @@
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
-using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia;
 

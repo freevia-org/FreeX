@@ -11,7 +11,7 @@ namespace FreeW.App.Avalonia;
 /// then runs the Avalonia shell. Validation commands live in the external FreeW validation host;
 /// the WPF FreeW.App.Host stays Windows-only.
 /// </summary>
-internal static class Program
+internal static partial class Program
 {
     [STAThread]
     public static int Main(string[] args) =>
@@ -22,26 +22,9 @@ internal static class Program
                 PrepareLaunch,
                 startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
 
-    internal static int RunToolHost(
-        IReadOnlyList<string> startupArguments,
-        Action<MainWindow.ValidationAccessAdapter> coordinator)
-    {
-        ArgumentNullException.ThrowIfNull(startupArguments);
-        ArgumentNullException.ThrowIfNull(coordinator);
-        App.StartupArguments = startupArguments.ToArray();
-        App.ExternalStartupCoordinator = window => coordinator(window.CreateValidationAccessAdapter());
-        return SisterAvaloniaProgramRunner.Run(
-            [],
-            new SisterAvaloniaProgramSpec(
-                FreeWApplicationStartup.ProductIdentity,
-                arguments => SisterAvaloniaLaunchPreparation.Continue(arguments),
-                arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments)));
-    }
-
     private static SisterAvaloniaLaunchPreparation PrepareLaunch(string[] args)
     {
         App.StartupArguments = args;
-        App.ExternalStartupCoordinator = null;
         return SisterAvaloniaLaunchPreparation.Continue(args);
     }
 

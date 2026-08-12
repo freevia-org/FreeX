@@ -12,6 +12,28 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreeWValidationHost)' == 'true'">
+    <OutputPath>bin\Validation\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreeWValidationHost)' == 'true'">
+    <Compile Include="..\TestSupport\Validation.Avalonia\Program.ValidationHost.cs"
+             Link="Program.ValidationHost.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\App.ValidationHost.cs"
+             Link="App.ValidationHost.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\MainWindow.ValidationAccessAdapter.cs"
+             Link="MainWindow.ValidationAccessAdapter.cs" />
+    <Compile Include="..\TestSupport\Validation.Avalonia\AvaloniaSpeechEngine.ValidationAccess.cs"
+             Link="AvaloniaSpeechEngine.ValidationAccess.cs" />
+  </ItemGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreeWValidationHost)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreeWValidationHost</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />

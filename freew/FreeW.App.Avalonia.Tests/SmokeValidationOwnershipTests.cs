@@ -1,5 +1,7 @@
+using System.Reflection;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Avalonia;
 using FreeW.Validation.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -13,6 +15,7 @@ public sealed class SmokeValidationOwnershipTests
         var shipping = Path.Combine(root, "freew", "FreeW.App.Avalonia");
         var program = File.ReadAllText(Path.Combine(shipping, "Program.cs"));
         var app = File.ReadAllText(Path.Combine(shipping, "App.cs"));
+        var speech = File.ReadAllText(Path.Combine(shipping, "AvaloniaSpeechEngine.cs"));
 
         var smokeDirectory = Path.Combine(shipping, "Smoke");
         (Directory.Exists(smokeDirectory)
@@ -24,8 +27,58 @@ public sealed class SmokeValidationOwnershipTests
         program.Should().NotContain(SisterAppLaunchSmokeOptions.Argument);
         program.Should().NotContain("PackagingSmoke.TryRun");
         program.Should().NotContain("ReadAloudPauseSmoke.TryRun");
+        program.Should().NotContain("RunToolHost");
         app.Should().NotContain("LaunchSmokeOptions");
         app.Should().NotContain("LaunchSmokeCoordinator");
+        app.Should().NotContain("ExternalStartupCoordinator");
+        speech.Should().NotContain("OwnedProcessIdForSmoke");
+
+        typeof(FreeW.App.Avalonia.Program).GetMethod(
+                "RunToolHost",
+                BindingFlags.Static | BindingFlags.NonPublic)
+            .Should().BeNull();
+        typeof(App).GetProperty(
+                "ExternalStartupCoordinator",
+                BindingFlags.Static | BindingFlags.NonPublic)
+            .Should().BeNull();
+        typeof(MainWindow).GetNestedType(
+                "ValidationAccessAdapter",
+                BindingFlags.NonPublic)
+            .Should().BeNull();
+        typeof(AvaloniaSpeechEngine).GetProperty(
+                "OwnedProcessIdForSmoke",
+                BindingFlags.Instance | BindingFlags.NonPublic)
+            .Should().BeNull();
+    }
+
+    [Fact]
+    public void ValidationHostOwnsConditionalAppAccessSources()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var shipping = Path.Combine(root, "freew", "FreeW.App.Avalonia");
+        var validation = Path.Combine(root, "freew", "TestSupport", "Validation.Avalonia");
+
+        File.Exists(Path.Combine(shipping, "MainWindow.ValidationAccessAdapter.cs"))
+            .Should().BeFalse();
+        foreach (var fileName in new[]
+                 {
+                     "Program.ValidationHost.cs",
+                     "App.ValidationHost.cs",
+                     "MainWindow.ValidationAccessAdapter.cs",
+                     "AvaloniaSpeechEngine.ValidationAccess.cs",
+                 })
+        {
+            File.Exists(Path.Combine(validation, fileName)).Should().BeTrue(fileName);
+        }
+
+        var shippingProject = File.ReadAllText(Path.Combine(shipping, "FreeW.App.Avalonia.csproj"));
+        var validationProject = File.ReadAllText(Path.Combine(validation, "FreeW.Validation.Avalonia.csproj"));
+        shippingProject.Should().Contain("Condition=\"'$(FreeWValidationHost)' == 'true'\"");
+        shippingProject.Should().Contain("..\\TestSupport\\Validation.Avalonia\\MainWindow.ValidationAccessAdapter.cs");
+        shippingProject.Should().Contain("..\\TestSupport\\Validation.Avalonia\\AvaloniaSpeechEngine.ValidationAccess.cs");
+        shippingProject.Should().Contain("<GlobalPropertiesToRemove>FreeWValidationHost</GlobalPropertiesToRemove>");
+        validationProject.Should().Contain("AdditionalProperties=\"FreeWValidationHost=true\"");
+        validationProject.Should().Contain("Compile Remove=\"MainWindow.ValidationAccessAdapter.cs\"");
     }
 
     [Fact]

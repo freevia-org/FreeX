@@ -8,10 +8,9 @@ using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Avalonia;
 
-public sealed class App : Application
+public sealed partial class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
-    internal static Action<MainWindow>? ExternalStartupCoordinator { get; set; }
     internal static Theme ActiveTheme { get; private set; } = FreeWApplicationStartup.Theme.DefaultTheme;
 
     public override void OnFrameworkInitializationCompleted()
@@ -31,20 +30,18 @@ public sealed class App : Application
         var optionsStore = ApplicationOptionsStore<FreeWOptions>.Create(
             PlatformApplicationDataPathProvider.LocalInstance);
         var loadedOptions = optionsStore.Load();
+        Action<MainWindow>? afterMainWindowCreated = null;
+        ConfigureAfterMainWindowCreated(ref afterMainWindowCreated);
 
         SisterAvaloniaAppBootstrap.Initialize(
             this,
             new SisterAvaloniaAppBootstrapSpec<MainWindow>(
                 StartupArguments,
                 args => new MainWindow(args, loadedOptions, optionsStore),
-                mainWindow =>
-                {
-                    if (ExternalStartupCoordinator is { } externalStartupCoordinator)
-                    {
-                        externalStartupCoordinator(mainWindow);
-                    }
-                }));
+                afterMainWindowCreated));
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    partial void ConfigureAfterMainWindowCreated(ref Action<MainWindow>? callback);
 }
