@@ -60,17 +60,7 @@ public sealed class SelectionAdornerLayer : Control
 
     // ── State owned / updated by AvaloniaCanvasGestureHandler ──────────────────
 
-    private readonly List<(uint id, Rect screenRect)> _selectionRects = new();
-    private Rect? _previewRect;
-    private double _previewRotationDeg;
-    /// <summary>Per-member geometry from the shared multi-transform preview plan.</summary>
-    private IReadOnlyList<CanvasShapeTransformPreview> _transformPreview =
-        Array.Empty<CanvasShapeTransformPreview>();
-    private Rect? _marqueeRect;
-    private IReadOnlyList<SnapGuideLine>? _snapGuides;
-    private SlideTransformCore _snapTransform = SlideTransformCore.Identity;
-    private readonly List<(string Name, Point Position)> _geometryHandles = new();
-    private (string Name, Point Position)? _geometryPreview;
+    private readonly SelectionAdornerState _state = new();
 
     // ── Construction ───────────────────────────────────────────────────────────
 
@@ -84,70 +74,59 @@ public sealed class SelectionAdornerLayer : Control
     /// <summary>Replaces the selection rectangles and triggers repaint.</summary>
     public void UpdateSelection(IEnumerable<(uint id, Rect screenRect)> rects)
     {
-        _selectionRects.Clear();
-        _selectionRects.AddRange(rects);
-        _previewRect = null;
-        _transformPreview = Array.Empty<CanvasShapeTransformPreview>();
+        _state.UpdateSelection(rects.Select(item => new SelectionAdornerSelectionPlan(
+            item.id,
+            ToSelectionAdornerRect(item.screenRect))));
         InvalidateVisual();
     }
 
     /// <summary>Replaces the visible preset-shape edit points.</summary>
     public void UpdateGeometryHandles(IEnumerable<(string Name, Point Position)> handles)
     {
-        _geometryHandles.Clear();
-        _geometryHandles.AddRange(handles);
-        _geometryPreview = null;
+        _state.UpdateGeometryHandles(handles.Select(handle =>
+            new SelectionAdornerGeometryHandlePlan(handle.Name, ToCanvasPoint(handle.Position))));
         InvalidateVisual();
     }
 
     /// <summary>Shows the transient position of the handle being dragged.</summary>
     public void UpdateGeometryPreview(string? name, Point? position)
     {
-        _geometryPreview = name is not null && position is { } point
-            ? (name, point)
-            : null;
+        _state.UpdateGeometryPreview(name, position is { } point ? ToCanvasPoint(point) : null);
         InvalidateVisual();
     }
 
     /// <summary>Updates the live preview rectangle during a move/resize gesture.</summary>
     public void UpdatePreview(Rect? screenRect, double rotationDeg = 0)
     {
-        _previewRect        = screenRect;
-        _previewRotationDeg = rotationDeg;
-        _transformPreview = Array.Empty<CanvasShapeTransformPreview>();
+        _state.UpdatePreview(
+            screenRect is { } rect ? ToSelectionAdornerRect(rect) : null,
+            rotationDeg);
         InvalidateVisual();
     }
 
     /// <summary>Shows each member's live geometry from one shared transform plan.</summary>
     public void UpdateTransformPreview(CanvasMultiTransformPlan plan)
     {
-        _transformPreview = plan.PreviewShapes;
-        _previewRect = plan.PreviewBounds is { } bounds ? ToAvaloniaRect(bounds) : null;
-        _previewRotationDeg = plan.PreviewRotationDeg;
+        _state.UpdateTransformPreview(plan);
         InvalidateVisual();
     }
 
     /// <summary>Updates the marquee rectangle during a marquee-selection drag.</summary>
     public void UpdateMarquee(Rect? screenRect)
     {
-        _marqueeRect = screenRect;
+        _state.UpdateMarquee(screenRect is { } rect ? ToSelectionAdornerRect(rect) : null);
         InvalidateVisual();
     }
 
     /// <summary>Updates the transient snap guide lines shown during a move/resize gesture.</summary>
     public void UpdateSnapGuides(IReadOnlyList<SnapGuideLine>? guides, SlideTransformCore transform)
     {
-        _snapGuides    = guides;
-        _snapTransform = transform;
+        _state.UpdateSnapGuides(guides, transform);
         InvalidateVisual();
     }
 
     internal bool HasTransientInteractionVisualsForTests =>
-        _previewRect.HasValue ||
-        _transformPreview.Count > 0 ||
-        _marqueeRect.HasValue ||
-        _snapGuides is { Count: > 0 } ||
-        _geometryPreview.HasValue;
+        _state.HasTransientInteractionVisuals;
 
     // ── Rendering ───────────────────────────────────────────────────────────────
 
@@ -156,23 +135,26 @@ public sealed class SelectionAdornerLayer : Control
         base.Render(dc);
 
         // Snap guide lines (drawn first — behind selection rects).
-        if (_snapGuides is { Count: > 0 })
-            DrawSnapGuides(dc, _snapGuides, _snapTransform);
+        if (_state.SnapGuides is { Count: > 0 } snapGuides)
+            DrawSnapGuides(dc, snapGuides, _state.SnapTransform);
 
         // Marquee
-        if (_marqueeRect.HasValue)
-            dc.DrawRectangle(MarqueeFill, MarqueePen, _marqueeRect.Value);
+        if (_state.MarqueeRect is { } marqueeRect)
+            dc.DrawRectangle(MarqueeFill, MarqueePen, ToAvaloniaRect(marqueeRect));
 
         // Multi-selection uses one group box for handles; individual boxes remain visible
         // without handles so the selected members are still discoverable.
-        if (_selectionRects.Count == 1)
+        if (_state.Selections.Count == 1)
         {
-            DrawSelectionRect(dc, _selectionRects[0].screenRect, drawHandles: true);
+            DrawSelectionRect(
+                dc,
+                ToAvaloniaRect(_state.Selections[0].ScreenRect),
+                drawHandles: true);
         }
         else
         {
-            foreach (var (_, rect) in _selectionRects)
-                DrawSelectionRect(dc, rect, drawHandles: false);
+            foreach (var selection in _state.Selections)
+                DrawSelectionRect(dc, ToAvaloniaRect(selection.ScreenRect), drawHandles: false);
 
             if (SelectionBounds is { } groupBounds)
                 DrawSelectionRect(dc, groupBounds, drawHandles: true);
@@ -180,12 +162,12 @@ public sealed class SelectionAdornerLayer : Control
 
         DrawGeometryHandles(dc);
 
-        foreach (var preview in _transformPreview)
+        foreach (var preview in _state.TransformPreview)
             DrawPreviewRect(dc, ToAvaloniaRect(preview.ScreenBounds), preview.RotationDeg);
 
         // Preview
-        if (_previewRect.HasValue)
-            DrawPreviewRect(dc, _previewRect.Value, _previewRotationDeg);
+        if (_state.PreviewRect is { } previewRect)
+            DrawPreviewRect(dc, ToAvaloniaRect(previewRect), _state.PreviewRotationDeg);
     }
 
     private static void DrawSnapGuides(DrawingContext dc, IReadOnlyList<SnapGuideLine> guides, SlideTransformCore xf)
@@ -263,11 +245,21 @@ public sealed class SelectionAdornerLayer : Control
     private void DrawGeometryHandles(DrawingContext dc)
     {
         const double radius = 5.0;
-        foreach (var (_, point) in _geometryHandles)
-            dc.DrawEllipse(EditPointFill, EditPointBorder, point, radius, radius);
+        foreach (var handle in _state.GeometryHandles)
+            dc.DrawEllipse(
+                EditPointFill,
+                EditPointBorder,
+                ToAvaloniaPoint(handle.ScreenPosition),
+                radius,
+                radius);
 
-        if (_geometryPreview is { } preview)
-            dc.DrawEllipse(null, EditPointPreviewPen, preview.Position, radius + 2, radius + 2);
+        if (_state.GeometryPreview is { } preview)
+            dc.DrawEllipse(
+                null,
+                EditPointPreviewPen,
+                ToAvaloniaPoint(preview.ScreenPosition),
+                radius + 2,
+                radius + 2);
     }
 
     // ── Geometry helpers ────────────────────────────────────────────────────────
@@ -304,9 +296,7 @@ public sealed class SelectionAdornerLayer : Control
     public string? HitTestGeometryHandle(Point screenPt)
     {
         return SelectionAdornerGeometry.HitTestGeometryHandle(
-            _geometryHandles.Select(handle => new SelectionAdornerGeometryHandlePlan(
-                handle.Name,
-                ToCanvasPoint(handle.Position))),
+            _state.GeometryHandles,
             ToCanvasPoint(screenPt));
     }
 
@@ -320,19 +310,15 @@ public sealed class SelectionAdornerLayer : Control
         => new(point.X, point.Y);
 
     /// <summary>Selection rects accessible to the gesture handler for external queries.</summary>
-    public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects => _selectionRects;
+    public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects =>
+        _state.Selections
+            .Select(selection => (selection.ShapeId, ToAvaloniaRect(selection.ScreenRect)))
+            .ToArray();
 
     /// <summary>Per-member live preview rectangles exposed for focused host tests.</summary>
-    internal IReadOnlyList<CanvasShapeTransformPreview> TransformPreview => _transformPreview;
+    internal IReadOnlyList<CanvasShapeTransformPreview> TransformPreview => _state.TransformPreview;
 
     /// <summary>Union box used for multi-selection handles and group gestures.</summary>
-    public Rect? SelectionBounds
-    {
-        get
-        {
-            var bounds = SelectionAdornerGeometry.GetSelectionBounds(
-                _selectionRects.Select(item => ToSelectionAdornerRect(item.screenRect)));
-            return bounds is { } rect ? ToAvaloniaRect(rect) : null;
-        }
-    }
+    public Rect? SelectionBounds =>
+        _state.SelectionBounds is { } rect ? ToAvaloniaRect(rect) : null;
 }

@@ -268,6 +268,71 @@ public sealed class SelectionAdornerGeometryTests
     }
 
     [Fact]
+    public void StateOwnsSelectionPreviewAndGeometryResetPolicy()
+    {
+        var state = new SelectionAdornerState();
+        state.UpdateSelection(
+        [
+            new SelectionAdornerSelectionPlan(1, new SelectionAdornerRect(10, 20, 30, 40)),
+            new SelectionAdornerSelectionPlan(2, new SelectionAdornerRect(50, 5, 20, 10)),
+        ]);
+        state.UpdateGeometryHandles(
+        [
+            new SelectionAdornerGeometryHandlePlan("adj", new CanvasGesturePoint(12, 18)),
+        ]);
+        state.UpdateGeometryPreview("adj", new CanvasGesturePoint(14, 19));
+        state.UpdatePreview(new SelectionAdornerRect(1, 2, 3, 4), 15);
+
+        state.SelectionBounds.Should().Be(new SelectionAdornerRect(10, 5, 60, 55));
+        state.PreviewRect.Should().Be(new SelectionAdornerRect(1, 2, 3, 4));
+        state.PreviewRotationDeg.Should().Be(15);
+        state.GeometryPreview.Should().Be(
+            new SelectionAdornerGeometryHandlePlan("adj", new CanvasGesturePoint(14, 19)));
+        state.HasTransientInteractionVisuals.Should().BeTrue();
+
+        state.UpdateTransformPreview(new CanvasMultiTransformPlan(
+            [],
+            [new CanvasShapeTransformPreview(1, new SlideScreenRect(3, 4, 5, 6), 25)],
+            new SlideScreenRect(7, 8, 9, 10),
+            35));
+
+        state.TransformPreview.Should().ContainSingle();
+        state.PreviewRect.Should().Be(new SelectionAdornerRect(7, 8, 9, 10));
+        state.PreviewRotationDeg.Should().Be(35);
+
+        state.UpdateSelection([]);
+        state.Selections.Should().BeEmpty();
+        state.SelectionBounds.Should().BeNull();
+        state.PreviewRect.Should().BeNull();
+        state.TransformPreview.Should().BeEmpty();
+
+        state.UpdateGeometryHandles([]);
+        state.GeometryHandles.Should().BeEmpty();
+        state.GeometryPreview.Should().BeNull();
+        state.HasTransientInteractionVisuals.Should().BeFalse();
+    }
+
+    [Fact]
+    public void StateOwnsMarqueeSnapGuideAndTransientVisualPolicy()
+    {
+        var state = new SelectionAdornerState();
+        var transform = new SlideTransformCore(2, 3, 4, 960, 540);
+        var guides = new[] { new SnapGuideLine { IsHorizontal = true, Position = 20 } };
+
+        state.UpdateMarquee(new SelectionAdornerRect(1, 2, 30, 40));
+        state.UpdateSnapGuides(guides, transform);
+
+        state.MarqueeRect.Should().Be(new SelectionAdornerRect(1, 2, 30, 40));
+        state.SnapGuides.Should().BeSameAs(guides);
+        state.SnapTransform.Should().BeSameAs(transform);
+        state.HasTransientInteractionVisuals.Should().BeTrue();
+
+        state.UpdateMarquee(null);
+        state.UpdateSnapGuides(null, SlideTransformCore.Identity);
+        state.HasTransientInteractionVisuals.Should().BeFalse();
+    }
+
+    [Fact]
     public void WpfAndAvaloniaAdorners_DelegateGeometryPolicyToSharedPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SelectionAdorner.cs");
@@ -280,7 +345,7 @@ public sealed class SelectionAdornerGeometryTests
         wpf.Should().Contain("SelectionAdornerGeometry.GetRotateHandleCenter");
         wpf.Should().Contain("SelectionAdornerGeometry.HitTestHandle");
         wpf.Should().Contain("SelectionAdornerGeometry.HitTestGeometryHandle");
-        wpf.Should().Contain("SelectionAdornerGeometry.GetSelectionBounds");
+        wpf.Should().Contain("_state.SelectionBounds");
         wpf.Should().Contain("public CanvasGestureHandleKind HitTestHandle");
         wpf.Should().NotContain("public enum HandleKind");
         wpf.Should().NotContain("ToHandleKind");
@@ -293,7 +358,7 @@ public sealed class SelectionAdornerGeometryTests
         avalonia.Should().Contain("SelectionAdornerGeometry.GetRotateHandleCenter");
         avalonia.Should().Contain("SelectionAdornerGeometry.HitTestHandle");
         avalonia.Should().Contain("SelectionAdornerGeometry.HitTestGeometryHandle");
-        avalonia.Should().Contain("SelectionAdornerGeometry.GetSelectionBounds");
+        avalonia.Should().Contain("_state.SelectionBounds");
         avalonia.Should().Contain("public CanvasGestureHandleKind HitTestHandle");
         avalonia.Should().NotContain("public enum HandleKind");
         avalonia.Should().NotContain("ToHandleKind");
@@ -301,6 +366,23 @@ public sealed class SelectionAdornerGeometryTests
         avalonia.Should().NotContain("HandleHitRadius");
         avalonia.Should().NotContain("hitRadius = 9.0");
         avalonia.Should().NotContain("_selectionRects.Min");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("private readonly SelectionAdornerState _state = new();")
+                .And.Contain("_state.UpdateSelection(")
+                .And.Contain("_state.UpdateGeometryHandles(")
+                .And.Contain("_state.UpdateGeometryPreview(")
+                .And.Contain("_state.UpdatePreview(")
+                .And.Contain("_state.UpdateTransformPreview(")
+                .And.Contain("_state.UpdateMarquee(")
+                .And.Contain("_state.UpdateSnapGuides(")
+                .And.NotContain("private readonly List<(uint id, Rect screenRect)> _selectionRects")
+                .And.NotContain("private Rect? _previewRect")
+                .And.NotContain("private Rect? _marqueeRect")
+                .And.NotContain("private IReadOnlyList<SnapGuideLine>? _snapGuides")
+                .And.NotContain("private readonly List<(string Name, Point Position)> _geometryHandles");
+        }
     }
 
     [Fact]

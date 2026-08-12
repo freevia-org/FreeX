@@ -45,6 +45,95 @@ public sealed record SelectionAdornerProjectionPlan(
             Selections.Select(selection => selection.ScreenRect));
 }
 
+/// <summary>
+/// Owns renderer-neutral selection chrome state while native adorners retain painting and
+/// framework coordinate conversion.
+/// </summary>
+public sealed class SelectionAdornerState
+{
+    private readonly List<SelectionAdornerSelectionPlan> _selections = new();
+    private readonly List<SelectionAdornerGeometryHandlePlan> _geometryHandles = new();
+    private IReadOnlyList<CanvasShapeTransformPreview> _transformPreview =
+        Array.Empty<CanvasShapeTransformPreview>();
+
+    public IReadOnlyList<SelectionAdornerSelectionPlan> Selections => _selections;
+
+    public SelectionAdornerRect? PreviewRect { get; private set; }
+
+    public double PreviewRotationDeg { get; private set; }
+
+    public IReadOnlyList<CanvasShapeTransformPreview> TransformPreview => _transformPreview;
+
+    public SelectionAdornerRect? MarqueeRect { get; private set; }
+
+    public IReadOnlyList<SnapGuideLine>? SnapGuides { get; private set; }
+
+    public SlideTransformCore SnapTransform { get; private set; } = SlideTransformCore.Identity;
+
+    public IReadOnlyList<SelectionAdornerGeometryHandlePlan> GeometryHandles => _geometryHandles;
+
+    public SelectionAdornerGeometryHandlePlan? GeometryPreview { get; private set; }
+
+    public SelectionAdornerRect? SelectionBounds =>
+        SelectionAdornerGeometry.GetSelectionBounds(
+            _selections.Select(selection => selection.ScreenRect));
+
+    public bool HasTransientInteractionVisuals =>
+        PreviewRect.HasValue ||
+        _transformPreview.Count > 0 ||
+        MarqueeRect.HasValue ||
+        SnapGuides is { Count: > 0 } ||
+        GeometryPreview is not null;
+
+    public void UpdateSelection(IEnumerable<SelectionAdornerSelectionPlan> selections)
+    {
+        _selections.Clear();
+        _selections.AddRange(selections);
+        PreviewRect = null;
+        _transformPreview = Array.Empty<CanvasShapeTransformPreview>();
+    }
+
+    public void UpdateGeometryHandles(IEnumerable<SelectionAdornerGeometryHandlePlan> handles)
+    {
+        _geometryHandles.Clear();
+        _geometryHandles.AddRange(handles);
+        GeometryPreview = null;
+    }
+
+    public void UpdateGeometryPreview(string? name, CanvasGesturePoint? position)
+    {
+        GeometryPreview = name is not null && position is { } point
+            ? new SelectionAdornerGeometryHandlePlan(name, point)
+            : null;
+    }
+
+    public void UpdatePreview(SelectionAdornerRect? screenRect, double rotationDeg = 0)
+    {
+        PreviewRect = screenRect;
+        PreviewRotationDeg = rotationDeg;
+        _transformPreview = Array.Empty<CanvasShapeTransformPreview>();
+    }
+
+    public void UpdateTransformPreview(CanvasMultiTransformPlan plan)
+    {
+        _transformPreview = plan.PreviewShapes;
+        PreviewRect = plan.PreviewBounds is { } bounds
+            ? new SelectionAdornerRect(bounds.Left, bounds.Top, bounds.Width, bounds.Height)
+            : null;
+        PreviewRotationDeg = plan.PreviewRotationDeg;
+    }
+
+    public void UpdateMarquee(SelectionAdornerRect? screenRect) => MarqueeRect = screenRect;
+
+    public void UpdateSnapGuides(
+        IReadOnlyList<SnapGuideLine>? guides,
+        SlideTransformCore transform)
+    {
+        SnapGuides = guides;
+        SnapTransform = transform;
+    }
+}
+
 public static class SelectionAdornerGeometry
 {
     public const double HandleSize = 8.0;

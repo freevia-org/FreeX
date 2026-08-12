@@ -126,6 +126,36 @@ public sealed class PresentationCanvasAutomationSessionTests
     }
 
     [Fact]
+    public void ProjectLocalBoundsUsesTheLiveCanvasTransformWithoutNativeGeometry()
+    {
+        var slide = Presentation.CreateEmpty().Slides[0];
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 7,
+            OffsetXEmu = 10 * 9525,
+            OffsetYEmu = 20 * 9525,
+            ExtentCxEmu = 30 * 9525,
+            ExtentCyEmu = 40 * 9525,
+        });
+        var session = new PresentationCanvasAutomationSession();
+        session.TryProjectShape(slide, 7, [], out var descriptor).Should().BeTrue();
+
+        session.TryProjectLocalBounds(
+                descriptor,
+                new SlideTransformCore(2, 100, 50, 960, 540),
+                out var bounds)
+            .Should().BeTrue();
+
+        bounds.Should().Be(new SlideScreenRect(120, 90, 60, 80));
+        session.TryProjectLocalBounds(
+                session.ProjectCanvas(null, null),
+                SlideTransformCore.Identity,
+                out _)
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public void RendererPeersOnlyTranslateSharedAutomationPolicy()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
@@ -138,6 +168,9 @@ public sealed class PresentationCanvasAutomationSessionTests
         foreach (var source in sources)
         {
             var automationSource = source[source.IndexOf("Accessibility: UI Automation", StringComparison.Ordinal)..];
+            var boundsSource = automationSource[
+                automationSource.IndexOf("internal Rect GetShapeBoundingRectangle", StringComparison.Ordinal)..
+                automationSource.IndexOf("internal void NotifySelectionChanged", StringComparison.Ordinal)];
 
             automationSource.Should().Contain("_canvasAutomation.ProjectCanvas(")
                 .And.Contain("_canvasAutomation.ProjectShapes(")
@@ -152,6 +185,11 @@ public sealed class PresentationCanvasAutomationSessionTests
                 .And.NotContain("ShapeKindToControlType")
                 .And.NotContain("Shape selection is owned by the slide canvas's editing session.")
                 .And.NotContain("$\"Shape_{shapeId}\"");
+
+            boundsSource.Should().Contain("_canvasAutomation.TryProjectLocalBounds(")
+                .And.NotContain("SlideTransformCore.EmuToDip(")
+                .And.NotContain("SlideTransform.EmuToDip(")
+                .And.NotContain(".SlideToScreen(");
         }
     }
 

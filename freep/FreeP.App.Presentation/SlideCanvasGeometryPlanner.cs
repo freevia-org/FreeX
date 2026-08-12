@@ -14,6 +14,8 @@ public readonly record struct SlideScreenRect(
     public double Bottom => Top + Height;
 }
 
+public readonly record struct SlideCanvasSize(double Width, double Height);
+
 public readonly record struct InCanvasEditorPlacement(
     double Left,
     double Top,
@@ -50,6 +52,24 @@ public readonly record struct InCanvasEditorPlacement(
 
 public static class SlideCanvasGeometryPlanner
 {
+    public static SlideCanvasSize FitAspectRatio(
+        double slideWidth,
+        double slideHeight,
+        double availableWidth,
+        double availableHeight)
+    {
+        double ratio = slideWidth / slideHeight;
+        double width = double.IsInfinity(availableWidth) ? slideWidth : availableWidth;
+        double height = double.IsInfinity(availableHeight) ? slideHeight : availableHeight;
+
+        if (width / height > ratio)
+            width = height * ratio;
+        else
+            height = width / ratio;
+
+        return new SlideCanvasSize(Math.Max(1, width), Math.Max(1, height));
+    }
+
     public static SlideScreenRect DipBoundsToScreen(
         double left,
         double top,

@@ -306,18 +306,12 @@ public sealed partial class SlideCanvas : FrameworkElement
         if (_slideWidthDip <= 0 || _slideHeightDip <= 0)
             return base.MeasureOverride(availableSize);
 
-        double ratio = _slideWidthDip / _slideHeightDip;
-
-        double w = double.IsInfinity(availableSize.Width) ? _slideWidthDip : availableSize.Width;
-        double h = double.IsInfinity(availableSize.Height) ? _slideHeightDip : availableSize.Height;
-
-        // Fit inside available area preserving aspect ratio
-        if (w / h > ratio)
-            w = h * ratio;
-        else
-            h = w / ratio;
-
-        return new Size(Math.Max(1, w), Math.Max(1, h));
+        var fitted = SlideCanvasGeometryPlanner.FitAspectRatio(
+            _slideWidthDip,
+            _slideHeightDip,
+            availableSize.Width,
+            availableSize.Height);
+        return new Size(fitted.Width, fitted.Height);
     }
 
     // ── Rendering ──────────────────────────────────────────────────────────────
@@ -2959,16 +2953,15 @@ public sealed partial class SlideCanvas : FrameworkElement
         /// </summary>
         internal Rect GetShapeBoundingRectangle(uint shapeId)
         {
-            if (!TryGetShape(shapeId, out var descriptor) || descriptor.Bounds is not { } bounds)
+            if (!TryGetShape(shapeId, out var descriptor) ||
+                !OwnerCanvas._canvasAutomation.TryProjectLocalBounds(
+                    descriptor,
+                    OwnerCanvas.CurrentTransform.Core,
+                    out var localBounds))
                 return Rect.Empty;
 
-            var transform = OwnerCanvas.CurrentTransform;
-            var topLeft = transform.SlideToScreen(
-                SlideTransform.EmuToDip(bounds.OffsetXEmu),
-                SlideTransform.EmuToDip(bounds.OffsetYEmu));
-            var bottomRight = transform.SlideToScreen(
-                SlideTransform.EmuToDip(bounds.OffsetXEmu + bounds.ExtentCxEmu),
-                SlideTransform.EmuToDip(bounds.OffsetYEmu + bounds.ExtentCyEmu));
+            var topLeft = new Point(localBounds.Left, localBounds.Top);
+            var bottomRight = new Point(localBounds.Right, localBounds.Bottom);
 
             try
             {

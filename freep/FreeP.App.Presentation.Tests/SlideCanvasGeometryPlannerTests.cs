@@ -9,6 +9,26 @@ public sealed class SlideCanvasGeometryPlannerTests
 
     private static long ToEmu(double dip) => (long)Math.Round(dip * EmuPerDip);
 
+    [Theory]
+    [InlineData(1000, 1000, 1000, 562.5)]
+    [InlineData(double.PositiveInfinity, 270, 480, 270)]
+    [InlineData(320, double.PositiveInfinity, 320, 180)]
+    [InlineData(double.PositiveInfinity, double.PositiveInfinity, 960, 540)]
+    [InlineData(0, 100, 1, 1)]
+    public void FitAspectRatio_PreservesRendererMeasureGeometry(
+        double availableWidth,
+        double availableHeight,
+        double expectedWidth,
+        double expectedHeight)
+    {
+        SlideCanvasGeometryPlanner.FitAspectRatio(
+                960,
+                540,
+                availableWidth,
+                availableHeight)
+            .Should().Be(new SlideCanvasSize(expectedWidth, expectedHeight));
+    }
+
     [Fact]
     public void ShapeBoundsToScreen_UsesSharedUniformFitTransform()
     {
@@ -269,10 +289,21 @@ public sealed class SlideCanvasGeometryPlannerTests
             source.Should().NotContain("g.Position * xf.Scale");
         }
 
+        var wpfCanvas = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs");
         var avaloniaCanvas = ReadWorkspaceFile(
             "freep",
             "FreeP.App.Rendering.Avalonia",
             "SlideCanvas.cs");
+        foreach (var source in new[] { wpfCanvas, avaloniaCanvas })
+        {
+            source.Should().Contain("SlideCanvasGeometryPlanner.FitAspectRatio(")
+                .And.NotContain("double ratio = _slideWidthDip / _slideHeightDip")
+                .And.NotContain("if (w / h > ratio)");
+        }
+
         avaloniaCanvas.Should().Contain("PresentationViewZoomPlanner.PlanStageTransform");
         avaloniaCanvas.Should().NotContain("Math.Min(renderW / _slideWidthDip");
     }

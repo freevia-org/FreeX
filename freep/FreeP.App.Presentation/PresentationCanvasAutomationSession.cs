@@ -203,6 +203,34 @@ public sealed class PresentationCanvasAutomationSession
         return false;
     }
 
+    public bool TryProjectLocalBounds(
+        PresentationCanvasAutomationDescriptor descriptor,
+        SlideTransformCore transform,
+        out SlideScreenRect localBounds)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(transform);
+
+        if (descriptor.Bounds is not { } bounds)
+        {
+            localBounds = default;
+            return false;
+        }
+
+        var topLeft = transform.SlideToScreen(
+            SlideTransformCore.EmuToDip(bounds.OffsetXEmu),
+            SlideTransformCore.EmuToDip(bounds.OffsetYEmu));
+        var bottomRight = transform.SlideToScreen(
+            SlideTransformCore.EmuToDip(bounds.OffsetXEmu + bounds.ExtentCxEmu),
+            SlideTransformCore.EmuToDip(bounds.OffsetYEmu + bounds.ExtentCyEmu));
+        localBounds = new SlideScreenRect(
+            topLeft.X,
+            topLeft.Y,
+            bottomRight.X - topLeft.X,
+            bottomRight.Y - topLeft.Y);
+        return true;
+    }
+
     /// <summary>
     /// Seeds notification state from a new editing session without raising a synthetic delta.
     /// The selection is copied so later in-place mutations cannot alter this baseline.

@@ -272,14 +272,12 @@ public sealed partial class SlideCanvas : Control
         if (_slideWidthDip <= 0 || _slideHeightDip <= 0)
             return base.MeasureOverride(availableSize);
 
-        double ratio = _slideWidthDip / _slideHeightDip;
-        double w = double.IsInfinity(availableSize.Width)  ? _slideWidthDip  : availableSize.Width;
-        double h = double.IsInfinity(availableSize.Height) ? _slideHeightDip : availableSize.Height;
-
-        if (w / h > ratio) w = h * ratio;
-        else                h = w / ratio;
-
-        return new Size(Math.Max(1, w), Math.Max(1, h));
+        var fitted = SlideCanvasGeometryPlanner.FitAspectRatio(
+            _slideWidthDip,
+            _slideHeightDip,
+            availableSize.Width,
+            availableSize.Height);
+        return new Size(fitted.Width, fitted.Height);
     }
 
     // ── Rendering ────────────────────────────────────────────────────────────
@@ -2587,17 +2585,16 @@ public sealed partial class SlideCanvas : Control
         /// </summary>
         internal Rect GetShapeBoundingRectangle(uint shapeId)
         {
-            if (!TryGetShape(shapeId, out var descriptor) || descriptor.Bounds is not { } bounds)
+            if (!TryGetShape(shapeId, out var descriptor) ||
+                !OwnerCanvas._canvasAutomation.TryProjectLocalBounds(
+                    descriptor,
+                    OwnerCanvas.CurrentTransform,
+                    out var localBounds))
                 return default;
 
-            var transform = OwnerCanvas.CurrentTransform;
-            var (x1, y1) = transform.SlideToScreen(
-                SlideTransformCore.EmuToDip(bounds.OffsetXEmu),
-                SlideTransformCore.EmuToDip(bounds.OffsetYEmu));
-            var (x2, y2) = transform.SlideToScreen(
-                SlideTransformCore.EmuToDip(bounds.OffsetXEmu + bounds.ExtentCxEmu),
-                SlideTransformCore.EmuToDip(bounds.OffsetYEmu + bounds.ExtentCyEmu));
-            var localRect = new Rect(new Point(x1, y1), new Point(x2, y2));
+            var localRect = new Rect(
+                new Point(localBounds.Left, localBounds.Top),
+                new Point(localBounds.Right, localBounds.Bottom));
 
             var topLevel = TopLevel.GetTopLevel(OwnerCanvas);
             if (topLevel is null)
