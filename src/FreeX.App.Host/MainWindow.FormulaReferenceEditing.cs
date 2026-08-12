@@ -264,28 +264,6 @@ public partial class MainWindow
                 return null;
             });
 
-    internal bool RaiseFormulaReferenceGripDragForTest(int highlightIndex, CellAddress target)
-    {
-        var editor = GetFormulaReferenceHighlightEditor();
-        var highlights = editor is null
-            ? []
-            : GetFormulaReferenceHighlights(editor.Text);
-        if (editor is null || highlightIndex < 0 || highlightIndex >= highlights.Count ||
-            highlights[highlightIndex].Range is not { } originalRange ||
-            originalRange.Start.Sheet != target.Sheet)
-        {
-            return false;
-        }
-
-        var newRange = _formulaRangeEditingSession.PlanReferenceDrag(highlights[highlightIndex], target);
-        if (newRange is null)
-            return false;
-
-        ApplyFormulaReferenceResize(editor, highlights[highlightIndex], newRange.Value);
-        RefreshFormulaReferenceHighlights();
-        return true;
-    }
-
     private GridRange? ResolveStructuredFormulaReference(string tableName, string selector) =>
         StructuredReferenceResolver.ResolveEditorReference(
             _workbook,

@@ -218,11 +218,6 @@ public partial class MainWindow
     private Control? FindRenderedRibbonControl(string commandName) =>
         _renderedRibbonControls.TryGetValue(commandName, out var control) ? control : null;
 
-    /// <summary>Test hook: returns the visible rendered ribbon control for a command name (e.g. a
-    /// gallery button) so functional tests can assert its attached context menu.</summary>
-    internal Control? FindRenderedRibbonCommandControlForTest(string commandName) =>
-        FindRenderedRibbonControl(commandName);
-
     /// <summary>
     /// Shares imperatively-built context menus from the legacy backplane buttons onto the rendered
     /// buttons. Toggle/combo/enablement state is no longer mirrored here — it flows from the

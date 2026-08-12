@@ -315,10 +315,6 @@ public partial class MainWindow
         AttachTableDesignStyleGalleryContextMenu();
     }
 
-    /// <summary>Test hook: builds + attaches the Table Styles gallery to the rendered button, mirroring
-    /// what happens when the contextual Table Design button is engaged.</summary>
-    internal void PopulateTableDesignStyleGalleryMenuForTest() => PopulateTableDesignStyleGalleryMenu();
-
     /// <summary>Attaches the imperatively-built Table Styles gallery menu to the rendered declarative
     /// "Table Styles" button. No-op until both the menu and the rendered button exist; the rendered
     /// button's click runs <see cref="TableDesignStylesBtn_Click"/>, which opens this menu.</summary>

@@ -125,26 +125,4 @@ public partial class MainWindow
                    routedCommand);
     }
 
-    internal string FormulaBoxTextForTest
-    {
-        get => FormulaBar.Text;
-        set => FormulaBar.Text = value;
-    }
-
-    internal void BeginFormulaPointModeEditForTest(CellAddress address, string formulaText)
-    {
-        if (!_formulaRangeEditingSession.IsFormulaText(formulaText))
-            throw new ArgumentException("Formula point-mode text must start with '='.", nameof(formulaText));
-
-        SheetGrid.SelectedRange = new GridRange(address, address);
-        BeginFormulaBarFormulaEdit(formulaText);
-    }
-
-    internal void RaiseFormulaBoxKeyDownForTest(KeyEventArgs e) => FormulaBar_KeyDown(FormulaBar, e);
-
-    internal bool RouteFormulaPointSelectionForTest(
-        GridRange range,
-        bool append = false,
-        bool extendSelection = false) =>
-        TryRouteFormulaPointModeSelection(range, append, extendSelection);
 }
