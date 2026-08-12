@@ -24,7 +24,7 @@ internal sealed class DocumentInspectorDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private DocumentInspectorDialog(Window owner, InspectionResult result)
     {
         Owner = owner;
-        Title = "Document Inspector";
+        Title = UiText.Get("DocumentInspector_Title");
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -35,21 +35,21 @@ internal sealed class DocumentInspectorDialog : Free.Shared.Ribbon.Wpf.DialogWin
         panel.Children.Add(new TextBlock
         {
             Text = result.IsClean
-                ? "No comments, tracked changes, document properties, or bookmarks were found."
-                : "Review the items found below, then choose which to remove.",
+                ? UiText.Get("DocumentInspector_Clean_Message")
+                : UiText.Get("DocumentInspector_Review_Message"),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12),
             Foreground = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40))
         });
 
-        _comments = AddRow(panel, "Comments", result.Comments,
-            "Removes review comments and their marks.");
-        _revisions = AddRow(panel, "Tracked Changes", result.Revisions,
-            "Accepts all tracked insertions and deletions.");
-        _properties = AddRow(panel, "Document Properties", result.NonEmptyProperties,
-            "Clears title, author, and other core properties.");
-        _bookmarks = AddRow(panel, "Bookmarks", result.Bookmarks,
-            "Removes named bookmarks and internal links to them.");
+        _comments = AddRow(panel, UiText.Get("DocumentInspector_Comments_Label"), result.Comments,
+            UiText.Get("DocumentInspector_Comments_HelpText"));
+        _revisions = AddRow(panel, UiText.Get("DocumentInspector_Revisions_Label"), result.Revisions,
+            UiText.Get("DocumentInspector_Revisions_HelpText"));
+        _properties = AddRow(panel, UiText.Get("DocumentInspector_Properties_Label"), result.NonEmptyProperties,
+            UiText.Get("DocumentInspector_Properties_HelpText"));
+        _bookmarks = AddRow(panel, UiText.Get("DocumentInspector_Bookmarks_Label"), result.Bookmarks,
+            UiText.Get("DocumentInspector_Bookmarks_HelpText"));
 
         var removePlan = DocumentInspectorDialogPlanner.ActionButtons[0];
         var remove = new Button
@@ -116,8 +116,10 @@ internal sealed class DocumentInspectorDialog : Free.Shared.Ribbon.Wpf.DialogWin
         });
         header.Inlines.Add(new System.Windows.Documents.Run(
             found
-                ? $"  —  {count.ToString("N0", CultureInfo.CurrentCulture)} found"
-                : "  —  none found"));
+                ? UiText.Format(
+                    "DocumentInspector_FoundCount_Format",
+                    count.ToString("N0", CultureInfo.CurrentCulture))
+                : UiText.Get("DocumentInspector_NoneFound")));
 
         var check = new CheckBox
         {

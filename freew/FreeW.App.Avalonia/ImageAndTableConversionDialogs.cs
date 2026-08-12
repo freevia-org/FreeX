@@ -57,10 +57,10 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
         AddField(grid, surface.Field(ImageCropDialogField.Top).Label, _topBox, 2);
         AddField(grid, surface.Field(ImageCropDialogField.Bottom).Label, _bottomBox, 3);
 
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => Close(null);
 
@@ -72,7 +72,7 @@ internal sealed class ImageCropDialog : FreeWDialogWindow
                 grid,
                 new TextBlock
                 {
-                    Text = "Enter the percentage of width/height to remove from each edge (0-99).",
+                    Text = UiText.Get("ImageCrop_Instruction"),
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 10,
                     Margin = new Thickness(0, 6, 0, 0),
@@ -176,10 +176,10 @@ internal sealed class TableTextConversionDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyListBox(_choices, DialogChromeStyle);
         _choices.DoubleTapped += (_, _) => Accept();
 
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => Close(null);
 

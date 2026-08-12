@@ -34,6 +34,12 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class FreeWRibbonCommands
 {
+    private static void ShowImageSelectionRequired(DocumentView editor, string titleResourceKey) =>
+        DialogMessageHelper.ShowInfo(
+            Window.GetWindow(editor),
+            UiText.Get("Image_SelectPictureFirst_Message"),
+            UiText.Get(titleResourceKey));
+
     private static IRibbonCommand BuildImageAdjustmentPresetCommand(
         DocumentView editor,
         ImageAdjustmentPresetDescriptor preset) => preset.Channel switch
@@ -477,7 +483,10 @@ internal static class FreeWRibbonCommands
         // Artistic Effects: top-level gallery opener.
         registry.Register("freew.image-artistic",               new ActionRibbonCommand(() =>
         {
-            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose an artistic effect from the dropdown menu.", "Artistic Effects");
+            DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
+                UiText.Get("Image_ArtisticEffects_Choose_Message"),
+                UiText.Get("Image_ArtisticEffects_Title"));
         }));
         // Picture Format tab — Picture Styles gallery presets.
         foreach (var preset in PictureStyleCatalog.Catalog)
@@ -561,7 +570,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.wordart-style", new ActionRibbonCommand(() =>
         {
             editor.Focus();
-            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a WordArt style from the dropdown.", "WordArt Style");
+            DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
+                UiText.Get("WordArt_Style_Choose_Message"),
+                UiText.Get("WordArt_Style_Title"));
         }));
 
         // Map each WordArtStyle to its ribbon command id (original four by legacy name, extended by slug).
@@ -593,7 +605,10 @@ internal static class FreeWRibbonCommands
                 editor.Focus();
                 if (editor.SelectedWordArt() is null)
                 {
-                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select WordArt first.", "WordArt Style");
+                    DialogMessageHelper.ShowInfo(
+                        Window.GetWindow(editor),
+                        UiText.Get("WordArt_SelectFirst_Message"),
+                        UiText.Get("WordArt_Style_Title"));
                     return;
                 }
                 editor.SetSelectedWordArtStyle(p);
@@ -604,7 +619,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.wordart-transform", new ActionRibbonCommand(() =>
         {
             editor.Focus();
-            DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Choose a text transform from the dropdown.", "Text Effects: Transform");
+            DialogMessageHelper.ShowInfo(
+                Window.GetWindow(editor),
+                UiText.Get("WordArt_Transform_Choose_Message"),
+                UiText.Get("WordArt_Transform_Title"));
         }));
 
         static string WarpId(WordArtWarp w) => w switch
@@ -636,7 +654,10 @@ internal static class FreeWRibbonCommands
                 editor.Focus();
                 if (editor.SelectedWordArt() is null)
                 {
-                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select WordArt first.", "Text Effects: Transform");
+                    DialogMessageHelper.ShowInfo(
+                        Window.GetWindow(editor),
+                        UiText.Get("WordArt_SelectFirst_Message"),
+                        UiText.Get("WordArt_Transform_Title"));
                     return;
                 }
                 editor.SetSelectedWordArtWarp(w);
@@ -794,7 +815,8 @@ internal static class FreeWRibbonCommands
             registry.Bind(FreeWRibbonCommandAction.Thesaurus, new ActionRibbonCommand(() =>
             {
                 DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    "Thesaurus: no synonyms pane is wired.", "Thesaurus");
+                    UiText.Get("Thesaurus_Unavailable_Message"),
+                    UiText.Get("Pane_Thesaurus_Heading"));
             }));
         }
 
@@ -1850,8 +1872,8 @@ internal static class FreeWRibbonCommands
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Select some text first, then choose Change Case.",
-                    "FreeW");
+                    UiText.Get("ChangeCase_SelectText_Message"),
+                    UiText.Get("FreeW_ProductName"));
                 return;
             }
 
@@ -1867,7 +1889,7 @@ internal static class FreeWRibbonCommands
             CaseKind? result = null;
             var window = new Window
             {
-                Title = "Change Case",
+                Title = UiText.Get("Ribbon_Command_ChangeCase_Label"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null
@@ -2476,7 +2498,7 @@ internal static class FreeWRibbonCommands
             string? hex = null;
             var window = new Window
             {
-                Title = "Paragraph Shading",
+                Title = UiText.Get("ParagraphShading_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null
@@ -2507,7 +2529,7 @@ internal static class FreeWRibbonCommands
 
             var clear = new Button
             {
-                Content = "No Color",
+                Content = UiText.Get("Ribbon_Palette_PageColor_NoColor_Label"),
                 Margin = new Thickness(2, 6, 2, 0),
                 Padding = new Thickness(8, 2, 8, 2)
             };
@@ -2567,7 +2589,7 @@ internal static class FreeWRibbonCommands
 
             var window = new Window
             {
-                Title = "Cell Borders",
+                Title = UiText.Get("CellBorders_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = owner is null
@@ -2580,7 +2602,7 @@ internal static class FreeWRibbonCommands
             var outer = new StackPanel { Margin = new Thickness(10) };
 
             // -- Preset buttons row --
-            var presetLabel = new TextBlock { Text = "Preset:", Margin = new Thickness(0, 0, 0, 4), FontWeight = FontWeights.SemiBold };
+            var presetLabel = new TextBlock { Text = UiText.Get("Border_Preset_Label"), Margin = new Thickness(0, 0, 0, 4), FontWeight = FontWeights.SemiBold };
             outer.Children.Add(presetLabel);
             var presetPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 10) };
             string[] presets = ["All", "Outside", "Inside", "Top", "Bottom", "Left", "Right", "None"];
@@ -2619,7 +2641,7 @@ internal static class FreeWRibbonCommands
             outer.Children.Add(presetPanel);
 
             // -- Style picker --
-            var styleLabel = new TextBlock { Text = "Style:", Margin = new Thickness(0, 0, 0, 2) };
+            var styleLabel = new TextBlock { Text = UiText.Get("Border_Style_Label"), Margin = new Thickness(0, 0, 0, 2) };
             outer.Children.Add(styleLabel);
             var styleCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 8) };
             foreach (var s in Enum.GetValues<BorderLineStyle>())
@@ -2633,7 +2655,7 @@ internal static class FreeWRibbonCommands
             outer.Children.Add(styleCombo);
 
             // -- Colour swatches --
-            var colorLabel = new TextBlock { Text = "Color:", Margin = new Thickness(0, 0, 0, 2) };
+            var colorLabel = new TextBlock { Text = UiText.Get("Design_PageColor_Color_Label"), Margin = new Thickness(0, 0, 0, 2) };
             outer.Children.Add(colorLabel);
             var colorPanel = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
             Border? selectedColorBorder = null;
@@ -2659,7 +2681,7 @@ internal static class FreeWRibbonCommands
             outer.Children.Add(colorPanel);
 
             // -- Width spinner --
-            var widthLabel = new TextBlock { Text = "Width (pt):", Margin = new Thickness(0, 0, 0, 2) };
+            var widthLabel = new TextBlock { Text = UiText.Get("ChartSize_Width_Label"), Margin = new Thickness(0, 0, 0, 2) };
             outer.Children.Add(widthLabel);
             var widthBox = new TextBox { Text = "0.5", Width = 60, Margin = new Thickness(0, 0, 0, 10), HorizontalAlignment = HorizontalAlignment.Left };
             widthBox.TextChanged += (_, _) =>
@@ -2673,7 +2695,7 @@ internal static class FreeWRibbonCommands
             var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             applyBtn = new Button
             {
-                Content = "Apply",
+                Content = UiText.Get("Common_Apply"),
                 IsEnabled = false,
                 Padding = new Thickness(12, 4, 12, 4),
                 Margin = new Thickness(0, 0, 6, 0)
@@ -2686,7 +2708,7 @@ internal static class FreeWRibbonCommands
                     result = BuildPreset(chosenPreset, MakeEdge);
                 window.Close();
             };
-            var cancelBtn = new Button { Content = "Cancel", Padding = new Thickness(12, 4, 12, 4) };
+            var cancelBtn = new Button { Content = UiText.Get("Common_CancelText"), Padding = new Thickness(12, 4, 12, 4) };
             cancelBtn.Click += (_, _) => window.Close();
             buttonRow.Children.Add(applyBtn);
             buttonRow.Children.Add(cancelBtn);
@@ -2798,7 +2820,10 @@ internal static class FreeWRibbonCommands
             if (session.CandidateCount == 0)
             {
                 if (owner is not null)
-                    DialogMessageHelper.ShowInfo(owner, "Manual hyphenation found no words to review.", "Hyphenation");
+                    DialogMessageHelper.ShowInfo(
+                        owner,
+                        UiText.Get("Hyphenation_NoWords_Message"),
+                        UiText.Get("Hyphenation_Title"));
                 return;
             }
 
@@ -2994,7 +3019,7 @@ internal static class FreeWRibbonCommands
             FreeWFileTextResources.Document,
             FreeWDocumentFragmentImportFailureSurface.WpfModalError);
         if (presentation.ModalMessage is { } message)
-            DialogMessageHelper.ShowError(owner, message, presentation.ModalTitle ?? "FreeW");
+            DialogMessageHelper.ShowError(owner, message, presentation.ModalTitle ?? UiText.Get("FreeW_ProductName"));
     }
 
     // Insert > Illustrations > Picture: realize the portable import workflow through WPF-native ports.
@@ -3019,7 +3044,7 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowError(
                     owner,
                     message,
-                    presentation.ModalTitle ?? "FreeW");
+                    presentation.ModalTitle ?? UiText.Get("FreeW_ProductName"));
             }
         }
 
@@ -3101,7 +3126,10 @@ internal static class FreeWRibbonCommands
             {
                 if (window is not null && window.WindowState == WindowState.Minimized)
                     window.WindowState = previousState;
-                DialogMessageHelper.ShowError(window, $"Could not capture the screen clip:\n{ex.Message}", "FreeW");
+                DialogMessageHelper.ShowError(
+                    window,
+                    UiText.Format("ScreenClip_Failed_Message_Format", ex.Message),
+                    UiText.Get("FreeW_ProductName"));
             }
         }
     }
@@ -3141,7 +3169,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Picture Border");
+                ShowImageSelectionRequired(editor, "Image_PictureBorder_Title");
                 return;
             }
             var result = ImageBorderDialog.Prompt(
@@ -3161,7 +3189,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Corrections");
+                ShowImageSelectionRequired(editor, "Image_Corrections_Title");
                 return;
             }
             editor.SetSelectedImageAdjust(brightnessPct, image.ContrastPct, image.SaturationPct, image.TransparencyPct);
@@ -3177,7 +3205,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Corrections");
+                ShowImageSelectionRequired(editor, "Image_Corrections_Title");
                 return;
             }
             editor.SetSelectedImageAdjust(image.BrightnessPct, contrastPct, image.SaturationPct, image.TransparencyPct);
@@ -3193,7 +3221,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Picture Corrections");
+                ShowImageSelectionRequired(editor, "Image_PictureCorrections_Title");
                 return;
             }
             var result = ImageAdjustDialog.Prompt(
@@ -3213,7 +3241,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Color");
+                ShowImageSelectionRequired(editor, "Image_Color_Title");
                 return;
             }
             editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, saturationPct, image.TransparencyPct);
@@ -3229,7 +3257,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Color");
+                ShowImageSelectionRequired(editor, "Image_Color_Title");
                 return;
             }
             var result = ImageAdjustDialog.Prompt(
@@ -3249,7 +3277,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Transparency");
+                ShowImageSelectionRequired(editor, "Image_Transparency_Title");
                 return;
             }
             editor.SetSelectedImageAdjust(image.BrightnessPct, image.ContrastPct, image.SaturationPct, transparencyPct);
@@ -3265,7 +3293,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Transparency");
+                ShowImageSelectionRequired(editor, "Image_Transparency_Title");
                 return;
             }
             var result = ImageAdjustDialog.Prompt(
@@ -3285,7 +3313,7 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (editor.SelectedImage() is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Recolor");
+                ShowImageSelectionRequired(editor, "Image_Recolor_Title");
                 return;
             }
             editor.SetSelectedImageRecolor(mode);
@@ -3300,7 +3328,7 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (editor.SelectedImage() is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Color Tone");
+                ShowImageSelectionRequired(editor, "Image_ColorTone_Title");
                 return;
             }
             editor.SetSelectedImageRecolor(ImageRecolorMode.None, temperaturePct);
@@ -3316,7 +3344,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Shadow");
+                ShowImageSelectionRequired(editor, "Image_Shadow_Title");
                 return;
             }
             editor.SetSelectedImageEffect(preset, image.GlowSizePt, image.GlowColorHex,
@@ -3333,7 +3361,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Reflection");
+                ShowImageSelectionRequired(editor, "Image_Reflection_Title");
                 return;
             }
             editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
@@ -3350,7 +3378,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Glow");
+                ShowImageSelectionRequired(editor, "Image_Glow_Title");
                 return;
             }
             editor.SetSelectedImageEffect(image.ShadowPreset, glowPt, image.GlowColorHex,
@@ -3367,7 +3395,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Soft Edges");
+                ShowImageSelectionRequired(editor, "Image_SoftEdges_Title");
                 return;
             }
             editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
@@ -3384,7 +3412,7 @@ internal static class FreeWRibbonCommands
             var image = editor.SelectedImage();
             if (image is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Bevel");
+                ShowImageSelectionRequired(editor, "Image_Bevel_Title");
                 return;
             }
             editor.SetSelectedImageEffect(image.ShadowPreset, image.GlowSizePt, image.GlowColorHex,
@@ -3400,7 +3428,7 @@ internal static class FreeWRibbonCommands
             editor.Focus();
             if (editor.SelectedImage() is null)
             {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Artistic Effects");
+                ShowImageSelectionRequired(editor, "Image_ArtisticEffects_Title");
                 return;
             }
             editor.SetSelectedImageArtisticEffect(effect);
@@ -3416,7 +3444,8 @@ internal static class FreeWRibbonCommands
             var seed = editor.Selection.Text is { Length: > 0 } text && Uri.IsWellFormedUriString(text, UriKind.Absolute)
                 ? text
                 : "https://";
-            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed);
+            var dialogText = InsertDialogTextResources.Hyperlink;
+            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.Title, dialogText.AddressLabel);
             if (!string.IsNullOrWhiteSpace(url))
                 editor.ApplyHyperlink(url!.Trim());
         }
@@ -3432,7 +3461,8 @@ internal static class FreeWRibbonCommands
             if (!editor.IsCaretOnHyperlink())
                 return;
             var seed = editor.HyperlinkUrlAtCaret() is { Length: > 0 } current ? current : "https://";
-            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, "Edit Hyperlink", "Address:");
+            var dialogText = InsertDialogTextResources.Hyperlink;
+            var url = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.EditTitle, dialogText.AddressLabel);
             if (!string.IsNullOrWhiteSpace(url))
                 editor.EditHyperlink(url!.Trim());
         }
@@ -3458,7 +3488,8 @@ internal static class FreeWRibbonCommands
             if (!editor.IsCaretOnHyperlink())
                 return;
             var seed = editor.HyperlinkTooltipAtCaret() ?? string.Empty;
-            var tip = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, "Set ScreenTip", "ScreenTip:");
+            var dialogText = InsertDialogTextResources.ScreenTip;
+            var tip = HyperlinkPrompt.Ask(Window.GetWindow(editor), seed, dialogText.Title, dialogText.Label);
             // A null result is a cancel (leave unchanged); an empty/blank string clears the ScreenTip.
             if (tip is not null)
                 editor.SetHyperlinkTooltip(tip);
@@ -3542,7 +3573,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var text = TextPrompt.Ask(Window.GetWindow(editor), "Insert Footnote", "Footnote text:", string.Empty);
+            var text = TextPrompt.Ask(
+                Window.GetWindow(editor),
+                UiText.Get("Dialog_Note_InsertFootnoteTitle"),
+                UiText.Get("Dialog_Note_FootnoteTextLabel"),
+                string.Empty);
             if (string.IsNullOrWhiteSpace(text))
                 return; // cancelled or empty — nothing to anchor a footnote to
             editor.Focus();
@@ -3557,7 +3592,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var text = TextPrompt.Ask(Window.GetWindow(editor), "Insert Endnote", "Endnote text:", string.Empty);
+            var text = TextPrompt.Ask(
+                Window.GetWindow(editor),
+                UiText.Get("Dialog_Note_InsertEndnoteTitle"),
+                UiText.Get("Dialog_Note_EndnoteTextLabel"),
+                string.Empty);
             if (string.IsNullOrWhiteSpace(text))
                 return; // cancelled or empty — nothing to anchor an endnote to
             editor.Focus();
@@ -3585,9 +3624,11 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     footnote
-                        ? "This document does not contain any footnotes."
-                        : "This document does not contain any endnotes.",
-                    footnote ? "Footnotes" : "Endnotes");
+                        ? UiText.Get("Notes_NoFootnotes_Message")
+                        : UiText.Get("Notes_NoEndnotes_Message"),
+                    footnote
+                        ? UiText.Get("Notes_Footnotes_Title")
+                        : UiText.Get("Notes_Endnotes_Title"));
         }
     }
 
@@ -3604,8 +3645,8 @@ internal static class FreeWRibbonCommands
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "This document does not contain any footnotes or endnotes.",
-                    "Show Notes");
+                    UiText.Get("Notes_None_Message"),
+                    UiText.Get("Notes_Show_Title"));
                 return;
             }
 
@@ -3644,7 +3685,7 @@ internal static class FreeWRibbonCommands
 
             var dialog = new Window
             {
-                Title = "Show Notes",
+                Title = UiText.Get("Notes_Show_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.CanResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -3654,7 +3695,7 @@ internal static class FreeWRibbonCommands
 
             var close = new System.Windows.Controls.Button
             {
-                Content = "Close",
+                Content = UiText.Get("Dialog_Close_Label"),
                 IsCancel = true,
                 MinWidth = 72,
                 HorizontalAlignment = HorizontalAlignment.Right
@@ -3663,7 +3704,9 @@ internal static class FreeWRibbonCommands
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = $"{items.Count} note{(items.Count == 1 ? string.Empty : "s")}",
+                Text = UiText.Format(
+                    items.Count == 1 ? "Notes_Count_Singular_Format" : "Notes_Count_Plural_Format",
+                    items.Count),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 8)
             });
@@ -3783,7 +3826,11 @@ internal static class FreeWRibbonCommands
             if (label is null)
                 return; // cancelled
 
-            var text = TextPrompt.Ask(owner, "Insert Caption", "Caption text (optional):", string.Empty);
+            var text = TextPrompt.Ask(
+                owner,
+                UiText.Get("Caption_Insert_Title"),
+                UiText.Get("Caption_Text_FieldLabel"),
+                string.Empty);
             if (text is null)
                 return; // cancelled — leave the model untouched
 
@@ -3798,7 +3845,11 @@ internal static class FreeWRibbonCommands
         {
             editor.Focus();
             var owner = Window.GetWindow(editor);
-            var text = TextPrompt.Ask(owner, "Insert Caption", "Caption text (optional):", string.Empty);
+            var text = TextPrompt.Ask(
+                owner,
+                UiText.Get("Caption_Insert_Title"),
+                UiText.Get("Caption_Text_FieldLabel"),
+                string.Empty);
             if (text is null)
                 return;
 
@@ -3826,7 +3877,7 @@ internal static class FreeWRibbonCommands
             string? result = null;
             var dialog = new Window
             {
-                Title = "Insert Caption",
+                Title = UiText.Get("Caption_Insert_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -3834,9 +3885,9 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var newLabel = new System.Windows.Controls.Button { Content = "New Label...", MinWidth = 96, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var newLabel = new System.Windows.Controls.Button { Content = UiText.Get("Caption_NewLabel_Button"), MinWidth = 96, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             void Choose()
             {
                 if (list.SelectedItem is string chosen)
@@ -3849,7 +3900,11 @@ internal static class FreeWRibbonCommands
             list.MouseDoubleClick += (_, _) => Choose();
             newLabel.Click += (_, _) =>
             {
-                var custom = TextPrompt.Ask(dialog, "New Label", "Label:", string.Empty);
+                var custom = TextPrompt.Ask(
+                    dialog,
+                    UiText.Get("Caption_NewLabel_Title"),
+                    UiText.Get("Caption_Label_FieldLabel"),
+                    string.Empty);
                 if (string.IsNullOrWhiteSpace(custom))
                     return;
                 result = Captions.NormalizeLabelText(custom);
@@ -3866,7 +3921,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Label:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = UiText.Get("Caption_Label_FieldLabel"), Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;
@@ -4095,8 +4150,8 @@ internal static class FreeWRibbonCommands
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "Click into a misspelled (red-underlined) word first, then choose Add to Dictionary.",
-                    "FreeW");
+                    UiText.Get("Proofing_AddToDictionary_MissingWord_Message"),
+                    UiText.Get("FreeW_ProductName"));
                 return;
             }
 
@@ -4236,7 +4291,10 @@ internal static class FreeWRibbonCommands
             }
             catch (Exception ex)
             {
-                DialogMessageHelper.ShowError(owner, $"Could not compare the documents:\n{ex.Message}", "FreeW");
+                DialogMessageHelper.ShowError(
+                    owner,
+                    UiText.Format("Review_CompareFailed_Message_Format", ex.Message),
+                    UiText.Get("FreeW_ProductName"));
             }
         }
     }
@@ -4287,7 +4345,10 @@ internal static class FreeWRibbonCommands
             }
             catch (Exception ex)
             {
-                DialogMessageHelper.ShowError(owner, $"Could not combine the documents:\n{ex.Message}", "FreeW");
+                DialogMessageHelper.ShowError(
+                    owner,
+                    UiText.Format("Review_CombineFailed_Message_Format", ex.Message),
+                    UiText.Get("FreeW_ProductName"));
             }
         }
     }
@@ -4316,8 +4377,11 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var name = TextPrompt.Ask(Window.GetWindow(editor), "Bookmark",
-                "Bookmark name (leave blank to remove):", string.Empty);
+            var name = TextPrompt.Ask(
+                Window.GetWindow(editor),
+                UiText.Get("Bookmark_Title"),
+                UiText.Get("Bookmark_NameOrRemove_Prompt"),
+                string.Empty);
             if (name is null)
                 return; // cancelled — leave the model untouched
             editor.SetBookmarkAtCaret(name);
@@ -4336,8 +4400,8 @@ internal static class FreeWRibbonCommands
             {
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
-                    "No bookmarks exist yet. Add a bookmark first (Insert › Bookmark), then link to it.",
-                    "FreeW");
+                    UiText.Get("Bookmark_NoneForLink_Message"),
+                    UiText.Get("FreeW_ProductName"));
                 return;
             }
 
@@ -4377,7 +4441,7 @@ internal static class FreeWRibbonCommands
             string? result = null;
             var dialog = new Window
             {
-                Title = "Link to Bookmark",
+                Title = UiText.Get("LinkBookmark_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -4385,8 +4449,8 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
             list.MouseDoubleClick += (_, _) => { result = list.SelectedItem as string; dialog.DialogResult = true; };
 
@@ -4399,7 +4463,7 @@ internal static class FreeWRibbonCommands
             buttons.Children.Add(cancel);
 
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Bookmark:", Margin = new Thickness(0, 0, 0, 4) });
+            panel.Children.Add(new System.Windows.Controls.TextBlock { Text = UiText.Get("LinkBookmark_Bookmark_Label"), Margin = new Thickness(0, 0, 0, 4) });
             panel.Children.Add(list);
             panel.Children.Add(buttons);
             dialog.Content = panel;
@@ -4539,7 +4603,7 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     quickPartText.EmptySelectionMessage,
-                    "FreeW");
+                    UiText.Get("FreeW_ProductName"));
                 return;
             }
 
@@ -4572,7 +4636,7 @@ internal static class FreeWRibbonCommands
                 DialogMessageHelper.ShowInfo(
                     Window.GetWindow(editor),
                     quickPartText.EmptyLibraryMessage,
-                    "FreeW");
+                    UiText.Get("FreeW_ProductName"));
                 return;
             }
 
@@ -4803,8 +4867,8 @@ internal static class FreeWRibbonCommands
 
             typeBox.SelectionChanged += (_, _) => RefreshFields();
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
                 result = CurrentEntry();
@@ -4991,8 +5055,8 @@ internal static class FreeWRibbonCommands
                 ReadPersonRows(),
                 corporateBox.Text));
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
                 result = session.Accept(ReadPersonRows(), corporateBox.Text);
@@ -5634,8 +5698,8 @@ internal static class FreeWRibbonCommands
                 valueBox.IsEnabled = session.IsComparisonValueEnabled;
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
                 result = session.AcceptIf(
@@ -5716,8 +5780,8 @@ internal static class FreeWRibbonCommands
                 valueBox.IsEnabled = session.IsComparisonValueEnabled;
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
                 result = session.AcceptCondition(
@@ -5782,8 +5846,8 @@ internal static class FreeWRibbonCommands
                 MinWidth = 260,
                 Margin = new Thickness(0, 0, 0, 12)
             };
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
 
             var buttons = new System.Windows.Controls.StackPanel
@@ -5825,8 +5889,8 @@ internal static class FreeWRibbonCommands
 
             var nameBox  = new System.Windows.Controls.TextBox { MinWidth = 200, Margin = new Thickness(0, 0, 0, 6) };
             var valueBox = new System.Windows.Controls.TextBox { MinWidth = 200, Margin = new Thickness(0, 0, 0, 10) };
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
                 result = session.Accept(nameBox.Text, valueBox.Text);
@@ -7146,11 +7210,17 @@ internal static class FreeWRibbonCommands
             var model = editor.Model;
             var existing = isFooter ? model.Footer : model.Header;
             var seed = existing?.PlainText ?? string.Empty;
-            var label = isFooter ? "Footer" : "Header";
+            var label = isFooter
+                ? UiText.Get("HeaderFooter_Footer_Label")
+                : UiText.Get("HeaderFooter_Header_Label");
 
             var text = askHeaderFooterText is { } ask
                 ? ask(isFooter, seed)
-                : TextPrompt.Ask(Window.GetWindow(editor), $"Edit {label}", $"{label} text:", seed);
+                : TextPrompt.Ask(
+                    Window.GetWindow(editor),
+                    UiText.Format("HeaderFooter_Edit_Title_Format", label),
+                    UiText.Format("HeaderFooter_Text_Label_Format", label),
+                    seed);
             if (text is null)
                 return; // cancelled — leave the model untouched
 
@@ -7396,7 +7466,7 @@ internal static class FreeWRibbonCommands
 
             var dialog = new Window
             {
-                Title = $"Edit {slotLabel}",
+                Title = UiText.Format("HeaderFooter_Edit_Title_Format", slotLabel),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -7407,20 +7477,20 @@ internal static class FreeWRibbonCommands
             // Insert buttons
             var btnPageNumber = new System.Windows.Controls.Button
             {
-                Content = "Insert Page Number",
+                Content = UiText.Get("Field_InsertPageNumber_Title"),
                 MinWidth = 140,
                 Margin = new Thickness(0, 0, 8, 8),
                 IsEnabled = state.CanInsertPageNumber
             };
             var btnDateTime = new System.Windows.Controls.Button
             {
-                Content = "Insert Date && Time",
+                Content = UiText.Get("Field_InsertDateTime_Title"),
                 MinWidth = 120,
                 Margin = new Thickness(0, 0, 8, 8)
             };
             var btnField = new System.Windows.Controls.Button
             {
-                Content = "Insert Field",
+                Content = UiText.Get("Field_Insert_Title"),
                 MinWidth = 90,
                 Margin = new Thickness(0, 0, 0, 8)
             };
@@ -7445,8 +7515,8 @@ internal static class FreeWRibbonCommands
                     appendFieldInstruction = instr;
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
                 result = HeaderFooterDialogPlanner.BuildSlotDialogResult(
@@ -7477,7 +7547,7 @@ internal static class FreeWRibbonCommands
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16), MinWidth = 400 };
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = $"{slotLabel} text:",
+                Text = UiText.Format("HeaderFooter_Text_Label_Format", slotLabel),
                 Margin = new Thickness(0, 0, 0, 4)
             });
             panel.Children.Add(box);
@@ -7761,8 +7831,8 @@ internal static class FreeWRibbonCommands
                 ResizeMode = ResizeMode.NoResize
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
                 if (!PageNumberFormatDialogPlanner.TryBuildResult(
@@ -7893,7 +7963,7 @@ internal static class FreeWRibbonCommands
             string? result = null;
             var dialog = new Window
             {
-                Title = "Insert Field",
+                Title = UiText.Get("Field_Insert_Title"),
                 SizeToContent = SizeToContent.WidthAndHeight,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -7903,12 +7973,12 @@ internal static class FreeWRibbonCommands
 
             var ok = new System.Windows.Controls.Button
             {
-                Content = "OK",
+                Content = UiText.Get("Common_OkText"),
                 IsDefault = true,
                 MinWidth = 72,
                 Margin = new Thickness(0, 0, 8, 0)
             };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
 
             void Commit()
             {
@@ -7940,7 +8010,7 @@ internal static class FreeWRibbonCommands
             var panel = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
             panel.Children.Add(new System.Windows.Controls.TextBlock
             {
-                Text = "Choose a field to insert:",
+                Text = UiText.Get("Field_Insert_Prompt"),
                 Margin = new Thickness(0, 0, 0, 8)
             });
             panel.Children.Add(listsRow);
@@ -8019,8 +8089,8 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             void Commit()
             {
                 var index = list.SelectedIndex;
@@ -8075,8 +8145,8 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
 
             var buttons = new System.Windows.Controls.StackPanel
@@ -8102,7 +8172,7 @@ internal static class FreeWRibbonCommands
     // text, or null if cancelled. Title/label default to the insert-link wording for existing callers.
     private static class HyperlinkPrompt
     {
-        public static string? Ask(Window? owner, string seed, string title = "Insert Link", string label = "Address:")
+        public static string? Ask(Window? owner, string seed, string title, string label)
         {
             var box = new System.Windows.Controls.TextBox
             {
@@ -8123,8 +8193,8 @@ internal static class FreeWRibbonCommands
                 ShowInTaskbar = false
             };
 
-            var ok = new System.Windows.Controls.Button { Content = "OK", IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = "Cancel", IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) => { result = box.Text; dialog.DialogResult = true; };
 
             var buttons = new System.Windows.Controls.StackPanel

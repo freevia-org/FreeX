@@ -54,7 +54,7 @@ internal static class MailMergeDialogs
             Margin = new Thickness(16, 0, 16, 0),
             Text = initialCsv ??
                 (string.IsNullOrWhiteSpace(seedHeader) ? string.Empty : seedHeader + "\n"),
-            PlaceholderText ="FirstName,LastName,City…",
+            PlaceholderText = MailMergeDialogMetadata.RecipientCsvPlaceholder,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(editor, DialogChromeStyle, fixedHeight: false);
         Grid.SetRow(editor, 1);
@@ -123,7 +123,7 @@ internal static class MailMergeDialogs
         // Also allow free text entry for a field not in the loaded list.
         var freeText = new TextBox
         {
-            PlaceholderText ="…or type a field name",
+            PlaceholderText = MailMergeDialogMetadata.MergeFieldPlaceholder,
             Margin = new Thickness(16, 8, 16, 0),
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(freeText, DialogChromeStyle);

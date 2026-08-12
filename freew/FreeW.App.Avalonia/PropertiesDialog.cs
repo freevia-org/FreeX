@@ -48,11 +48,11 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
                 AddReadOnlyRow(grid, row, spec);
         }
 
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
         AutomationProperties.SetAutomationId(ok, "DocumentPropertiesOkButton");
         ok.Click += (_, _) => Commit();
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 84);
         AutomationProperties.SetAutomationId(cancel, "DocumentPropertiesCancelButton");
         cancel.Click += (_, _) => Close();

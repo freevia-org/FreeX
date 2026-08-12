@@ -127,7 +127,7 @@ internal sealed class MailMergeEngine
             return;
 
         ApplyFieldMapping(MailMerge.AutoMatchFields(Session.Data!.Header));
-        ShowInfo("Matched recipient fields automatically.");
+        ShowInfo(UiText.Get("MailMerge_MatchedFields_Status"));
     }
 
     /// <summary>
@@ -163,8 +163,8 @@ internal sealed class MailMergeEngine
             ascending: true);
         ApplyRecipientFilter(filtered);
         ShowInfo(sortColumn is null
-            ? "Recipient list kept in document order."
-            : $"Recipient list sorted by {sortColumn}.");
+            ? UiText.Get("MailMerge_DocumentOrder_Status")
+            : UiText.Format("MailMerge_SortedBy_Status_Format", sortColumn));
     }
 
     public void ApplyRecipientFilter(MergeData data)
@@ -467,7 +467,7 @@ internal sealed class MailMergeEngine
             page.MarginBottomPt = plan.MarginPt;
             page.Landscape = plan.Landscape;
         });
-        ShowInfo("Applied default envelope page setup.");
+        ShowInfo(UiText.Get("MailMerge_EnvelopeSetupApplied_Status"));
     }
 
     /// <summary>Mailings &gt; Labels. Apply the default label sheet and insert its label grid.</summary>
@@ -529,7 +529,7 @@ internal sealed class MailMergeEngine
             }
         }
 
-        ShowInfo($"Inserted a {rows} x {columns} label grid.");
+        ShowInfo(UiText.Format("MailMerge_LabelGridInserted_Status_Format", rows, columns));
     }
 
     public MailMergeValidationPlan ValidateOperation(MailMergeOperation operation) =>

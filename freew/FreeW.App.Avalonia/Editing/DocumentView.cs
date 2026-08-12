@@ -969,7 +969,7 @@ public sealed partial class DocumentView : Control
         _automationPeer = new DocumentViewAutomationPeer(this);
         _lastAutomationValue = PlainText;
         _lastAutomationSelectionStatus = AutomationSelectionStatus();
-        AutomationProperties.SetName(this, "Document editor");
+        AutomationProperties.SetName(this, UiText.Get("Editor_Document_AutomationName"));
         AutomationProperties.SetHelpText(this, _lastAutomationSelectionStatus);
         return _automationPeer;
     }
@@ -7430,10 +7430,11 @@ public sealed partial class DocumentView : Control
         var startY = lastPageBottom + PageGap + _marginTopDip * 0.25;
 
         var headingFmt = RunFormatting.Default with { FontSizePt = NoteFontSizePt + 2, Bold = true };
-        var headingH = Math.Max(1, Build("Endnotes", headingFmt).Height);
+        var endnotesHeading = UiText.Get("Editor_Endnotes_Heading");
+        var headingH = Math.Max(1, Build(endnotesHeading, headingFmt).Height);
 
         // Heading.
-        _noteItems.Add(new NoteRenderItem { Text = "Endnotes", Fmt = headingFmt, X = _contentLeft, Y = startY });
+        _noteItems.Add(new NoteRenderItem { Text = endnotesHeading, Fmt = headingFmt, X = _contentLeft, Y = startY });
         var y = startY + headingH + 2;
 
         // Separator rule beneath the heading.

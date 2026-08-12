@@ -54,12 +54,12 @@ internal sealed partial class PasswordPromptDialog : FreeWDialogWindow
         });
         body.Children.Add(_passwordBox);
 
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, 72, isDefault: true);
         AutomationProperties.SetAutomationId(ok, PasswordPromptDialogSession.AcceptButtonAutomationId);
         ok.Click += (_, _) => Accept();
 
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, 72);
         AutomationProperties.SetAutomationId(cancel, PasswordPromptDialogSession.CancelButtonAutomationId);
         cancel.Click += (_, _) => Close();

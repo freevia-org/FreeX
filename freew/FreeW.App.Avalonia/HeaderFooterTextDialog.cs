@@ -34,7 +34,7 @@ internal sealed class HeaderFooterTextDialog : FreeWDialogWindow
 
         var ok = new Button
         {
-            Content = "OK",
+            Content = UiText.Get("Common_OkText"),
             IsDefault = true,
             MinWidth = 78,
         };
@@ -43,7 +43,7 @@ internal sealed class HeaderFooterTextDialog : FreeWDialogWindow
 
         var cancel = new Button
         {
-            Content = "Cancel",
+            Content = UiText.Get("Common_CancelText"),
             IsCancel = true,
             MinWidth = 78,
         };

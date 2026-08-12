@@ -11796,7 +11796,7 @@ public sealed partial class DocumentView : RichTextBox
         // A hyperlink cross-reference renders in the link colour so it reads as clickable, matching Word.
         else if (run.CrossReference!.Hyperlink)
             wpf.Foreground = new SolidColorBrush(Color.FromRgb(0x05, 0x63, 0xC1));
-        wpf.ToolTip = "Cross-reference: " + run.CrossReference!.Kind;
+        wpf.ToolTip = UiText.Format("Editor_CrossReference_ToolTip_Format", run.CrossReference!.Kind);
         return wpf;
     }
 
@@ -11816,7 +11816,7 @@ public sealed partial class DocumentView : RichTextBox
             wpf.FontSize = size * PxPerPoint;
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
-        wpf.ToolTip = "Formula: " + run.TableFormula!.Expression;
+        wpf.ToolTip = UiText.Format("Editor_Formula_ToolTip_Format", run.TableFormula!.Expression);
         return wpf;
     }
 
@@ -17073,7 +17073,7 @@ public sealed partial class DocumentView : RichTextBox
                     BorderThickness = new Thickness(1),
                     Cursor = Cursors.Cross,
                     Focusable = false,
-                    ToolTip = "Drag edit point"
+                    ToolTip = UiText.Get("Editor_DragEditPoint_ToolTip")
                 };
 
                 CustomPoint? dragStart = null;

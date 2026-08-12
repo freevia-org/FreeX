@@ -35,7 +35,7 @@ internal sealed class WordCountDialog : FreeWDialogWindow
         for (var index = 0; index < plan.Rows.Count; index++)
             AddStatRow(grid, index, plan.Rows[index]);
 
-        var ok = new Button { Content = "OK", IsDefault = true, IsCancel = true, MinWidth = 72 };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true, IsCancel = true, MinWidth = 72 };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
         ok.Click += (_, _) => Close();
 

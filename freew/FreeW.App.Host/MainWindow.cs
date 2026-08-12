@@ -1235,7 +1235,7 @@ public sealed partial class MainWindow : Window
             DocumentViewMode.PrintLayout);
         _webLayoutSwitch = ViewToggle(
             FreeWApplicationFrameTextCatalog.WebLayoutLabel,
-            "Web Layout: continuous, full-width view (no page chrome)",
+            UiText.Get("View_WebLayout_WpfHelpText"),
             RibbonCommandIconKind.WebLayout,
             DocumentViewMode.WebLayout);
         _draftSwitch = ViewToggle(
@@ -1253,10 +1253,10 @@ public sealed partial class MainWindow : Window
             Height = 22,
             Padding = new Thickness(4, 2, 4, 2),
             Margin = new Thickness(1, 2, 1, 2),
-            ToolTip = "Page Edit: editable paginated page boxes (WYSIWYG pagination)"
+            ToolTip = UiText.Get("View_PageEdit_WpfHelpText")
         };
         AutomationProperties.SetName(_pagedEditSwitch, FreeWApplicationFrameTextCatalog.PageEditLabel);
-        AutomationProperties.SetHelpText(_pagedEditSwitch, "Page Edit: editable paginated page boxes (WYSIWYG pagination)");
+        AutomationProperties.SetHelpText(_pagedEditSwitch, UiText.Get("View_PageEdit_WpfHelpText"));
         _pagedEditSwitch.Click += (_, _) => TogglePagedEditView();
 
         panel.Children.Add(ViewButton(
@@ -1447,7 +1447,7 @@ public sealed partial class MainWindow : Window
             FontSize = 9,
             Focusable = true
         };
-        AutomationProperties.SetName(button, "Tab stop selector");
+        AutomationProperties.SetName(button, UiText.Get("Ruler_TabStopSelector_AutomationName"));
 
         void Refresh()
         {
@@ -1460,10 +1460,10 @@ public sealed partial class MainWindow : Window
             };
             button.ToolTip = _hRuler.SelectedTabStopAlignment switch
             {
-                TabStopAlignment.Center => "Center tab",
-                TabStopAlignment.Right => "Right tab",
-                TabStopAlignment.Decimal => "Decimal tab",
-                _ => "Left tab"
+                TabStopAlignment.Center => UiText.Get("Ruler_CenterTab_ToolTip"),
+                TabStopAlignment.Right => UiText.Get("Ruler_RightTab_ToolTip"),
+                TabStopAlignment.Decimal => UiText.Get("Ruler_DecimalTab_ToolTip"),
+                _ => UiText.Get("Ruler_LeftTab_ToolTip")
             };
         }
 
@@ -1491,7 +1491,7 @@ public sealed partial class MainWindow : Window
     {
         var header = new TextBlock
         {
-            Text = "Reveal Formatting",
+            Text = UiText.Get("Pane_RevealFormatting_Heading"),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(10, 8, 10, 6)
         };
@@ -2006,7 +2006,7 @@ public sealed partial class MainWindow : Window
 
         var closeBtn = new Button
         {
-            Content = "Close Header and Footer",
+            Content = UiText.Get("HeaderFooter_Close_Label"),
             Padding = new Thickness(10, 3, 10, 3),
             Margin = new Thickness(10, 4, 10, 6),
             HorizontalAlignment = HorizontalAlignment.Left
@@ -2053,7 +2053,7 @@ public sealed partial class MainWindow : Window
         _hfActiveSlot = slot;
 
         var label = HeaderFooterDialogPlanner.LabelFor(slot);
-        _hfSlotLabel.Text = $"Editing: {label}";
+        _hfSlotLabel.Text = UiText.Format("HeaderFooter_Editing_Status_Format", label);
 
         var hf = _editor.Model.FinalSectionHeadersFooters;
         var current = HeaderFooterDialogPlanner.GetSlot(hf, slot);
@@ -2219,11 +2219,13 @@ public sealed partial class MainWindow : Window
         {
             newWindow.Show();
             newWindow._file.OpenRecentPath(path);
-            newWindow.Title = $"FreeW — {System.IO.Path.GetFileName(path)} (second view)";
+            newWindow.Title = UiText.Format(
+                "Window_SecondView_Title_Format",
+                System.IO.Path.GetFileName(path));
         }
         else
         {
-            newWindow.Title = "FreeW — (second view)";
+            newWindow.Title = UiText.Get("Window_SecondView_EmptyTitle");
             newWindow.Show();
         }
     }
@@ -2263,7 +2265,7 @@ public sealed partial class MainWindow : Window
     {
         var reportWindow = new MainWindow(_options, messageService: _messageService);
         reportWindow._editor.LoadModel(report);
-        reportWindow.Title = "FreeW — Mail Merge Error Report";
+        reportWindow.Title = UiText.Get("MailMerge_ErrorReport_WindowTitle");
         reportWindow.Show();
         reportWindow._editor.Focus();
     }
@@ -3133,8 +3135,8 @@ public sealed partial class MainWindow : Window
         {
             DialogMessageHelper.ShowError(
                 this,
-                "The document could not be printed.\n\n" + ex.Message,
-                "Print");
+                UiText.Format("Print_Failed_Message_Format", ex.Message),
+                UiText.Get("Print_Title"));
         }
     }
 
@@ -3318,7 +3320,10 @@ public sealed partial class MainWindow : Window
         ApplyEditorTypingOptions(_optionsRuntime.Apply(edited));
 
         if (!_optionsStore.Save(_options))
-            DialogMessageHelper.ShowError(this, _optionsStore.LastError, "FreeW Options");
+            DialogMessageHelper.ShowError(
+                this,
+                _optionsStore.LastError,
+                UiText.Get("Options_Dialog_Title"));
     }
 
     // Push the persisted AutoCorrect master switch + per-rule AutoFormat toggles onto the live editor so the

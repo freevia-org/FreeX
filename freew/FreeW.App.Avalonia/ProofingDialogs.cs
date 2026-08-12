@@ -73,7 +73,7 @@ internal sealed class ThesaurusDialog : FreeWDialogWindow
 
     public ThesaurusDialog(ThesaurusDisplayPlan plan)
     {
-        Title = "Thesaurus";
+        Title = UiText.Get("Pane_Thesaurus_Heading");
         Width = 440;
         Height = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -111,7 +111,7 @@ internal sealed class ThesaurusDialog : FreeWDialogWindow
 
         var close = new Button
         {
-            Content = "Close",
+            Content = UiText.Get("Dialog_Close_Label"),
             MinWidth = 78,
             IsDefault = true,
             IsCancel = true,
@@ -171,7 +171,7 @@ internal sealed class ThesaurusDialog : FreeWDialogWindow
 
         var replace = new Button
         {
-            Content = "Replace",
+            Content = UiText.Get("Thesaurus_Replace_Label"),
             MinWidth = 78,
             HorizontalContentAlignment = HorizontalAlignment.Center,
         };

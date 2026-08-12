@@ -22,7 +22,8 @@ internal sealed class ImageAdjustDialog : FreeWDialogWindow
 
     private ImageAdjustDialog(double brightness, double contrast, double saturation, double transparency)
     {
-        Title = "Picture Corrections";
+        var surface = ImageAdjustDialogPlanner.CompactSurface;
+        Title = surface.Title;
         Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -38,16 +39,16 @@ internal sealed class ImageAdjustDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
         var grid = AvaloniaLabeledFormRow.CreateCompactGrid(5);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Brightness (-100 to 100):", _brightness, 0);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Contrast (-100 to 100):", _contrast, 1);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Saturation (0 to 400):", _saturation, 2);
-        AvaloniaLabeledFormRow.AddCompact(grid, "Transparency (0 to 100):", _transparency, 3);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageAdjustDialogField.Brightness).Label, _brightness, 0);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageAdjustDialogField.Contrast).Label, _contrast, 1);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageAdjustDialogField.Saturation).Label, _saturation, 2);
+        AvaloniaLabeledFormRow.AddCompact(grid, surface.Field(ImageAdjustDialogField.Transparency).Label, _transparency, 3);
         Grid.SetRow(_status, 4);
         Grid.SetColumnSpan(_status, 2);
         grid.Children.Add(_status);
 
-        var ok = Chrome.Button("OK", Accept, isDefault: true);
-        var cancel = Chrome.Button("Cancel", () => Close(null), isCancel: true);
+        var ok = Chrome.Button(UiText.Get("Common_OkText"), Accept, isDefault: true);
+        var cancel = Chrome.Button(UiText.Get("Common_CancelText"), () => Close(null), isCancel: true);
         Content = new Border
         {
             Padding = new Thickness(14),

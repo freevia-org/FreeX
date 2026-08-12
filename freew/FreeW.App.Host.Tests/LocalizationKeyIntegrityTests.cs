@@ -41,6 +41,8 @@ public sealed class LocalizationKeyIntegrityTests
     {
         var available = UiText.GetNeutralResourceKeys();
         var required = MailMergeRuleDialogPlanner.RequiredResourceKeys
+            .Concat(MailMergeDialogMetadata.RequiredResourceKeys)
+            .Concat(InsertDialogTextResources.RequiredResourceKeys)
             .Concat(NavigationPaneTextCatalog.RequiredResourceKeys)
             .Concat(SmartArtDialogPlanner.RequiredResourceKeys)
             .Concat(TableTextConversionDialogPlanner.RequiredResourceKeys)

@@ -105,11 +105,11 @@ public sealed partial class CustomizeThemeColorsDialog : FreeWDialogWindow
 
     private StackPanel CreateActionRow()
     {
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, ActionButtonWidth, isDefault: true);
         ok.Click += (_, _) => Accept(closeOnSuccess: true);
 
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, ActionButtonWidth);
         cancel.Click += (_, _) => Close();
 

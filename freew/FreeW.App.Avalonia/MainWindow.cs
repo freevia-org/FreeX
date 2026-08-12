@@ -697,7 +697,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Insert Icon", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Operation_InsertIcon"),
+                ex.Message);
         }
     }
 
@@ -1054,7 +1057,9 @@ public sealed partial class MainWindow : Window
     private void ToggleSpellCheck()
     {
         var enabled = _editor.ToggleSpellCheck();
-        _status.Text = enabled ? "Spelling proofing is on." : "Spelling proofing is off.";
+        _status.Text = enabled
+            ? UiText.Get("Proofing_SpellCheckOn_Status")
+            : UiText.Get("Proofing_SpellCheckOff_Status");
     }
 
     private void AddCurrentWordToDictionary()
@@ -1062,14 +1067,14 @@ public sealed partial class MainWindow : Window
         var word = _editor.CurrentProofingWord;
         if (word is null)
         {
-            _status.Text = "Select a word, or place the caret inside one, then choose Add to Dictionary.";
+            _status.Text = UiText.Get("Proofing_SelectWord_Status");
             _editor.Focus();
             return;
         }
 
         _status.Text = _editor.AddCurrentWordToDictionary()
-            ? $"Added '{word}' to the custom dictionary."
-            : $"'{word}' is already in the custom dictionary.";
+            ? UiText.Format("Proofing_AddedToDictionary_Status_Format", word)
+            : UiText.Format("Proofing_AlreadyInDictionary_Status_Format", word);
         _editor.Focus();
     }
 
@@ -1085,14 +1090,15 @@ public sealed partial class MainWindow : Window
         _editor.SetProofingLanguage(chosen);
         var normalized = ProofingLanguageCatalog.NormalizeTag(chosen);
         _status.Text = normalized is null
-            ? "Proofing language cleared."
-            : $"Proofing language set to {normalized}.";
+            ? UiText.Get("Proofing_LanguageCleared_Status")
+            : UiText.Format("Proofing_LanguageSet_Status_Format", normalized);
         _editor.Focus();
     }
 
     private async Task CompareDocumentsAsync()
     {
-        var originalPath = await PromptReviewDocumentPathAsync("Compare: pick the ORIGINAL document");
+        var originalPath = await PromptReviewDocumentPathAsync(
+            UiText.Get("Review_Compare_OriginalPickerTitle"));
         if (originalPath is null)
             return;
 
@@ -1106,7 +1112,9 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var original = OpenReviewDocument(picked.OriginalFilePath, "Compare documents");
+            var original = OpenReviewDocument(
+                picked.OriginalFilePath,
+                UiText.Get("Review_CompareDocuments_Action"));
             var compared = ReviewCompareCombineWorkflow.ExecuteCompare(
                 new CompareDocumentsExecutionInput(
                     original,
@@ -1114,11 +1122,13 @@ public sealed partial class MainWindow : Window
                     picked.Author,
                     ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow),
                     picked.Settings));
-            LoadReviewResult(compared, $"Compared with {Path.GetFileName(picked.OriginalFilePath)}.");
+            LoadReviewResult(
+                compared,
+                UiText.Format("Review_ComparedWith_Status_Format", Path.GetFileName(picked.OriginalFilePath)));
         }
         catch (Exception ex)
         {
-            _status.Text = $"Could not compare the documents: {ex.Message}";
+            _status.Text = UiText.Format("Review_CompareFailed_Status_Format", ex.Message);
         }
 
         _editor.Focus();
@@ -1126,11 +1136,13 @@ public sealed partial class MainWindow : Window
 
     private async Task CombineDocumentsAsync()
     {
-        var originalPath = await PromptReviewDocumentPathAsync("Combine: pick the ORIGINAL document");
+        var originalPath = await PromptReviewDocumentPathAsync(
+            UiText.Get("Review_Combine_OriginalPickerTitle"));
         if (originalPath is null)
             return;
 
-        var reviewerBPath = await PromptReviewDocumentPathAsync("Combine: pick Reviewer B's revised document");
+        var reviewerBPath = await PromptReviewDocumentPathAsync(
+            UiText.Get("Review_Combine_ReviewerBPickerTitle"));
         if (reviewerBPath is null)
             return;
 
@@ -1145,8 +1157,9 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var original = OpenReviewDocument(picked.OriginalFilePath, "Combine documents");
-            var reviewerB = OpenReviewDocument(picked.ReviewerBFilePath, "Combine documents");
+            var combineAction = UiText.Get("Review_CombineDocuments_Action");
+            var original = OpenReviewDocument(picked.OriginalFilePath, combineAction);
+            var reviewerB = OpenReviewDocument(picked.ReviewerBFilePath, combineAction);
             var combined = ReviewCompareCombineWorkflow.ExecuteCombine(
                 new CombineDocumentsExecutionInput(
                     original,
@@ -1155,11 +1168,13 @@ public sealed partial class MainWindow : Window
                     reviewerB,
                     picked.AuthorB,
                     ReviewCompareCombineWorkflow.CreateRevisionDateXml(DateTimeOffset.UtcNow)));
-            LoadReviewResult(combined, $"Combined with {Path.GetFileName(picked.ReviewerBFilePath)}.");
+            LoadReviewResult(
+                combined,
+                UiText.Format("Review_CombinedWith_Status_Format", Path.GetFileName(picked.ReviewerBFilePath)));
         }
         catch (Exception ex)
         {
-            _status.Text = $"Could not combine the documents: {ex.Message}";
+            _status.Text = UiText.Format("Review_CombineFailed_Status_Format", ex.Message);
         }
 
         _editor.Focus();
@@ -1237,7 +1252,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Print Preview", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Operation_PrintPreview"),
+                ex.Message);
             return Task.CompletedTask;
         }
     }
@@ -1320,7 +1338,7 @@ public sealed partial class MainWindow : Window
     {
         var reportWindow = new MainWindow
         {
-            Title = "FreeW - Mail Merge Error Report"
+            Title = UiText.Get("MailMerge_ErrorReport_WindowTitle")
         };
         reportWindow.LoadDocumentContent(report);
         reportWindow.Show();
@@ -2345,7 +2363,7 @@ public sealed partial class MainWindow : Window
     // TopLevel.Clipboard with SetTextAsync / TryGetTextAsync.
     private Control BuildFindBar()
     {
-        var next = new Button { Content = "Find Next", Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
+        var next = new Button { Content = UiText.Get("Find_Inline_FindNext_Label"), Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
         next.Click += (_, _) => DoFind();
         _findBox.KeyDown += (_, e) =>
         {
@@ -2361,9 +2379,9 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        var replace = new Button { Content = "Replace", Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
+        var replace = new Button { Content = UiText.Get("Find_Inline_Replace_Label"), Padding = new Thickness(10, 4), Margin = new Thickness(6, 0, 0, 0) };
         replace.Click += (_, _) => DoReplace();
-        var replaceAll = new Button { Content = "Replace All", Padding = new Thickness(6, 4), Margin = new Thickness(4, 0, 0, 0) };
+        var replaceAll = new Button { Content = UiText.Get("Find_Inline_ReplaceAll_Label"), Padding = new Thickness(6, 4), Margin = new Thickness(4, 0, 0, 0) };
         replaceAll.Click += (_, _) => DoReplaceAll();
 
         var row = new StackPanel
@@ -2372,10 +2390,10 @@ public sealed partial class MainWindow : Window
             Margin = new Thickness(8, 4),
             Children =
             {
-                new TextBlock { Text = "Find:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) },
+                new TextBlock { Text = UiText.Get("Find_Inline_Find_Label"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) },
                 _findBox,
                 next,
-                new TextBlock { Text = "Replace:", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 6, 0) },
+                new TextBlock { Text = UiText.Get("Find_Inline_Replace_FieldLabel"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 6, 0) },
                 _replaceBox,
                 replace,
                 replaceAll,
@@ -2466,7 +2484,7 @@ public sealed partial class MainWindow : Window
             () => SetViewMode(DocumentViewMode.PrintLayout));
         _webLayoutSwitch = BuildStatusToggle(
             FreeWApplicationFrameTextCatalog.WebLayoutLabel,
-            "Web Layout: continuous, full-width view",
+            UiText.Get("View_WebLayout_HelpText"),
             RibbonCommandIconKind.WebLayout,
             foreground,
             () => SetViewMode(DocumentViewMode.WebLayout));
@@ -2478,7 +2496,7 @@ public sealed partial class MainWindow : Window
             () => SetViewMode(DocumentViewMode.Draft));
         _pagedEditSwitch = BuildStatusToggle(
             FreeWApplicationFrameTextCatalog.PageEditLabel,
-            "Page Edit: editable paginated page boxes",
+            UiText.Get("View_PageEdit_HelpText"),
             RibbonCommandIconKind.PrintLayout,
             foreground,
             TogglePagedEditView);
@@ -3031,7 +3049,10 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(FileText, "Editor", ex.Message);
+            _status.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                FileText,
+                UiText.Get("Operation_Editor"),
+                ex.Message);
         }
     }
 
@@ -3265,7 +3286,10 @@ public sealed partial class MainWindow : Window
                 cancellation.Token);
             _latestPrinterDiscovery = execution.Discovery ?? _latestPrinterDiscovery;
             _status.Text = printPdfResult is { ImageDiagnostics.Count: > 0 }
-                ? $"{execution.Message} ({printPdfResult.ImageDiagnostics.Count} image warning(s))"
+                ? UiText.Format(
+                    "Print_ImageWarnings_Status_Format",
+                    execution.Message,
+                    printPdfResult.ImageDiagnostics.Count)
                 : execution.Message;
         }
         finally
@@ -3440,11 +3464,14 @@ public sealed partial class MainWindow : Window
                 return;
 
             ApplyScreenClipCapture(_editor, capture);
-            _status.Text = $"Inserted screen clipping ({capture.PixelWidth} x {capture.PixelHeight}).";
+            _status.Text = UiText.Format(
+                "ScreenClip_Inserted_Status_Format",
+                capture.PixelWidth,
+                capture.PixelHeight);
         }
         catch (Exception ex)
         {
-            _status.Text = $"Could not capture the screen clip: {ex.Message}";
+            _status.Text = UiText.Format("ScreenClip_Failed_Status_Format", ex.Message);
         }
         finally
         {
@@ -3881,7 +3908,7 @@ public sealed partial class MainWindow : Window
             return;
 
         _editor.ApplyDocumentProperties(result);
-        _status.Text = "Document properties updated.";
+        _status.Text = UiText.Get("DocumentProperties_Updated_Status");
         _editor.Focus();
     }
 
@@ -3955,9 +3982,9 @@ public sealed partial class MainWindow : Window
 
         ApplyEditorTypingOptions(_optionsRuntime.Apply(edited));
         if (!_optionsStore.Save(_options))
-            _status.Text = _optionsStore.LastError ?? "FreeW Options could not be saved.";
+            _status.Text = _optionsStore.LastError ?? UiText.Get("Options_SaveFailed_Status");
         else
-            _status.Text = "FreeW Options saved.";
+            _status.Text = UiText.Get("Options_Saved_Status");
     }
 
     private void ApplyEditorTypingOptions(FreeWEditorTypingOptionsPlan plan)
@@ -3971,7 +3998,7 @@ public sealed partial class MainWindow : Window
     {
         var result = DesktopPathLauncher.OpenDirectory(folder);
         if (result.Error is not null)
-            _status.Text = $"Could not open folder: {result.Error.Message}";
+            _status.Text = UiText.Format("Shell_OpenFolderFailed_Status_Format", result.Error.Message);
     }
 
     /// <summary>

@@ -24,7 +24,8 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private InsertSmartArtDialog(Window? owner, SmartArt? seed)
     {
         Owner = owner;
-        Title = seed is null ? "Insert SmartArt" : "Edit SmartArt Text";
+        var dialogText = SmartArtDialogPlanner.ResolveText(UiText.Get);
+        Title = seed is null ? dialogText.InsertTitle : dialogText.EditTitle;
         var metrics = SmartArtDialogPlanner.VisualMetrics;
         Width = metrics.DialogWidth;
         MinHeight = metrics.MinimumDialogHeight;
@@ -38,7 +39,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var panel = new StackPanel { Margin = new Thickness(metrics.OuterMargin) };
 
         // ── Layout picker ────────────────────────────────────────────────────────────────────────
-        panel.Children.Add(new TextBlock { Text = "Layout:", Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) });
+        panel.Children.Add(new TextBlock { Text = dialogText.LayoutLabel, Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin) });
         _kindBox = new ComboBox { Margin = new Thickness(0, 0, 0, metrics.LayoutControlBottomMargin) };
         foreach (SmartArtKind kind in Enum.GetValues<SmartArtKind>())
             _kindBox.Items.Add(KindLabel(kind));
@@ -48,7 +49,7 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         // ── Node list + editing ──────────────────────────────────────────────────────────────────
         panel.Children.Add(new TextBlock
         {
-            Text = SmartArtDialogPlanner.NodeTextLabel,
+            Text = dialogText.NodeTextLabel,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, metrics.LabelBottomMargin)
         });
@@ -109,18 +110,18 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         };
         var addBtn = new Button
         {
-            Content = "Add Shape",
+            Content = dialogText.AddShapeLabel,
             Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding, metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding),
             Margin = new Thickness(0, 0, metrics.InlineActionSpacing, 0)
         };
         var removeBtn = new Button
         {
-            Content = "Remove Shape",
+            Content = dialogText.RemoveShapeLabel,
             Padding = new Thickness(metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding, metrics.InlineButtonHorizontalPadding, metrics.ButtonVerticalPadding)
         };
         addBtn.Click += (_, _) =>
         {
-            var idx = _nodeList.Items.Add("New Item");
+            var idx = _nodeList.Items.Add(dialogText.NewItemLabel);
             _nodeList.SelectedIndex = idx;
             DialogFocus.FocusAndSelect(_nodeTextBox);
         };
@@ -162,9 +163,12 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 kind,
                 _nodeList.Items.Cast<string>(),
                 out var result,
-                out var errorMessage))
+                out var errorMessage,
+                UiText.Get))
         {
-            DialogMessageHelper.ShowWarning(this, errorMessage ?? SmartArtDialogPlanner.EmptyNodesValidationMessage);
+            DialogMessageHelper.ShowWarning(
+                this,
+                errorMessage ?? SmartArtDialogPlanner.ResolveText(UiText.Get).EmptyNodesValidationMessage);
             return;
         }
 
@@ -175,9 +179,9 @@ internal sealed class InsertSmartArtDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
     private static string KindLabel(SmartArtKind kind) => kind switch
     {
-        SmartArtKind.List      => "List",
-        SmartArtKind.Process   => "Process",
-        SmartArtKind.Hierarchy => "Hierarchy",
+        SmartArtKind.List      => UiText.Get("SmartArt_Kind_List_Label"),
+        SmartArtKind.Process   => UiText.Get("SmartArt_Kind_Process_Label"),
+        SmartArtKind.Hierarchy => UiText.Get("SmartArt_Kind_Hierarchy_Label"),
         _                      => kind.ToString()
     };
 

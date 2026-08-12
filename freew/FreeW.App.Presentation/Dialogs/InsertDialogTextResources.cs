@@ -1,3 +1,5 @@
+using FreeW.App.Localization;
+
 namespace FreeW.App.Presentation.Dialogs;
 
 public sealed record HyperlinkDialogText(
@@ -35,40 +37,54 @@ public sealed record QuickPartDialogText(
 
 public static class InsertDialogTextResources
 {
-    public const string OkButton = "OK";
-    public const string CancelButton = "Cancel";
-    public const string TextFromFilePickerTitle = "Insert Text from File";
+    public static IReadOnlyList<string> RequiredResourceKeys { get; } =
+    [
+        "Common_OkText", "Common_CancelText", "InsertTextFromFile_PickerTitle",
+        "Hyperlink_Insert_Title", "Hyperlink_Edit_Title", "Hyperlink_Display_Placeholder",
+        "Hyperlink_Address_Placeholder", "Hyperlink_Display_Label", "Hyperlink_Address_Label",
+        "Hyperlink_ScreenTip_Title", "Hyperlink_ScreenTip_Placeholder", "Hyperlink_ScreenTip_Label",
+        "Bookmark_Title", "Bookmark_Name_Placeholder", "Bookmark_Name_Label", "Bookmark_GoTo_Label",
+        "Bookmark_Add_Button", "Bookmark_GoTo_Button", "Bookmark_Close_Button",
+        "LinkBookmark_Title", "LinkBookmark_Bookmark_Label", "LinkBookmark_Link_Button",
+        "QuickParts_Insert_Title", "QuickParts_Snippet_Placeholder", "QuickParts_Text_Label",
+    ];
 
-    public static HyperlinkDialogText Hyperlink { get; } = new(
-        Title: "Insert Hyperlink",
-        EditTitle: "Edit Hyperlink",
-        DisplayPlaceholder: "Text to display",
-        AddressPlaceholder: "https://\u2026  or  #BookmarkName for an internal link",
-        DisplayLabel: "Display:",
-        AddressLabel: "Address:");
+    public static string OkButton => Text("Common_OkText");
+    public static string CancelButton => Text("Common_CancelText");
+    public static string TextFromFilePickerTitle => Text("InsertTextFromFile_PickerTitle");
 
-    public static ScreenTipDialogText ScreenTip { get; } = new(
-        Title: "Set ScreenTip",
-        Placeholder: "ScreenTip",
-        Label: "ScreenTip:");
+    public static HyperlinkDialogText Hyperlink => new(
+        Title: Text("Hyperlink_Insert_Title"),
+        EditTitle: Text("Hyperlink_Edit_Title"),
+        DisplayPlaceholder: Text("Hyperlink_Display_Placeholder"),
+        AddressPlaceholder: Text("Hyperlink_Address_Placeholder"),
+        DisplayLabel: Text("Hyperlink_Display_Label"),
+        AddressLabel: Text("Hyperlink_Address_Label"));
 
-    public static BookmarkDialogText Bookmark { get; } = new(
-        Title: "Bookmark",
-        NamePlaceholder: "Bookmark name",
-        NameLabel: "Name:",
-        GoToLabel: "Go to:",
-        AddButton: "Add",
-        GoToButton: "Go To",
-        CloseButton: "Close");
+    public static ScreenTipDialogText ScreenTip => new(
+        Title: Text("Hyperlink_ScreenTip_Title"),
+        Placeholder: Text("Hyperlink_ScreenTip_Placeholder"),
+        Label: Text("Hyperlink_ScreenTip_Label"));
 
-    public static LinkBookmarkDialogText LinkBookmark { get; } = new(
-        Title: "Link to Bookmark",
-        BookmarkLabel: "Bookmark:",
-        LinkButton: "Link",
-        CloseButton: "Close");
+    public static BookmarkDialogText Bookmark => new(
+        Title: Text("Bookmark_Title"),
+        NamePlaceholder: Text("Bookmark_Name_Placeholder"),
+        NameLabel: Text("Bookmark_Name_Label"),
+        GoToLabel: Text("Bookmark_GoTo_Label"),
+        AddButton: Text("Bookmark_Add_Button"),
+        GoToButton: Text("Bookmark_GoTo_Button"),
+        CloseButton: Text("Bookmark_Close_Button"));
 
-    public static QuickPartDialogText QuickPart { get; } = new(
-        Title: "Insert Quick Part",
-        SnippetPlaceholder: "Snippet text (one paragraph per line)",
-        TextLabel: "Text:");
+    public static LinkBookmarkDialogText LinkBookmark => new(
+        Title: Text("LinkBookmark_Title"),
+        BookmarkLabel: Text("LinkBookmark_Bookmark_Label"),
+        LinkButton: Text("LinkBookmark_Link_Button"),
+        CloseButton: Text("Bookmark_Close_Button"));
+
+    public static QuickPartDialogText QuickPart => new(
+        Title: Text("QuickParts_Insert_Title"),
+        SnippetPlaceholder: Text("QuickParts_Snippet_Placeholder"),
+        TextLabel: Text("QuickParts_Text_Label"));
+
+    private static string Text(string resourceKey) => Loc.Get(resourceKey);
 }

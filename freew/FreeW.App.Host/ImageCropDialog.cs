@@ -64,7 +64,7 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var note = new TextBlock
         {
-            Text = "Enter the percentage of width/height to remove from each edge (0–99).",
+            Text = UiText.Get("ImageCrop_Instruction"),
             TextWrapping = TextWrapping.Wrap,
             FontSize = 10,
             Margin = new Thickness(0, 6, 0, 0)

@@ -237,7 +237,7 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
 
     public DocumentInspectorDialog(InspectionResult result)
     {
-        Title = "Document Inspector";
+        Title = UiText.Get("DocumentInspector_Title");
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -254,15 +254,15 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
         {
             body.Children.Add(new TextBlock
             {
-                Text = "No comments, revisions, document properties, or bookmarks were found.",
+                Text = UiText.Get("DocumentInspector_Clean_Message"),
                 TextWrapping = TextWrapping.Wrap,
             });
         }
 
-        _comments = AddCheck(body, "Comments", result.Comments);
-        _revisions = AddCheck(body, "Revisions", result.Revisions);
-        _properties = AddCheck(body, "Document properties", result.NonEmptyProperties);
-        _bookmarks = AddCheck(body, "Bookmarks", result.Bookmarks);
+        _comments = AddCheck(body, UiText.Get("DocumentInspector_Comments_Label"), result.Comments);
+        _revisions = AddCheck(body, UiText.Get("DocumentInspector_Revisions_Label"), result.Revisions);
+        _properties = AddCheck(body, UiText.Get("DocumentInspector_Properties_Label"), result.NonEmptyProperties);
+        _bookmarks = AddCheck(body, UiText.Get("DocumentInspector_Bookmarks_Label"), result.Bookmarks);
 
         var actionPlans = DocumentInspectorDialogPlanner.ActionButtons;
         var removePlan = actionPlans[0];
@@ -291,7 +291,7 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
     {
         var box = new CheckBox
         {
-            Content = $"{label}: {count}",
+            Content = UiText.Format("DocumentInspector_CategoryCount_Format", label, count),
             IsChecked = count > 0,
             IsEnabled = count > 0,
         };
@@ -351,7 +351,7 @@ internal sealed class AccessibilityReportDialog : FreeWDialogWindow
             });
         }
 
-        var ok = new Button { Content = "OK", IsDefault = true, IsCancel = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
         ok.Click += (_, _) => Close();
         outer.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok], new Thickness(0, 12, 0, 4)));

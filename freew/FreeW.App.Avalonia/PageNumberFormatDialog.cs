@@ -101,9 +101,9 @@ internal sealed class PageNumberFormatDialog : FreeWDialogWindow
         content.Children.Add(startRow);
         content.Children.Add(_status);
 
-        var ok = new Button { Content = "OK", IsDefault = true };
+        var ok = new Button { Content = UiText.Get("Common_OkText"), IsDefault = true };
         AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = UiText.Get("Common_CancelText"), IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 84);
         ok.Click += (_, _) => OnOk();
         cancel.Click += (_, _) => Close(null);

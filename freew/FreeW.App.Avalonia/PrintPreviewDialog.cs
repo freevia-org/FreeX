@@ -140,7 +140,7 @@ internal sealed class PrintPreviewDialog : Window
 
         var closeButton = new Button
         {
-            Content = "Close",
+            Content = UiText.Get("Dialog_Close_Label"),
             Margin = new Thickness(6, 8, 12, 8),
             Padding = new Thickness(14, 6),
         };
@@ -166,7 +166,7 @@ internal sealed class PrintPreviewDialog : Window
 
         panel.Children.Add(new TextBlock
         {
-            Text = "Print settings",
+            Text = UiText.Get("PrintPreview_Settings_Heading"),
             FontSize = 18,
             FontWeight = FontWeight.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28)),
