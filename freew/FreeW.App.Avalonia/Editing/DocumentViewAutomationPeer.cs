@@ -261,7 +261,8 @@ internal sealed class DocumentViewAutomationPeer : ControlAutomationPeer, IValue
             or DocumentAccessibilityNodeKind.Chart
             or DocumentAccessibilityNodeKind.WordArt
             or DocumentAccessibilityNodeKind.SmartArt
-            or DocumentAccessibilityNodeKind.DrawingGroup;
+            or DocumentAccessibilityNodeKind.DrawingGroup
+            or DocumentAccessibilityNodeKind.EmbeddedObject;
 
     private static Dictionary<string, string?> BuildParentMap(DocumentAccessibilityTree tree)
     {

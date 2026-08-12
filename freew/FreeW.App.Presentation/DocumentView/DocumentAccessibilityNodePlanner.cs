@@ -533,20 +533,21 @@ public static class DocumentAccessibilityNodePlanner
         int columnIndex,
         int paragraphIndex,
         int runIndex,
-        EmbeddedObject embeddedObject) =>
-        new(
+        EmbeddedObject embeddedObject)
+    {
+        var plan = EmbeddedObjectVisualPlanner.Build(embeddedObject);
+        return new(
             $"{paragraphId}:run:{runIndex}:embedded-object",
             DocumentAccessibilityNodeKind.EmbeddedObject,
-            FirstNonBlank(embeddedObject.Icon?.AltText, embeddedObject.ProgId, "Embedded object")!,
+            plan.AccessibleName,
             null,
-            embeddedObject.IsLinked
-                ? $"Linked {embeddedObject.ProgId} object"
-                : $"Embedded {embeddedObject.ProgId} object",
+            plan.HelpText,
             blockIndex,
             rowIndex,
             columnIndex,
             paragraphIndex,
             runIndex);
+    }
 
     private static DocumentAccessibilityNode? BuildGroupedObject(
         object child,

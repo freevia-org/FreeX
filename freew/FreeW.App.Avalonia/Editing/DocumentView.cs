@@ -180,6 +180,7 @@ public sealed class DocumentView : Control
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
     private readonly List<FloatingSmartArtData> _inlineSmartArts = new();
+    private readonly List<InlineEmbeddedObjectData> _inlineEmbeddedObjects = new();
     private readonly List<(string Text, EquationVisualSegmentRole Role, EquationVisualBaselineRole BaselineRole,
         double FontSizeScale, string FontFamily, bool Italic)> _equationVisualSegments = new();
     private readonly List<(EquationVisualElementKind Kind, string LinearText, string Numerator, string Denominator,
@@ -1414,6 +1415,20 @@ public sealed class DocumentView : Control
                     Math.Max(1, item.Width > 0 ? item.Width : item.AvailableWidth),
                     Math.Max(1, item.Height > 0 ? item.Height : item.LineHeight))));
         }
+        if (node.StoryKind != DocumentAccessibilityStoryKind.Body
+            && node.Kind == DocumentAccessibilityNodeKind.EmbeddedObject
+            && AutomationHeaderFooterContext(node) is { Paragraph: not null } embeddedContext)
+        {
+            var paragraphIndex = embeddedContext.Story.Paragraphs.IndexOf(embeddedContext.Paragraph);
+            rectangles.AddRange(_headerFooterItems
+                .Where(item => item.OwnerTarget is { } target
+                    && target.Slot == embeddedContext.Slot
+                    && target.ParaIdx == paragraphIndex
+                    && ReferenceEquals(ResolveHfStore(target), embeddedContext.Store)
+                    && item.EmbeddedObject is not null
+                    && item.RunIndex == node.RunIndex)
+                .Select(item => new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height))));
+        }
         if (node.ObjectPath is { Count: > 0 } objectPath
             && TryGetFloatingGroupChildGeometry(node.BlockIndex, node.RunIndex, objectPath, out var groupChild))
         {
@@ -1503,6 +1518,15 @@ public sealed class DocumentView : Control
                         .Where(group => group.BlockIndex == node.BlockIndex && group.RunIndex == node.RunIndex)
                         .Select(group => group.Rect));
                 }
+                break;
+            case DocumentAccessibilityNodeKind.EmbeddedObject:
+                rectangles.AddRange(_inlineEmbeddedObjects
+                    .Where(item => item.BlockIndex == node.BlockIndex
+                        && item.RunIndex == node.RunIndex
+                        && item.CellRow == node.RowIndex
+                        && item.CellColumn == node.ColumnIndex
+                        && item.CellParagraphIndex == node.ParagraphIndex)
+                    .Select(item => item.Rect));
                 break;
             case DocumentAccessibilityNodeKind.Paragraph:
             case DocumentAccessibilityNodeKind.Heading:
@@ -1639,7 +1663,8 @@ public sealed class DocumentView : Control
             || run.Shape is not null
             || run.Chart is not null
             || run.WordArt is not null
-            || run.SmartArt is not null)
+            || run.SmartArt is not null
+            || run.EmbeddedObject is not null)
             return 1;
         return run.Text.Length;
     }
@@ -3397,7 +3422,8 @@ public sealed class DocumentView : Control
             var hasInlineChart   = p.Runs.Any(r => r.Chart    is { IsFloating: false });
             var hasInlineWordArt = p.Runs.Any(r => r.WordArt  is { IsFloating: false });
             var hasInlineSmArt   = p.Runs.Any(r => r.SmartArt is { IsFloating: false });
-            if (hasInlineImage || hasInlineChart || hasInlineWordArt || hasInlineSmArt)
+            var hasEmbeddedObject = p.Runs.Any(r => r.EmbeddedObject is not null);
+            if (hasInlineImage || hasInlineChart || hasInlineWordArt || hasInlineSmArt || hasEmbeddedObject)
             {
                 // Render loop resets all counters and skips list numbering for this paragraph.
                 Array.Clear(levelCounters, 0, MaxListDepth);
@@ -4939,6 +4965,24 @@ public sealed class DocumentView : Control
                     pageHeightPt));
         }
 
+        foreach (var embeddedObject in _inlineEmbeddedObjects)
+        {
+            var sourceRect = embeddedObject.Rect;
+            var pageIndex = PageIndexFromPageSpaceY(sourceRect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+
+            var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
+            AddInlineDrawingOps(
+                sourceRect,
+                BuildPdfEmbeddedObjectOps(
+                    sourceRect,
+                    embeddedObject.Plan,
+                    embeddedObject.Icon,
+                    pageTopDip,
+                    pageHeightPt));
+        }
+
         for (var pageIndex = 0; pageIndex < inlineDrawingOpsByPage.Count; pageIndex++)
         {
             if (inlineDrawingOpsByPage[pageIndex].Count == 0)
@@ -5016,6 +5060,26 @@ public sealed class DocumentView : Control
                     pagesOps[pageIndex].Add(imageOp);
                 }
 
+                continue;
+            }
+
+            if (item.EmbeddedObject is { } embeddedObject)
+            {
+                var pageIndex = PageIndexFromPageSpaceY(item.Y + 0.01);
+                if (pageIndex < 0)
+                    continue;
+                EnsurePage(pageIndex);
+                var sourceRect = new Rect(
+                    item.X,
+                    item.Y,
+                    Math.Max(1, item.Width),
+                    Math.Max(1, item.Height));
+                pagesOps[pageIndex].AddRange(BuildPdfEmbeddedObjectOps(
+                    sourceRect,
+                    embeddedObject,
+                    item.EmbeddedObjectIcon,
+                    _surfacePlan.PageTopDip(pageIndex),
+                    pageHeightPt));
                 continue;
             }
 
@@ -7439,6 +7503,7 @@ public sealed class DocumentView : Control
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
         _inlineSmartArts.Clear();
+        _inlineEmbeddedObjects.Clear();
         _equationVisualSegments.Clear();
         _equationVisualElements.Clear();
         _cellHits.Clear();
@@ -7703,6 +7768,11 @@ public sealed class DocumentView : Control
             IncludeBlockStart(smartArt.BlockIndex, smartArt.Rect.X, smartArt.Rect.Y);
             Include(smartArt.Rect.X, smartArt.Rect.Y, smartArt.Rect.Height);
         }
+        foreach (var embeddedObject in _inlineEmbeddedObjects)
+        {
+            IncludeBlockStart(embeddedObject.BlockIndex, embeddedObject.Rect.X, embeddedObject.Rect.Y);
+            Include(embeddedObject.Rect.X, embeddedObject.Rect.Y, embeddedObject.Rect.Height);
+        }
 
         var justifiedBoundariesByPage = new PageVerticalAlignmentPlanner.BodyFlowStart[pageCount][];
         for (var page = 0; page < pageCount; page++)
@@ -7952,6 +8022,8 @@ public sealed class DocumentView : Control
         foreach (var chart in _inlineCharts) MoveChart(chart);
         foreach (var wordArt in _inlineWordArts) MoveWordArt(wordArt);
         foreach (var smartArt in _inlineSmartArts) MoveSmartArt(smartArt);
+        foreach (var embeddedObject in _inlineEmbeddedObjects)
+            embeddedObject.Rect = MoveRect(embeddedObject.Rect);
 
         for (var i = 0; i < _floatingSnapshots.Count; i++)
         {
@@ -8141,6 +8213,15 @@ public sealed class DocumentView : Control
             ShiftWordArt(wordArt, offsetForOwnedObject(wordArt.BlockIndex, wordArt.Rect.X, wordArt.Rect.Y));
         foreach (var smartArt in _inlineSmartArts)
             ShiftSmartArt(smartArt, offsetForOwnedObject(smartArt.BlockIndex, smartArt.Rect.X, smartArt.Rect.Y));
+        foreach (var embeddedObject in _inlineEmbeddedObjects)
+        {
+            embeddedObject.Rect = ShiftRectBy(
+                embeddedObject.Rect,
+                offsetForOwnedObject(
+                    embeddedObject.BlockIndex,
+                    embeddedObject.Rect.X,
+                    embeddedObject.Rect.Y));
+        }
 
         for (var i = 0; i < _floatingSnapshots.Count; i++)
         {
@@ -8220,8 +8301,10 @@ public sealed class DocumentView : Control
                 var hasInlineChart   = paragraph.Runs.Any(r => r.Chart    is { IsFloating: false });
                 var hasInlineWordArt = paragraph.Runs.Any(r => r.WordArt  is { IsFloating: false });
                 var hasInlineSmArt   = paragraph.Runs.Any(r => r.SmartArt is { IsFloating: false });
+                var hasEmbeddedObject = paragraph.Runs.Any(r => r.EmbeddedObject is not null);
                 var hasAnyImage    = paragraph.Runs.Any(r => r.Image is not null);
-                if (hasAnyImage && !hasInlineShape && !hasInlineChart && !hasInlineWordArt && !hasInlineSmArt)
+                if (hasAnyImage && !hasInlineShape && !hasInlineChart && !hasInlineWordArt && !hasInlineSmArt
+                    && !hasEmbeddedObject)
                 {
                     // Always collect floating images from this paragraph (done inside each layout path).
                     if (hasInlineImage)
@@ -8239,7 +8322,7 @@ public sealed class DocumentView : Control
                 }
 
                 // FO4: route mixed inline drawing objects through the shared flow owner.
-                if (hasInlineShape || hasInlineChart || hasInlineWordArt || hasInlineSmArt)
+                if (hasInlineShape || hasInlineChart || hasInlineWordArt || hasInlineSmArt || hasEmbeddedObject)
                 {
                     // Non-list paragraph: reset all counters (list run ended).
                     Array.Clear(levelCounters, 0, MaxListDepth);
@@ -8439,6 +8522,7 @@ public sealed class DocumentView : Control
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
         _inlineSmartArts.Clear();
+        _inlineEmbeddedObjects.Clear();
         _equationVisualSegments.Clear();
         _equationVisualElements.Clear();
         _cellHits.Clear();
@@ -8773,6 +8857,26 @@ public sealed class DocumentView : Control
                     continue;
                 }
 
+                if (run.EmbeddedObject is { } embeddedObject)
+                {
+                    FlushText();
+                    var plan = EmbeddedObjectVisualPlanner.Build(embeddedObject);
+                    segments.Add(new HfSegment
+                    {
+                        StopIndex = stopIndex,
+                        EmbeddedObject = plan,
+                        EmbeddedObjectIcon = plan.Icon is null ? null : DecodeRenderedImage(plan.Icon),
+                        Fmt = effectiveFormatting,
+                        ModelStart = modelOffset,
+                        RunIndex = runIndex,
+                        Width = plan.WidthPt * PxPerPoint,
+                        Height = plan.HeightPt * PxPerPoint,
+                    });
+                    modelOffset += run.Text.Length;
+                    segModelStart = modelOffset;
+                    continue;
+                }
+
                 if (isField)
                 {
                     // Atomic field run: append its resolved text whole (no tab-splitting inside a field).
@@ -8802,13 +8906,13 @@ public sealed class DocumentView : Control
 
             // Whether the paragraph contains any tab characters at all.
             var hasAnyTab = segments.Count > 1 || (segments.Count == 1 && stopIndex > 0);
-            var hasImages = segments.Any(s => s.Image is not null);
+            var hasVisualObjects = segments.Any(s => s.Image is not null || s.EmbeddedObject is not null);
 
             // Compute the line height from the first non-empty segment (or use DefaultFontSizePt).
             var lineH = DefaultFontSizePt * PxPerPoint * 1.3;
             foreach (var segment in segments)
             {
-                if (segment.Image is not null)
+                if (segment.Image is not null || segment.EmbeddedObject is not null)
                 {
                     lineH = Math.Max(lineH, segment.Height);
                     continue;
@@ -8833,7 +8937,7 @@ public sealed class DocumentView : Control
             var defaultRightPx  = availWidth;
 
             double SegmentWidth(HfSegment segment) =>
-                segment.Image is not null
+                segment.Image is not null || segment.EmbeddedObject is not null
                     ? segment.Width
                     : string.IsNullOrEmpty(segment.Text)
                         ? 0
@@ -8848,20 +8952,26 @@ public sealed class DocumentView : Control
                     Fmt              = segment.Fmt,
                     Image            = segment.Image,
                     ImageSignature   = segment.ImageSignature,
+                    EmbeddedObject   = segment.EmbeddedObject,
+                    EmbeddedObjectIcon = segment.EmbeddedObjectIcon,
+                    RunIndex         = segment.RunIndex,
                     SlotName         = slotName,
                     Width            = width,
-                    Height           = segment.Image is not null ? segment.Height : lineH,
+                    Height           = segment.Image is not null || segment.EmbeddedObject is not null
+                        ? segment.Height
+                        : lineH,
                     X                = itemX,
                     Y                = y,
                     AvailableWidth   = 0,
                     Alignment        = TextAlignment.Left,
-                    Target           = segment.Image is null ? paraTarget : null,
+                    Target           = segment.Image is null && segment.EmbeddedObject is null ? paraTarget : null,
                     LineHeight       = lineH,
                     ModelStartOffset = segment.ModelStart,
+                    OwnerTarget      = paraTarget,
                 });
             }
 
-            if (!hasAnyTab && !hasImages)
+            if (!hasAnyTab && !hasVisualObjects)
             {
                 // No tabs — use paragraph alignment as before. Emit even an EMPTY paragraph so an empty
                 // header/footer line is still clickable for editing (the caret needs a region to land in).
@@ -8883,7 +8993,7 @@ public sealed class DocumentView : Control
             else if (!hasAnyTab)
             {
                 var visible = segments
-                    .Where(s => s.Image is not null || !string.IsNullOrEmpty(s.Text))
+                    .Where(s => s.Image is not null || s.EmbeddedObject is not null || !string.IsNullOrEmpty(s.Text))
                     .ToList();
                 if (visible.Count == 0)
                 {
@@ -8919,7 +9029,7 @@ public sealed class DocumentView : Control
                 foreach (var group in segments.GroupBy(s => s.StopIndex).OrderBy(g => g.Key))
                 {
                     var visible = group
-                        .Where(s => s.Image is not null || !string.IsNullOrEmpty(s.Text))
+                        .Where(s => s.Image is not null || s.EmbeddedObject is not null || !string.IsNullOrEmpty(s.Text))
                         .ToList();
                     if (visible.Count == 0)
                         continue;
@@ -11213,8 +11323,32 @@ public sealed class DocumentView : Control
                     {
                         var lineHeight = line.Height;
                         var tx = rect.Left + pad + markerInset;
-                        foreach (var (ch, w, hidden) in line.Chars)
+                        foreach (var item in line.Items)
                         {
+                            if (item.EmbeddedObject is { } embeddedObject)
+                            {
+                                var objectY = ty + Math.Max(0, lineHeight - item.Height);
+                                var objectRect = new Rect(tx, objectY, item.Width, item.Height);
+                                _inlineEmbeddedObjects.Add(new InlineEmbeddedObjectData(
+                                    objectRect,
+                                    embeddedObject,
+                                    embeddedObject.Icon is null ? null : DecodeRenderedImage(embeddedObject.Icon),
+                                    blockIndex,
+                                    item.RunIndex,
+                                    r,
+                                    startCol,
+                                    pIdx));
+                                _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, objectY, 0, item.Height,
+                                    fmt, '\0', Sentinel: false, CellRow: r, CellCol: startCol,
+                                    CellParaIdx: pIdx, CellParaOffset: paraCharOffset));
+                                glyphOffset++;
+                                tx += item.Width;
+                                continue;
+                            }
+
+                            var ch = item.Ch;
+                            var w = item.Width;
+                            var hidden = item.Hidden;
                             var placedFormatting = hidden ? fmt with { Hidden = true } : fmt;
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, placedFormatting, ch,
                                 Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: paraCharOffset));
@@ -11247,7 +11381,8 @@ public sealed class DocumentView : Control
 
                     // BE1: sentinel at end of this paragraph (at the end of its last visual line).
                     CellWrappedLine? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
-                    var sentinelX = rect.Left + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
+                    var sentinelX = rect.Left + pad + markerInset
+                        + (lastParaLine.HasValue ? lastParaLine.Value.Items.Sum(item => item.Width) : 0);
                     var sentinelY = lastParaLine.HasValue
                         ? ty - paragraphSpacing.After - lastParaLine.Value.Height
                         : contentTopY;
@@ -11398,6 +11533,16 @@ public sealed class DocumentView : Control
                 var w = firstSa.WidthPt  > 0 ? firstSa.WidthPt  * PxPerPoint : 468 * PxPerPoint;
                 if (w > textWidth) h *= textWidth / w;
                 firstObjHeight = h;
+                break;
+            }
+            if (run.EmbeddedObject is { } firstEmbedded)
+            {
+                var plan = EmbeddedObjectVisualPlanner.Build(firstEmbedded);
+                var width = plan.WidthPt * PxPerPoint;
+                var height = plan.HeightPt * PxPerPoint;
+                if (width > textWidth)
+                    height *= textWidth / width;
+                firstObjHeight = height;
                 break;
             }
             if (run.Image is { IsFloating: false } firstImg)
@@ -11555,6 +11700,34 @@ public sealed class DocumentView : Control
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
 
+                _layoutContentY = contentY + height + gap;
+                continue;
+            }
+
+            // ── Inline embedded OLE object ──────────────────────────────────────────
+            if (run.EmbeddedObject is { } embeddedObject)
+            {
+                var plan = EmbeddedObjectVisualPlanner.Build(embeddedObject);
+                var width = plan.WidthPt * PxPerPoint;
+                var height = plan.HeightPt * PxPerPoint;
+                if (width > textWidth)
+                {
+                    var scale = textWidth / width;
+                    width = textWidth;
+                    height *= scale;
+                }
+
+                var contentY = ReserveContentY(height);
+                var pageSpaceY = ContentYToPageSpaceY(contentY);
+                var x = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
+                _inlineEmbeddedObjects.Add(new InlineEmbeddedObjectData(
+                    new Rect(x, pageSpaceY, width, height),
+                    plan,
+                    plan.Icon is null ? null : DecodeRenderedImage(plan.Icon),
+                    blockIndex,
+                    runIndex));
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                    RunFormatting.Default, '\0', Sentinel: false));
                 _layoutContentY = contentY + height + gap;
                 continue;
             }
@@ -12076,10 +12249,26 @@ public sealed class DocumentView : Control
     {
         var result = new List<CellWrappedLine>();
         var lineHeight = Build("Ag", fmt).Height;
-        var chars = new List<(char Ch, double W, bool Hidden)>();
+        var items = new List<CellWrappedItem>();
 
-        foreach (var run in paragraph.Runs)
+        for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
         {
+            var run = paragraph.Runs[runIndex];
+            if (run.EmbeddedObject is { } embeddedObject)
+            {
+                var plan = EmbeddedObjectVisualPlanner.Build(embeddedObject);
+                var width = plan.WidthPt * PxPerPoint;
+                var height = plan.HeightPt * PxPerPoint;
+                if (width > maxInner)
+                {
+                    var scale = maxInner / width;
+                    width = maxInner;
+                    height *= scale;
+                }
+                items.Add(new CellWrappedItem('\0', width, height, Hidden: false, plan, runIndex));
+                continue;
+            }
+
             var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run.Formatting, paragraph));
             var text = run.ComplexField is null
                 ? run.Text
@@ -12087,23 +12276,51 @@ public sealed class DocumentView : Control
             foreach (var ch in text)
             {
                 var width = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
-                chars.Add((ch, width, hidden));
+                items.Add(new CellWrappedItem(ch, width, lineHeight, hidden, null, runIndex));
             }
         }
 
-        if (chars.Count == 0)
+        if (items.Count == 0)
         {
             result.Add(new CellWrappedLine(lineHeight, [], 0));
             return result;
         }
 
-        var displayText = new string(chars.Select(item => item.Hidden ? ' ' : item.Ch).ToArray());
-        var measured = chars.Select(item => item.W).ToArray();
+        if (items.Any(item => item.EmbeddedObject is not null))
+        {
+            var lineItems = new List<CellWrappedItem>();
+            var objectLineWidth = 0.0;
+            var currentHeight = lineHeight;
+
+            void FlushLine()
+            {
+                if (lineItems.Count == 0)
+                    return;
+                result.Add(new CellWrappedLine(currentHeight, [.. lineItems], 0));
+                lineItems.Clear();
+                objectLineWidth = 0;
+                currentHeight = lineHeight;
+            }
+
+            foreach (var item in items)
+            {
+                if (lineItems.Count > 0 && objectLineWidth + item.Width > maxInner)
+                    FlushLine();
+                lineItems.Add(item);
+                objectLineWidth += item.Width;
+                currentHeight = Math.Max(currentHeight, item.Height);
+            }
+            FlushLine();
+            return result;
+        }
+
+        var displayText = new string(items.Select(item => item.Hidden ? ' ' : item.Ch).ToArray());
+        var measured = items.Select(item => item.Width).ToArray();
         var automaticHyphenWidths = AutomaticHyphenationDisplayPlanner.BuildBreakOffsets(
                 displayText,
                 _doc.Page,
                 ResolveParagraphFmt(paragraph))
-            .Where(offset => offset > 0 && offset < chars.Count)
+            .Where(offset => offset > 0 && offset < items.Count)
             .Distinct()
             .ToDictionary(
                 offset => offset,
@@ -12118,13 +12335,13 @@ public sealed class DocumentView : Control
         {
             result.Add(new CellWrappedLine(
                 lineHeight,
-                chars.Skip(from).Take(to - from).ToList(),
+                items.Skip(from).Take(to - from).ToList(),
                 automaticHyphenWidth));
         }
 
-        for (var index = 0; index < chars.Count; index++)
+        for (var index = 0; index < items.Count; index++)
         {
-            if (!chars[index].Hidden && chars[index].Ch == ' ')
+            if (!items[index].Hidden && items[index].Ch == ' ')
                 lastSpace = index;
 
             if (currentWidth + measured[index] > maxInner && index > lineStart)
@@ -12162,7 +12379,7 @@ public sealed class DocumentView : Control
                 for (var carried = lineStart; carried < index; carried++)
                 {
                     currentWidth += measured[carried];
-                    if (!chars[carried].Hidden && chars[carried].Ch == ' ')
+                    if (!items[carried].Hidden && items[carried].Ch == ' ')
                         lastSpace = carried;
                 }
             }
@@ -12170,7 +12387,7 @@ public sealed class DocumentView : Control
             currentWidth += measured[index];
         }
 
-        AddLine(lineStart, chars.Count);
+        AddLine(lineStart, items.Count);
         return result;
     }
 
@@ -13174,6 +13391,8 @@ public sealed class DocumentView : Control
             DrawFloatingWordArt(context, wd);
         foreach (var sd in _inlineSmartArts)
             DrawFloatingSmartArt(context, sd);
+        foreach (var embeddedObject in _inlineEmbeddedObjects)
+            DrawInlineEmbeddedObject(context, embeddedObject);
 
         // AV-TBL2: cross-cell block-selection highlight. Draw a semi-transparent overlay over each
         // cell-hit rect that falls inside the selected row×col rectangle.
@@ -13442,6 +13661,19 @@ public sealed class DocumentView : Control
                 {
                     var rect = new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height));
                     DrawFloatingImage(context, rect, DecodeRenderedImage(image), image, image.ReflectionPreset);
+                    continue;
+                }
+
+                if (item.EmbeddedObject is { } embeddedObject)
+                {
+                    DrawInlineEmbeddedObject(
+                        context,
+                        new InlineEmbeddedObjectData(
+                            new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height)),
+                            embeddedObject,
+                            item.EmbeddedObjectIcon,
+                            blockIndex: -1,
+                            runIndex: item.RunIndex));
                     continue;
                 }
 
@@ -13839,6 +14071,77 @@ public sealed class DocumentView : Control
         {
             transformState?.Dispose();
         }
+    }
+
+    private IReadOnlyList<PdfDrawOp> BuildPdfEmbeddedObjectOps(
+        Rect sourceRect,
+        EmbeddedObjectVisualPlan plan,
+        AvaloniaRenderedImage? renderedIcon,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        var xPt = (sourceRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+        var yPt = pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint);
+        var widthPt = sourceRect.Width / PxPerPoint;
+        var heightPt = sourceRect.Height / PxPerPoint;
+        var ops = new List<PdfDrawOp>
+        {
+            new PdfFillRect(xPt, yPt, widthPt, heightPt, ParseColor(plan.BackgroundColorHex))
+        };
+        if (plan.Icon is { } icon
+            && BuildPdfImage(sourceRect, icon, renderedIcon, pageTopDip, pageHeightPt) is { } iconOp)
+        {
+            ops.Add(iconOp);
+        }
+        else
+        {
+            const double fontSizePt = 10;
+            var estimatedTextWidth = plan.Label.Length * fontSizePt * 0.52;
+            ops.Add(new PdfText(
+                xPt + Math.Max(4, (widthPt - estimatedTextWidth) / 2),
+                yPt + Math.Max(fontSizePt, (heightPt - fontSizePt) / 2),
+                fontSizePt,
+                PdfFontFace.Regular,
+                ParseColor(plan.ForegroundColorHex),
+                plan.Label));
+        }
+        ops.Add(new PdfStrokeRect(
+            xPt,
+            yPt,
+            widthPt,
+            heightPt,
+            ParseColor(plan.BorderColorHex),
+            0.75));
+        return ops;
+    }
+
+    private void DrawInlineEmbeddedObject(DrawingContext context, InlineEmbeddedObjectData data)
+    {
+        var plan = data.Plan;
+        context.FillRectangle(BrushFor(plan.BackgroundColorHex), data.Rect);
+
+        var inset = Math.Min(4, Math.Min(data.Rect.Width, data.Rect.Height) / 4);
+        var contentRect = new Rect(
+            data.Rect.X + inset,
+            data.Rect.Y + inset,
+            Math.Max(0, data.Rect.Width - inset * 2),
+            Math.Max(0, data.Rect.Height - inset * 2));
+        if (data.Icon is not null && contentRect.Width > 0 && contentRect.Height > 0)
+        {
+            context.DrawImage(data.Icon.Bitmap, data.Icon.VisualRect(contentRect));
+        }
+        else if (contentRect.Width > 0 && contentRect.Height > 0)
+        {
+            var formatted = Build(
+                plan.Label,
+                RunFormatting.Default with { ColorHex = plan.ForegroundColorHex });
+            var x = contentRect.X + Math.Max(0, (contentRect.Width - formatted.WidthIncludingTrailingWhitespace) / 2);
+            var y = contentRect.Y + Math.Max(0, (contentRect.Height - formatted.Height) / 2);
+            using (context.PushClip(contentRect))
+                context.DrawText(formatted, new Point(x, y));
+        }
+
+        context.DrawRectangle(null, new Pen(BrushFor(plan.BorderColorHex), 1), data.Rect);
     }
 
     internal static Matrix BuildPictureTransform(Rect rect, InlineImage image)
@@ -26655,9 +26958,17 @@ public sealed class DocumentView : Control
         LinkInfo? Link,
         FormatRevision? FormatRevision);
 
+    private readonly record struct CellWrappedItem(
+        char Ch,
+        double Width,
+        double Height,
+        bool Hidden,
+        EmbeddedObjectVisualPlan? EmbeddedObject,
+        int RunIndex);
+
     private readonly record struct CellWrappedLine(
         double Height,
-        List<(char Ch, double W, bool Hidden)> Chars,
+        List<CellWrappedItem> Items,
         double AutomaticHyphenWidth);
 
     /// <summary>
@@ -26826,6 +27137,9 @@ public sealed class DocumentView : Control
         public int ModelStart;
         public InlineImage? Image;
         public string? ImageSignature;
+        public EmbeddedObjectVisualPlan? EmbeddedObject;
+        public AvaloniaRenderedImage? EmbeddedObjectIcon;
+        public int RunIndex = -1;
         public double Width;
         public double Height;
     }
@@ -26847,6 +27161,9 @@ public sealed class DocumentView : Control
         public TextAlignment Alignment;
         public InlineImage? Image;
         public string? ImageSignature;
+        public EmbeddedObjectVisualPlan? EmbeddedObject;
+        public AvaloniaRenderedImage? EmbeddedObjectIcon;
+        public int RunIndex = -1;
         public string SlotName = string.Empty;
         public double Width;
         public double Height;
@@ -26864,6 +27181,7 @@ public sealed class DocumentView : Control
         /// displayed text begins. A click X inside the segment maps to ModelStartOffset + (chars before X).
         /// </summary>
         public int ModelStartOffset;
+        public HfTarget? OwnerTarget;
     }
 
     // ── AV-NOTERENDER: footnote / endnote render item ─────────────────────────────────────────────────
@@ -27013,6 +27331,26 @@ public sealed class DocumentView : Control
         public SmartArtLayoutGeometryPlan? LayoutGeometry;
         public List<Color>      NodeFills = [];
         public Color            NodeTextColor = Colors.White;
+    }
+
+    private sealed class InlineEmbeddedObjectData(
+        Rect rect,
+        EmbeddedObjectVisualPlan plan,
+        AvaloniaRenderedImage? icon,
+        int blockIndex,
+        int runIndex,
+        int cellRow = -1,
+        int cellColumn = -1,
+        int cellParagraphIndex = -1)
+    {
+        public Rect Rect { get; set; } = rect;
+        public EmbeddedObjectVisualPlan Plan { get; } = plan;
+        public AvaloniaRenderedImage? Icon { get; } = icon;
+        public int BlockIndex { get; } = blockIndex;
+        public int RunIndex { get; } = runIndex;
+        public int CellRow { get; } = cellRow;
+        public int CellColumn { get; } = cellColumn;
+        public int CellParagraphIndex { get; } = cellParagraphIndex;
     }
 
     private sealed class FloatingGroupChildData

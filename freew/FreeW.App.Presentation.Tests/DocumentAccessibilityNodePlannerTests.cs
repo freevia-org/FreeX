@@ -205,6 +205,37 @@ public sealed class DocumentAccessibilityNodePlannerTests
     }
 
     [Fact]
+    public void Build_projects_embedded_object_inside_table_cell_with_grid_coordinates()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        var objectParagraph = table.Rows[0].Cells[1].Paragraphs[0];
+        objectParagraph.Runs.Clear();
+        objectParagraph.Runs.Add(new Run("Before "));
+        objectParagraph.Runs.Add(Run.FromEmbeddedObject(EmbeddedObject.Create(
+            [1, 2, 3],
+            "Excel.Sheet.12",
+            new InlineImage([4, 5, 6], 32, 24) { AltText = "Quarterly workbook" })));
+        objectParagraph.Runs.Add(new Run(" after"));
+        document.Blocks.Add(table);
+
+        var tableNode = DocumentAccessibilityNodePlanner.Build(document).Children.Single();
+        var objectNode = tableNode.SemanticChildren[0]
+            .SemanticChildren[1]
+            .SemanticChildren[0]
+            .SemanticChildren.Single(node => node.Kind == DocumentAccessibilityNodeKind.EmbeddedObject);
+
+        objectNode.Name.Should().Be("Quarterly workbook");
+        objectNode.HelpText.Should().Be("Embedded Excel.Sheet.12 object");
+        objectNode.BlockIndex.Should().Be(0);
+        objectNode.RowIndex.Should().Be(0);
+        objectNode.ColumnIndex.Should().Be(1);
+        objectNode.ParagraphIndex.Should().Be(0);
+        objectNode.RunIndex.Should().Be(1);
+    }
+
+    [Fact]
     public void Build_projects_each_section_header_footer_story_with_stable_context()
     {
         var document = TextDocument.CreateEmpty();

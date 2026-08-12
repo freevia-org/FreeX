@@ -15200,14 +15200,15 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static InlineUIContainer BuildEmbeddedObjectRun(EmbeddedObject embedded)
     {
-        var widthPx = embedded.WidthPt * PxPerPoint;
-        var heightPx = embedded.HeightPt * PxPerPoint;
+        var plan = EmbeddedObjectVisualPlanner.Build(embedded);
+        var widthPx = plan.WidthPt * PxPerPoint;
+        var heightPx = plan.HeightPt * PxPerPoint;
 
         FrameworkElement content;
         // The icon bytes are nominally PNG but real OLE objects carry icons in formats WIC cannot decode
         // (WMF/EMF/uncommon codecs); decode defensively so a bad icon falls back to the ProgID placeholder
         // instead of throwing NotSupportedException and blanking the whole document.
-        var iconSource = embedded.Icon is { } icon ? TryDecodeRaster(icon.PngBytes) : null;
+        var iconSource = plan.Icon is { } icon ? TryDecodeRaster(icon.PngBytes) : null;
         if (iconSource is not null)
         {
             content = new Image
@@ -15220,8 +15221,11 @@ public sealed class DocumentView : RichTextBox
         {
             content = new TextBlock
             {
-                Text = embedded.ProgId,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40)),
+                Text = plan.Label,
+                Foreground = new SolidColorBrush(
+                    TryParseColor(plan.ForegroundColorHex, out var foreground)
+                        ? foreground
+                        : Color.FromRgb(0x40, 0x40, 0x40)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
@@ -15233,12 +15237,20 @@ public sealed class DocumentView : RichTextBox
         {
             Width = widthPx,
             Height = heightPx,
-            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD8)),
+            Background = new SolidColorBrush(
+                TryParseColor(plan.BackgroundColorHex, out var background)
+                    ? background
+                    : Color.FromRgb(0xF3, 0xF6, 0xFB)),
+            BorderBrush = new SolidColorBrush(
+                TryParseColor(plan.BorderColorHex, out var border)
+                    ? border
+                    : Color.FromRgb(0xC0, 0xC8, 0xD8)),
             BorderThickness = new Thickness(1),
             Child = content,
             Tag = embedded // carries the model object so CommitToModel can round-trip it
         };
+        System.Windows.Automation.AutomationProperties.SetName(element, plan.AccessibleName);
+        System.Windows.Automation.AutomationProperties.SetHelpText(element, plan.HelpText);
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 
