@@ -126,9 +126,9 @@ public static class ParagraphBreaksDialogPlanner
         return new ParagraphBreaksInitialState(
             LeftText: indentState.LeftText,
             RightText: indentState.RightText,
-            SpaceBeforeText: ParagraphIndentDialogPlanner.FormatPoints(current.SpaceBeforePt, culture),
-            SpaceAfterText: ParagraphIndentDialogPlanner.FormatPoints(current.SpaceAfterPt, culture),
-            LineSpacingText: ParagraphIndentDialogPlanner.FormatPoints(current.LineSpacing, culture),
+            SpaceBeforeText: DialogNumericTextPolicy.FormatPoints(current.SpaceBeforePt, culture),
+            SpaceAfterText: DialogNumericTextPolicy.FormatPoints(current.SpaceAfterPt, culture),
+            LineSpacingText: DialogNumericTextPolicy.FormatPoints(current.LineSpacing, culture),
             SpecialIndex: indentState.SpecialIndex,
             SpecialAmountText: indentState.SpecialAmountText,
             SpecialAmountEnabled: indentState.SpecialAmountEnabled,
@@ -156,37 +156,37 @@ public static class ParagraphBreaksDialogPlanner
         result = null;
         validation = null;
 
-        if (!TryParseNonNegative(input.LeftText, culture, out var left))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.LeftText, culture, out var left))
         {
             validation = new ParagraphBreaksValidation(ParagraphBreaksDialogField.Left, ValidationMessage);
             return false;
         }
 
-        if (!TryParseNonNegative(input.RightText, culture, out var right))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.RightText, culture, out var right))
         {
             validation = new ParagraphBreaksValidation(ParagraphBreaksDialogField.Right, ValidationMessage);
             return false;
         }
 
-        if (!TryParseNonNegative(input.SpecialAmountText, culture, out var specialAmount))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.SpecialAmountText, culture, out var specialAmount))
         {
             validation = new ParagraphBreaksValidation(ParagraphBreaksDialogField.SpecialAmount, ValidationMessage);
             return false;
         }
 
-        if (!TryParseNonNegative(input.SpaceBeforeText, culture, out var spaceBefore))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.SpaceBeforeText, culture, out var spaceBefore))
         {
             validation = new ParagraphBreaksValidation(ParagraphBreaksDialogField.SpaceBefore, ValidationMessage);
             return false;
         }
 
-        if (!TryParseNonNegative(input.SpaceAfterText, culture, out var spaceAfter))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.SpaceAfterText, culture, out var spaceAfter))
         {
             validation = new ParagraphBreaksValidation(ParagraphBreaksDialogField.SpaceAfter, ValidationMessage);
             return false;
         }
 
-        if (!TryParsePositive(input.LineSpacingText, culture, out var lineSpacing))
+        if (!DialogNumericTextPolicy.TryParsePositiveDouble(input.LineSpacingText, culture, out var lineSpacing))
         {
             validation = new ParagraphBreaksValidation(ParagraphBreaksDialogField.LineSpacing, ValidationMessage);
             return false;
@@ -195,7 +195,7 @@ public static class ParagraphBreaksDialogPlanner
         result = new ParagraphBreaksDialogResult(
             LeftPt: left,
             RightPt: right,
-            FirstLinePt: SignedFirstLine(input.SpecialIndex, specialAmount),
+            FirstLinePt: ParagraphIndentDialogPlanner.SignedFirstLineFromSpecial(input.SpecialIndex, specialAmount),
             SpaceBeforePt: spaceBefore,
             SpaceAfterPt: spaceAfter,
             LineSpacing: lineSpacing,
@@ -209,26 +209,4 @@ public static class ParagraphBreaksDialogPlanner
         return true;
     }
 
-    private static double SignedFirstLine(int specialIndex, double amount) =>
-        ParagraphIndentDialogPlanner.SpecialItems[Math.Clamp(
-            specialIndex,
-            0,
-            ParagraphIndentDialogPlanner.SpecialItems.Count - 1)].Value switch
-        {
-            ParagraphIndentSpecialKind.FirstLine => amount,
-            ParagraphIndentSpecialKind.Hanging => -amount,
-            _ => 0.0
-        };
-
-    private static bool TryParseNonNegative(string? text, CultureInfo culture, out double value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && value >= 0;
-    }
-
-    private static bool TryParsePositive(string? text, CultureInfo culture, out double value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && value > 0;
-    }
 }

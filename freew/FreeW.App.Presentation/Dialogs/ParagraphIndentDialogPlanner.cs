@@ -75,10 +75,10 @@ public static class ParagraphIndentDialogPlanner
 
         var special = SpecialKindFromSignedFirstLine(firstLinePt);
         return new ParagraphIndentInitialState(
-            LeftText: FormatPoints(leftPt, culture),
-            RightText: FormatPoints(rightPt, culture),
+            LeftText: DialogNumericTextPolicy.FormatPoints(leftPt, culture),
+            RightText: DialogNumericTextPolicy.FormatPoints(rightPt, culture),
             SpecialIndex: (int)special,
-            SpecialAmountText: FormatPoints(Math.Abs(firstLinePt), culture),
+            SpecialAmountText: DialogNumericTextPolicy.FormatPoints(Math.Abs(firstLinePt), culture),
             SpecialAmountEnabled: special != ParagraphIndentSpecialKind.None);
     }
 
@@ -97,19 +97,19 @@ public static class ParagraphIndentDialogPlanner
         result = null;
         validation = null;
 
-        if (!TryParseNonNegative(input.LeftText, culture, out var left))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.LeftText, culture, out var left))
         {
             validation = new ParagraphIndentValidation(ParagraphIndentDialogField.Left, ValidationMessage);
             return false;
         }
 
-        if (!TryParseNonNegative(input.RightText, culture, out var right))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.RightText, culture, out var right))
         {
             validation = new ParagraphIndentValidation(ParagraphIndentDialogField.Right, ValidationMessage);
             return false;
         }
 
-        if (!TryParseNonNegative(input.SpecialAmountText, culture, out var amount))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.SpecialAmountText, culture, out var amount))
         {
             validation = new ParagraphIndentValidation(ParagraphIndentDialogField.SpecialAmount, ValidationMessage);
             return false;
@@ -122,12 +122,6 @@ public static class ParagraphIndentDialogPlanner
         return true;
     }
 
-    public static string FormatPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
-
     private static ParagraphIndentSpecialKind SpecialKindFromSignedFirstLine(double firstLinePt) =>
         firstLinePt > 0
             ? ParagraphIndentSpecialKind.FirstLine
@@ -135,19 +129,13 @@ public static class ParagraphIndentDialogPlanner
                 ? ParagraphIndentSpecialKind.Hanging
                 : ParagraphIndentSpecialKind.None;
 
-    private static double SignedFirstLineFromSpecial(int specialIndex, double amount) =>
+    internal static double SignedFirstLineFromSpecial(int specialIndex, double amount) =>
         ChoiceAt(SpecialItems, specialIndex).Value switch
         {
             ParagraphIndentSpecialKind.FirstLine => amount,
             ParagraphIndentSpecialKind.Hanging => -amount,
             _ => 0.0
         };
-
-    private static bool TryParseNonNegative(string? text, CultureInfo culture, out double value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && value >= 0;
-    }
 
     private static ParagraphIndentSpecialChoice ChoiceAt(
         IReadOnlyList<ParagraphIndentSpecialChoice> choices,

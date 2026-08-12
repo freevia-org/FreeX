@@ -83,8 +83,8 @@ public static class ColumnsDialogPlanner
 
         return new ColumnsDialogInitialState(
             PresetIndex: PresetIndexFor(page),
-            CountText: FormatPoints(Math.Max(1, page.ColumnCount), culture),
-            SpacingText: FormatPoints(page.ColumnSpacingPt, culture),
+            CountText: DialogNumericTextPolicy.FormatPoints(Math.Max(1, page.ColumnCount), culture),
+            SpacingText: DialogNumericTextPolicy.FormatPoints(page.ColumnSpacingPt, culture),
             LineBetween: page.ColumnsLineBetween,
             ContentWidthPt: ContentWidthFor(page));
     }
@@ -115,7 +115,7 @@ public static class ColumnsDialogPlanner
         errorMessage = null;
 
         if (!TryParseCount(input.CountText, culture, out var count) ||
-            !TryParseSpacing(input.SpacingText, culture, out var spacing))
+            !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.SpacingText, culture, out var spacing))
         {
             errorMessage = ValidationMessage;
             return false;
@@ -148,21 +148,10 @@ public static class ColumnsDialogPlanner
         return Math.Max(MinimumContentWidthPt, page.WidthPt - page.MarginLeftPt - page.MarginRightPt);
     }
 
-    public static string FormatPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
-
     private static bool TryParseCount(string? text, CultureInfo culture, out int value)
     {
         var t = (text ?? string.Empty).Trim();
         return int.TryParse(t, NumberStyles.Integer, culture, out value) && value is >= 1 and <= 12;
     }
 
-    private static bool TryParseSpacing(string? text, CultureInfo culture, out double value)
-    {
-        var t = (text ?? string.Empty).Trim();
-        return double.TryParse(t, NumberStyles.Float, culture, out value) && value >= 0;
-    }
 }

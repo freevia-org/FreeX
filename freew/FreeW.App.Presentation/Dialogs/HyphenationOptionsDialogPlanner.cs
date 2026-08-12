@@ -63,8 +63,8 @@ public static class HyphenationOptionsDialogPlanner
 
         return new HyphenationOptionsInitialState(
             AutoHyphenation: page.AutoHyphenation,
-            ZoneText: FormatNumber(page.HyphenationZonePt, culture),
-            ConsecutiveLimitText: FormatNumber(page.ConsecutiveHyphenLimit, culture),
+            ZoneText: DialogNumericTextPolicy.FormatPoints(page.HyphenationZonePt, culture),
+            ConsecutiveLimitText: DialogNumericTextPolicy.FormatPoints(page.ConsecutiveHyphenLimit, culture),
             HyphenateCaps: !page.DoNotHyphenateCaps);
     }
 
@@ -80,8 +80,8 @@ public static class HyphenationOptionsDialogPlanner
         result = null;
         errorMessage = null;
 
-        if (!TryParseNonNegative(input.ZoneText, culture, out var zone) ||
-            !TryParseNonNegative(input.ConsecutiveLimitText, culture, out var limitValue))
+        if (!DialogNumericTextPolicy.TryParseNonNegativeDouble(input.ZoneText, culture, out var zone) ||
+            !DialogNumericTextPolicy.TryParseNonNegativeDouble(input.ConsecutiveLimitText, culture, out var limitValue))
         {
             errorMessage = ValidationMessage;
             return false;
@@ -95,15 +95,4 @@ public static class HyphenationOptionsDialogPlanner
         return true;
     }
 
-    public static string FormatNumber(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
-    }
-
-    private static bool TryParseNonNegative(string? text, CultureInfo culture, out double value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && value >= 0;
-    }
 }

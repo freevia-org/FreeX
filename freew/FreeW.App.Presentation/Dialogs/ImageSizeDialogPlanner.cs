@@ -53,8 +53,8 @@ public static class ImageSizeDialogPlanner
         ArgumentNullException.ThrowIfNull(culture);
 
         return new ImageSizeDialogInitialState(
-            WidthText: FormatPoints(currentWidthPt, culture),
-            HeightText: FormatPoints(currentHeightPt, culture),
+            WidthText: DialogNumericTextPolicy.FormatPoints(currentWidthPt, culture),
+            HeightText: DialogNumericTextPolicy.FormatPoints(currentHeightPt, culture),
             AspectRatio: CalculateAspectRatio(currentWidthPt, currentHeightPt),
             LockAspectRatio: true);
     }
@@ -71,13 +71,13 @@ public static class ImageSizeDialogPlanner
         result = null;
         validation = null;
 
-        if (!TryParsePositive(input.WidthText, culture, out var width))
+        if (!DialogNumericTextPolicy.TryParsePositiveDouble(input.WidthText, culture, out var width))
         {
             validation = new ImageSizeValidation(ImageSizeDialogField.Width, PositiveSizeValidationMessage);
             return false;
         }
 
-        if (!TryParsePositive(input.HeightText, culture, out var height))
+        if (!DialogNumericTextPolicy.TryParsePositiveDouble(input.HeightText, culture, out var height))
         {
             validation = new ImageSizeValidation(ImageSizeDialogField.Height, PositiveSizeValidationMessage);
             return false;
@@ -97,10 +97,10 @@ public static class ImageSizeDialogPlanner
         ArgumentNullException.ThrowIfNull(culture);
 
         heightText = null;
-        if (!lockAspectRatio || !TryParsePositive(widthText, culture, out var width))
+        if (!lockAspectRatio || !DialogNumericTextPolicy.TryParsePositiveDouble(widthText, culture, out var width))
             return false;
 
-        heightText = FormatPoints(width * aspectRatio, culture);
+        heightText = DialogNumericTextPolicy.FormatPoints(width * aspectRatio, culture);
         return true;
     }
 
@@ -116,27 +116,16 @@ public static class ImageSizeDialogPlanner
         widthText = null;
         if (!lockAspectRatio
             || aspectRatio <= 0
-            || !TryParsePositive(heightText, culture, out var height))
+            || !DialogNumericTextPolicy.TryParsePositiveDouble(heightText, culture, out var height))
         {
             return false;
         }
 
-        widthText = FormatPoints(height / aspectRatio, culture);
+        widthText = DialogNumericTextPolicy.FormatPoints(height / aspectRatio, culture);
         return true;
-    }
-
-    public static string FormatPoints(double value, CultureInfo culture)
-    {
-        ArgumentNullException.ThrowIfNull(culture);
-        return value.ToString("0.##", culture);
     }
 
     private static double CalculateAspectRatio(double width, double height) =>
         width > 0 ? height / width : 1.0;
 
-    private static bool TryParsePositive(string? text, CultureInfo culture, out double value)
-    {
-        var trimmed = (text ?? string.Empty).Trim();
-        return double.TryParse(trimmed, NumberStyles.Float, culture, out value) && value > 0;
-    }
 }
