@@ -328,7 +328,7 @@ public sealed class AnimationPanePlannerTests
             slideWidthDip: 960,
             slideHeightDip: 540);
 
-        var readiness = AnimationPanePlanner.BuildVisualBaselineReadinessPlan(
+        var readiness = AnimationPaneVisualBaselinePlanner.Build(
             timeline,
             checkpoints,
             slideIndex: 2,

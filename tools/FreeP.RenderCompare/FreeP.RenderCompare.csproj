@@ -38,6 +38,7 @@
     <ProjectReference Include="..\FreeX.ToolsShared.Wpf\FreeX.ToolsShared.Wpf.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="..\..\freep\TestSupport\VisualEvidence\FreeP.VisualEvidence.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.App.Rendering.Wpf\FreeP.App.Rendering.Wpf.csproj" />
     <ProjectReference Include="..\..\freep\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
   </ItemGroup>

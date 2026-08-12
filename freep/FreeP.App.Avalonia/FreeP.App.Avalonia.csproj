@@ -27,8 +27,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\tools\FreeP.RenderCompare\VisualEvidenceCaptureOrchestration.cs"
-             Link="VisualEvidence\VisualEvidenceCaptureOrchestration.cs" />
     <!-- Runtime and package assets derive from one FreeP identity source in the shared shell. -->
     <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico"
              Link="Resources\FreeP.ico"
@@ -41,6 +39,7 @@
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="..\TestSupport\VisualEvidence\FreeP.VisualEvidence.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording.Windows\FreeP.App.Recording.Windows.csproj"
                       Condition="'$(TargetPlatformIdentifier)' == 'Windows'" />

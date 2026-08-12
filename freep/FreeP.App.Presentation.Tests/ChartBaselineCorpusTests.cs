@@ -1022,7 +1022,7 @@ public sealed class ChartBaselineCorpusTests
             .Select(shape => shape.Chart!)
             .ToArray();
 
-        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+        var readiness = ChartVisualBaselineReadinessPlanner.Build(
             charts,
             slideIndex: 0,
             scenarioId: "Chart Baseline Depth");
@@ -1195,7 +1195,7 @@ public sealed class ChartBaselineCorpusTests
         markerPlan.Series[0].Markers.Should().HaveCount(4);
         markerPlan.Series[0].Path.Fill.Should().BeNull();
 
-        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+        var readiness = ChartVisualBaselineReadinessPlanner.Build(
             charts,
             slideIndex: 2,
             scenarioId: "Radar Type Decisions");
@@ -1260,7 +1260,7 @@ public sealed class ChartBaselineCorpusTests
                 ChartStockPriceMove.Falling,
                 ChartStockPriceMove.Unchanged);
 
-        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+        var readiness = ChartVisualBaselineReadinessPlanner.Build(
             [stock],
             slideIndex: 5,
             scenarioId: "Stock OHLC Decisions");
@@ -1314,7 +1314,7 @@ public sealed class ChartBaselineCorpusTests
             0.0001);
         volumeBars[2].Bounds.Height.Should().BeLessThan(volumeBars[1].Bounds.Height);
 
-        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+        var readiness = ChartVisualBaselineReadinessPlanner.Build(
             [stock],
             slideIndex: 6,
             scenarioId: "Stock Volume OHLC Decisions");
@@ -1363,7 +1363,7 @@ public sealed class ChartBaselineCorpusTests
         slices[3].SeriesIndex.Should().Be(1);
         slices[3].InnerRadius.Should().BeGreaterThan(slices[0].OuterRadius);
 
-        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+        var readiness = ChartVisualBaselineReadinessPlanner.Build(
             [doughnut],
             slideIndex: 3,
             scenarioId: "Doughnut Ring Decisions");
@@ -1404,7 +1404,7 @@ public sealed class ChartBaselineCorpusTests
         slices[0].EffectiveVerticalScale.Should().Be(ChartRenderPlanner.ThreeDPieVerticalScale);
         slices[0].DepthOffsetY.Should().BeApproximately(14, 0.0001);
 
-        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+        var readiness = ChartVisualBaselineReadinessPlanner.Build(
             [pie],
             slideIndex: 4,
             scenarioId: "Pie 3D Depth Decisions");

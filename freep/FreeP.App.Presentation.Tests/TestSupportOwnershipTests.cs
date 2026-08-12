@@ -15,6 +15,20 @@ public sealed class TestSupportOwnershipTests
             .Should().BeNull();
         productionAssembly.GetType("FreeP.App.Compositor.ChartSeriesOptionsDialogTestSettings")
             .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.PresentationExportBackstageEvidencePlanner")
+            .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.ChartVisualBaselineReadinessPlanner")
+            .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.AnimationPaneVisualBaselinePlanner")
+            .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.DialogPaneVisualEvidenceCatalog")
+            .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.DialogPaneVisualEvidencePreparationSession")
+            .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.DialogPaneVisualEvidenceFixtureFactory")
+            .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.WholeWindowVisualEvidencePreparationSession")
+            .Should().BeNull();
     }
 
     [Fact]
@@ -32,5 +46,26 @@ public sealed class TestSupportOwnershipTests
         ReferenceEquals(
             typeof(ChartSeriesOptionsDialogTestSettings).Assembly,
             typeof(TestSupportOwnershipTests).Assembly).Should().BeTrue();
+    }
+
+    [Fact]
+    public void VisualEvidenceSupportAssemblyOwnsPortableEvidenceInfrastructure()
+    {
+        var supportAssembly = typeof(PresentationExportBackstageEvidencePlanner).Assembly;
+
+        ReferenceEquals(supportAssembly, typeof(ChartVisualBaselineReadinessPlanner).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(AnimationPaneVisualBaselinePlanner).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(DialogPaneVisualEvidenceCatalog).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(DialogPaneVisualEvidencePreparationSession).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(DialogPaneVisualEvidenceFixtureFactory).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(WholeWindowVisualEvidencePreparationSession).Assembly)
+            .Should().BeTrue();
+        ReferenceEquals(supportAssembly, typeof(EditingSession).Assembly)
+            .Should().BeFalse();
     }
 }

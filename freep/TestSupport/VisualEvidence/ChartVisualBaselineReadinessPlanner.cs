@@ -27,7 +27,7 @@ public sealed record ChartVisualBaselineCaptureRequest(
     bool RequiresPowerPointCom,
     string EvidenceSummary);
 
-public sealed record ChartVisualBaselineReadinessPlan(
+public sealed record ChartVisualBaselineEvidence(
     string ScenarioId,
     int SlideIndex,
     int ChartCount,
@@ -47,9 +47,9 @@ public sealed record ChartVisualBaselineReadinessPlan(
         && CaptureRequests.Any(request => request.Host == ChartVisualBaselineCaptureHost.Avalonia);
 }
 
-public static partial class ChartRenderPlanner
+public static class ChartVisualBaselineReadinessPlanner
 {
-    public static ChartVisualBaselineReadinessPlan BuildVisualBaselineReadinessPlan(
+    public static ChartVisualBaselineEvidence Build(
         IReadOnlyList<ChartShape> charts,
         int slideIndex,
         string scenarioId = "chart-baseline")
@@ -88,7 +88,7 @@ public static partial class ChartRenderPlanner
             "PowerPoint requests are readiness contracts and require desktop PowerPoint COM on the baseline machine",
         };
 
-        return new ChartVisualBaselineReadinessPlan(
+        return new ChartVisualBaselineEvidence(
             safeScenarioId,
             safeSlideIndex,
             charts.Count,
@@ -140,7 +140,7 @@ public static partial class ChartRenderPlanner
     {
         var decision = chart.ChartType switch
         {
-            ChartType.Stock => TryResolveStockVolumeSeries(chart) >= 0
+            ChartType.Stock => HasStockVolumeSeries(chart)
                 ? "stock volume columns plus high-low/open-close tick plan"
                 : "stock high-low/open-close tick plan",
             ChartType.Surface3D => "3-D surface projected facet, wireframe, and contour plan",
@@ -170,6 +170,11 @@ public static partial class ChartRenderPlanner
             CultureInfo.InvariantCulture,
             $"{chart.ChartType} chart {chartIndex + 1}: {decision}; {chart.Series.Count} series; {chart.Categories.Count} categories");
     }
+
+    private static bool HasStockVolumeSeries(ChartShape chart) =>
+        chart.Series.Count >= 5 ||
+        chart.Series.Any(series =>
+            series.Name?.Contains("volume", StringComparison.OrdinalIgnoreCase) == true);
 
     private static string NormalizeChartBaselineScenarioId(string value)
     {

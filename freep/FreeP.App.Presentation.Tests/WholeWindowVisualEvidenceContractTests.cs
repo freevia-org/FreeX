@@ -251,7 +251,8 @@ public sealed class WholeWindowVisualEvidenceContractTests
         var owner = File.ReadAllText(Path.Combine(
             root,
             "freep",
-            "FreeP.App.Presentation",
+            "TestSupport",
+            "VisualEvidence",
             "WholeWindowVisualEvidenceContract.cs"));
         var hosts = new[]
         {
