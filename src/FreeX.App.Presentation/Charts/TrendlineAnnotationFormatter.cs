@@ -46,13 +46,13 @@ public static class TrendlineAnnotationFormatter
         if (chart.TrendlineType == ChartTrendlineType.Polynomial)
             return $"Polynomial (order {Math.Clamp(chart.TrendlineOrder, 2, 6)})";
         if (trendPoints.Count < 2)
-            return GetTrendlineTitle(chart.TrendlineType);
+            return GetTitle(chart.TrendlineType);
 
         var first = trendPoints[0];
         var last = trendPoints[^1];
         var dx = last.X - first.X;
         if (Math.Abs(dx) < double.Epsilon)
-            return GetTrendlineTitle(chart.TrendlineType);
+            return GetTitle(chart.TrendlineType);
 
         return chart.TrendlineType switch
         {
@@ -105,7 +105,7 @@ public static class TrendlineAnnotationFormatter
     private static string FormatSigned(double value) =>
         value < 0 ? $"- {Math.Abs(value):0.###}" : $"+ {value:0.###}";
 
-    private static string GetTrendlineTitle(ChartTrendlineType type) =>
+    public static string GetTitle(ChartTrendlineType type) =>
         type switch
         {
             ChartTrendlineType.Exponential => "Exponential Trendline",

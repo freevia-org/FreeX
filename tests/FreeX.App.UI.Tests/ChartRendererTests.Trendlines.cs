@@ -15,6 +15,41 @@ namespace FreeX.App.UI.Tests;
 public sealed partial class ChartRendererTests
 {
     [Fact]
+    public void ScatterRenderer_TrendlineUsesPortableInterceptAndForecastProjection()
+    {
+        var sheetId = SheetId.New();
+        var chart = new ChartModel
+        {
+            Type = ChartType.Scatter,
+            FirstColIsCategories = false,
+            DataRange = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 4, 2)),
+            ShowLinearTrendline = true,
+            TrendlineType = ChartTrendlineType.Linear,
+            TrendlineIntercept = 5,
+            TrendlineForward = 2,
+            TrendlineBackward = 1,
+        };
+
+        var model = BuildPlotModel(chart, new ViewportModel(
+            [
+                Cell(1, 1, "X"),
+                Cell(1, 2, "Revenue"),
+                Cell(2, 1, "1"),
+                Cell(2, 2, "9"),
+                Cell(3, 1, "2"),
+                Cell(3, 2, "13"),
+                Cell(4, 1, "3"),
+                Cell(4, 2, "17"),
+            ],
+            [],
+            []));
+
+        var trendline = model.Series[1].Should().BeOfType<LineSeries>().Subject;
+        trendline.Points.Select(point => (point.X, point.Y))
+            .Should().Equal((0, 5), (1, 9), (3, 17), (5, 25));
+    }
+
+    [Fact]
     public void ScatterRenderer_AddsLinearTrendlineFromActualXValues()
     {
         var sheetId = SheetId.New();

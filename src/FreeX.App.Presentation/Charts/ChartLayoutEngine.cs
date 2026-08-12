@@ -1581,140 +1581,6 @@ public static class ChartLayoutEngine
 
     // ---- Trendline overlay ----------------------------------------------------------------
 
-    // Mirrors the source renderer's AddTrendlineIfRequested: Excel only allows a fixed intercept on
-    // the Linear trendline, so when ChartModel.TrendlineIntercept is set, the free-intercept fit
-    // TrendlineCalculator.Calculate produced is discarded and refit with the intercept pinned
-    // (least squares over the residual y - intercept), then the (possibly refit) trendline is
-    // extended by the Forecast Forward/Backward periods. Without this step (the bug this method
-    // fixes), both persisted, round-tripped chart options were silently dropped on this shell.
-    private static IReadOnlyList<TrendPoint> ApplyTrendlineInterceptAndForecast(
-        ChartModel chart,
-        IReadOnlyList<TrendPoint> sourcePoints,
-        IReadOnlyList<TrendPoint> trend)
-    {
-        if (chart.TrendlineType == ChartTrendlineType.Linear && chart.TrendlineIntercept is { } fixedIntercept)
-            trend = CalculateLinearWithFixedIntercept(sourcePoints, fixedIntercept) ?? trend;
-
-        return ApplyTrendlineForecast(chart, trend);
-    }
-
-    /// <summary>
-    /// Refits a linear trendline with the intercept pinned to <paramref name="intercept"/> (Excel's
-    /// "Set Intercept" option), returning the two fitted endpoints across the source X range. Uses
-    /// ordinary least squares on the residual (y - intercept) so slope = Σx·(y-intercept) / Σx².
-    /// Returns null when the fit is undefined (fewer than 2 points or a degenerate X range). Mirrors
-    /// the source renderer's CalculateLinearWithFixedIntercept exactly.
-    /// </summary>
-    private static IReadOnlyList<TrendPoint>? CalculateLinearWithFixedIntercept(
-        IReadOnlyList<TrendPoint> points,
-        double intercept)
-    {
-        var sumXX = 0.0;
-        var sumXResidual = 0.0;
-        var minX = double.PositiveInfinity;
-        var maxX = double.NegativeInfinity;
-        var count = 0;
-        for (var i = 0; i < points.Count; i++)
-        {
-            var point = points[i];
-            sumXX += point.X * point.X;
-            sumXResidual += point.X * (point.Y - intercept);
-            minX = Math.Min(minX, point.X);
-            maxX = Math.Max(maxX, point.X);
-            count++;
-        }
-
-        if (count < 2 || Math.Abs(sumXX) < double.Epsilon)
-            return null;
-
-        var slope = sumXResidual / sumXX;
-        return [new TrendPoint(minX, intercept + slope * minX), new TrendPoint(maxX, intercept + slope * maxX)];
-    }
-
-    /// <summary>
-    /// Extends the fitted trendline by Excel's Forward/Backward forecast periods (measured in
-    /// category-axis units, i.e. the same X units as the source points). Extrapolates using the
-    /// trendline's own boundary segment (linear/exponential/logarithmic/power all sample a smooth
-    /// curve whose two nearest boundary points define the local slope) so the extension continues the
-    /// fitted shape rather than requiring a shared-file change to the trendline calculator. Moving
-    /// Average has no Excel forecast option and is returned unchanged. Mirrors the source renderer's
-    /// ApplyTrendlineForecast exactly.
-    /// </summary>
-    private static IReadOnlyList<TrendPoint> ApplyTrendlineForecast(
-        ChartModel chart,
-        IReadOnlyList<TrendPoint> trendPoints)
-    {
-        var forward = chart.TrendlineForward is { } f && f > 0 ? f : 0;
-        var backward = chart.TrendlineBackward is { } b && b > 0 ? b : 0;
-        if ((forward <= 0 && backward <= 0) || chart.TrendlineType == ChartTrendlineType.MovingAverage || trendPoints.Count < 2)
-            return trendPoints;
-
-        var result = new List<TrendPoint>(trendPoints.Count + 2);
-        if (backward > 0)
-        {
-            var first = trendPoints[0];
-            var second = trendPoints[1];
-            var extendedX = first.X - backward;
-            result.Add(new TrendPoint(extendedX, ExtrapolateY(chart.TrendlineType, first, second, extendedX)));
-        }
-
-        result.AddRange(trendPoints);
-
-        if (forward > 0)
-        {
-            var last = trendPoints[^1];
-            var secondToLast = trendPoints[^2];
-            var extendedX = last.X + forward;
-            result.Add(new TrendPoint(extendedX, ExtrapolateY(chart.TrendlineType, secondToLast, last, extendedX)));
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Extrapolates a Y value at <paramref name="targetX"/> beyond the boundary segment
-    /// (<paramref name="a"/>, <paramref name="b"/>) of a fitted trendline, using the closed-form shape
-    /// appropriate to <paramref name="type"/> (log-linear for exponential/power in the relevant axis,
-    /// straight-line extension otherwise). Falls back to a linear extension of the segment when the
-    /// closed form is undefined for the given points (e.g. non-positive X/Y for log/power). Mirrors
-    /// the source renderer's ExtrapolateY exactly.
-    /// </summary>
-    private static double ExtrapolateY(ChartTrendlineType type, TrendPoint a, TrendPoint b, double targetX)
-    {
-        var dx = b.X - a.X;
-        if (Math.Abs(dx) < double.Epsilon)
-            return b.Y;
-
-        switch (type)
-        {
-            case ChartTrendlineType.Exponential when a.Y > 0 && b.Y > 0:
-            {
-                var slope = Math.Log(b.Y / a.Y) / dx;
-                return a.Y * Math.Exp(slope * (targetX - a.X));
-            }
-            case ChartTrendlineType.Power when a.X > 0 && b.X > 0 && a.Y > 0 && b.Y > 0 && targetX > 0:
-            {
-                var dLogX = Math.Log(b.X) - Math.Log(a.X);
-                if (Math.Abs(dLogX) < double.Epsilon)
-                    break;
-                var slope = Math.Log(b.Y / a.Y) / dLogX;
-                return a.Y * Math.Pow(targetX / a.X, slope);
-            }
-            case ChartTrendlineType.Logarithmic when a.X > 0 && b.X > 0 && targetX > 0:
-            {
-                var dLogX = Math.Log(b.X) - Math.Log(a.X);
-                if (Math.Abs(dLogX) < double.Epsilon)
-                    break;
-                var slope = (b.Y - a.Y) / dLogX;
-                return b.Y + slope * (Math.Log(targetX) - Math.Log(b.X));
-            }
-        }
-
-        // Linear (and any degenerate curve case above) extends the straight segment.
-        var linearSlope = (b.Y - a.Y) / dx;
-        return b.Y + linearSlope * (targetX - b.X);
-    }
-
     // Computes the trendline overlay for the first plotted series (matching the source renderer,
     // which fits the trendline to the first series' points) and attaches it to that series' layout.
     private static void AttachTrendline(
@@ -1727,8 +1593,6 @@ public static class ChartLayoutEngine
         double[]? categoryPositions = null)
     {
         var chart = request.Chart;
-        if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type))
-            return;
         if (request.Series.Count == 0 || seriesLayouts.Count == 0)
             return;
 
@@ -1744,24 +1608,19 @@ public static class ChartLayoutEngine
                 sourcePoints.Add(new TrendPoint(CategoryX(categoryPositions, i), v));
         }
 
-        if (sourcePoints.Count < 2)
+        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints);
+        if (plan is null)
             return;
-
-        var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
-        if (trend.Count < 2)
-            return;
-
-        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
 
         var onSecondary = useSecondary && ChartRenderPolicyPlanner.UsesSecondaryAxis(chart, first.SeriesIndex) && secondaryScale is not null;
         var yScale = onSecondary ? secondaryScale! : primaryScale;
-        var pixelPoints = new List<LayoutPoint>(trend.Count);
-        foreach (var point in trend)
+        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+        foreach (var point in plan.Points)
             pixelPoints.Add(new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y)));
 
         seriesLayouts[0] = seriesLayouts[0] with
         {
-            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
+            Trendline = BuildTrendlineLayout(plan, pixelPoints,
                 point => new LayoutPoint(xToPixel(point.X), yScale.Transform(point.Y))),
         };
     }
@@ -1778,8 +1637,6 @@ public static class ChartLayoutEngine
         AxisScale valueScale)
     {
         var chart = request.Chart;
-        if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type))
-            return;
         if (request.Series.Count == 0 || seriesLayouts.Count == 0)
             return;
 
@@ -1791,26 +1648,19 @@ public static class ChartLayoutEngine
                 sourcePoints.Add(new TrendPoint(i, v));
         }
 
-        if (sourcePoints.Count < 2)
+        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints, swapAxes: true);
+        if (plan is null)
             return;
 
-        var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
-        if (trend.Count < 2)
-            return;
-
-        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
-
-        // TrendPoint.X is the category index (→ categoryScale, vertical); TrendPoint.Y is the value
-        // (→ valueScale, horizontal).
-        var pixelPoints = new List<LayoutPoint>(trend.Count);
-        foreach (var point in trend)
-            pixelPoints.Add(new LayoutPoint(valueScale.Transform(point.Y), categoryScale.Transform(point.X)));
+        // The portable plan projects bar points to (value, category) display-axis order.
+        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+        foreach (var point in plan.Points)
+            pixelPoints.Add(new LayoutPoint(valueScale.Transform(point.X), categoryScale.Transform(point.Y)));
 
         seriesLayouts[0] = seriesLayouts[0] with
         {
-            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
-                point => new LayoutPoint(valueScale.Transform(point.Y), categoryScale.Transform(point.X)),
-                swapAnnotationAxes: true),
+            Trendline = BuildTrendlineLayout(plan, pixelPoints,
+                point => new LayoutPoint(valueScale.Transform(point.X), categoryScale.Transform(point.Y))),
         };
     }
 
@@ -1823,8 +1673,6 @@ public static class ChartLayoutEngine
         AxisScale yScale)
     {
         var chart = request.Chart;
-        if (!chart.ShowLinearTrendline || !ChartTypeSupport.SupportsTrendlines(chart.Type))
-            return;
         if (request.Series.Count == 0 || seriesLayouts.Count == 0)
             return;
 
@@ -1838,78 +1686,37 @@ public static class ChartLayoutEngine
             sourcePoints.Add(new TrendPoint(x, y));
         }
 
-        if (sourcePoints.Count < 2)
+        var plan = TrendlineProjectionPlanner.Plan(chart, sourcePoints);
+        if (plan is null)
             return;
 
-        var trend = TrendlineCalculator.Calculate(chart.TrendlineType, sourcePoints, chart.TrendlinePeriod, chart.TrendlineOrder);
-        if (trend.Count < 2)
-            return;
-
-        trend = ApplyTrendlineInterceptAndForecast(chart, sourcePoints, trend);
-
-        var pixelPoints = new List<LayoutPoint>(trend.Count);
-        foreach (var point in trend)
+        var pixelPoints = new List<LayoutPoint>(plan.Points.Count);
+        foreach (var point in plan.Points)
             pixelPoints.Add(new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y)));
 
         seriesLayouts[0] = seriesLayouts[0] with
         {
-            Trendline = BuildTrendlineLayout(chart, sourcePoints, trend, pixelPoints,
+            Trendline = BuildTrendlineLayout(plan, pixelPoints,
                 point => new LayoutPoint(xScale.Transform(point.X), yScale.Transform(point.Y))),
         };
     }
 
-    // Builds the TrendlineLayout including the optional equation/R-squared annotation (F18): the
-    // annotation anchor mirrors the source renderer's TextAnnotation placement. The source renderer
-    // (AddTrendlineIfRequested) swaps each source point to (Y, X) before taking (Min(X), Max(Y))
-    // whenever swapTrendlineAxes is set (Bar charts); for the non-swapped families it takes
-    // (Min(X), Max(Y)) of the source points directly. swapAnnotationAxes reproduces that exactly:
-    // when true, the anchor is (min value, max index) — the swapped corner — instead of
-    // (min index, max value), matching WPF's swapTrendlineAxes: true path for ChartType.Bar.
+    // Maps the portable data-space plan to layout pixels; projection and annotation semantics stay
+    // in TrendlineProjectionPlanner so every renderer consumes the same result.
     private static TrendlineLayout BuildTrendlineLayout(
-        ChartModel chart,
-        IReadOnlyList<TrendPoint> sourcePoints,
-        IReadOnlyList<TrendPoint> trend,
+        TrendlineProjectionPlan plan,
         IReadOnlyList<LayoutPoint> pixelPoints,
-        Func<TrendPoint, LayoutPoint> toPixel,
-        bool swapAnnotationAxes = false)
+        Func<TrendPoint, LayoutPoint> toPixel)
     {
-        var annotationLines = TrendlineAnnotationFormatter.BuildAnnotationLines(chart, sourcePoints, trend);
-        var anchor = default(LayoutPoint);
-        if (annotationLines.Count > 0)
-        {
-            if (swapAnnotationAxes)
-            {
-                // Mirror WPF's displaySourcePoints = points.Select(p => (p.Y, p.X)) swap: anchor at
-                // (min value, max index) rather than (min index, max value).
-                var minValue = sourcePoints[0].Y;
-                var maxIndex = sourcePoints[0].X;
-                foreach (var point in sourcePoints)
-                {
-                    minValue = Math.Min(minValue, point.Y);
-                    maxIndex = Math.Max(maxIndex, point.X);
-                }
-
-                anchor = toPixel(new TrendPoint(maxIndex, minValue));
-            }
-            else
-            {
-                var minX = sourcePoints[0].X;
-                var maxY = sourcePoints[0].Y;
-                foreach (var point in sourcePoints)
-                {
-                    minX = Math.Min(minX, point.X);
-                    maxY = Math.Max(maxY, point.Y);
-                }
-
-                anchor = toPixel(new TrendPoint(minX, maxY));
-            }
-        }
+        var anchor = plan.AnnotationAnchor is { } dataAnchor
+            ? toPixel(dataAnchor)
+            : default;
 
         return new TrendlineLayout
         {
-            Fit = ToFitKind(chart.TrendlineType),
+            Fit = ToFitKind(plan.Type),
             Points = pixelPoints,
-            AnnotationLines = annotationLines,
+            AnnotationLines = plan.AnnotationLines,
             AnnotationAnchor = anchor,
         };
     }
