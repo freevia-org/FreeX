@@ -148,14 +148,6 @@ public sealed class Presentation
     /// </summary>
     public uint? KioskRestartAfterMilliseconds { get; set; }
 
-    /// <summary>Compatibility alias for the initial misnamed projection.</summary>
-    [Obsolete("Use KioskRestartAfterMilliseconds; PresentationML stores restart in milliseconds.")]
-    public uint? KioskRestartAfterMinutes
-    {
-        get => KioskRestartAfterMilliseconds;
-        set => KioskRestartAfterMilliseconds = value;
-    }
-
     /// <summary>Core document properties (title, author, subject, …).</summary>
     public DocumentProperties Properties { get; } = new();
 

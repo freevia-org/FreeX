@@ -114,12 +114,6 @@ public static class FreePKeyboardShortcutCatalog
         Resolver.TryDispatch(key, modifiers, dispatch);
 }
 
-public enum FreePContextMenuSurface
-{
-    Slide,
-    SectionHeader,
-}
-
 public enum FreePContextMenuCommand
 {
     AddSection,

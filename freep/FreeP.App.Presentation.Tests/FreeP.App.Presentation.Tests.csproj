@@ -26,6 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\SlideShowRecordingHostAdapterParityPlanner.cs"
+             Link="TestSupport\SlideShowRecordingHostAdapterParityPlanner.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
