@@ -86,6 +86,7 @@ public sealed class FreeWBehaviorSourceGuardTests
     {
         var session = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWAutosaveSession.cs");
         var planner = ReadSource("freew", "FreeW.App.Presentation", "Shell", "AutosaveRecoveryPlanner.cs");
+        var workflow = ReadSource("freew", "FreeW.App.Presentation", "Shell", "FreeWRecoveryWorkflow.cs");
         var wpf = ReadSource("freew", "FreeW.App.Host", "AutosaveCoordinator.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "AutosaveAdapter.cs");
 
@@ -93,6 +94,7 @@ public sealed class FreeWBehaviorSourceGuardTests
         {
             source.Should().Contain("new FreeWAutosaveSession(");
             source.Should().Contain("_session.PlanRecoveries()");
+            source.Should().Contain("FreeWRecoveryWorkflow.RunAsync(");
             source.Should().Contain("FreeWAutosaveSession.DefaultInterval");
             source.Should().NotContain("AutosaveSnapshotCoordinator");
             source.Should().NotContain("AutosaveRecoveryPlanner");
@@ -102,10 +104,23 @@ public sealed class FreeWBehaviorSourceGuardTests
             source.Should().NotContain("DocxWriter");
         }
 
+        var wpfStartupOffer = Between(wpf, "public bool OfferRecovery", "public bool RecoverUnsavedDocuments");
+        var wpfManualOffer = wpf[wpf.IndexOf("public bool RecoverUnsavedDocuments", StringComparison.Ordinal)..];
+        var avaloniaStartupOffer = Between(avalonia, "public async Task OfferRecoveryAsync", "public void Dispose");
+        foreach (var nativeOffer in new[] { wpfStartupOffer, wpfManualOffer, avaloniaStartupOffer })
+        {
+            nativeOffer.Should().NotContain("for (var index = 0; index < recoveries.Count; index++)");
+            nativeOffer.Should().NotContain("unsaved documents found");
+        }
+
         session.Should().Contain("new AutosaveSnapshotCoordinator(");
         session.Should().Contain("AutosaveRecoveryPlanner.PlanAll(_store)");
         session.Should().Contain("AutosaveRecoveryPlanner.Complete(");
         planner.Should().Contain("SelectAllOrdered(store.ExcludeLiveOwned(store.EnumerateCandidates()))");
+        workflow.Should().Contain("for (var index = 0; index < recoveries.Count; index++)");
+        workflow.Should().Contain("var useCurrentWindow = !anyAccepted;");
+        workflow.Should().Contain("FreeWRecoveryPromptMode.Manual");
+        workflow.Should().Contain("unsaved documents found");
         session.Should().Contain("class SnapshotSource : IAutosaveSnapshotSource");
         session.Should().Contain("ExecuteWithDocument(document => DocxWriter.Write(document, snapshotPath))");
         session.Should().Contain("DocxReader.Read(snapshotPath)");
@@ -141,5 +156,14 @@ public sealed class FreeWBehaviorSourceGuardTests
 
     private static string ReadSource(params string[] parts) =>
         File.ReadAllText(Path.Combine(new[] { TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx") }.Concat(parts).ToArray()));
+
+    private static string Between(string source, string startMarker, string endMarker)
+    {
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
+    }
 
 }

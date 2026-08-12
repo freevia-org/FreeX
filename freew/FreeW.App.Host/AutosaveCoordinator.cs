@@ -61,30 +61,27 @@ internal sealed class AutosaveCoordinator
     {
         try
         {
-            var recoveries = _session.PlanRecoveries();
-            var anyAccepted = false;
-            for (var index = 0; index < recoveries.Count; index++)
-            {
-                var recovery = recoveries[index];
-                var remaining = recoveries.Count - index;
-                var prompt = remaining > 1
-                    ? $"FreeW found unsaved changes to {recovery.DisplayName} from a previous session ({remaining} unsaved documents found). Recover this one?"
-                    : $"FreeW found unsaved changes to {recovery.DisplayName} from a previous session. Recover them?";
-                if (!DialogMessageHelper.AskYesNo(owner, prompt, "FreeW - Recover"))
-                    continue;
-
-                var firstAccepted = !anyAccepted;
-                anyAccepted = true;
-                _session.CompleteRecovery(
-                    recovery,
-                    accepted: true,
-                    firstAccepted
-                        ? _file.OpenSnapshot
-                        : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
-                    FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
-            }
-
-            return anyAccepted;
+            return FreeWRecoveryWorkflow.RunAsync(
+                    _session.PlanRecoveries(),
+                    FreeWRecoveryPromptMode.Startup,
+                    offer => new ValueTask<bool>(DialogMessageHelper.AskYesNo(
+                        owner,
+                        offer.Prompt,
+                        "FreeW - Recover")),
+                    (recovery, useCurrentWindow) =>
+                    {
+                        var recovered = _session.CompleteRecovery(
+                            recovery,
+                            accepted: true,
+                            useCurrentWindow
+                                ? _file.OpenSnapshot
+                                : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false,
+                            FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
+                        return new ValueTask<bool>(recovered);
+                    })
+                .GetAwaiter()
+                .GetResult()
+                .AnyAccepted;
         }
         catch
         {
@@ -106,36 +103,24 @@ internal sealed class AutosaveCoordinator
                 return false;
             }
 
-            var anyAccepted = false;
-            var anyRecovered = false;
-            for (var index = 0; index < recoveries.Count; index++)
-            {
-                var recovery = recoveries[index];
-                var remaining = recoveries.Count - index;
-                var prompt = remaining > 1
-                    ? $"Recover unsaved changes to {recovery.DisplayName}? ({remaining} unsaved documents found.)"
-                    : $"Recover unsaved changes to {recovery.DisplayName}?";
-                var answer = DialogMessageHelper.ShowMessage(
-                    owner,
-                    prompt,
-                    "FreeW - Recover",
-                    UserMessageButtons.OkCancel,
-                    UserMessageIcon.Question);
-                if (answer != UserMessageResult.Ok)
-                    continue;
-
-                var firstAccepted = !anyAccepted;
-                anyAccepted = true;
-                var recovered = _session.CompleteRecovery(
-                    recovery,
-                    accepted: true,
-                    firstAccepted
-                        ? _file.RecoverSnapshot
-                        : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false);
-                anyRecovered |= recovered;
-            }
-
-            return anyRecovered;
+            return FreeWRecoveryWorkflow.RunAsync(
+                    recoveries,
+                    FreeWRecoveryPromptMode.Manual,
+                    offer => new ValueTask<bool>(DialogMessageHelper.ShowMessage(
+                        owner,
+                        offer.Prompt,
+                        "FreeW - Recover",
+                        UserMessageButtons.OkCancel,
+                        UserMessageIcon.Question) == UserMessageResult.Ok),
+                    (recovery, useCurrentWindow) => new ValueTask<bool>(_session.CompleteRecovery(
+                        recovery,
+                        accepted: true,
+                        useCurrentWindow
+                            ? _file.RecoverSnapshot
+                            : (_, _) => _recoverInNewWindow?.Invoke(recovery.Candidate) ?? false)))
+                .GetAwaiter()
+                .GetResult()
+                .AnyRecovered;
         }
         catch (Exception ex)
         {

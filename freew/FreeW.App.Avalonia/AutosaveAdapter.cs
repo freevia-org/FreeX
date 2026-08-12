@@ -96,34 +96,27 @@ internal sealed class AutosaveAdapter : IDisposable
 
         try
         {
-            var recoveries = _session.PlanRecoveries();
-            var anyAccepted = false;
-            for (var index = 0; index < recoveries.Count; index++)
-            {
-                var recovery = recoveries[index];
-                var remaining = recoveries.Count - index;
-                var prompt = remaining > 1
-                    ? $"FreeW found unsaved changes to \"{recovery.DisplayName}\" from a previous session ({remaining} unsaved documents found). Recover this one?"
-                    : $"FreeW found unsaved changes to \"{recovery.DisplayName}\" from a previous session. Recover them?";
-                if (!await RecoveryPromptDialog.ShowAsync(owner, prompt))
-                    continue;
-
-                var firstAccepted = !anyAccepted;
-                anyAccepted = true;
-                if (firstAccepted)
+            await FreeWRecoveryWorkflow.RunAsync(
+                _session.PlanRecoveries(),
+                FreeWRecoveryPromptMode.StartupQuotedDisplayName,
+                offer => new ValueTask<bool>(RecoveryPromptDialog.ShowAsync(owner, offer.Prompt)),
+                async (recovery, useCurrentWindow) =>
                 {
-                    _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
+                    if (useCurrentWindow)
                     {
-                        _editor.LoadDocument(document);
-                        _workflow.MarkDirtyWithPath(originalPath);
-                    }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
-                    continue;
-                }
+                        var recoveredInCurrentWindow = _session.CompleteDocumentRecovery(recovery, accepted: true, (document, originalPath) =>
+                        {
+                            _editor.LoadDocument(document);
+                            _workflow.MarkDirtyWithPath(originalPath);
+                        }, FreeWRecoveryRestoreExceptionPolicy.QuarantineCandidate);
+                        return recoveredInCurrentWindow;
+                    }
 
-                var recovered = _recoverInNewWindowAsync is not null &&
-                    await _recoverInNewWindowAsync(recovery.Candidate);
-                _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
-            }
+                    var recovered = _recoverInNewWindowAsync is not null &&
+                        await _recoverInNewWindowAsync(recovery.Candidate);
+                    _session.CompleteRecoveryResult(recovery, accepted: true, recovered);
+                    return recovered;
+                });
         }
         catch
         {
