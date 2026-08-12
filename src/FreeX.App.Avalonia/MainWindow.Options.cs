@@ -60,13 +60,8 @@ public sealed partial class MainWindow
 
         // Edit a snapshot loaded from the shared store during normal use. The capture route swaps
         // in a deterministic shared fixture so paired screenshots do not inherit user-local state.
-#if FREEX_PARITY_CAPTURE
-        var current = App.ParityCaptureOptions is null
-            ? _optionsRuntimeSession.Reload()
-            : OptionsDialogParityFixture.Create();
-#else
-        var current = _optionsRuntimeSession.Reload();
-#endif
+        var current = App.ExternalOptionsFixtureFactory?.Invoke()
+            ?? _optionsRuntimeSession.Reload();
         var optionsDialogSession = _optionsRuntimeSession.BeginDialog(current);
         current = optionsDialogSession.OpenSnapshot;
         var quickAccessSession = optionsDialogSession.QuickAccessToolbar;

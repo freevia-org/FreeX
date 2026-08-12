@@ -20,12 +20,12 @@ public sealed class App : Application
 
     internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }
 
-#if FREEX_PARITY_CAPTURE
-    internal static ParityCaptureOptions? ParityCaptureOptions { get; set; }
-    internal static GridCaptureOptions? GridCaptureOptions { get; set; }
+    internal static Func<WorkbookSessionFactory, double, double, bool, WorkbookSession>?
+        ExternalStartupSessionFactory { get; set; }
 
-    internal static InteractionValidationOptions? InteractionValidationOptions { get; set; }
-#endif
+    internal static Action<MainWindow, LocalAppDiagnostics?>? ExternalStartupCoordinator { get; set; }
+
+    internal static Func<AppOptions>? ExternalOptionsFixtureFactory { get; set; }
 
     internal static LocalAppDiagnostics? Diagnostics { get; set; }
 
@@ -101,14 +101,7 @@ public sealed class App : Application
             // PlanStartupFileOpens). Skipped for the special capture/validation launch modes, whose
             // StartupArguments carry option flags rather than real file paths (mirrors the MainWindow
             // ctor's own guard for those modes).
-#if FREEX_PARITY_CAPTURE
-            var isSpecialStartupMode =
-                GridCaptureOptions is not null ||
-                InteractionValidationOptions is not null ||
-                ParityCaptureOptions is not null;
-#else
-            const bool isSpecialStartupMode = false;
-#endif
+            var isSpecialStartupMode = ExternalStartupCoordinator is not null;
             if (!isSpecialStartupMode)
             {
                 var additionalStartupFilePaths =
@@ -155,16 +148,7 @@ public sealed class App : Application
             if (LaunchSmokeOptions is { } launchSmokeOptions)
                 MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
 
-#if FREEX_PARITY_CAPTURE
-            if (ParityCaptureOptions is { } parityCaptureOptions)
-                ParityCaptureCoordinator.Start(mainWindow, parityCaptureOptions, Diagnostics);
-
-            if (GridCaptureOptions is { } gridCaptureOptions)
-                GridCaptureCoordinator.Start(mainWindow, gridCaptureOptions, Diagnostics);
-
-            if (InteractionValidationOptions is { } interactionValidationOptions)
-                InteractionValidationCoordinator.Start(mainWindow, interactionValidationOptions, Diagnostics);
-#endif
+            ExternalStartupCoordinator?.Invoke(mainWindow, Diagnostics);
         }
 
         base.OnFrameworkInitializationCompleted();

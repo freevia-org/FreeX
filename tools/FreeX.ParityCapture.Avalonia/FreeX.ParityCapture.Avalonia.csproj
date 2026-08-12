@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\FreeX.App.Avalonia\**\*.cs"
-             Exclude="..\..\src\FreeX.App.Avalonia\bin\**;..\..\src\FreeX.App.Avalonia\obj\**;..\..\src\FreeX.App.Avalonia\MacOs\**\*.cs"
+             Exclude="..\..\src\FreeX.App.Avalonia\bin\**;..\..\src\FreeX.App.Avalonia\obj\**;..\..\src\FreeX.App.Avalonia\MacOs\**\*.cs;..\..\src\FreeX.App.Avalonia\Program.cs"
              LinkBase="Renderer" />
     <Compile Include="Capture\**\*.cs" />
   </ItemGroup>

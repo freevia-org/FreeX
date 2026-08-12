@@ -1354,18 +1354,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             _session = sharedSession;
         }
-#if FREEX_PARITY_CAPTURE
-        else if (App.ParityCaptureOptions is not null ||
-                 App.GridCaptureOptions is not null ||
-                 App.InteractionValidationOptions is not null)
+        else if (App.ExternalStartupSessionFactory is { } externalStartupSessionFactory)
         {
-            _session = ParityCaptureWorkbookSessionFactory.Create(
+            _session = externalStartupSessionFactory(
                 _sessionFactory,
                 InitialViewportHeight,
                 InitialViewportWidth,
-                includeObjects: true);
+                true);
         }
-#endif
         else
         {
             // Interactive app startup defers command-line files until crash recovery has completed;
