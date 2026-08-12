@@ -1003,20 +1003,36 @@ public partial class MainWindow
 
     private void SsAccountBtn_Click(object sender, RoutedEventArgs e)
     {
-        var plan = LocalAccountPlanner.Create(
-            _options,
-            _currentFilePath,
-            _workbook.Name,
-            workbook: _workbook,
-            hasSelection: SheetGrid.SelectedRange is not null);
+        var plan = BuildLocalAccountPanePlan();
         var message = WpfResourceKeyTextResolver.Resolve(
             DeferredCommandMessagePlanner.LocalAccountInfo(),
-            body => LocalAccountWorkflowPlanner.FormatMessageBody(plan, body));
+            body => FreeXBackstageAccountPanePlanner.FormatMessageBody(plan, body, UiText.Get));
         ShowOwnedMessage(
             message.Body,
             message.Title,
             MessageBoxButton.OK,
             MessageBoxImage.Information);
+    }
+
+    private FreeXBackstageAccountPanePlan BuildLocalAccountPanePlan()
+    {
+        var accountInfo = LocalAccountInfoPlanner.Build(new LocalAccountInfoRequest(
+            typeof(MainWindow).Assembly,
+            DeviceName: Environment.MachineName,
+            UserName: _options.UserName,
+            LocalOsUserName: Environment.UserName,
+            LocalOsUserDomain: Environment.UserDomainName,
+            OptionsFile: AppOptionsStore.StorePath,
+            CurrentWorkbookPath: _currentFilePath,
+            CurrentWorkbookName: _workbook.Name,
+            Workbook: _workbook,
+            HasSelection: SheetGrid.SelectedRange is not null));
+
+        return FreeXBackstageAccountPanePlanner.Build(
+            LocalAccountInfoPlanner.CreateBackstageAccountPaneRequest(
+                accountInfo,
+                _currentFilePath,
+                _workbook.Name));
     }
 
     private void SsMoreTemplatesBtn_Click(object sender, RoutedEventArgs e)

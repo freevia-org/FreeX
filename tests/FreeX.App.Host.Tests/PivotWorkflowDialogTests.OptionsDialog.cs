@@ -568,7 +568,6 @@ public sealed partial class PivotWorkflowDialogTests
             "AddLabeledControl(layoutPanel, UiText.Get(\"PivotTableOptions_CompactIndentLabel\"), _compactIndentBox",
             "AddLabeledControl(formatPanel, UiText.Get(\"PivotTableOptions_EmptyCellsLabel\"), _emptyCellsBox",
             "AddLabeledControl(formatPanel, UiText.Get(\"PivotTableOptions_ErrorValuesLabel\"), _errorValuesBox",
-            "AddLabeledControl(dataPanel, UiText.Get(\"PivotTableOptions_RetainItemsDeletedLabel\"), _missingItemsLimitBox",
             "AddLabeledControl(filtersPanel, UiText.Get(\"PivotTableOptions_SubtotalPlacementLabel\"), _subtotalPlacementBox",
             "AddLabeledControl(stylePanel, UiText.Get(\"PivotTableOptions_PivotTableStyleLabel\"), _styleBox",
             "new Label",
@@ -576,6 +575,10 @@ public sealed partial class PivotWorkflowDialogTests
             "Target = control"
         })
             source.Should().Contain(content);
+
+        source.Should().Contain("UiText.Get(\"PivotTableOptions_RetainItemsDeletedLabel\")");
+        source.Should().Contain("_missingItemsLimitBox");
+        source.Should().Contain("PivotOptionsPlanner.MissingItemsLimits");
     }
 
     [Fact]

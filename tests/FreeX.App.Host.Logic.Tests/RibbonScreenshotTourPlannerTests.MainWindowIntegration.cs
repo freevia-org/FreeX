@@ -456,7 +456,9 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("freex_options_quick_access_toolbar_category_navigation");
         source.Should().Contain("freex_options_view_category_navigation");
         source.Should().Contain("freex_options_cancel_focus_return");
-        source.Should().Contain("LocalAccountPlanner.Create");
+        source.Should().Contain("BuildLocalAccountPanePlan()");
+        source.Should().Contain("UiText.Get(accountPlan.TitleKey)");
+        source.Should().Contain("UiText.Get(detail.LabelKey)");
         // The backstage rail is now the shared BackstageFrame: the tour focuses the Account entry by its
         // automation id and invokes the account command rather than driving a named SsAccountNavBtn control.
         source.Should().Contain("_backstageFrame?.FocusEntry(\"BackstageAccountButton\")");

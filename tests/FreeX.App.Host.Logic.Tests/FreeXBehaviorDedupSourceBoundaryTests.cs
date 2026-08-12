@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -95,19 +96,23 @@ public sealed class FreeXBehaviorDedupSourceBoundaryTests
         var hostOutline = ReadHost("MainWindow.OutlineCommands.cs");
         var avaloniaOutline = ReadAvalonia("MainWindow.Outline.cs");
         var hostDiagnostics = ReadHost("AppDiagnostics.cs");
-        var avaloniaDiagnostics = ReadAvalonia("AvaloniaAppDiagnostics.cs");
+        var avaloniaProgram = ReadAvalonia("Program.cs");
+        var avaloniaApp = ReadAvalonia("App.cs");
 
         hostOutline.Should().Contain("_session.UngroupSelectedOutline");
         avaloniaOutline.Should().Contain("_session.UngroupSelectedOutline");
         hostOutline.Should().NotContain("private static int GetUngroupedOutlineLevel");
         avaloniaOutline.Should().NotContain("private static int GetUngroupedOutlineLevel");
         hostDiagnostics.Should().Contain("LocalAppDiagnostics");
-        avaloniaDiagnostics.Should().Contain("LocalAppDiagnostics");
-        avaloniaDiagnostics.Should().NotContain("AppDiagnosticsFileStore");
-        avaloniaDiagnostics.Should().NotContain("_local");
-        avaloniaDiagnostics.Should().NotContain("new bool IsEnabled");
-        avaloniaDiagnostics.Should().NotContain("new void RecordEvent");
-        avaloniaDiagnostics.Should().NotContain("new string RecordCrash");
+        avaloniaProgram.Should().Contain("LocalAppDiagnostics.Create(");
+        avaloniaProgram.Should().Contain("() => diagnostics.RegisterCrashHandlers()");
+        avaloniaApp.Should().Contain("LocalAppDiagnostics? Diagnostics");
+        File.Exists(Path.Combine(
+                WorkspaceFileLocator.FindWorkspaceRoot(),
+                "src",
+                "FreeX.App.Avalonia",
+                "AvaloniaAppDiagnostics.cs"))
+            .Should().BeFalse();
     }
 
     private static string ReadHost(string fileName) =>

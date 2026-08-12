@@ -2,6 +2,7 @@ using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
+using Free.Shared.AppServices;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -906,7 +907,7 @@ internal static class MacOsLaunchSmokeCoordinator
     public static void Start(
         MainWindow mainWindow,
         MacOsLaunchSmokeOptions options,
-        AvaloniaAppDiagnostics? diagnostics = null)
+        LocalAppDiagnostics? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
         ArgumentNullException.ThrowIfNull(options);
@@ -917,7 +918,7 @@ internal static class MacOsLaunchSmokeCoordinator
     private static async Task RunAsync(
         MainWindow mainWindow,
         MacOsLaunchSmokeOptions options,
-        AvaloniaAppDiagnostics? diagnostics)
+        LocalAppDiagnostics? diagnostics)
     {
         var deadline = DateTimeOffset.UtcNow.AddMilliseconds(
             MaxWaitMilliseconds + (options.VerifyLiveCommandKeys ? LiveCommandKeyWaitMilliseconds : 0));

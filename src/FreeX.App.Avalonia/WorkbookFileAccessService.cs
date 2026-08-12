@@ -1,4 +1,5 @@
 using Avalonia.Platform.Storage;
+using Free.Shared.AppServices;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -52,7 +53,7 @@ internal interface IWorkbookFileAccessService
 
 internal static class WorkbookFileAccessServiceFactory
 {
-    public static IWorkbookFileAccessService Create(AvaloniaAppDiagnostics? diagnostics = null) =>
+    public static IWorkbookFileAccessService Create(LocalAppDiagnostics? diagnostics = null) =>
         new AvaloniaWorkbookFileAccessService(diagnostics);
 }
 
@@ -60,9 +61,9 @@ internal sealed class AvaloniaWorkbookFileAccessService : IWorkbookFileAccessSer
 {
     internal const string MacOsSecurityScopedBookmarkKind = "macos-security-scoped-bookmark";
 
-    private readonly AvaloniaAppDiagnostics? _diagnostics;
+    private readonly LocalAppDiagnostics? _diagnostics;
 
-    public AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null) =>
+    public AvaloniaWorkbookFileAccessService(LocalAppDiagnostics? diagnostics = null) =>
         _diagnostics = diagnostics;
 
     public async Task<WorkbookFileAccessIdentity> CreateIdentityAsync(

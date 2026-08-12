@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
+using Free.Shared.AppServices;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.Interactions;
 using FreeX.App.Services;
@@ -192,7 +193,7 @@ internal static class InteractionValidationCoordinator
     public static void Start(
         MainWindow mainWindow,
         InteractionValidationOptions options,
-        AvaloniaAppDiagnostics? diagnostics = null)
+        LocalAppDiagnostics? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
         ArgumentNullException.ThrowIfNull(options);
@@ -203,7 +204,7 @@ internal static class InteractionValidationCoordinator
     private static async Task RunAsync(
         MainWindow mainWindow,
         InteractionValidationOptions options,
-        AvaloniaAppDiagnostics? diagnostics)
+        LocalAppDiagnostics? diagnostics)
     {
         var exitCode = 1;
         try

@@ -57,6 +57,38 @@ public sealed class PivotOptionsPlannerTests
     }
 
     [Fact]
+    public void PageFieldLayoutChoices_RoundTripAcrossIndexAndLabelBindings()
+    {
+        PivotOptionsPlanner.PageFieldLayouts.Select(option => option.Label).Should().Equal(
+            "Down, then over",
+            "Over, then down");
+        PivotOptionsPlanner.FindPageFieldLayoutIndex(false).Should().Be(0);
+        PivotOptionsPlanner.FindPageFieldLayoutIndex(true).Should().Be(1);
+        PivotOptionsPlanner.PageFieldLayoutFromIndex(-1).Should().BeFalse();
+        PivotOptionsPlanner.PageFieldLayoutFromIndex(99).Should().BeTrue();
+        PivotOptionsPlanner.GetPageFieldLayoutLabel(true).Should().Be("Over, then down");
+        PivotOptionsPlanner.PageFieldLayoutFromLabel("over, THEN down").Should().BeTrue();
+        PivotOptionsPlanner.PageFieldLayoutFromLabel("unknown").Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(null, 0, "Automatic")]
+    [InlineData(0, 1, "None")]
+    [InlineData(42, 2, "Maximum")]
+    public void MissingItemsChoices_RoundTripAcrossIndexAndLabelBindings(
+        int? value,
+        int expectedIndex,
+        string expectedLabel)
+    {
+        PivotOptionsPlanner.FindMissingItemsLimitIndex(value).Should().Be(expectedIndex);
+        PivotOptionsPlanner.GetMissingItemsLimitLabel(value).Should().Be(expectedLabel);
+        PivotOptionsPlanner.MissingItemsLimitFromIndex(expectedIndex)
+            .Should().Be(PivotOptionsPlanner.NormalizeMissingItemsLimit(value));
+        PivotOptionsPlanner.MissingItemsLimitFromLabel(expectedLabel.ToLowerInvariant())
+            .Should().Be(PivotOptionsPlanner.NormalizeMissingItemsLimit(value));
+    }
+
+    [Fact]
     public void Capture_ReadsTotalsLayoutAndDisplayValues()
     {
         var pivot = new PivotTableModel

@@ -20,12 +20,11 @@ public sealed class CellMaterializationDedupSourceGuardTests
     }
 
     [Fact]
-    public void NativeAdaptersDelegateTextAndGradientPolicy()
+    public void NativeRenderersDelegateTextAndGradientPolicy()
     {
         var wpfStyles = ReadSource("src", "FreeX.App.UI", "GridView.Rendering.CellStyles.cs");
         var wpfGrid = ReadSource("src", "FreeX.App.UI", "GridView.Rendering.cs");
         var avaloniaGradient = ReadSource("src", "FreeX.App.Avalonia", "CellGradientBrush.cs");
-        var avaloniaScript = ReadSource("src", "FreeX.App.Avalonia", "CellSuperSubScript.cs");
         var avaloniaGrid = ReadSource("src", "FreeX.App.Avalonia", "MainWindow.cs");
 
         wpfGrid.Should().Contain("CellTextMaterializationProfile.Wpf");
@@ -33,8 +32,8 @@ public sealed class CellMaterializationDedupSourceGuardTests
         avaloniaGrid.Should().Contain("CellTextMaterializationProfile.Avalonia");
         avaloniaGrid.Should().Contain("CellFillMaterializationProfile.Avalonia");
         wpfStyles.Should().Contain("CellTextMaterializationPlanner.MaterializeRuns(");
+        avaloniaGrid.Should().Contain("CellTextMaterializationPlanner.Plan(");
         avaloniaGradient.Should().Contain("CellFillMaterializationPlanner.PlanGradient(");
-        avaloniaScript.Should().Contain("CellTextMaterializationPlanner.Plan(");
 
         wpfStyles.Should().NotContain("Math.Cos(");
         wpfStyles.Should().NotContain("Math.Sin(");
@@ -42,8 +41,6 @@ public sealed class CellMaterializationDedupSourceGuardTests
         avaloniaGradient.Should().NotContain("Math.Cos(");
         avaloniaGradient.Should().NotContain("Math.Sin(");
         avaloniaGradient.Should().NotContain("OrderBy(s => s.Position)");
-        avaloniaScript.Should().NotContain("style?.Superscript == true");
-        avaloniaScript.Should().NotContain("style?.Subscript == true");
     }
 
     [Fact]

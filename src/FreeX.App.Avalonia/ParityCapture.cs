@@ -180,7 +180,7 @@ internal static class ParityCaptureCoordinator
     // never hang the Docker container after the manifest is already written.
     private const int ShutdownBackstopMilliseconds = 8000;
 
-    public static void Start(MainWindow mainWindow, ParityCaptureOptions options, AvaloniaAppDiagnostics? diagnostics = null)
+    public static void Start(MainWindow mainWindow, ParityCaptureOptions options, LocalAppDiagnostics? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
         ArgumentNullException.ThrowIfNull(options);
@@ -188,7 +188,7 @@ internal static class ParityCaptureCoordinator
         mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options, diagnostics);
     }
 
-    private static async Task RunAsync(MainWindow mainWindow, ParityCaptureOptions options, AvaloniaAppDiagnostics? diagnostics)
+    private static async Task RunAsync(MainWindow mainWindow, ParityCaptureOptions options, LocalAppDiagnostics? diagnostics)
     {
         diagnostics?.RecordEvent("parity_capture", new Dictionary<string, string?>
         {
@@ -416,7 +416,7 @@ internal static class GridCaptureCoordinator
     private const int ShellReadyWaitMilliseconds = 15000;
     private const int PollDelayMilliseconds = 100;
 
-    public static void Start(MainWindow mainWindow, GridCaptureOptions options, AvaloniaAppDiagnostics? diagnostics = null)
+    public static void Start(MainWindow mainWindow, GridCaptureOptions options, LocalAppDiagnostics? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(mainWindow);
         ArgumentNullException.ThrowIfNull(options);
@@ -424,7 +424,7 @@ internal static class GridCaptureCoordinator
         mainWindow.Opened += async (_, _) => await RunAsync(mainWindow, options, diagnostics);
     }
 
-    private static async Task RunAsync(MainWindow mainWindow, GridCaptureOptions options, AvaloniaAppDiagnostics? diagnostics)
+    private static async Task RunAsync(MainWindow mainWindow, GridCaptureOptions options, LocalAppDiagnostics? diagnostics)
     {
         diagnostics?.RecordEvent("grid_capture", new Dictionary<string, string?>
         {

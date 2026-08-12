@@ -149,9 +149,9 @@ public sealed class AvaloniaShellSourceTests
         serviceSource.Should().Contain("storageProvider.OpenFileBookmarkAsync(bookmark)");
         serviceSource.Should().Contain("WorkbookFileAccessScope.FromDisposable(");
         serviceSource.Should().Contain("PlatformPathIdentityComparer.Current.Equals(identity.LocalPath, resolvedPath)");
-        serviceSource.Should().Contain("Create(AvaloniaAppDiagnostics? diagnostics = null)");
+        serviceSource.Should().Contain("Create(LocalAppDiagnostics? diagnostics = null)");
         serviceSource.Should().Contain("new AvaloniaWorkbookFileAccessService(diagnostics)");
-        serviceSource.Should().Contain("AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null)");
+        serviceSource.Should().Contain("AvaloniaWorkbookFileAccessService(LocalAppDiagnostics? diagnostics = null)");
         serviceSource.Should().Contain("_diagnostics?.RecordEvent(eventName");
         serviceSource.Should().Contain("RecordIdentityEvent(\"bookmark_created\", grantKind: MacOsSecurityScopedBookmarkKind);");
         serviceSource.Should().Contain("RecordScopeEvent(\"scope_started\", grantKind: MacOsSecurityScopedBookmarkKind);");
@@ -1141,7 +1141,8 @@ public sealed class AvaloniaShellSourceTests
         programSource.Should().Contain("MacOsLaunchSmokeOptions.TryParse(");
         programSource.Should().Contain("out var launchSmokeOptions");
         programSource.Should().Contain("out var startupArguments");
-        programSource.Should().Contain("AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory)");
+        programSource.Should().Contain("LocalAppDiagnostics.Create(");
+        programSource.Should().Contain("AppHelpInfo.GetVersionText(typeof(Program).Assembly)");
         programSource.Should().Contain("diagnostics.RecordEvent(\"app_start\"");
         programSource.Should().Contain("diagnostics.RecordEvent(\"app_exit\"");
         programSource.Should().Contain("SisterAvaloniaApplicationStartupRunner.Run(");
@@ -1152,7 +1153,7 @@ public sealed class AvaloniaShellSourceTests
         appSource.Should().Contain("private const string ApplicationTitle = \"FreeX\";");
         appSource.Should().Contain("Name = ApplicationTitle;");
         appSource.Should().Contain("internal static MacOsLaunchSmokeOptions? LaunchSmokeOptions { get; set; }");
-        appSource.Should().Contain("internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }");
+        appSource.Should().Contain("internal static LocalAppDiagnostics? Diagnostics { get; set; }");
         appSource.Should().Contain("Diagnostics?.RecordEvent(\"app_ready\"");
         appSource.Should().Contain("if (LaunchSmokeOptions is { } launchSmokeOptions)");
         appSource.Should().Contain("MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);");

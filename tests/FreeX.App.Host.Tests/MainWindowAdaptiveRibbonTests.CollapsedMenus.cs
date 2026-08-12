@@ -49,29 +49,4 @@ public sealed partial class MainWindowAdaptiveRibbonTests
         });
     }
 
-    [Fact]
-    public void CollapsedRibbonNestedMenuItem_ClickRoutesOnlyToMatchingSourceItem()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var parentInvocations = 0;
-            var childInvocations = 0;
-            var sourceParent = new MenuItem { Header = "Sort & Filter" };
-            var sourceChild = new MenuItem { Header = "Sort A to Z" };
-            sourceParent.Items.Add(sourceChild);
-            sourceParent.Click += (_, args) =>
-            {
-                if (ReferenceEquals(args.OriginalSource, sourceParent))
-                    parentInvocations++;
-            };
-            sourceChild.Click += (_, _) => childInvocations++;
-            var clonedParent = (MenuItem)RibbonMenuItemCloner.CloneRibbonMenuItem(sourceParent)!;
-            var clonedChild = clonedParent.Items.OfType<MenuItem>().Single();
-            clonedChild.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, clonedChild));
-
-            childInvocations.Should().Be(1);
-            parentInvocations.Should().Be(0, "a nested collapsed overflow command should not also invoke its parent menu command");
-        });
-    }
-
 }

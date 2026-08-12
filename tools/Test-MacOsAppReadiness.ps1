@@ -1086,9 +1086,11 @@ function Test-SourceWiring {
             Markers = @(
                 "PackagingSmokeCommand.TryRun(args, Console.Out, Console.Error, out var smokeExitCode)",
                 "MacOsLaunchSmokeOptions.TryParse(",
-                "AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory)",
+                "LocalAppDiagnostics.Create(",
+                "AppHelpInfo.GetVersionText(typeof(Program).Assembly)",
+                "launchSmokeOptions?.DiagnosticsDirectory)",
                 "SisterAvaloniaApplicationStartupRunner.Run(",
-                "RegisterUnhandledExceptionHandlers: diagnostics.RegisterUnhandledExceptionHandlers",
+                "RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers()",
                 "RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source)",
                 "diagnostics.RecordEvent(`"app_start`"",
                 "App.StartupArguments = startupArguments;",
@@ -1120,27 +1122,13 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\App.cs"
             Markers = @(
-                "internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }",
+                "internal static LocalAppDiagnostics? Diagnostics { get; set; }",
                 "Diagnostics?.RecordEvent(`"app_ready`"",
                 "this.TryGetFeature<IActivatableLifetime>() is { } activatableLifetime",
                 "args is not FileActivatedEventArgs fileArgs",
                 "fileArgs.Kind != ActivationKind.File",
                 "await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);",
                 "MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);"
-            )
-            OrderedPairs = @()
-        },
-        @{
-            Path = "src\FreeX.App.Avalonia\AvaloniaAppDiagnostics.cs"
-            Markers = @(
-                "internal sealed class AvaloniaAppDiagnostics : LocalAppDiagnostics",
-                "private AvaloniaAppDiagnostics(LocalAppDiagnostics local)",
-                ": base(local)",
-                "public static AvaloniaAppDiagnostics Create(string? diagnosticsDirectory = null)",
-                "new(LocalAppDiagnostics.Create(",
-                "AppHelpInfo.GetVersionText(typeof(AvaloniaAppDiagnostics).Assembly)",
-                "diagnosticsDirectory));",
-                "public void RegisterUnhandledExceptionHandlers() => RegisterCrashHandlers();"
             )
             OrderedPairs = @()
         },
@@ -1198,9 +1186,9 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\WorkbookFileAccessService.cs"
             Markers = @(
-                "Create(AvaloniaAppDiagnostics? diagnostics = null)",
+                "Create(LocalAppDiagnostics? diagnostics = null)",
                 "new AvaloniaWorkbookFileAccessService(diagnostics)",
-                "AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null)",
+                "AvaloniaWorkbookFileAccessService(LocalAppDiagnostics? diagnostics = null)",
                 "MacOsSecurityScopedBookmarkKind = `"macos-security-scoped-bookmark`"",
                 "storageItem is { CanBookmark: true }",
                 "StorageItemMatchesPath(storageItem, path)",

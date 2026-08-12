@@ -67,7 +67,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests");
-        script.Should().Contain("new(LocalAppDiagnostics.Create(");
+        script.Should().Contain("LocalAppDiagnostics.Create(");
         script.Should().Contain("Path = \"shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs\"");
         script.Should().Contain("string.IsNullOrWhiteSpace(diagnosticsDirectory)");
         script.Should().Contain("? defaults.DiagnosticsDirectory");
@@ -1845,8 +1845,10 @@ public sealed class MacOsAppReadinessPreflightTests
                         return smokeExitCode;
 
                     MacOsLaunchSmokeOptions.TryParse(args, out var launchSmokeOptions, out var startupArguments, out var launchSmokeError);
-                    var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
-                    diagnostics.RegisterUnhandledExceptionHandlers();
+                    var diagnostics = LocalAppDiagnostics.Create(
+                        AppHelpInfo.GetVersionText(typeof(Program).Assembly),
+                        launchSmokeOptions?.DiagnosticsDirectory);
+                    diagnostics.RegisterCrashHandlers();
                     diagnostics.RecordEvent("app_start");
                     App.StartupArguments = startupArguments;
                     App.LaunchSmokeOptions = launchSmokeOptions;
@@ -1876,7 +1878,7 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 private const string ApplicationTitle = "FreeX";
 
-                internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
+                internal static LocalAppDiagnostics? Diagnostics { get; set; }
 
                 private static async Task ActivatedAsync(MainWindow mainWindow, ActivatedEventArgs args)
                 {
@@ -1889,28 +1891,6 @@ public sealed class MacOsAppReadinessPreflightTests
                     await mainWindow.OpenActivatedFilesAsync(fileArgs.Files);
                     MacOsLaunchSmokeCoordinator.Start(mainWindow, launchSmokeOptions, Diagnostics);
                 }
-            }
-            """);
-
-        WriteFile(
-            root,
-            "src/FreeX.App.Avalonia/AvaloniaAppDiagnostics.cs",
-            """
-            using Free.Shared.AppServices;
-
-            namespace FreeX.App.Avalonia;
-
-            internal sealed class AvaloniaAppDiagnostics : LocalAppDiagnostics
-            {
-                private AvaloniaAppDiagnostics(LocalAppDiagnostics local)
-                    : base(local) { }
-
-                public static AvaloniaAppDiagnostics Create(string? diagnosticsDirectory = null) =>
-                    new(LocalAppDiagnostics.Create(
-                        AppHelpInfo.GetVersionText(typeof(AvaloniaAppDiagnostics).Assembly),
-                        diagnosticsDirectory));
-
-                public void RegisterUnhandledExceptionHandlers() => RegisterCrashHandlers();
             }
             """);
 
@@ -2006,7 +1986,7 @@ public sealed class MacOsAppReadinessPreflightTests
 
             internal static class WorkbookFileAccessServiceFactory
             {
-                public static IWorkbookFileAccessService Create(AvaloniaAppDiagnostics? diagnostics = null) =>
+                public static IWorkbookFileAccessService Create(LocalAppDiagnostics? diagnostics = null) =>
                     new AvaloniaWorkbookFileAccessService(diagnostics);
             }
 
@@ -2014,7 +1994,7 @@ public sealed class MacOsAppReadinessPreflightTests
             {
                 internal const string MacOsSecurityScopedBookmarkKind = "macos-security-scoped-bookmark";
 
-                public AvaloniaWorkbookFileAccessService(AvaloniaAppDiagnostics? diagnostics = null) { }
+                public AvaloniaWorkbookFileAccessService(LocalAppDiagnostics? diagnostics = null) { }
 
                 private async Task BeginAsync(IStorageItem storageItem, IStorageProvider storageProvider, WorkbookFileAccessIdentity identity, string path)
                 {
@@ -3509,12 +3489,12 @@ public sealed class MacOsAppReadinessPreflightTests
                     startupArguments = filteredArguments.ToArray();
                 }
 
-                public static void Start(MainWindow mainWindow, MacOsLaunchSmokeOptions options, AvaloniaAppDiagnostics? diagnostics = null)
+                public static void Start(MainWindow mainWindow, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics = null)
                 {
                     RunAsync(mainWindow, options, diagnostics);
                 }
 
-                private static void RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options, AvaloniaAppDiagnostics? diagnostics)
+                private static void RunAsync(MainWindow mainWindow, MacOsLaunchSmokeOptions options, LocalAppDiagnostics? diagnostics)
                 {
                     diagnostics?.RecordEvent("macos_launch_smoke");
                     diagnostics?.RecordCrash(ex, "macos_launch_smoke");

@@ -140,15 +140,6 @@ internal sealed class PreviewTextDecorationsConverter : System.Windows.Data.IVal
         => Binding.DoNothing;
 }
 
-internal sealed class AppliesToConverter : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.AppliesToString(cf.AppliesTo) : "";
-
-    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => Binding.DoNothing;
-}
-
 internal sealed class AppliesToRangeConverter(SheetId sheetId) : System.Windows.Data.IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
@@ -163,13 +154,4 @@ internal sealed class AppliesToRangeConverter(SheetId sheetId) : System.Windows.
             ? range
             : Binding.DoNothing;
     }
-}
-
-internal sealed class StopIfTrueConverter : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => value is ConditionalFormat cf ? ManageConditionalFormatsDialog.StopIfTrueText(cf) : "";
-
-    public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
-        => Binding.DoNothing;
 }

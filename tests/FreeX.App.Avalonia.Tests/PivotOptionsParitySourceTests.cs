@@ -11,7 +11,9 @@ public sealed class PivotOptionsParitySourceTests
         source.Should().Contain("PivotOptionsPlanner.CreateDialogValues(");
         source.Should().Contain("PivotApplication.PlanDialogOptions(");
         source.Should().Contain("PivotStyleGalleryPlanner.GetStyleNames(values.StyleName)");
-        source.Should().Contain("MissingItemsLimitLabels");
+        source.Should().Contain("PivotOptionsPlanner.PageFieldLayouts");
+        source.Should().Contain("PivotOptionsPlanner.MissingItemsLimits");
+        source.Should().Contain("PivotOptionsPlanner.FindMissingItemsLimitIndex(values.MissingItemsLimit)");
         source.Should().Contain("TryParsePageWrap(pageWrapBox.Text");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyGroupBox(groupBox, PivotDialogChromeStyle);");
         source.Should().Contain("AvaloniaDisplayOptionSpacingCompensation");
@@ -41,7 +43,7 @@ public sealed class PivotOptionsParitySourceTests
                      "saveSourceData: saveSourceDataBox.IsChecked == true",
                      "enableRefresh: enableRefreshBox.IsChecked == true",
                      "preserveSourceSortFilter: preserveSourceSortFilterBox.IsChecked == true",
-                     "missingItemsLimit: MissingItemsLimitForIndex(missingItemsLimitBox.SelectedIndex)",
+                     "missingItemsLimit: PivotOptionsPlanner.MissingItemsLimitFromIndex(missingItemsLimitBox.SelectedIndex)",
                      "printTitles: printTitlesBox.IsChecked == true",
                      "printExpandCollapseButtons: printExpandCollapseBox.IsChecked == true",
                      "altTextTitle: altTextTitleBox.Text",

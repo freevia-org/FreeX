@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Fonts.Inter;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Services;
 
@@ -61,12 +62,14 @@ internal static class Program
             return 1;
         }
 
-        var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
+        var diagnostics = LocalAppDiagnostics.Create(
+            AppHelpInfo.GetVersionText(typeof(Program).Assembly),
+            launchSmokeOptions?.DiagnosticsDirectory);
         return SisterAvaloniaApplicationStartupRunner.Run(
             startupArguments,
             new SisterAvaloniaApplicationStartupSpec(
                 StartApplication: _ => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments),
-                RegisterUnhandledExceptionHandlers: diagnostics.RegisterUnhandledExceptionHandlers,
+                RegisterUnhandledExceptionHandlers: () => diagnostics.RegisterCrashHandlers(),
                 RecordCrash: (exception, source) => diagnostics.RecordCrash(exception, source))
         {
             BeforeRun = () =>

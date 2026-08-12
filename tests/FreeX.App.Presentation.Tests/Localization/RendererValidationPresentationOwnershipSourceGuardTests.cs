@@ -37,7 +37,6 @@ public sealed class RendererValidationPresentationOwnershipSourceGuardTests
         var sources = new[]
         {
             Read(repoRoot, "src", "FreeX.App.Host", "MainWindow.Backstage.cs"),
-            Read(repoRoot, "src", "FreeX.App.Host", "LocalAccountPlanner.cs"),
             Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.Backstage.cs"),
             Read(repoRoot, "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"),
         };

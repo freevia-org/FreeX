@@ -217,7 +217,9 @@ public sealed partial class MainWindow
         };
 
         // ── Tab: Layout & Format ───────────────────────────────────────────────
-        var pageFieldLayoutBox = OptionComboBox(["Down, then over", "Over, then down"], values.PageOverThenDown ? 1 : 0);
+        var pageFieldLayoutBox = OptionComboBox(
+            PivotOptionsPlanner.PageFieldLayouts.Select(option => option.Label).ToArray(),
+            PivotOptionsPlanner.FindPageFieldLayoutIndex(values.PageOverThenDown));
         AutomationProperties.SetAutomationId(pageFieldLayoutBox, "PivotOptionsPageFieldLayoutBox");
         AutomationProperties.SetName(pageFieldLayoutBox, "Report filter area");
         pageWrapBox = OptionTextBox(PivotOptionsPlanner.PageWrapText(values.PageWrap), 80);
@@ -353,7 +355,9 @@ public sealed partial class MainWindow
             UiText.Get("PivotTableOptions_EnableShowDetails"), values.EnableDrill);
         var preserveSourceSortFilterBox = OptionCheckBox(
             UiText.Get("PivotTableOptions_PreserveSourceSortAndFilterSettings"), values.PreserveSourceSortFilter);
-        var missingItemsLimitBox = OptionComboBox(MissingItemsLimitLabels, MissingItemsLimitIndex(values.MissingItemsLimit));
+        var missingItemsLimitBox = OptionComboBox(
+            PivotOptionsPlanner.MissingItemsLimits.Select(option => option.Label).ToArray(),
+            PivotOptionsPlanner.FindMissingItemsLimitIndex(values.MissingItemsLimit));
         AutomationProperties.SetAutomationId(missingItemsLimitBox, "PivotOptionsMissingItemsLimitBox");
         dataSection.Children.Add(refreshOnOpenBox);
         dataSection.Children.Add(saveSourceDataBox);
@@ -449,7 +453,7 @@ public sealed partial class MainWindow
             saveSourceData: saveSourceDataBox.IsChecked == true,
             enableRefresh: enableRefreshBox.IsChecked == true,
             preserveSourceSortFilter: preserveSourceSortFilterBox.IsChecked == true,
-            missingItemsLimit: MissingItemsLimitForIndex(missingItemsLimitBox.SelectedIndex),
+            missingItemsLimit: PivotOptionsPlanner.MissingItemsLimitFromIndex(missingItemsLimitBox.SelectedIndex),
             printTitles: printTitlesBox.IsChecked == true,
             printExpandCollapseButtons: printExpandCollapseBox.IsChecked == true,
             altTextTitle: altTextTitleBox.Text,
@@ -465,7 +469,7 @@ public sealed partial class MainWindow
             mergeAndCenterLabels: mergeLabelsBox.IsChecked == true,
             showItemsWithNoDataOnRows: showItemsWithNoDataRowsBox.IsChecked == true,
             showItemsWithNoDataOnColumns: showItemsWithNoDataColumnsBox.IsChecked == true,
-            pageOverThenDown: pageFieldLayoutBox.SelectedIndex == 1,
+            pageOverThenDown: PivotOptionsPlanner.PageFieldLayoutFromIndex(pageFieldLayoutBox.SelectedIndex),
             pageWrap: pageWrap,
             errorValueText: errorValuesBox.Text,
             enableDrill: enableShowDetailsBox.IsChecked == true);
@@ -478,22 +482,6 @@ public sealed partial class MainWindow
     }
 
     // ── Pivot option control factories ────────────────────────────────────────
-    private static readonly string[] MissingItemsLimitLabels = ["Automatic", "None", "Maximum"];
-
-    private static int MissingItemsLimitIndex(int? value) => PivotOptionsPlanner.NormalizeMissingItemsLimit(value) switch
-    {
-        null => 0,
-        <= 0 => 1,
-        _ => 2,
-    };
-
-    private static int? MissingItemsLimitForIndex(int selectedIndex) => selectedIndex switch
-    {
-        1 => 0,
-        2 => PivotOptionsPlanner.MaxMissingItemsLimit,
-        _ => null,
-    };
-
     private static TextBlock OptionLabel(string text) => new()
     {
         Text = StripDisplayMnemonic(text),

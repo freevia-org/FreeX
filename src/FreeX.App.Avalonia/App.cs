@@ -26,7 +26,7 @@ public sealed class App : Application
 
     internal static InteractionValidationOptions? InteractionValidationOptions { get; set; }
 
-    internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
+    internal static LocalAppDiagnostics? Diagnostics { get; set; }
 
     /// <summary>
     /// The active brand theme selected at startup (default: <see cref="BrandThemes.FreeX"/>).

@@ -116,6 +116,19 @@ public static class PivotOptionsPlanner
         ("Show subtotals at top of group", PivotSubtotalPlacement.Top),
     ];
 
+    public static readonly IReadOnlyList<(string Label, bool PageOverThenDown)> PageFieldLayouts =
+    [
+        ("Down, then over", false),
+        ("Over, then down", true),
+    ];
+
+    public static readonly IReadOnlyList<(string Label, int? Limit)> MissingItemsLimits =
+    [
+        ("Automatic", null),
+        ("None", 0),
+        ("Maximum", MaxMissingItemsLimit),
+    ];
+
     public static int FindReportLayoutIndex(PivotReportLayout layout)
     {
         for (var index = 0; index < ReportLayouts.Count; index++)
@@ -154,6 +167,43 @@ public static class PivotOptionsPlanner
 
     public static PivotSubtotalPlacement SubtotalPlacementFromIndex(int selectedIndex) =>
         SubtotalPlacements[Math.Max(0, Math.Min(selectedIndex, SubtotalPlacements.Count - 1))].Value;
+
+    public static int FindPageFieldLayoutIndex(bool pageOverThenDown) =>
+        pageOverThenDown ? 1 : 0;
+
+    public static bool PageFieldLayoutFromIndex(int selectedIndex) =>
+        PageFieldLayouts[Math.Clamp(selectedIndex, 0, PageFieldLayouts.Count - 1)].PageOverThenDown;
+
+    public static string GetPageFieldLayoutLabel(bool pageOverThenDown) =>
+        PageFieldLayouts[FindPageFieldLayoutIndex(pageOverThenDown)].Label;
+
+    public static bool PageFieldLayoutFromLabel(string? label) =>
+        string.Equals(label, PageFieldLayouts[1].Label, StringComparison.OrdinalIgnoreCase);
+
+    public static int FindMissingItemsLimitIndex(int? value) =>
+        NormalizeMissingItemsLimit(value) switch
+        {
+            null => 0,
+            <= 0 => 1,
+            _ => 2,
+        };
+
+    public static int? MissingItemsLimitFromIndex(int selectedIndex) =>
+        MissingItemsLimits[Math.Clamp(selectedIndex, 0, MissingItemsLimits.Count - 1)].Limit;
+
+    public static string GetMissingItemsLimitLabel(int? value) =>
+        MissingItemsLimits[FindMissingItemsLimitIndex(value)].Label;
+
+    public static int? MissingItemsLimitFromLabel(string? label)
+    {
+        foreach (var option in MissingItemsLimits)
+        {
+            if (string.Equals(label, option.Label, StringComparison.OrdinalIgnoreCase))
+                return option.Limit;
+        }
+
+        return null;
+    }
 
     /// <summary>Snapshots the current totals/layout-display option values off the pivot.</summary>
     public static PivotOptionsValues Capture(PivotTableModel pivotTable)

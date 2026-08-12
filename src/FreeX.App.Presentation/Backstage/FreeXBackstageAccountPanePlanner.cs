@@ -104,6 +104,22 @@ public static class FreeXBackstageAccountPanePlanner
             notices);
     }
 
+    public static string FormatMessageBody(
+        FreeXBackstageAccountPanePlan plan,
+        string bodyText,
+        Func<string, string> getText)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        ArgumentNullException.ThrowIfNull(getText);
+
+        var lines = plan.Details.Select(detail =>
+            $"{getText(detail.LabelKey)}: {detail.Value.Resolve(getText)}");
+        return bodyText +
+               Environment.NewLine +
+               Environment.NewLine +
+               string.Join(Environment.NewLine, lines);
+    }
+
     private static FreeXBackstageTextValue ResolveDetailValue(
         FreeXBackstageAccountDetailId id,
         FreeXBackstageAccountPaneRequest request) =>

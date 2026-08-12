@@ -8,7 +8,6 @@ using Avalonia.Media;
 using Avalonia.Styling;
 
 using Free.Shared.Shell.Avalonia;
-using FreeX.App.Avalonia.Dialogs;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.Dialogs;

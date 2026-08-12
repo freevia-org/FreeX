@@ -20,6 +20,7 @@ using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon.Wpf;
 using FreeX.Core.Calc;
+using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.Consolidate;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DefinedNames;
@@ -3180,12 +3181,7 @@ public partial class MainWindow
         _backstageFrame?.FocusEntry("BackstageAccountButton");
         await CaptureCurrentWindowAsync(outputDir, "freex_account_backstage_entry_focused", 760);
 
-        var accountPlan = LocalAccountPlanner.Create(
-            _options,
-            _currentFilePath,
-            _workbook.Name,
-            workbook: _workbook,
-            hasSelection: SheetGrid.SelectedRange is not null);
+        var accountPlan = BuildLocalAccountPanePlan();
         var accountMessageCapture = CaptureOwnedNativeDialogWhenShownAsync(
             UiText.Get("DeferredCommand_LocalAccount_Title"),
             outputDir,
@@ -11344,7 +11340,7 @@ public partial class MainWindow
 
     private static async Task WriteOptionsAccountTourManifestAsync(
         string outputDir,
-        LocalAccountPlan accountPlan,
+        FreeXBackstageAccountPanePlan accountPlan,
         OptionsAccountTourManifestCapture accountMessageCapture,
         IReadOnlyList<OptionsAccountTourManifestCapture> optionCaptures,
         bool categoryListFocusedByDefault,
@@ -11419,8 +11415,8 @@ public partial class MainWindow
                 Policy: IsScreenshotTourBackgroundRenderAllowed()
                     ? $"{ScreenshotTourAllowBackgroundRenderEnvVar}=1 allowed deterministic in-process WPF RenderTargetBitmap captures plus owned native Account dialog PrintWindow capture; no global mouse or keyboard input is used."
                     : "Abort before WPF window file writes unless the expected FreeX window owns foreground focus; owned native Account dialog is captured by HWND ownership and caption."),
-            AccountTitle: accountPlan.Title,
-            AccountDetailLabels: accountPlan.Details.Select(detail => detail.Label).ToArray(),
+            AccountTitle: UiText.Get(accountPlan.TitleKey),
+            AccountDetailLabels: accountPlan.Details.Select(detail => UiText.Get(detail.LabelKey)).ToArray(),
             CategoryListFocusedByDefault: categoryListFocusedByDefault,
             OptionsClosedViaCancelEquivalent: closedViaCancelEquivalent,
             FocusReturnedToBackstageOptionsCommand: focusReturned,
