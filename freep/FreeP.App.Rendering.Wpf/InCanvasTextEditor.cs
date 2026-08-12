@@ -607,7 +607,12 @@ public sealed class InCanvasTextEditor : IDisposable
             else if (e.Key is Key.C or Key.X &&
                      !result.Handled &&
                      result.FailureMessage is { } failureMessage)
-                _onClipboardWriteFailed?.Invoke(e.Key == Key.X ? "Cut" : "Copy", failureMessage);
+                _onClipboardWriteFailed?.Invoke(
+                    PresentationShellTextCatalog.Resolve(
+                        e.Key == Key.X
+                            ? PresentationShellTextCatalog.EditCutCommand
+                            : PresentationShellTextCatalog.EditCopyCommand),
+                    failureMessage);
             return;
         }
 

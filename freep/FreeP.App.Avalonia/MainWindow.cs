@@ -147,7 +147,8 @@ public sealed partial class MainWindow : Window,
         Task.FromResult(new PrintSubmissionResult(
             PrintSubmissionStatus.Failed,
             null,
-            Message: "No Backstage print action has run."));
+            Message: PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.BackstagePrintNotRunStatus)));
     private CancellationTokenSource? _printCancellation;
     private readonly Border _titleBar;
     private IReadOnlyList<Button> _quickAccessButtons = [];
@@ -410,7 +411,8 @@ public sealed partial class MainWindow : Window,
         _optionsRuntime = new FreePOptionsRuntimeSession(_options);
         _optionsStore = optionsStore ?? new InMemoryApplicationOptionsStore<FreePOptions>(_options);
         _nativeOutputCapabilities = nativeOutputCapabilities ??
-            LinuxNativeOutputCapabilities.Unavailable("Native output capability detection is pending.");
+            LinuxNativeOutputCapabilities.Unavailable(PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.NativeOutputDetectionPendingStatus));
         _printService = printService ?? CreatePlatformPrintService();
         _showPrintSelectionDialog = showPrintSelectionDialog ??
             ShowPlatformPrintSelectionDialogAsync;
@@ -2911,7 +2913,9 @@ public sealed partial class MainWindow : Window,
     }
 
     internal void OpenHyperlinkDialog() =>
-        RunGuarded(async () => await OpenHyperlinkDialogAsync(), "Hyperlink");
+        RunGuarded(
+            async () => await OpenHyperlinkDialogAsync(),
+            UiText.Get("Ribbon_Command_InsertLink_Label"));
 
 
     private async Task<HyperlinkDialogApplyPlan> OpenHyperlinkDialogAsync()
@@ -3667,7 +3671,8 @@ public sealed partial class MainWindow : Window,
                 new PrintSubmissionResult(
                     PrintSubmissionStatus.Failed,
                     normalized,
-                    Message: $"Windows printer queue '{normalized}' is no longer available."));
+                    Message: PresentationShellTextCatalog.Resolve(
+                        PresentationShellTextCatalog.WindowsPrinterQueueUnavailableStatus(normalized))));
             return;
         }
 
@@ -3761,12 +3766,15 @@ public sealed partial class MainWindow : Window,
         IPlatformPrintService printService)
     {
         var hostName = OperatingSystem.IsWindows()
-            ? "Avalonia Windows print host"
-            : "Avalonia Linux print host";
+            ? PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.AvaloniaWindowsPrintHostName)
+            : PresentationShellTextCatalog.Resolve(
+                PresentationShellTextCatalog.AvaloniaLinuxPrintHostName);
         if (!printService.IsSupported)
             return PresentationNativePrintHandoffHostCapabilities.Deferred(
                 hostName,
-                $"{hostName} is unavailable on this platform.");
+                PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.PrintHostUnavailableStatus(hostName)));
 
         return OperatingSystem.IsWindows()
             ? PresentationNativePrintHandoffHostCapabilities.Available(hostName)

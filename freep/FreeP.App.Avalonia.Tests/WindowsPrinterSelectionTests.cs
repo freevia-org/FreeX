@@ -28,7 +28,8 @@ public sealed class WindowsPrinterSelectionTests
         var source = Read("freep", "FreeP.App.Avalonia", "MainWindow.cs");
 
         source.Should().Contain("_latestPrinterDiscovery?.Printers.FirstOrDefault")
-            .And.Contain("Windows printer queue '{normalized}' is no longer available.")
+            .And.Contain("PresentationShellTextCatalog.WindowsPrinterQueueUnavailableStatus(normalized)")
+            .And.NotContain("Windows printer queue '{normalized}' is no longer available.")
             .And.NotContain("WindowsNativePrintOutput.ForPrinter(");
     }
 

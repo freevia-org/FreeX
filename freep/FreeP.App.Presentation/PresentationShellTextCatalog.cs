@@ -274,6 +274,33 @@ public static class PresentationShellTextCatalog
     public static LocalizedTextDescriptor PrinterSelectedStatus(string printerName) =>
         Text("Print_Status_PrinterSelected", printerName);
 
+    public static LocalizedTextDescriptor BackstagePrintNotRunStatus { get; } =
+        Text("Print_Status_BackstageNotRun");
+
+    public static LocalizedTextDescriptor NativeOutputDetectionPendingStatus { get; } =
+        Text("Print_Status_NativeDetectionPending");
+
+    public static LocalizedTextDescriptor WindowsPrinterQueueUnavailableStatus(string printerName) =>
+        Text("Print_Status_WindowsQueueUnavailableFormat", printerName);
+
+    public static LocalizedTextDescriptor WpfPrintHostName { get; } =
+        Text("Print_Host_Wpf");
+
+    public static LocalizedTextDescriptor AvaloniaWindowsPrintHostName { get; } =
+        Text("Print_Host_AvaloniaWindows");
+
+    public static LocalizedTextDescriptor AvaloniaLinuxPrintHostName { get; } =
+        Text("Print_Host_AvaloniaLinux");
+
+    public static LocalizedTextDescriptor PrintHostUnavailableStatus(string hostName) =>
+        Text("Print_Host_UnavailableFormat", hostName);
+
+    public static LocalizedTextDescriptor WpfPrintWindowsOnlyStatus { get; } =
+        Text("Print_Host_WpfWindowsOnly");
+
+    public static LocalizedTextDescriptor InlineOleObjectFallbackLabel { get; } =
+        Text("Renderer_InlineOleObjectFallback");
+
     public static string Resolve(LocalizedTextDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);

@@ -225,4 +225,15 @@
   <data name="Shell_Command_SummaryZoomTargets" xml:space="preserve"><value>Cibles du zoom de synth&#232;se</value></data>
   <data name="Shell_Command_SlidePane" xml:space="preserve"><value>Volet des diapositives</value></data>
   <data name="Shell_Command_CustomShow" xml:space="preserve"><value>Diaporama personnalis&#233;</value></data>
+  <data name="File_Error_PlatformPickerUnavailableFormat" xml:space="preserve"><value>{0} n'est pas disponible, car cette plateforme ne peut pas ouvrir de fichiers.</value></data>
+  <data name="File_Error_InvalidAvaloniaAssetSelection" xml:space="preserve"><value>La ressource de pr&#233;sentation s&#233;lectionn&#233;e n'est pas un fichier de stockage Avalonia.</value></data>
+  <data name="Print_Status_BackstageNotRun" xml:space="preserve"><value>Aucune action d'impression Backstage n'a &#233;t&#233; ex&#233;cut&#233;e.</value></data>
+  <data name="Print_Status_NativeDetectionPending" xml:space="preserve"><value>La d&#233;tection des fonctions de sortie natives est en attente.</value></data>
+  <data name="Print_Status_WindowsQueueUnavailableFormat" xml:space="preserve"><value>La file d'impression Windows '{0}' n'est plus disponible.</value></data>
+  <data name="Print_Host_Wpf" xml:space="preserve"><value>H&#244;te d'impression WPF</value></data>
+  <data name="Print_Host_AvaloniaWindows" xml:space="preserve"><value>H&#244;te d'impression Avalonia Windows</value></data>
+  <data name="Print_Host_AvaloniaLinux" xml:space="preserve"><value>H&#244;te d'impression Avalonia Linux</value></data>
+  <data name="Print_Host_UnavailableFormat" xml:space="preserve"><value>{0} n'est pas disponible sur cette plateforme.</value></data>
+  <data name="Print_Host_WpfWindowsOnly" xml:space="preserve"><value>L'impression WPF native est disponible uniquement sous Windows.</value></data>
+  <data name="Renderer_InlineOleObjectFallback" xml:space="preserve"><value>Objet OLE</value></data>
 </root>

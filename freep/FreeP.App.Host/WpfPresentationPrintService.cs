@@ -16,12 +16,14 @@ internal static class WpfPresentationPrintService
 {
     public static PresentationNativePrintHandoffHostCapabilities DetectCapabilities()
     {
-        const string hostName = "WPF print host";
+        var hostName = PresentationShellTextCatalog.Resolve(
+            PresentationShellTextCatalog.WpfPrintHostName);
         if (!OperatingSystem.IsWindows())
         {
             return PresentationNativePrintHandoffHostCapabilities.Deferred(
                 hostName,
-                "Native WPF printing is available only on Windows.");
+                PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.WpfPrintWindowsOnlyStatus));
         }
 
         var discovery = WpfPrintQueueCatalog.Discover();
@@ -29,7 +31,8 @@ internal static class WpfPresentationPrintService
             ? PresentationNativePrintHandoffHostCapabilities.Available(hostName)
             : PresentationNativePrintHandoffHostCapabilities.Deferred(
                 hostName,
-                discovery.FailureReason ?? "Windows reported no available printer queue.");
+                discovery.FailureReason ?? PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.NoWindowsPrinterQueuesStatus));
     }
 
     public static bool ShowPrintDialogAndPrint(

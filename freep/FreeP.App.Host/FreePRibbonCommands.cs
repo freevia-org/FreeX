@@ -268,7 +268,10 @@ internal static class FreePRibbonCommands
                 {
                     osClipboard.Copy(
                         editor,
-                        error => onClipboardWriteFailed?.Invoke("Copy", error));
+                        error => onClipboardWriteFailed?.Invoke(
+                            PresentationShellTextCatalog.Resolve(
+                                PresentationShellTextCatalog.EditCopyCommand),
+                            error));
                     return;
                 }
 
@@ -281,7 +284,10 @@ internal static class FreePRibbonCommands
                 {
                     osClipboard.Cut(
                         editor,
-                        error => onClipboardWriteFailed?.Invoke("Cut", error));
+                        error => onClipboardWriteFailed?.Invoke(
+                            PresentationShellTextCatalog.Resolve(
+                                PresentationShellTextCatalog.EditCutCommand),
+                            error));
                     return;
                 }
 

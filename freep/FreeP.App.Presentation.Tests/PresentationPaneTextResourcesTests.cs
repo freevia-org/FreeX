@@ -301,7 +301,7 @@ public sealed class PresentationPaneTextResourcesTests
         {
             source.Should().Contain("PresentationPaneTextResources");
             source.Should().Contain("_mediaCaptionPaneHeading.Text = plan.Heading");
-            source.Should().Contain("_readingOrderPaneMessage.Text = plan.DisplayMessage");
+            source.Should().Contain("_readingOrderPaneMessage.Text = plan.Message");
             source.Should().Contain("Text = item.DisplayTitle");
             source.Should().Contain("Text = item.Metadata");
             source.Should().Contain("item.SelectionToolTip");

@@ -3786,4 +3786,15 @@
   <data name="Shell_Command_SummaryZoomTargets" xml:space="preserve"><value>Summary Zoom Targets</value></data>
   <data name="Shell_Command_SlidePane" xml:space="preserve"><value>Slide Pane</value></data>
   <data name="Shell_Command_CustomShow" xml:space="preserve"><value>Custom Show</value></data>
+  <data name="File_Error_PlatformPickerUnavailableFormat" xml:space="preserve"><value>{0} is unavailable because this platform cannot open files.</value></data>
+  <data name="File_Error_InvalidAvaloniaAssetSelection" xml:space="preserve"><value>The selected presentation asset is not an Avalonia storage file.</value></data>
+  <data name="Print_Status_BackstageNotRun" xml:space="preserve"><value>No Backstage print action has run.</value></data>
+  <data name="Print_Status_NativeDetectionPending" xml:space="preserve"><value>Native output capability detection is pending.</value></data>
+  <data name="Print_Status_WindowsQueueUnavailableFormat" xml:space="preserve"><value>Windows printer queue '{0}' is no longer available.</value></data>
+  <data name="Print_Host_Wpf" xml:space="preserve"><value>WPF print host</value></data>
+  <data name="Print_Host_AvaloniaWindows" xml:space="preserve"><value>Avalonia Windows print host</value></data>
+  <data name="Print_Host_AvaloniaLinux" xml:space="preserve"><value>Avalonia Linux print host</value></data>
+  <data name="Print_Host_UnavailableFormat" xml:space="preserve"><value>{0} is unavailable on this platform.</value></data>
+  <data name="Print_Host_WpfWindowsOnly" xml:space="preserve"><value>Native WPF printing is available only on Windows.</value></data>
+  <data name="Renderer_InlineOleObjectFallback" xml:space="preserve"><value>OLE object</value></data>
 </root>

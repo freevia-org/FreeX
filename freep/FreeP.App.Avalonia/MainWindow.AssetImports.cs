@@ -57,7 +57,9 @@ public sealed partial class MainWindow
             if (!AvaloniaFilePickerService.CanOpen(owner.StorageProvider))
             {
                 return PresentationAssetPickerResult.Unavailable(
-                    $"{request.CommandName} is unavailable because this platform cannot open files.");
+                    UiText.Format(
+                        "File_Error_PlatformPickerUnavailableFormat",
+                        request.CommandName));
             }
 
             var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
@@ -85,7 +87,8 @@ public sealed partial class MainWindow
             CancellationToken cancellationToken)
         {
             if (selection.Source is not IStorageFile file)
-                throw new InvalidOperationException("The selected presentation asset is not an Avalonia storage file.");
+                throw new InvalidOperationException(
+                    UiText.Get("File_Error_InvalidAvaloniaAssetSelection"));
 
             try
             {

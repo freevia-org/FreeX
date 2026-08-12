@@ -375,7 +375,8 @@ internal static class TextBodyFlowDocumentConverter
         if (mr.InlineOleObject is { } ole)
         {
             var label = string.IsNullOrWhiteSpace(ole.ClassName)
-                ? "OLE object"
+                ? PresentationShellTextCatalog.Resolve(
+                    PresentationShellTextCatalog.InlineOleObjectFallbackLabel)
                 : ole.ClassName;
             var border = new Border
             {
