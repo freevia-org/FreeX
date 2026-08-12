@@ -24,6 +24,9 @@ param(
     [ValidateSet("FreeX", "FreeW", "FreeP")]
     [string]$App = "FreeX",
 
+    [ValidateSet("Application", "Validation")]
+    [string]$Host = "Application",
+
     [ValidateRange(1024, 65535)]
     [int]$Port = 6080,
 
@@ -94,12 +97,23 @@ $appDefinitions = @{
 }
 
 $definition = $appDefinitions[$App]
+if ($Host -eq "Validation") {
+    if ($App -ne "FreeP") {
+        throw "The Validation host is currently available only for FreeP."
+    }
+    $definition = @{
+        Project = "freep/TestSupport/Validation.Avalonia/FreeP.Validation.Avalonia.csproj"
+        Executable = "FreeP.Validation.Avalonia"
+        WindowTitle = "FreeP"
+    }
+}
 $appKey = $App.ToLowerInvariant()
+$publishKey = if ($Host -eq "Validation") { "$appKey-validation" } else { $appKey }
 $containerName = "freex-linux-interactive-$appKey-$Port"
-$appImage = "freex-linux-interactive-app-$appKey-$workspaceKey`:current"
+$appImage = "freex-linux-interactive-app-$publishKey-$workspaceKey`:current"
 $appOutputRoot = Join-Path $resolvedOutputRoot $appKey
 $publishDir = if ([string]::IsNullOrWhiteSpace($PublishDir)) {
-    Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/$appKey/publish/linux-x64"
+    Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/$publishKey/publish/linux-x64"
 } elseif ([IO.Path]::IsPathRooted($PublishDir)) {
     [IO.Path]::GetFullPath($PublishDir)
 } else {
@@ -296,7 +310,7 @@ if (-not $SkipImageBuild) {
 
 $projectPath = Join-Path $repoRoot $definition.Project
 if (-not $SkipPublish) {
-    Write-Host "Publishing $App for linux-x64..."
+    Write-Host "Publishing $App $Host host for linux-x64..."
     $publishArguments = @(
         "--configuration", "Release",
         "--framework", "net10.0",

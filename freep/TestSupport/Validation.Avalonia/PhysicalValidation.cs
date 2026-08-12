@@ -1,13 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Avalonia.Controls;
 using Free.Shared.AppServices.Printing;
 using Free.Shared.Drawing;
+using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.App.Recording;
-using FreeP.Core.Model;
 
-namespace FreeP.App.Avalonia;
+namespace FreeP.Validation.Avalonia;
 
 internal sealed record PhysicalValidationOptions(string OutputDirectory)
 {
@@ -89,27 +88,27 @@ internal static class PhysicalValidationCoordinator
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    public static void Start(MainWindow window, PhysicalValidationOptions options)
+    public static void Start(MainWindow.ValidationAccessAdapter access, PhysicalValidationOptions options)
     {
-        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(access);
         ArgumentNullException.ThrowIfNull(options);
-        window.Opened += async (_, _) => await RunAsync(window, options);
+        access.StartWhenOpened(() => RunAsync(access, options));
     }
 
-    private static async Task RunAsync(MainWindow window, PhysicalValidationOptions options)
+    private static async Task RunAsync(MainWindow.ValidationAccessAdapter access, PhysicalValidationOptions options)
     {
         var outputDirectory = Path.GetFullPath(options.OutputDirectory);
         Directory.CreateDirectory(outputDirectory);
         var rows = new List<PhysicalValidationRow>();
         var screenshots = new List<string>();
-        SlideShowWindow? mediaShowForCleanup = null;
+        SlideShowWindow.ValidationAccessAdapter? mediaShowForCleanup = null;
         string? ffmpegPath = null;
         string? ffprobePath = null;
         string? cupsQueue = null;
         try
         {
-            var capabilities = await WaitForCapabilitiesAsync(window);
-            var printerDiscovery = await window.DiscoverPrintersForPhysicalValidationAsync();
+            var capabilities = await WaitForCapabilitiesAsync(access);
+            var printerDiscovery = await access.DiscoverPrintersAsync();
             ffmpegPath = capabilities.Video.ExecutablePath;
             ffprobePath = FindExecutable("ffprobe");
             cupsQueue = printerDiscovery.DefaultPrinter;
@@ -125,41 +124,37 @@ internal static class PhysicalValidationCoordinator
                     ? $"Linux capability detector found ffmpeg encoder '{capabilities.Video.EncoderName}' and ffprobe."
                     : $"Video capability: {capabilities.Video.Reason}; ffprobe={(ffprobePath is null ? "missing" : "found")}." );
 
-            window.Editor.InsertSlide();
-            window.Editor.InsertSlide();
-            var slideshow = new SlideShowWindow(window.PresentationForPhysicalValidation, 0);
-            var slideshowOpened = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            slideshow.Opened += (_, _) => slideshowOpened.TrySetResult(true);
-            slideshow.Show(window);
-            await slideshowOpened.Task.WaitAsync(TimeSpan.FromSeconds(8));
+            access.InsertSlide();
+            access.InsertSlide();
+            var slideshow = await access.ShowSlideShowAsync();
             await Task.Delay(350);
             await CaptureAsync(outputDirectory, "slideshow-open.png");
             screenshots.Add("slideshow-open.png");
             AddRow(
                 rows,
                 "slideshow.open-and-render",
-                slideshow.IsVisible && slideshow.Controller.CurrentSlideIndex == 0 ? "passed" : "failed",
+                slideshow.IsVisible && slideshow.CurrentSlideIndex == 0 ? "passed" : "failed",
                 ["slideshow-open.png"],
-                $"Visible={slideshow.IsVisible}; currentSlide={slideshow.Controller.CurrentSlideIndex}; slideCount={window.SlideCount}.");
+                $"Visible={slideshow.IsVisible}; currentSlide={slideshow.CurrentSlideIndex}; slideCount={access.SlideCount}.");
 
-            var initialSlide = slideshow.Controller.CurrentSlideIndex;
-            var advance = slideshow.ExecuteAdvance();
+            var initialSlide = slideshow.CurrentSlideIndex;
+            var advance = slideshow.Advance();
             await Task.Delay(250);
             await CaptureAsync(outputDirectory, "slideshow-advanced.png");
             screenshots.Add("slideshow-advanced.png");
             AddRow(
                 rows,
                 "slideshow.advance",
-                slideshow.Controller.CurrentSlideIndex == initialSlide + 1 ? "passed" : "failed",
+                slideshow.CurrentSlideIndex == initialSlide + 1 ? "passed" : "failed",
                 ["slideshow-advanced.png"],
-                $"Advance result={advance.GetType().Name}; currentSlide={slideshow.Controller.CurrentSlideIndex}.");
+                $"Advance result={advance}; currentSlide={slideshow.CurrentSlideIndex}.");
 
             slideshow.Close();
             await Task.Delay(150);
 
             var videoPath = Path.Combine(outputDirectory, "exported-video.mp4");
             var videoResult = capabilities.Video.CanEncodeMp4
-                ? await window.ExecuteVideoExportAsync(
+                ? await access.ExecuteVideoExportAsync(
                     videoPath,
                     new PresentationVideoExportRequest(
                         Quality: PresentationVideoQualityKind.Standard,
@@ -200,40 +195,23 @@ internal static class PhysicalValidationCoordinator
                         $"ffprobe exit={ffprobe.ExitCode}; output={ffprobe.StandardError.Trim()}.");
                 }
 
-                var mediaSlide = window.PresentationForPhysicalValidation.Slides[0];
-                mediaSlide.Shapes.Add(new SlideShape
-                {
-                    Id = 8801,
-                    Name = "Physical validation video",
-                    Kind = SlideShapeKind.Media,
-                    ExtentCxEmu = 6096000,
-                    ExtentCyEmu = 3429000,
-                    Media = new MediaInfo
-                    {
-                        IsVideo = true,
-                        ContentType = "video/mp4",
-                        Bytes = await File.ReadAllBytesAsync(videoPath),
-                    },
-                });
-                var mediaShow = new SlideShowWindow(window.PresentationForPhysicalValidation, 0);
+                access.AddValidationVideo(await File.ReadAllBytesAsync(videoPath));
+                var mediaShow = await access.ShowSlideShowAsync();
                 mediaShowForCleanup = mediaShow;
-                var mediaOpened = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-                mediaShow.Opened += (_, _) => mediaOpened.TrySetResult(true);
-                mediaShow.Show(window);
-                await mediaOpened.Task.WaitAsync(TimeSpan.FromSeconds(8));
                 await Task.Delay(900);
                 await CaptureAsync(outputDirectory, "media-playback.png");
                 screenshots.Add("media-playback.png");
-                var mediaAvailable = mediaShow.MediaPlaybackAvailabilityForTest;
+                var media = mediaShow.CaptureMediaPlayback();
                 AddRow(
                     rows,
                     "media.libvlc-playback",
-                    mediaAvailable?.IsAvailable == true && mediaShow.ActiveMediaPlansForTest.Any() &&
-                    mediaShow.LastMediaPlaybackFailureForTest is null ? "passed" : "not-proven",
+                    media.IsAvailable == true && media.ActiveMediaCount > 0 && !media.HasFailure
+                        ? "passed"
+                        : "not-proven",
                     ["media-playback.png"],
-                    mediaAvailable?.IsAvailable == true
-                        ? $"LibVLC opened the exported MP4 through the production slideshow media controller; activeMedia={mediaShow.ActiveMediaPlansForTest.Count}."
-                        : $"LibVLC media playback was unavailable: {mediaAvailable?.FailureReason ?? "no availability report"}.");
+                    media.IsAvailable == true
+                        ? $"LibVLC opened the exported MP4 through the production slideshow media controller; activeMedia={media.ActiveMediaCount}."
+                        : $"LibVLC media playback was unavailable: {media.FailureReason ?? "no availability report"}.");
             }
             else
             {
@@ -243,7 +221,7 @@ internal static class PhysicalValidationCoordinator
             }
 
             var printMode = Environment.GetEnvironmentVariable("FREEX_CUPS_DRY_RUN_MODE") ?? "success";
-            var printResult = await window.ExecutePrintForPhysicalValidationAsync(
+            var printResult = await access.ExecutePrintAsync(
                 new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides));
             var submittedPath = "/work/cups-dry-run/last-submitted.pdf";
             var invocationPath = "/work/cups-dry-run/last-invocation.txt";
@@ -268,9 +246,9 @@ internal static class PhysicalValidationCoordinator
             AddRow(
                 rows,
                 "print.pdf-package",
-                window.LastPrintExecutionDescriptor?.Validation.IsValid == true ? "passed" : "failed",
+                access.LastPrintPackageIsValid ? "passed" : "failed",
                 submitted ? ["cups-submitted.pdf"] : ["owner-before.png"],
-                $"Print package validation: {window.LastPrintExecutionDescriptor?.Validation.FailureReason ?? "valid"}.");
+                $"Print package validation: {access.LastPrintPackageFailureReason ?? "valid"}.");
 
             await CaptureAsync(outputDirectory, "owner-after.png");
             screenshots.Add("owner-after.png");
@@ -305,24 +283,24 @@ internal static class PhysicalValidationCoordinator
                 Path.Combine(outputDirectory, "freep-physical-linux-wave13b.json"),
                 JsonSerializer.Serialize(manifest, JsonOptions));
             mediaShowForCleanup?.Close();
-            window.AllowCloseWithoutDirtyPromptForPhysicalValidation();
-            window.Close();
+            access.CloseWithoutDirtyPrompt();
         }
     }
 
-    private static async Task<LinuxNativeOutputCapabilities> WaitForCapabilitiesAsync(MainWindow window)
+    private static async Task<LinuxNativeOutputCapabilities> WaitForCapabilitiesAsync(
+        MainWindow.ValidationAccessAdapter access)
     {
-        window.StartNativeOutputCapabilityDetectionForTests();
+        access.StartNativeOutputCapabilityDetection();
         var deadline = DateTime.UtcNow.AddSeconds(8);
         while (DateTime.UtcNow < deadline)
         {
-            var capabilities = window.NativeOutputCapabilitiesForPhysicalValidation;
-            if (window.NativeOutputCapabilityDetectionCompletedForPhysicalValidation)
+            var capabilities = access.NativeOutputCapabilities;
+            if (access.NativeOutputCapabilityDetectionCompleted)
                 return capabilities;
             await Task.Delay(100);
         }
 
-        return window.NativeOutputCapabilitiesForPhysicalValidation;
+        return access.NativeOutputCapabilities;
     }
 
     private static string? FindExecutable(string name)

@@ -70,7 +70,7 @@ cd /opt/published
 if [[ "${FREEX_CUPS_DRY_RUN:-0}" == "1" ]]; then
     cups_dry_run_bin="/tmp/freex-cups-dry-run"
     cups_dry_run_output="/work/cups-dry-run"
-    cups_dry_run_queue="${app_executable}-DryRun"
+    cups_dry_run_queue="${app_window_title}-DryRun"
     mkdir -p "$cups_dry_run_bin" "$cups_dry_run_output"
     export FREEX_CUPS_DRY_RUN_QUEUE="$cups_dry_run_queue"
     cat > "$cups_dry_run_bin/lpstat" <<'SH'
@@ -118,7 +118,7 @@ for argument in "${app_arguments[@]}"; do
         interaction_validation=true
         break
     fi
-    if [[ "$argument" == "--physical-validation" ]]; then
+    if [[ "$argument" == "--physical-validation" || "$argument" == --physical-validation=* ]]; then
         physical_validation=true
         break
     fi

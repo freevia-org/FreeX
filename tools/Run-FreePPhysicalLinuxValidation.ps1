@@ -78,7 +78,7 @@ function Start-ValidationRun {
     New-Item -ItemType Directory -Path $runRoot -Force | Out-Null
     $arguments = @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Port", "$Port",
+        "-Action", "Start", "-App", "FreeP", "-Host", "Validation", "-Port", "$Port",
         "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
         "-MemoryLimit", $MemoryLimit, "-OutputDir", $runRoot,
         "-CupsDryRun", "-CupsDryRunMode", $Mode,

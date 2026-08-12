@@ -1,6 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
-using FreeP.App.Avalonia.Smoke;
+using FreeP.Validation.Avalonia;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -28,7 +28,7 @@ public sealed class StartupDirtyTraceTests
             return;
 
         var documentPath = RepoFile("tools/FreeP.RenderCompare/corpus/01-title-slide.pptx");
-        var appAssemblyPath = typeof(App).Assembly.Location;
+        var appAssemblyPath = typeof(StartupDirtyTraceOptions).Assembly.Location;
         using var temporaryDirectory = new TestTemporaryDirectory("freep-startup-dirty-");
         var reportPath = Path.Combine(temporaryDirectory.Path, "startup-dirty.json");
 
@@ -72,6 +72,32 @@ public sealed class StartupDirtyTraceTests
             if (!process!.HasExited)
                 process.Kill(entireProcessTree: true);
         }
+    }
+
+    [Fact]
+    public void Startup_dirty_trace_harness_is_owned_by_validation_support()
+    {
+        var coordinator = File.ReadAllText(RepoFile(
+            "freep", "TestSupport", "Validation.Avalonia", "StartupDirtyTraceValidation.cs"));
+        var app = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "App.cs"));
+        var program = File.ReadAllText(RepoFile("freep", "FreeP.App.Avalonia", "Program.cs"));
+        var adapter = File.ReadAllText(RepoFile(
+            "freep", "FreeP.App.Avalonia", "MainWindow.ValidationAccessAdapter.cs"));
+
+        coordinator.Should().Contain("DispatcherTimer");
+        coordinator.Should().Contain("File.WriteAllText");
+        coordinator.Should().Contain("StartupDirtyTraceReport");
+        app.Should().NotContain("StartupDirtyTraceOptions");
+        app.Should().NotContain("StartupDirtyTraceCoordinator");
+        program.Should().NotContain("StartupDirtyTraceOptions");
+        program.Should().NotContain("--startup-dirty-trace");
+        adapter.Should().Contain("StartupDirtyTrace =>");
+        adapter.Should().NotContain("DispatcherTimer");
+        adapter.Should().NotContain("File.WriteAllText");
+        File.Exists(Path.Combine(
+            Path.GetDirectoryName(RepoFile("freep", "FreeP.App.Avalonia", "Program.cs"))!,
+            "Smoke",
+            "StartupDirtyTrace.cs")).Should().BeFalse();
     }
 
     private static string RepoFile(params string[] parts) =>

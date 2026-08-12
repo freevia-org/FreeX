@@ -64,6 +64,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="FreeP.App.Avalonia.Tests" />
     <InternalsVisibleTo Include="FreeP.VisualEvidence.Avalonia" />
+    <InternalsVisibleTo Include="FreeP.Validation.Avalonia" />
     <Using Include="FreeP.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 

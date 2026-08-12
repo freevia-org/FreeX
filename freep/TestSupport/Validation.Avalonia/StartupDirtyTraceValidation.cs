@@ -1,8 +1,8 @@
 using System.Text.Json;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
+using FreeP.App.Avalonia;
 
-namespace FreeP.App.Avalonia.Smoke;
+namespace FreeP.Validation.Avalonia;
 
 internal sealed record StartupDirtyTraceOptions(string ReportPath)
 {
@@ -47,12 +47,12 @@ internal static class StartupDirtyTraceCoordinator
     private const int SettleTicks = 4;
     private const int PollMilliseconds = 100;
 
-    public static void Start(MainWindow window, StartupDirtyTraceOptions options)
+    public static void Start(MainWindow.ValidationAccessAdapter access, StartupDirtyTraceOptions options)
     {
-        ArgumentNullException.ThrowIfNull(window);
+        ArgumentNullException.ThrowIfNull(access);
         ArgumentNullException.ThrowIfNull(options);
 
-        window.Opened += (_, _) =>
+        access.StartWhenOpened(() =>
         {
             var ticks = 0;
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(PollMilliseconds) };
@@ -63,21 +63,17 @@ internal static class StartupDirtyTraceCoordinator
 
                 timer.Stop();
                 var report = new StartupDirtyTraceReport(
-                    window.IsVisible,
-                    window.Title ?? string.Empty,
-                    window.IsDirty,
-                    window.DirtyGeneration,
-                    window.StartupDirtyTraceForTests);
+                    access.IsVisible,
+                    access.Title,
+                    access.IsDirty,
+                    access.DirtyGeneration,
+                    access.StartupDirtyTrace);
                 WriteReport(options.ReportPath, report);
-
-                if (global::Avalonia.Application.Current?.ApplicationLifetime
-                    is IClassicDesktopStyleApplicationLifetime desktop)
-                {
-                    desktop.Shutdown(report.IsPassed ? 0 : 1);
-                }
+                access.Shutdown(report.IsPassed ? 0 : 1);
             };
             timer.Start();
-        };
+            return Task.CompletedTask;
+        });
     }
 
     private static void WriteReport(string path, StartupDirtyTraceReport report)

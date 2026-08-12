@@ -1,4 +1,4 @@
-using FreeP.App.Avalonia;
+using FreeP.Validation.Avalonia;
 
 namespace FreeP.App.Avalonia.Tests;
 
@@ -37,19 +37,37 @@ public sealed class PhysicalValidationSourceTests
     [Fact]
     public void Physical_validation_source_wires_the_real_output_and_slideshow_paths()
     {
-        var source = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/PhysicalValidation.cs"));
+        var source = File.ReadAllText(RepoFile("freep/TestSupport/Validation.Avalonia/PhysicalValidation.cs"));
+        var adapter = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/MainWindow.ValidationAccessAdapter.cs"));
+        var slideshow = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/SlideShowWindow.cs"));
+        var program = File.ReadAllText(RepoFile("freep/FreeP.App.Avalonia/Program.cs"));
 
-        source.Should().Contain("window.ExecuteVideoExportAsync(");
-        source.Should().Contain("window.ExecutePrintForPhysicalValidationAsync(");
-        source.Should().Contain("window.DiscoverPrintersForPhysicalValidationAsync(");
-        source.Should().Contain("new SlideShowWindow(");
+        source.Should().Contain("access.ExecuteVideoExportAsync(");
+        source.Should().Contain("access.ExecutePrintAsync(");
+        source.Should().Contain("access.DiscoverPrintersAsync(");
+        source.Should().Contain("access.ShowSlideShowAsync(");
         source.Should().Contain("ffprobe");
-        source.Should().Contain("MediaPlaybackAvailabilityForTest");
+        source.Should().Contain("CaptureMediaPlayback");
         source.Should().Contain("cups-dry-run/last-submitted.pdf");
         source.Should().Contain("new SystemProcessRunner()");
         source.Should().Contain("new ProcessInvocation(");
         source.Should().NotContain("ProcessStartInfo");
         source.Should().NotContain("RunProcessAsync");
+        adapter.Should().Contain("internal sealed class ValidationAccessAdapter");
+        adapter.Should().Contain("new SlideShowWindow(");
+        adapter.Should().NotContain("--physical-validation");
+        adapter.Should().NotContain("JsonSerializer");
+        adapter.Should().NotContain("SystemProcessRunner");
+        slideshow.Should().Contain("internal sealed class ValidationAccessAdapter");
+        slideshow.Should().NotContain("ActiveMediaPlansForTest");
+        slideshow.Should().NotContain("MediaPlaybackAvailabilityForTest");
+        slideshow.Should().NotContain("LastMediaPlaybackFailureForTest");
+        program.Should().NotContain("PhysicalValidationOptions");
+        program.Should().NotContain("--physical-validation");
+        File.Exists(Path.Combine(Path.GetDirectoryName(RepoFile(
+            "freep/FreeP.App.Avalonia/Program.cs"))!, "PhysicalValidation.cs")).Should().BeFalse();
+        File.ReadAllText(RepoFile("tools/Run-FreePPhysicalLinuxValidation.ps1"))
+            .Should().Contain("\"-Host\", \"Validation\"");
     }
 
     [Fact]

@@ -29,6 +29,7 @@ internal static class Program
         ArgumentNullException.ThrowIfNull(coordinator);
         App.ExternalStartupCoordinator = coordinator;
         App.StartupArguments = [];
+        App.EnableStartupDirtyTrace = false;
         return SisterAvaloniaProgramRunner.Run(
             [],
             new SisterAvaloniaProgramSpec(
@@ -37,41 +38,26 @@ internal static class Program
                 startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
     }
 
+    internal static int RunToolHost(
+        IReadOnlyList<string> startupArguments,
+        bool enableStartupDirtyTrace,
+        Action<MainWindow.ValidationAccessAdapter> coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(startupArguments);
+        ArgumentNullException.ThrowIfNull(coordinator);
+        App.StartupArguments = startupArguments.ToArray();
+        App.EnableStartupDirtyTrace = enableStartupDirtyTrace;
+        App.ExternalStartupCoordinator = window => coordinator(window.CreateValidationAccessAdapter());
+        return SisterAvaloniaProgramRunner.Run(
+            [],
+            new SisterAvaloniaProgramSpec(
+                FreePApplicationStartupDescriptor.ProductIdentity,
+                arguments => SisterAvaloniaLaunchPreparation.Continue(arguments),
+                arguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(arguments)));
+    }
+
     private static SisterAvaloniaLaunchPreparation PrepareLaunch(string[] args)
     {
-        if (!PhysicalValidationOptions.TryParse(
-                args,
-                out var physicalValidationOptions,
-                out var physicalStartupArguments,
-                out var physicalValidationError))
-        {
-            Console.Error.WriteLine(physicalValidationError);
-            return SisterAvaloniaLaunchPreparation.Exit(2);
-        }
-        args = physicalStartupArguments;
-
-        if (!AccessibilityValidationOptions.TryParse(
-                args,
-                out var accessibilityValidationOptions,
-                out var accessibilityStartupArguments,
-                out var accessibilityValidationError))
-        {
-            Console.Error.WriteLine(accessibilityValidationError);
-            return SisterAvaloniaLaunchPreparation.Exit(2);
-        }
-        args = accessibilityStartupArguments;
-
-        if (!StartupDirtyTraceOptions.TryParse(
-                args,
-                out var startupDirtyTraceOptions,
-                out var startupDirtyTraceArguments,
-                out var startupDirtyTraceError))
-        {
-            Console.Error.WriteLine(startupDirtyTraceError);
-            return SisterAvaloniaLaunchPreparation.Exit(2);
-        }
-        args = startupDirtyTraceArguments;
-
         // Headless engine smoke (no display): exercise the model + .pptx round-trip and exit.
         if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))
             return SisterAvaloniaLaunchPreparation.Exit(packagingExit);
@@ -84,9 +70,7 @@ internal static class Program
         }
 
         App.StartupArguments = startupArguments;
-        App.StartupDirtyTraceOptions = startupDirtyTraceOptions;
-        App.PhysicalValidationOptions = physicalValidationOptions;
-        App.AccessibilityValidationOptions = accessibilityValidationOptions;
+        App.EnableStartupDirtyTrace = false;
         App.LaunchSmokeOptions = launchSmoke;
         return SisterAvaloniaLaunchPreparation.Continue(startupArguments);
     }

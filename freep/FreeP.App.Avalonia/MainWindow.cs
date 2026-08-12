@@ -637,10 +637,6 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
     internal bool IsPrintOptionsPaneVisible => _printOptionsPaneHost?.IsVisible == true;
     internal IReadOnlyList<PresentationPaneAccessibilitySnapshotEntry> PaneAccessibilitySnapshotForTests =>
         _paneAccessibility.BuildSnapshot();
-    internal void FocusRepresentativePanesForAccessibilityValidation()
-    {
-        _slidePaneList.Focus();
-    }
     internal string PaneAccessibilitySnapshotSerializationForTests =>
         _paneAccessibility.SerializeSnapshot();
     internal TextBox NotesPaneForAccessibilityTests => _notesBox;
@@ -985,7 +981,7 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
             handledEventsToo: true);
         Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
         Closing += (_, e) => e.Cancel =
-            !_allowCloseWithoutDirtyPromptForPhysicalValidation &&
+            !_allowCloseWithoutDirtyPromptForValidation &&
             _closeCoordinator.ShouldCancelClosing();
         Closed += (_, _) =>
         {
@@ -3804,15 +3800,6 @@ public sealed partial class MainWindow : Window, IPresentationMediaPaneHostView
         PresentationPrintRequest? request = null,
         CancellationToken cancellationToken = default) =>
         ExecutePrintWorkflowAsync(request, cancellationToken);
-
-    internal Task<PrintSubmissionResult> ExecutePrintForPhysicalValidationAsync(
-        PresentationPrintRequest? request = null,
-        CancellationToken cancellationToken = default) =>
-        ExecutePrintWorkflowCoreAsync(
-            request ?? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
-            _fileSession.BuildPrintOutputPackage,
-            cancellationToken,
-            promptForSelection: false);
 
     private async Task<PrintSubmissionResult> ExecutePrintWorkflowAsync(
         PresentationPrintRequest? request = null,

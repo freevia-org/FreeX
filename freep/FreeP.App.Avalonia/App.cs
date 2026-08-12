@@ -12,9 +12,7 @@ public sealed class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
     internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
-    internal static StartupDirtyTraceOptions? StartupDirtyTraceOptions { get; set; }
-    internal static PhysicalValidationOptions? PhysicalValidationOptions { get; set; }
-    internal static AccessibilityValidationOptions? AccessibilityValidationOptions { get; set; }
+    internal static bool EnableStartupDirtyTrace { get; set; }
     internal static Action<MainWindow>? ExternalStartupCoordinator { get; set; }
     internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeP;
 
@@ -45,28 +43,13 @@ public sealed class App : Application
                     args,
                     loadRecentFilesStore: null,
                     options: options,
-                    enableStartupDirtyTrace: StartupDirtyTraceOptions is not null,
+                    enableStartupDirtyTrace: EnableStartupDirtyTrace,
                     optionsStore: optionsStore),
                 mainWindow =>
                 {
                     if (ExternalStartupCoordinator is { } externalStartupCoordinator)
                     {
                         externalStartupCoordinator(mainWindow);
-                        return;
-                    }
-                    if (StartupDirtyTraceOptions is { } startupDirtyTraceOptions)
-                    {
-                        StartupDirtyTraceCoordinator.Start(mainWindow, startupDirtyTraceOptions);
-                        return;
-                    }
-                    if (PhysicalValidationOptions is { } physicalValidationOptions)
-                    {
-                        PhysicalValidationCoordinator.Start(mainWindow, physicalValidationOptions);
-                        return;
-                    }
-                    if (AccessibilityValidationOptions is { } accessibilityValidationOptions)
-                    {
-                        AccessibilityValidationCoordinator.Start(mainWindow, accessibilityValidationOptions);
                         return;
                     }
                     if (LaunchSmokeOptions is { } options)

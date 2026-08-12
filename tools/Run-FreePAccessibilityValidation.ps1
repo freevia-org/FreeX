@@ -40,7 +40,7 @@ $started = $false
 try {
     $startArguments = @(
         "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner,
-        "-Action", "Start", "-App", "FreeP", "-Port", "$Port",
+        "-Action", "Start", "-App", "FreeP", "-Host", "Validation", "-Port", "$Port",
         "-Width", "$Width", "-Height", "$Height", "-Dpi", "$Dpi",
         "-MemoryLimit", $MemoryLimit, "-OutputDir", $resolvedOutputRoot,
         "-AppArgument", "--accessibility-validation=/work/accessibility-validation"
