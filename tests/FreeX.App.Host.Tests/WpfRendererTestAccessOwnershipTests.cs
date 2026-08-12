@@ -18,6 +18,12 @@ public sealed class WpfRendererTestAccessOwnershipTests
         "PopulateTableDesignStyleGalleryMenuForTest"
     ];
 
+    private static readonly string[] MainWindowTestFields =
+    [
+        "_reservationPasswordPromptOverrideForTest",
+        "_wheelScrollLinesTestOverride"
+    ];
+
     [Fact]
     public void ShippingRenderer_DoesNotOwnTestAccessMembers()
     {
@@ -26,6 +32,7 @@ public sealed class WpfRendererTestAccessOwnershipTests
         var prewarmer = assembly.GetType("FreeX.App.Host.StartupPipelinePrewarmer")!;
 
         GetMemberNames(mainWindow).Should().NotContain(MainWindowTestMembers);
+        GetMemberNames(mainWindow).Should().NotContain(MainWindowTestFields);
         GetMemberNames(prewarmer).Should().NotContain("RunPrewarmForTests");
 
     }
@@ -34,6 +41,7 @@ public sealed class WpfRendererTestAccessOwnershipTests
     public void ToolRenderer_OwnsTestAccessMembers()
     {
         GetMemberNames(typeof(MainWindow)).Should().Contain(MainWindowTestMembers);
+        GetMemberNames(typeof(MainWindow)).Should().Contain(MainWindowTestFields);
         GetMemberNames(typeof(StartupPipelinePrewarmer)).Should().Contain("RunPrewarmForTests");
 
     }

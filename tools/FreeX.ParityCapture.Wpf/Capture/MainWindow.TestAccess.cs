@@ -6,6 +6,24 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
+    private Func<string, string?>? _reservationPasswordPromptOverrideForTest = null;
+    private static int? _wheelScrollLinesTestOverride = null;
+
+    partial void TryResolveExternalReservationPasswordPrompt(
+        string workbookName,
+        ref bool handled,
+        ref string? password)
+    {
+        if (_reservationPasswordPromptOverrideForTest is null)
+            return;
+
+        password = _reservationPasswordPromptOverrideForTest(workbookName);
+        handled = true;
+    }
+
+    static partial void TryGetExternalWheelScrollLines(ref int? lines) =>
+        lines = _wheelScrollLinesTestOverride;
+
     internal bool RaiseFormulaReferenceGripDragForTest(int highlightIndex, CellAddress target)
     {
         var editor = GetFormulaReferenceHighlightEditor();

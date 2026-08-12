@@ -145,18 +145,12 @@ public partial class MainWindow
         e.Handled = true;
     }
 
-    /// <summary>
-    /// Test-only override for <see cref="GetSystemWheelScrollLines"/>'s OS read (set via reflection
-    /// -- see R76_WheelScrollLinesTests), so a unit test can drive <c>SheetGrid_MouseWheel</c>
-    /// deterministically instead of depending on the real machine's live "Number of lines to
-    /// scroll" setting. Always null in production.
-    /// </summary>
-    private static int? _wheelScrollLinesTestOverride = null;
-
     private static int GetSystemWheelScrollLines()
     {
-        if (_wheelScrollLinesTestOverride is { } testOverride)
-            return testOverride;
+        int? externalLines = null;
+        TryGetExternalWheelScrollLines(ref externalLines);
+        if (externalLines is { } lines)
+            return lines;
 
         try
         {

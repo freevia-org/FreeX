@@ -1475,19 +1475,13 @@ public partial class MainWindow
                 MessageBoxImage.Warning);
     }
 
-    /// <summary>
-    /// Test-only override for <see cref="ResolveReservationPasswordPrompt"/> -- unit tests inject a
-    /// canned password (or <c>null</c> to simulate Cancel) instead of driving the real modal
-    /// <see cref="PasswordProtectionDialog"/> window. Not used by production code paths. Set via
-    /// reflection from tests (mirrors how <see cref="_workbookReadOnlySession"/> itself is read by
-    /// R69_ReadOnlyRecommendedPromptTests) since this assembly has no test-project InternalsVisibleTo.
-    /// </summary>
-    private Func<string, string?>? _reservationPasswordPromptOverrideForTest = null;
-
-    private string? ResolveReservationPasswordPrompt(string workbookName) =>
-        _reservationPasswordPromptOverrideForTest is not null
-            ? _reservationPasswordPromptOverrideForTest(workbookName)
-            : ShowReservationPasswordPromptDialog(workbookName);
+    private string? ResolveReservationPasswordPrompt(string workbookName)
+    {
+        var handled = false;
+        string? password = null;
+        TryResolveExternalReservationPasswordPrompt(workbookName, ref handled, ref password);
+        return handled ? password : ShowReservationPasswordPromptDialog(workbookName);
+    }
 
     private string? ShowReservationPasswordPromptDialog(string workbookName)
     {

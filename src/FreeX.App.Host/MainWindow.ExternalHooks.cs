@@ -9,4 +9,11 @@ public partial class MainWindow
     partial void StartExternalLoadedWorkflows();
 
     partial void RefreshExternalReviewWindows(Sheet sheet);
+
+    partial void TryResolveExternalReservationPasswordPrompt(
+        string workbookName,
+        ref bool handled,
+        ref string? password);
+
+    static partial void TryGetExternalWheelScrollLines(ref int? lines);
 }
