@@ -39,11 +39,18 @@ public sealed class SlideShowHostPolicySourceTests
     [Fact]
     public void WpfSlideShowWindow_DelegatesHostPolicyToPresentationPlanner()
     {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
-            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            root,
             "freep",
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
+        var testAccessSource = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "TestSupport",
+            "SlideShow.Wpf",
+            "SlideShowWindow.TestAccess.cs"));
 
         source.Should().Contain("_runtime.HandleKeyboardInput(");
         source.Should().Contain("_runtime.ExecuteSlideNumberJump(");
@@ -168,9 +175,12 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_runtime.AnimationRendererSession.PlanFrame(");
         source.Should().NotContain("SlideShowPlaybackPlanner.PlanAnimationStep(");
         source.Should().NotContain("SlideShowPlaybackPlanner.PlanFallbackAnimation(");
-        source.Should().Contain("LastAnimationFramePlanForTest");
-        source.Should().Contain("LastAnimationStepFrameEvidenceForTest");
-        source.Should().Contain("LastAnimationStepPlaybackReadinessPlanForTest");
+        source.Should().NotContain("LastAnimationFramePlanForTest");
+        source.Should().NotContain("LastAnimationStepFrameEvidenceForTest");
+        source.Should().NotContain("LastAnimationStepPlaybackReadinessPlanForTest");
+        testAccessSource.Should().Contain("LastAnimationFramePlanForTest");
+        testAccessSource.Should().Contain("LastAnimationStepFrameEvidenceForTest");
+        testAccessSource.Should().Contain("LastAnimationStepPlaybackReadinessPlanForTest");
 
         source.Should().NotContain("case Key.Right");
         source.Should().NotContain("case Key.Left");

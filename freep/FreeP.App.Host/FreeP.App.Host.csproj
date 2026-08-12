@@ -14,7 +14,12 @@
     <IntermediateOutputPath>obj\VisualEvidence\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true'">
+  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' == 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
     <OutputPath>bin\HostAccess\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\HostAccess\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
@@ -26,15 +31,20 @@
              Link="Backstage\BackstageView.TestAccess.cs" />
   </ItemGroup>
 
-  <ItemDefinitionGroup Condition="'$(FreePHostAccess)' == 'true'">
-    <ProjectReference>
-      <GlobalPropertiesToRemove>FreePHostAccess</GlobalPropertiesToRemove>
-    </ProjectReference>
-  </ItemDefinitionGroup>
-
+  <PropertyGroup Condition="'$(FreePSlideShowTestSupport)' == 'true' And '$(FreePHostAccess)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true'">
+    <OutputPath>bin\SlideShowTestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\SlideShowTestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
     <Compile Include="..\TestSupport\VisualEvidence.Wpf\MainWindow.VisualCaptureAdapter.cs"
              Link="MainWindow.VisualCaptureAdapter.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(FreePSlideShowTestSupport)' == 'true'">
+    <Compile Include="..\TestSupport\SlideShow.Wpf\SlideShowMediaController.TestAccess.cs"
+             Link="SlideShowMediaController.TestAccess.cs" />
+    <Compile Include="..\TestSupport\SlideShow.Wpf\SlideShowWindow.TestAccess.cs"
+             Link="SlideShowWindow.TestAccess.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -43,6 +53,12 @@
     <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
     <InternalsVisibleTo Include="FreeP.VisualEvidence.Wpf" />
   </ItemGroup>
+
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <GlobalPropertiesToRemove>$(GlobalPropertiesToRemove);FreePHostAccess;FreePSlideShowTestSupport;FreePVisualEvidenceHost</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.Windows.SDK.NET.Ref" />

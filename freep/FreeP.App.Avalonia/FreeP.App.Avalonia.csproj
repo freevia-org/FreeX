@@ -27,9 +27,19 @@
     <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true'">
+  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' == 'true' And '$(FreePVisualEvidenceHost)' != 'true' And '$(FreePValidationHost)' != 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true' And '$(FreePSlideShowTestSupport)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true' And '$(FreePValidationHost)' != 'true'">
     <OutputPath>bin\HostAccess\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\HostAccess\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(FreePSlideShowTestSupport)' == 'true' And '$(FreePHostAccess)' != 'true' And '$(FreePVisualEvidenceHost)' != 'true' And '$(FreePValidationHost)' != 'true'">
+    <OutputPath>bin\SlideShowTestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\SlideShowTestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true' Or '$(FreePValidationHost)' == 'true'">
@@ -64,12 +74,12 @@
              Link="Backstage\BackstageView.TestAccess.cs" />
   </ItemGroup>
 
-  <ItemDefinitionGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePVisualEvidenceHost)' == 'true' Or '$(FreePValidationHost)' == 'true'">
-    <ProjectReference>
-      <GlobalPropertiesToRemove>FreePHostAccess;FreePVisualEvidenceHost;FreePValidationHost</GlobalPropertiesToRemove>
-    </ProjectReference>
-  </ItemDefinitionGroup>
-
+  <ItemGroup Condition="'$(FreePSlideShowTestSupport)' == 'true' Or '$(FreePValidationHost)' == 'true'">
+    <Compile Include="..\TestSupport\SlideShow.Avalonia\AvaloniaSlideShowMediaController.TestAccess.cs"
+             Link="AvaloniaSlideShowMediaController.TestAccess.cs" />
+    <Compile Include="..\TestSupport\SlideShow.Avalonia\SlideShowWindow.TestAccess.cs"
+             Link="SlideShowWindow.TestAccess.cs" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
@@ -78,6 +88,12 @@
     <PackageReference Include="LibVLCSharp.Avalonia" />
     <PackageReference Include="VideoLAN.LibVLC.Windows" Condition="'$(RuntimeIdentifier)' == '' Or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win'))" />
   </ItemGroup>
+
+  <ItemDefinitionGroup>
+    <ProjectReference>
+      <GlobalPropertiesToRemove>$(GlobalPropertiesToRemove);FreePHostAccess;FreePSlideShowTestSupport;FreePValidationHost;FreePVisualEvidenceHost</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
 
   <ItemGroup>
     <!-- Runtime and package assets derive from one FreeP identity source in the shared shell. -->

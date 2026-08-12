@@ -29,7 +29,7 @@
     <Compile Include="..\TestSupport\ChartOptionsDialogTestPlans.cs"
              Link="TestSupport\ChartOptionsDialogTestPlans.cs" />
     <ProjectReference Include="..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj"
-                      AdditionalProperties="FreePHostAccess=true" />
+                      AdditionalProperties="FreePHostAccess=true;FreePSlideShowTestSupport=true" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
     <ProjectReference Include="..\TestSupport\Validation.Avalonia\FreeP.Validation.Avalonia.csproj" />
   </ItemGroup>

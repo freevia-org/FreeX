@@ -16,7 +16,7 @@ namespace FreeP.App.Avalonia;
 /// Avalonia slideshow adapter for the shared LibVLC playback engine.
 /// Poster/click behavior remains deterministic when native LibVLC is unavailable.
 /// </summary>
-internal sealed class AvaloniaSlideShowMediaController
+internal sealed partial class AvaloniaSlideShowMediaController
 {
     private sealed class MediaSlot
     {
@@ -67,11 +67,6 @@ internal sealed class AvaloniaSlideShowMediaController
     public MediaPlaybackBackendAvailability? Availability { get; private set; }
     public MediaPlaybackFailure? LastFailure { get; private set; }
     public SlideShowMediaClickPlan LastClick { get; private set; } = SlideShowMediaClickPlan.NotMedia;
-
-    internal string? CaptionTextForTest(uint shapeId) =>
-        _slots.FirstOrDefault(slot => slot.ShapeId == shapeId)?.CaptionText?.Text;
-
-    internal void RefreshCaptionsForTest() => UpdateCaptions();
 
     public void SetCanvasBounds(double canvasW, double canvasH)
     {

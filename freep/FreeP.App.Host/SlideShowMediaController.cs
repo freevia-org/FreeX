@@ -131,7 +131,7 @@ public sealed class MediaShapeRect
 /// <summary>
 /// Manages MediaElement overlays for media shapes on a single slide visit.
 /// </summary>
-public sealed class SlideShowMediaController
+public sealed partial class SlideShowMediaController
 {
     // ── injected / constructed ────────────────────────────────────────────────
 
@@ -182,13 +182,7 @@ public sealed class SlideShowMediaController
         };
     }
 
-    internal string? CaptionTextForTest(uint shapeId) =>
-        _slots.FirstOrDefault(slot => slot.CaptionTrack?.ShapeId == shapeId)?.CaptionText?.Text;
-
-    internal void RefreshCaptionsForTest(TimeSpan? playbackPosition = null) =>
-        UpdateCaptions(playbackPosition);
-
-    internal uint? LastMediaClickShapeIdForTest { get; private set; }
+    partial void ObserveMediaClickForTests(SlideShowMediaClickPlan click);
 
     // ── public API ────────────────────────────────────────────────────────────
 
@@ -403,7 +397,7 @@ public sealed class SlideShowMediaController
             canvasY,
             _showMediaControls,
             _showNarration);
-        LastMediaClickShapeIdForTest = click.Media?.ShapeId;
+        ObserveMediaClickForTests(click);
         if (!click.IsHandled)
             return false;
 

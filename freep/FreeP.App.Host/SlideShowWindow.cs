@@ -51,7 +51,7 @@ namespace FreeP.App.Host;
 /// (white-flash). Window uses a centered aperture. Morph uses matched object
 /// overlays and falls back to Fade only when no object correspondence exists.
 /// </summary>
-public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer, ISlideShowDisplayRenderer
+public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer, ISlideShowDisplayRenderer
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -404,17 +404,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
 
     public SlideShowRecordingReviewApplyResult ApplyRecordingReview() =>
         _runtime.ApplyRecordingReview();
-
-    internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
-    internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest =>
-        _runtime.AnimationRendererSession.LastFrame;
-    internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest =>
-        _runtime.AnimationRendererSession.LastStep?.Checkpoints ?? [];
-    internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest =>
-        _runtime.AnimationRendererSession.LastStep?.Readiness;
-    internal SlideShowPlaybackRoute PlaybackRoute => _runtime.PlaybackRoute;
-    internal int CurrentPresentationSlideIndex => _runtime.CurrentPresentationSlideIndex;
-    internal Slide? RevealedHiddenSlideForTest => _runtime.RevealedHiddenSlide;
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
@@ -2676,7 +2665,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     {
         var rendererPlan = _runtime.AnimationRendererSession.PlanStep(
             step,
-            CurrentPresentationSlideIndex,
+            _runtime.CurrentPresentationSlideIndex,
             _slideDipW,
             _slideDipH,
             BuildAnimationTargetAvailability(),

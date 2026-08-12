@@ -61,7 +61,7 @@ namespace FreeP.App.Avalonia;
 /// Actual audio/video playback uses the LibVLCSharp adapter with poster/click fallback
 /// when a platform cannot load its native LibVLC runtime.
 /// </summary>
-public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer, ISlideShowDisplayRenderer
+public sealed partial class SlideShowWindow : Window, ISlideShowTransitionPlaybackRenderer, ISlideShowDisplayRenderer
 {
     // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -416,51 +416,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     public SlideShowRecordingReviewApplyResult ApplyRecordingReview() =>
         _runtime.ApplyRecordingReview();
 
-    internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
-    internal string? ActiveMediaCaptionForTest(uint shapeId) => _mediaController.CaptionTextForTest(shapeId);
-    internal void RefreshMediaCaptionsForTest() => _mediaController.RefreshCaptionsForTest();
-    internal SlideShowMediaClickPlan LastMediaClickForTest => _mediaController.LastClick;
-    internal ValidationAccessAdapter CreateValidationAccessAdapter() => new(this);
-    internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest =>
-        _runtime.AnimationRendererSession.LastFrame;
-    internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest =>
-        _runtime.AnimationRendererSession.LastStep?.Checkpoints ?? [];
-    internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest =>
-        _runtime.AnimationRendererSession.LastStep?.Readiness;
-    internal SlideShowPlaybackRoute PlaybackRoute => _runtime.PlaybackRoute;
-    internal int CurrentPresentationSlideIndex => _runtime.CurrentPresentationSlideIndex;
-    internal Slide? RevealedHiddenSlideForTest => _runtime.RevealedHiddenSlide;
-
-    internal sealed class ValidationAccessAdapter
-    {
-        private readonly SlideShowWindow _owner;
-
-        internal ValidationAccessAdapter(SlideShowWindow owner) => _owner = owner;
-
-        internal bool IsVisible => _owner.IsVisible;
-        internal int CurrentSlideIndex => _owner.Controller.CurrentSlideIndex;
-
-        internal string Advance()
-        {
-            var result = _owner.ExecuteAdvance();
-            return result.GetType().Name;
-        }
-
-        internal ValidationMediaPlaybackState CaptureMediaPlayback() => new(
-            _owner._mediaController.Availability?.IsAvailable,
-            _owner._mediaController.Availability?.FailureReason,
-            _owner._mediaController.Active.Count,
-            _owner._mediaController.LastFailure is not null);
-
-        internal void Close() => _owner.Close();
-    }
-
-    internal sealed record ValidationMediaPlaybackState(
-        bool? IsAvailable,
-        string? FailureReason,
-        int ActiveMediaCount,
-        bool HasFailure);
-
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
         SlideShowPresenterDisplayIntent? displayIntent = null) =>
@@ -568,9 +523,6 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
         return WindowsRecordingCaptureBackend.CreateUnavailable(windowsMetadata);
 #endif
     }
-
-    /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
-    internal SlideCanvas CanvasForTest => _slideCanvas;
 
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 
@@ -2772,7 +2724,7 @@ public sealed class SlideShowWindow : Window, ISlideShowTransitionPlaybackRender
     {
         var rendererPlan = _runtime.AnimationRendererSession.PlanStep(
             step,
-            CurrentPresentationSlideIndex,
+            _runtime.CurrentPresentationSlideIndex,
             _slideDipW,
             _slideDipH,
             BuildAnimationTargetAvailability(),
