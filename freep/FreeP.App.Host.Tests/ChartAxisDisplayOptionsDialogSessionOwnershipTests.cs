@@ -14,7 +14,7 @@ public sealed class ChartAxisDisplayOptionsDialogSessionOwnershipTests
         var source = ReadHostSource(fileName);
 
         source.Should().Contain($"new {sessionType}(editor");
-        source.Should().Contain("_session.BuildCommitPlanForTests(_form.CaptureValues())");
+        source.Should().Contain("_session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()))");
         source.Should().Contain("_session.Submit(ReadInput())");
         source.Should().Contain("ReadInput()");
         source.Should().Contain("ChartOptionsDialogChrome.");

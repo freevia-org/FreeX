@@ -18,7 +18,7 @@ public sealed class ChartOptionsDialogDedupSourceTests
             if (!string.Equals(fileName, "ChartExSeriesLayoutDialog.cs", StringComparison.Ordinal))
             {
                 source.Should().Contain("_session.BuildInput(_form.CaptureValues())", fileName);
-                source.Should().Contain("_session.BuildCommitPlanForTests(_form.CaptureValues()", fileName);
+                source.Should().Contain("_session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues())", fileName);
                 source.Should().NotContain("_form.SetText(", fileName);
                 source.Should().NotContain("_form.SetSelectedIndex(", fileName);
                 source.Should().NotContain("_form.SetChecked(", fileName);
@@ -26,8 +26,10 @@ public sealed class ChartOptionsDialogDedupSourceTests
                 if (source.Contains("SetOptionsForTests", StringComparison.Ordinal)
                     || source.Contains("SetOfPieOptionsForTests", StringComparison.Ordinal))
                 {
-                    source.Should().Contain("_form.ApplyValues(_session.BuildTestValues(", fileName);
+                    source.Should().Contain("_form.ApplyValues(buildValues(_session))", fileName);
                 }
+                source.Should().NotContain("OptionsDialogTestSettings", fileName);
+                source.Should().NotContain("_session.BuildTestValues(", fileName);
             }
             source.Should().NotContain("NumberStyles.", fileName);
             source.Should().NotContain("double.TryParse", fileName);

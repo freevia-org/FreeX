@@ -29,13 +29,13 @@ internal sealed class ChartPieOptionsDialog : Window
     }
 
     internal ChartPieOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlanForTests(_form.CaptureValues(), CultureInfo.CurrentCulture);
+        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()), CultureInfo.CurrentCulture);
 
-    internal void SetOptionsForTests(ChartPieOptionsDialogTestSettings settings) =>
-        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
+    internal void SetOptionsForTests(Func<ChartPieOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
+        _form.ApplyValues(buildValues(_session));
 
-    internal void SetOfPieOptionsForTests(ChartOfPieOptionsDialogTestSettings settings) =>
-        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
+    internal void SetOfPieOptionsForTests(Func<ChartPieOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
+        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

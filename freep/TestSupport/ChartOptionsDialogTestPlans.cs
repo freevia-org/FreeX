@@ -10,7 +10,12 @@ public sealed record ChartAreaOptionsDialogTestSettings(
     double? Width,
     bool NoFill = false,
     bool NoOutline = false,
-    double? FillTransparency = null);
+    double? FillTransparency = null)
+{
+    public static implicit operator Func<ChartAreaOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartAreaOptionsDialogTestSettings settings) =>
+        session => session.BuildTestValues(settings, CultureInfo.CurrentCulture);
+}
 
 public sealed record ChartLayoutOptionsDialogTestSettings(
     ChartLayoutTarget Target,
@@ -22,16 +27,30 @@ public sealed record ChartLayoutOptionsDialogTestSettings(
     double? X,
     double? Y,
     double? Width,
-    double? Height);
+    double? Height)
+{
+    public static implicit operator Func<ChartLayoutOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartLayoutOptionsDialogTestSettings settings) =>
+        session => session.BuildTestValues(settings, CultureInfo.CurrentCulture);
+}
 
 public sealed record ChartBubbleOptionsDialogTestSettings(
     int BubbleScalePercent,
     BubbleSizeRepresentation SizeRepresents,
-    bool ShowNegativeBubbles);
+    bool ShowNegativeBubbles)
+{
+    public static implicit operator Func<ChartBubbleOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartBubbleOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+}
 
 public sealed record ChartPieOptionsDialogTestSettings(
     int? FirstSliceAngleDegrees,
-    int DoughnutHolePercent);
+    int DoughnutHolePercent)
+{
+    public static implicit operator Func<ChartPieOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartPieOptionsDialogTestSettings settings) =>
+        session => session.BuildTestValues(settings, CultureInfo.CurrentCulture);
+}
 
 public sealed record ChartOfPieOptionsDialogTestSettings(
     OfPieType Type,
@@ -40,17 +59,30 @@ public sealed record ChartOfPieOptionsDialogTestSettings(
     int SecondPieSizePercent,
     string CustomPointIndices,
     int? GapWidthPercent = null,
-    bool SeriesLines = false);
+    bool SeriesLines = false)
+{
+    public static implicit operator Func<ChartPieOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartOfPieOptionsDialogTestSettings settings) =>
+        session => session.BuildTestValues(settings, CultureInfo.CurrentCulture);
+}
 
 public sealed record ChartPlotStyleOptionsDialogTestSettings(
     ScatterStyle ScatterStyle,
-    RadarStyle RadarStyle);
+    RadarStyle RadarStyle)
+{
+    public static implicit operator Func<ChartPlotStyleOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartPlotStyleOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+}
 
 public sealed record ChartProtectionOptionsDialogTestSettings(
     bool? ChartObject,
     bool? Data,
     bool? Formatting,
-    bool? Selection);
+    bool? Selection)
+{
+    public static implicit operator Func<ChartProtectionOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartProtectionOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+}
 
 public sealed record Chart3DViewOptionsDialogTestSettings(
     int? RotationX,
@@ -60,14 +92,22 @@ public sealed record Chart3DViewOptionsDialogTestSettings(
     int? DepthPercent,
     bool? RightAngleAxes,
     bool? Wireframe,
-    int? BarGapDepthPercent = null);
+    int? BarGapDepthPercent = null)
+{
+    public static implicit operator Func<Chart3DViewOptionsDialogSession, ChartOptionsDialogValues>(
+        Chart3DViewOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+}
 
 public sealed record ChartTextOptionsDialogTestSettings(
     string? FontFamily,
     double? FontSizePt,
     bool? Bold,
     bool? Italic,
-    string? Color);
+    string? Color)
+{
+    public static implicit operator Func<ChartTextOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartTextOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+}
 
 public sealed record ChartDataTableOptionsDialogTestSettings(
     bool ShowDataTable,
@@ -82,7 +122,12 @@ public sealed record ChartDataTableOptionsDialogTestSettings(
     double? FontSizePt = null,
     string? FontFamily = null,
     bool? Bold = null,
-    bool? Italic = null);
+    bool? Italic = null)
+{
+    public static implicit operator Func<ChartDataTableOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartDataTableOptionsDialogTestSettings settings) =>
+        session => session.BuildTestValues(settings, CultureInfo.CurrentCulture);
+}
 
 public sealed record ChartAxisOptionsDialogTestSettings(
     ChartAxisKind Axis,
@@ -105,7 +150,11 @@ public sealed record ChartAxisOptionsDialogTestSettings(
     bool? NoMultiLevelLabels = null,
     bool? AutoCrossing = null,
     bool ReverseOrder = false,
-    bool MinorGridlines = false);
+    bool MinorGridlines = false)
+{
+    public static implicit operator Func<ChartAxisOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartAxisOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+}
 
 public sealed record ChartPointOptionsDialogTestSettings(
     int SeriesIndex,
@@ -131,7 +180,11 @@ public sealed record ChartPointOptionsDialogTestSettings(
     string? LabelColor = null,
     bool ShowBubbleSize = false,
     int? ExplosionPercent = null,
-    bool? ShowLeaderLines = null);
+    bool? ShowLeaderLines = null)
+{
+    public static implicit operator Func<ChartPointOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartPointOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+}
 
 public sealed record ChartSeriesOptionsDialogTestSettings(
     int SeriesIndex,
@@ -170,10 +223,17 @@ public sealed record ChartSeriesOptionsDialogTestSettings(
     bool TrendlineEquation = false,
     bool TrendlineRSquared = false,
     ChartType? OverrideChartType = null,
-    bool? InvertIfNegative = null);
+    bool? InvertIfNegative = null)
+{
+    public static implicit operator Func<ChartSeriesOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartSeriesOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+}
 
 public sealed record ChartDisplayOptionsDialogTestSettings
 {
+    public static implicit operator Func<ChartDisplayOptionsDialogSession, ChartOptionsDialogValues>(
+        ChartDisplayOptionsDialogTestSettings settings) => session => session.BuildTestValues(settings);
+
     public string? Title { get; init; }
     public bool? TitleOverlay { get; init; }
     public ChartExTitlePosition? TitlePosition { get; init; }

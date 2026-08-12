@@ -29,6 +29,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\ChartOptionsDialogTestPlans.cs"
+             Link="TestSupport\ChartOptionsDialogTestPlans.cs" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices.Windows\Free.Shared.AppServices.Windows.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
     <ProjectReference Include="..\FreeP.App.Localization\FreeP.App.Localization.csproj" />

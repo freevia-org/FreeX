@@ -27,10 +27,10 @@ public sealed class ChartTextOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     internal ChartTextOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlanForTests(_form.CaptureValues());
+        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
 
-    internal void SetOptionsForTests(ChartTextOptionsDialogTestSettings settings) =>
-        _form.ApplyValues(_session.BuildTestValues(settings));
+    internal void SetOptionsForTests(Func<ChartTextOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
+        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

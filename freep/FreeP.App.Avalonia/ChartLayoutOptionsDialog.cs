@@ -29,10 +29,10 @@ internal sealed class ChartLayoutOptionsDialog : Window
     }
 
     internal ChartLayoutOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlanForTests(_form.CaptureValues(), CultureInfo.CurrentCulture);
+        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()), CultureInfo.CurrentCulture);
 
-    internal void SetOptionsForTests(ChartLayoutOptionsDialogTestSettings settings) =>
-        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
+    internal void SetOptionsForTests(Func<ChartLayoutOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
+        _form.ApplyValues(buildValues(_session));
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {

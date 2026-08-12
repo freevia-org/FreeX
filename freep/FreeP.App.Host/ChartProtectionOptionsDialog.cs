@@ -27,10 +27,10 @@ public sealed class ChartProtectionOptionsDialog : Free.Shared.Ribbon.Wpf.Dialog
     }
 
     internal ChartProtectionOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlanForTests(_form.CaptureValues());
+        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
 
-    internal void SetOptionsForTests(ChartProtectionOptionsDialogTestSettings settings) =>
-        _form.ApplyValues(_session.BuildTestValues(settings));
+    internal void SetOptionsForTests(Func<ChartProtectionOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
+        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

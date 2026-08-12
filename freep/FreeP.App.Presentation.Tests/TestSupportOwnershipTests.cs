@@ -11,6 +11,10 @@ public sealed class TestSupportOwnershipTests
             .Should().BeNull();
         productionAssembly.GetType("FreeP.App.Compositor.SlideShowRecordingHostAdapterParityPlanner")
             .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.ChartOptionsDialogTestPlanCatalog")
+            .Should().BeNull();
+        productionAssembly.GetType("FreeP.App.Compositor.ChartSeriesOptionsDialogTestSettings")
+            .Should().BeNull();
     }
 
     [Fact]
@@ -21,6 +25,12 @@ public sealed class TestSupportOwnershipTests
             typeof(TestSupportOwnershipTests).Assembly).Should().BeTrue();
         ReferenceEquals(
             typeof(SlideShowRecordingHostAdapterParityPlanner).Assembly,
+            typeof(TestSupportOwnershipTests).Assembly).Should().BeTrue();
+        ReferenceEquals(
+            typeof(ChartOptionsDialogTestPlanCatalog).Assembly,
+            typeof(TestSupportOwnershipTests).Assembly).Should().BeTrue();
+        ReferenceEquals(
+            typeof(ChartSeriesOptionsDialogTestSettings).Assembly,
             typeof(TestSupportOwnershipTests).Assembly).Should().BeTrue();
     }
 }

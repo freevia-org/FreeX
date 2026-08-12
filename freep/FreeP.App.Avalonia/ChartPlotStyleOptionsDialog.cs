@@ -28,10 +28,10 @@ internal sealed class ChartPlotStyleOptionsDialog : Window
     }
 
     internal ChartPlotStyleOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlanForTests(_form.CaptureValues());
+        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
 
-    internal void SetOptionsForTests(ChartPlotStyleOptionsDialogTestSettings settings) =>
-        _form.ApplyValues(_session.BuildTestValues(settings));
+    internal void SetOptionsForTests(Func<ChartPlotStyleOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
+        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

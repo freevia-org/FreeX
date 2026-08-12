@@ -28,10 +28,10 @@ internal sealed class Chart3DViewOptionsDialog : Window
     }
 
     internal Chart3DViewOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlanForTests(_form.CaptureValues());
+        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()));
 
-    internal void SetOptionsForTests(Chart3DViewOptionsDialogTestSettings settings) =>
-        _form.ApplyValues(_session.BuildTestValues(settings));
+    internal void SetOptionsForTests(Func<Chart3DViewOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
+        _form.ApplyValues(buildValues(_session));
 
     private void OnOk()
     {

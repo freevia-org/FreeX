@@ -26,6 +26,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\TestSupport\ChartOptionsDialogTestPlans.cs"
+             Link="TestSupport\ChartOptionsDialogTestPlans.cs" />
     <ProjectReference Include="..\FreeP.App.Avalonia\FreeP.App.Avalonia.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
   </ItemGroup>

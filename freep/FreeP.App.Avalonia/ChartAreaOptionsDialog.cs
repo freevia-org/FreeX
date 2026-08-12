@@ -31,10 +31,10 @@ internal sealed class ChartAreaOptionsDialog : Window
     }
 
     internal ChartAreaOptions BuildCommitPlanForTests() =>
-        _session.BuildCommitPlanForTests(_form.CaptureValues(), CultureInfo.CurrentCulture);
+        _session.BuildCommitPlan(_session.BuildInput(_form.CaptureValues()), CultureInfo.CurrentCulture);
 
-    internal void SetOptionsForTests(ChartAreaOptionsDialogTestSettings settings) =>
-        _form.ApplyValues(_session.BuildTestValues(settings, CultureInfo.CurrentCulture));
+    internal void SetOptionsForTests(Func<ChartAreaOptionsDialogSession, ChartOptionsDialogValues> buildValues) =>
+        _form.ApplyValues(buildValues(_session));
 
     private void OnValueChanged(ChartOptionsDialogFieldId fieldId)
     {
