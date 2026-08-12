@@ -26,7 +26,7 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
         var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, targetArchive, context);
-        XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, targetArchive, context, drawingPaths);
+        XlsxWorksheetDrawingReferencePreserver.Preserve(context, drawingPaths);
 
         var worksheetXml = LoadPackageXml(targetArchive, "xl/worksheets/sheet5.xml");
         worksheetXml.Root!
@@ -65,7 +65,7 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
         var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, targetArchive, context);
-        XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, targetArchive, context, drawingPaths);
+        XlsxWorksheetDrawingReferencePreserver.Preserve(context, drawingPaths);
 
         var worksheetXml = LoadPackageXml(targetArchive, "xl/worksheets/sheet5.xml");
         var drawingRelId = worksheetXml.Root!
@@ -101,7 +101,7 @@ public sealed class XlsxDrawingPackageSchemaValidationTests
         var generatedEntriesBeforeMerge = XlsxPackageMetadataMerger.CopyUnknownPackageParts(sourceArchive, targetArchive);
         XlsxPackageMetadataMerger.MergeRelationshipParts(sourceArchive, targetArchive, generatedEntriesBeforeMerge);
         var drawingPaths = XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths(sourceArchive, targetArchive, context);
-        XlsxWorksheetDrawingReferencePreserver.Preserve(sourceArchive, targetArchive, context, drawingPaths);
+        XlsxWorksheetDrawingReferencePreserver.Preserve(context, drawingPaths);
 
         XlsxDrawingSchemaNormalizer.NormalizePackage(targetArchive);
 

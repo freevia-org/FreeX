@@ -109,7 +109,7 @@ internal static class XlsxWorksheetHyperlinkRelationshipPruner
         string targetWorksheetPath,
         ZipArchiveEntry relsEntry)
     {
-        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath);
         var previouslyLiveHyperlinkIds = ReadHyperlinkRelationshipIds(sourceWorksheetXml);
         if (previouslyLiveHyperlinkIds.Count == 0)
             return;

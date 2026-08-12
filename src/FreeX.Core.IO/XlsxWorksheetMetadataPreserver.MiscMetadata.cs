@@ -304,15 +304,13 @@ internal static partial class XlsxWorksheetMetadataPreserver
     }
 
     private static bool RebindWorksheetCustomPropertyRelationships(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
         XElement sourceCustomProperties,
         XElement targetRoot,
         string sourceWorksheetPath,
         string targetWorksheetPath,
         XNamespace workbookNs,
-        XNamespace relNs,
-        XNamespace packageRelNs)
+        XNamespace relNs)
     {
         const string customPropertyRelationshipType =
             "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customProperty";
@@ -339,22 +337,15 @@ internal static partial class XlsxWorksheetMetadataPreserver
         if (sourcePropertiesByName.Count == 0)
             return false;
 
-        var sourceRelationshipTargets = XlsxRelationshipReader.LoadTargets(
-            sourceArchive,
-            XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
-            sourceWorksheetPath,
-            packageRelNs);
+        var sourceRelationshipTargets = context.GetSourceRelationshipTargets(sourceWorksheetPath);
         if (sourceRelationshipTargets.Count == 0)
             return false;
 
-        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-        var targetRelsEntry = targetArchive.GetEntry(targetRelsPath);
-        var targetRelsXml = targetRelsEntry is null
-            ? new XDocument(new XElement(packageRelNs + "Relationships"))
-            : XlsxPackageXmlEditor.LoadXml(targetRelsEntry);
+        var targetArchive = context.TargetArchive;
+        var (targetRelsPath, targetRelsXml) = context.LoadOrCreateTargetRelationships(targetWorksheetPath);
 
         var changed = false;
-        var relsChanged = targetRelsEntry is null;
+        var relsChanged = targetArchive.GetEntry(targetRelsPath) is null;
         foreach (var targetProperty in targetCustomProperties.Elements(workbookNs + "customPr"))
         {
             var name = targetProperty.Attribute("name")?.Value;
@@ -369,7 +360,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
             var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
                 targetRelsXml,
-                packageRelNs,
+                context.PackageRelNs,
                 targetWorksheetPath,
                 sourceTargetPath,
                 customPropertyRelationshipType);
@@ -386,17 +377,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
         }
 
         if (relsChanged)
-            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetRelsPath, targetRelsXml);
+            context.ReplaceTargetPartXml(targetRelsPath, targetRelsXml);
 
         return changed;
     }
 
     private static void RebindWorksheetCustomPropertyRelationships(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext context,
         IReadOnlySet<string>? worksheetsWithPreservableSourceMetadata)
     {
+        var targetArchive = context.TargetArchive;
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
             // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name -- resolve
@@ -413,7 +403,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 continue;
             }
 
-            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath);
             var sourceCustomProperties = sourceWorksheetXml?.Root?.Element(context.WorkbookNs + "customProperties");
             if (sourceCustomProperties is null)
                 continue;
@@ -428,15 +418,13 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 continue;
 
             if (RebindWorksheetCustomPropertyRelationships(
-                sourceArchive,
-                targetArchive,
+                context,
                 sourceCustomProperties,
                 targetRoot,
                 sourceWorksheetPath,
                 targetWorksheetPath,
                 context.WorkbookNs,
-                context.RelNs,
-                context.PackageRelNs))
+                context.RelNs))
             {
                 XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
             }

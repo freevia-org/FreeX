@@ -41,14 +41,14 @@ internal static class XlsxWorksheetFormControlPreserver
     private const long EmusPerPixel = 9525;
 
     public static void Preserve(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext? context,
         Workbook? workbook = null)
     {
         if (context is null)
             return;
 
+        var sourceArchive = context.SourceArchive;
+        var targetArchive = context.TargetArchive;
         var anyChange = false;
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
@@ -61,7 +61,7 @@ internal static class XlsxWorksheetFormControlPreserver
                 continue;
             }
 
-            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+            var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath);
             var sourceRoot = sourceWorksheetXml?.Root;
             if (sourceRoot is null)
                 continue;
@@ -158,8 +158,6 @@ internal static class XlsxWorksheetFormControlPreserver
     /// </para>
     /// </summary>
     public static void CloneOntoDuplicatedSheet(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext context,
         string sourceWorksheetPath,
         string targetWorksheetPath,
@@ -168,7 +166,9 @@ internal static class XlsxWorksheetFormControlPreserver
         if (newSheet.FormControls.Count == 0)
             return;
 
-        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceArchive = context.SourceArchive;
+        var targetArchive = context.TargetArchive;
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath);
         var sourceRoot = sourceWorksheetXml?.Root;
         if (sourceRoot is null)
             return;
@@ -190,14 +190,8 @@ internal static class XlsxWorksheetFormControlPreserver
         if (FindControlsContainer(targetRoot, context.WorkbookNs) is not null)
             return;
 
-        var sourceRelsPath = XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath);
-        var sourceRels = XlsxRelationshipReader.LoadTargets(
-            sourceArchive, sourceRelsPath, sourceWorksheetPath, context.PackageRelNs);
-
-        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-        var targetRelsXml = targetArchive.GetEntry(targetRelsPath) is { } targetRelsEntry
-            ? XlsxPackageXmlEditor.LoadXml(targetRelsEntry)
-            : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+        var sourceRels = context.GetSourceRelationshipTargets(sourceWorksheetPath);
+        var (targetRelsPath, targetRelsXml) = context.LoadOrCreateTargetRelationships(targetWorksheetPath);
 
         // Clone every distinct ctrlProp part the source controls reference into fresh parts owned
         // solely by the duplicate.
@@ -365,17 +359,14 @@ internal static class XlsxWorksheetFormControlPreserver
         XlsxPackageXmlEditor.EnsureDefaultContentType(
             targetArchive, "vml", "application/vnd.openxmlformats-officedocument.vmlDrawing");
 
-        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-        var targetRelsXml = targetArchive.GetEntry(targetRelsPath) is { } targetRelsEntry
-            ? XlsxPackageXmlEditor.LoadXml(targetRelsEntry)
-            : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+        var (targetRelsPath, targetRelsXml) = context.LoadOrCreateTargetRelationships(targetWorksheetPath);
         var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
             targetRelsXml,
             context.PackageRelNs,
             targetWorksheetPath,
             clonedVmlPath,
             VmlDrawingRelationshipType);
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetRelsPath, targetRelsXml);
+        context.ReplaceTargetPartXml(targetRelsPath, targetRelsXml);
 
         var marker = new XElement(context.WorkbookNs + "legacyDrawing",
             new XAttribute(context.RelNs + "id", targetRelId));
@@ -478,14 +469,14 @@ internal static class XlsxWorksheetFormControlPreserver
     /// during the earlier <see cref="Preserve"/> call.
     /// </summary>
     public static void ReapplyVmlAnchorsAfterCommentReconciliation(
-        ZipArchive sourceArchive,
-        ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext? context,
         Workbook? workbook)
     {
         if (context is null || workbook is null)
             return;
 
+        var sourceArchive = context.SourceArchive;
+        var targetArchive = context.TargetArchive;
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
             if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
@@ -536,7 +527,7 @@ internal static class XlsxWorksheetFormControlPreserver
         if (sheet.FormControls.Count == 0)
             return;
 
-        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath);
         var sourceRoot = sourceWorksheetXml?.Root;
         if (sourceRoot is null)
             return;
@@ -545,11 +536,7 @@ internal static class XlsxWorksheetFormControlPreserver
         if (controlElements.Count == 0)
             return;
 
-        var worksheetRels = XlsxRelationshipReader.LoadTargets(
-            sourceArchive,
-            XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath),
-            sourceWorksheetPath,
-            context.PackageRelNs);
+        var worksheetRels = context.GetSourceRelationshipTargets(sourceWorksheetPath);
 
         // Controls are read into FormControlModel in the same document order they're enumerated
         // here (XlsxFormControlMapper.ReadWorksheet uses the identical traversal), so pairing by
@@ -694,19 +681,14 @@ internal static class XlsxWorksheetFormControlPreserver
         XlsxSourcePackagePreservationContext context,
         string sourceWorksheetPath)
     {
-        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath);
         var sourceRoot = sourceWorksheetXml?.Root;
         var sourceMarker = sourceRoot?.Element(context.WorkbookNs + "legacyDrawing");
         var sourceRelId = sourceMarker?.Attribute(context.RelNs + "id")?.Value;
         if (string.IsNullOrWhiteSpace(sourceRelId))
             return null;
 
-        var sourceRelsPath = XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath);
-        var sourceRels = XlsxRelationshipReader.LoadTargets(
-            sourceArchive,
-            sourceRelsPath,
-            sourceWorksheetPath,
-            context.PackageRelNs);
+        var sourceRels = context.GetSourceRelationshipTargets(sourceWorksheetPath);
 
         return sourceRels.TryGetValue(sourceRelId, out var vmlPath) && !string.IsNullOrWhiteSpace(vmlPath)
             ? vmlPath
@@ -864,22 +846,14 @@ internal static class XlsxWorksheetFormControlPreserver
         if (string.IsNullOrWhiteSpace(sourceRelId))
             return false;
 
-        var sourceRelsPath = XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath);
-        var sourceRels = XlsxRelationshipReader.LoadTargets(
-            sourceArchive,
-            sourceRelsPath,
-            sourceWorksheetPath,
-            context.PackageRelNs);
+        var sourceRels = context.GetSourceRelationshipTargets(sourceWorksheetPath);
         if (!sourceRels.TryGetValue(sourceRelId, out var vmlPath) ||
             targetArchive.GetEntry(vmlPath) is null)
         {
             return false;
         }
 
-        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
-        var targetRelsXml = targetArchive.GetEntry(targetRelsPath) is { } targetRelsEntry
-            ? XlsxPackageXmlEditor.LoadXml(targetRelsEntry)
-            : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+        var (targetRelsPath, targetRelsXml) = context.LoadOrCreateTargetRelationships(targetWorksheetPath);
         var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
             targetRelsXml,
             context.PackageRelNs,
@@ -1067,7 +1041,7 @@ internal static class XlsxWorksheetFormControlPreserver
         string targetWorksheetPath,
         Sheet sheet)
     {
-        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceWorksheetPath);
         var sourceRoot = sourceWorksheetXml?.Root;
         if (sourceRoot is null)
             return;

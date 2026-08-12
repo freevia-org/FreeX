@@ -146,7 +146,7 @@ internal static class XlsxWorksheetDrawingPartMerger
         XNamespace packageRelNs,
         XlsxSourcePackagePreservationContext? sourceContext = null)
     {
-        var worksheetXml = sourceContext?.GetSourceWorksheetXml(archive, worksheetPath);
+        var worksheetXml = sourceContext?.GetSourceWorksheetXml(worksheetPath);
         if (worksheetXml is null)
         {
             var worksheetEntry = archive.GetEntry(worksheetPath);

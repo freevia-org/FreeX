@@ -5,20 +5,15 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxExternalLinkReferencePreserver
 {
-    public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
+    public static void Preserve(XlsxSourcePackagePreservationContext? context)
     {
-        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
-
-        var sourceWorkbookEntry = sourceArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookEntry = targetArchive.GetEntry("xl/workbook.xml");
-        var targetWorkbookRelsEntry = targetArchive.GetEntry("xl/_rels/workbook.xml.rels");
-        if (sourceWorkbookEntry is null || targetWorkbookEntry is null || targetWorkbookRelsEntry is null)
+        if (context is null || !context.HasTargetWorkbookRelationshipsPart)
             return;
 
-        var sourceWorkbookXml = XlsxPackageXmlEditor.LoadXml(sourceWorkbookEntry);
-        var sourceExternalReferences = sourceWorkbookXml.Root?
+        var workbookNs = context.WorkbookNs;
+        var relNs = context.RelNs;
+        var packageRelNs = context.PackageRelNs;
+        var sourceExternalReferences = context.SourceWorkbookXml.Root?
             .Element(workbookNs + "externalReferences")?
             .Elements(workbookNs + "externalReference")
             .ToList()
@@ -26,14 +21,11 @@ internal static class XlsxExternalLinkReferencePreserver
         if (sourceExternalReferences.Count == 0)
             return;
 
-        var sourceWorkbookRels = XlsxRelationshipReader.LoadTargets(
-            sourceArchive,
-            "xl/_rels/workbook.xml.rels",
-            "xl/workbook.xml",
-            packageRelNs);
-        var targetWorkbookXml = XlsxPackageXmlEditor.LoadXml(targetWorkbookEntry);
-        var targetWorkbookRelsXml = XlsxPackageXmlEditor.LoadXml(targetWorkbookRelsEntry);
+        var sourceWorkbookRels = context.SourceWorkbookRels;
+        var targetWorkbookXml = context.LoadCurrentTargetWorkbookXml();
+        var targetWorkbookRelsXml = context.LoadCurrentTargetWorkbookRelationshipsXml();
         var targetRoot = targetWorkbookXml.Root;
+
         if (targetRoot is null)
             return;
 
@@ -139,7 +131,7 @@ internal static class XlsxExternalLinkReferencePreserver
         if (!targetExternalReferences.HasElements)
             targetExternalReferences.Remove();
 
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/workbook.xml", targetWorkbookXml);
-        XlsxPackageXmlEditor.ReplaceXml(targetArchive, "xl/_rels/workbook.xml.rels", targetWorkbookRelsXml);
+        context.ReplaceTargetWorkbookXml(targetWorkbookXml);
+        context.ReplaceTargetWorkbookRelationshipsXml(targetWorkbookRelsXml);
     }
 }
