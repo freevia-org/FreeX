@@ -1,6 +1,5 @@
 using System.Globalization;
 using Free.Shared.Shell;
-using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Backstage;
@@ -112,7 +111,7 @@ public static class BackstagePrintPanePlanner
 {
     private static readonly string[] PrintPreviewFixtureScenarioIds =
     [
-        "backstage-print-preview-fidelity",
+        BackstagePrintEvidenceRequirementCatalog.PrintPreviewScenarioId,
         "page-composition-print-layout",
         "f2-hf-basic",
         "f2-footnotes",
@@ -121,7 +120,7 @@ public static class BackstagePrintPanePlanner
 
     private static readonly string[] PdfExportFixtureScenarioIds =
     [
-        "backstage-pdf-export-fidelity",
+        BackstagePrintEvidenceRequirementCatalog.PdfExportScenarioId,
         "page-composition-print-layout",
         "f2-hf-basic",
         "f2-footnotes",
@@ -131,18 +130,15 @@ public static class BackstagePrintPanePlanner
     public static BackstagePrintPanePlan Build(
         string displayName,
         PageSettings page,
-        BackstageDirectPrintCapability? directPrintCapability = null,
-        FreeWVisualEvidenceNormalizedSummary? visualEvidenceSummary = null)
+        BackstageDirectPrintCapability? directPrintCapability = null)
     {
         ArgumentNullException.ThrowIfNull(page);
 
         var directPrint = directPrintCapability ?? BackstageDirectPrintCapability.Deferred();
         var printPreviewReadiness = BuildEvidenceReadiness(
-            BackstagePrintEvidenceKind.PrintPreviewFidelity,
-            visualEvidenceSummary);
+            BackstagePrintEvidenceKind.PrintPreviewFidelity);
         var pdfExportReadiness = BuildEvidenceReadiness(
-            BackstagePrintEvidenceKind.PdfExportFidelity,
-            visualEvidenceSummary);
+            BackstagePrintEvidenceKind.PdfExportFidelity);
 
         return new BackstagePrintPanePlan(
             "Print this document using the current page layout and printer settings.",
@@ -188,8 +184,7 @@ public static class BackstagePrintPanePlanner
     }
 
     public static BackstagePrintEvidenceReadiness BuildEvidenceReadiness(
-        BackstagePrintEvidenceKind kind,
-        FreeWVisualEvidenceNormalizedSummary? visualEvidenceSummary)
+        BackstagePrintEvidenceKind kind)
     {
         var fixtureDescription = kind switch
         {
@@ -209,84 +204,16 @@ public static class BackstagePrintPanePlanner
                 []);
         }
 
-        if (visualEvidenceSummary is null)
-        {
-            return new BackstagePrintEvidenceReadiness(
-                BackstagePrintEvidenceStatus.FixtureReady,
-                fixtureDescription,
-                []);
-        }
-
-        var failures = new List<string>();
-        foreach (var requirement in requirements)
-        {
-            var scenario = visualEvidenceSummary.Scenarios.SingleOrDefault(candidate =>
-                string.Equals(candidate.HostId, requirement.HostId, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(candidate.ScenarioId, requirement.ScenarioId, StringComparison.OrdinalIgnoreCase));
-
-            if (scenario is null)
-            {
-                failures.Add(
-                    $"{requirement.HostId}/{requirement.ScenarioId}: missing normalized scenario row");
-                continue;
-            }
-
-            if (scenario.TrustedOutputs < requirement.MinimumExpectedOutputs)
-            {
-                failures.Add(
-                    $"{requirement.HostId}/{requirement.ScenarioId}: expected at least {requirement.MinimumExpectedOutputs.ToString(CultureInfo.InvariantCulture)} trusted output(s), found {scenario.TrustedOutputs.ToString(CultureInfo.InvariantCulture)}");
-            }
-
-            failures.AddRange(scenario.Trust.Failures.Select(failure =>
-                $"{requirement.HostId}/{requirement.ScenarioId}: {failure}"));
-        }
-
-        var scenarioIds = requirements
-            .Select(requirement => requirement.ScenarioId)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        failures.AddRange(visualEvidenceSummary.Trust.Failures
-            .Where(failure => scenarioIds.Any(scenarioId =>
-                failure.Contains(scenarioId, StringComparison.OrdinalIgnoreCase)))
-            .Select(failure => "summary: " + failure));
-
-        if (failures.Count == 0)
-        {
-            return new BackstagePrintEvidenceReadiness(
-                BackstagePrintEvidenceStatus.HostBacked,
-                "Real WPF and Avalonia captures satisfy the visual summary contract for " +
-                string.Join(", ", scenarioIds) + ".",
-                []);
-        }
-
         return new BackstagePrintEvidenceReadiness(
-            BackstagePrintEvidenceStatus.Deferred,
-            "Real WPF/Avalonia captures are not ready: " + string.Join("; ", failures.Distinct(StringComparer.OrdinalIgnoreCase)),
-            failures.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+            BackstagePrintEvidenceStatus.FixtureReady,
+            fixtureDescription,
+            []);
     }
 
     public static IReadOnlyList<BackstagePrintEvidenceRequirement> BuildEvidenceRequirements(
         BackstagePrintEvidenceKind kind)
     {
-        IReadOnlyList<string> scenarioIds = kind switch
-        {
-            BackstagePrintEvidenceKind.PrintPreviewFidelity => [PrintPreviewFixtureScenarioIds[0]],
-            BackstagePrintEvidenceKind.PdfExportFidelity => [PdfExportFixtureScenarioIds[0]],
-            _ => []
-        };
-
-        if (scenarioIds.Count == 0)
-            return [];
-
-        return FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios
-            .Where(expected => scenarioIds.Contains(expected.ScenarioId, StringComparer.OrdinalIgnoreCase))
-            .OrderBy(expected => expected.HostId, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(expected => expected.ScenarioId, StringComparer.OrdinalIgnoreCase)
-            .Select(expected => new BackstagePrintEvidenceRequirement(
-                expected.HostId,
-                expected.ScenarioId,
-                expected.MinimumExpectedOutputs))
-            .ToArray();
+        return BackstagePrintEvidenceRequirementCatalog.Build(kind);
     }
 
     private static string Normalize(string? value, string fallback) =>

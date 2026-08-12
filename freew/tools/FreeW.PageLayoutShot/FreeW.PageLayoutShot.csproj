@@ -13,5 +13,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\FreeW.App.Avalonia\FreeW.App.Avalonia.csproj" />
     <ProjectReference Include="..\..\FreeW.App.Presentation\FreeW.App.Presentation.csproj" />
+    <ProjectReference Include="..\..\tests\FreeW.VisualEvidence.TestSupport\FreeW.VisualEvidence.TestSupport.csproj" />
   </ItemGroup>
 </Project>
