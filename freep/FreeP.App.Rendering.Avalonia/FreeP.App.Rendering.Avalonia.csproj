@@ -14,6 +14,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
+    <Compile Include="..\TestSupport\Rendering.Avalonia\AvaloniaCanvasGestureHandler.TestAccess.cs"
+             Link="AvaloniaCanvasGestureHandler.TestAccess.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Fonts.Inter" />

@@ -14,6 +14,16 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
+    <OutputPath>bin\TestSupport\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\TestSupport\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreePRendererTestSupport)' == 'true'">
+    <Compile Include="..\TestSupport\Rendering.Wpf\CanvasGestureHandler.TestAccess.cs"
+             Link="CanvasGestureHandler.TestAccess.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\shared\Free.Shared.Shell.Wpf\Free.Shared.Shell.Wpf.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />

@@ -19,7 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
+    <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj"
+                      AdditionalProperties="FreePRendererTestSupport=true" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
   </ItemGroup>
