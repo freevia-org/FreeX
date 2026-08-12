@@ -27,6 +27,8 @@
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePVisualEvidenceHost)' == 'true'">
     <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
              Link="MainWindow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.DiagnosticsAccess.cs"
+             Link="MainWindow.DiagnosticsAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\BackstageView.TestAccess.cs"
              Link="Backstage\BackstageView.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Wpf\BasicDialogs.TestAccess.cs"

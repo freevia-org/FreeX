@@ -18,6 +18,7 @@ public sealed class HostAccessOwnershipTests
         var project = File.ReadAllText(Path.Combine(hostDirectory, "FreeP.App.Avalonia.csproj"));
         project.Should().Contain("'$(FreePHostAccess)' == 'true'");
         project.Should().Contain("..\\TestSupport\\HostAccess.Avalonia\\MainWindow.TestAccess.cs");
+        project.Should().Contain("..\\TestSupport\\HostAccess.Avalonia\\MainWindow.DiagnosticsAccess.cs");
         project.Should().Contain("<InternalsVisibleTo Include=\"FreeP.App.Avalonia.Tests\"");
         project.Should().Contain("<InternalsVisibleTo Include=\"FreeP.VisualEvidence.Avalonia\"");
         project.Should().Contain("<InternalsVisibleTo Include=\"FreeP.Validation.Avalonia\"");

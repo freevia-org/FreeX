@@ -60,7 +60,7 @@ public sealed partial class CanvasGestureHandler
         _adorner.UpdateMarquee(new Rect(3, 3, 8, 8));
         _adorner.UpdateSnapGuides(
             [new SnapGuideLine { IsHorizontal = true, Position = 4, Label = "test" }],
-            SlideTransform.Identity);
+            SlideTransformCore.Identity);
     }
 
     internal void SeedResizeStateForTests(

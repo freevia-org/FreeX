@@ -70,6 +70,8 @@
   <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePVisualEvidenceHost)' == 'true' Or '$(FreePValidationHost)' == 'true'">
     <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.TestAccess.cs"
              Link="MainWindow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Avalonia\MainWindow.DiagnosticsAccess.cs"
+             Link="MainWindow.DiagnosticsAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\BackstageView.TestAccess.cs"
              Link="Backstage\BackstageView.TestAccess.cs" />
     <Compile Include="..\TestSupport\HostAccess.Avalonia\BasicDialogs.TestAccess.cs"

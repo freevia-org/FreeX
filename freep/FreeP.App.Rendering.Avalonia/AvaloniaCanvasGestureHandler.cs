@@ -21,7 +21,7 @@ namespace FreeP.App.Rendering.Avalonia;
 ///   <item>All coordinate work uses the framework-free gesture router and preview projector.</item>
 /// </list>
 /// </summary>
-public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
+public sealed partial class AvaloniaCanvasGestureHandler : IDisposable, ICanvasGesturePreviewSurface
 {
     // ── Wiring ─────────────────────────────────────────────────────────────────
 
@@ -325,49 +325,36 @@ public sealed partial class AvaloniaCanvasGestureHandler : IDisposable
             _editor.CurrentSlide,
             _editor.Presentation,
             transform);
-        switch (visual.Kind)
-        {
-            case CanvasGestureKind.Move:
-                _adorner.UpdatePreview(
-                    visual.PreviewBounds is { } bounds ? ToAvaloniaRect(bounds) : null);
-                _adorner.UpdateSnapGuides(
-                    visual.SnapGuides.Count > 0 ? visual.SnapGuides : null,
-                    transform);
-                break;
-
-            case CanvasGestureKind.Resize when visual.MultiTransform is { } multiResize:
-                _adorner.UpdateTransformPreview(multiResize);
-                _canvas.UpdateTransformPreview(multiResize);
-                break;
-
-            case CanvasGestureKind.Resize when visual.PreviewBounds is { } resizeBounds:
-                _adorner.UpdatePreview(ToAvaloniaRect(resizeBounds));
-                break;
-
-            case CanvasGestureKind.Rotate when visual.MultiTransform is { } multiRotate:
-                _adorner.UpdateTransformPreview(multiRotate);
-                _canvas.UpdateTransformPreview(multiRotate);
-                break;
-
-            case CanvasGestureKind.Rotate when
-                visual.PreviewBounds is { } rotationBounds &&
-                visual.RotationDegrees is { } angle:
-                _adorner.UpdatePreview(ToAvaloniaRect(rotationBounds), angle);
-                break;
-
-            case CanvasGestureKind.GeometryAdjustment when
-                visual.GeometryHandleName is { } handleName &&
-                visual.GeometryScreenPoint is { } geometryScreen:
-                _adorner.UpdateGeometryPreview(
-                    handleName,
-                    new Point(geometryScreen.X, geometryScreen.Y));
-                break;
-
-            case CanvasGestureKind.Marquee when visual.PreviewBounds is { } marquee:
-                _adorner.UpdateMarquee(ToAvaloniaRect(marquee));
-                break;
-        }
+        CanvasGesturePreviewDispatcher.Apply(visual, transform, this);
     }
+
+    void ICanvasGesturePreviewSurface.UpdatePreview(
+        SlideScreenRect? bounds,
+        double rotationDegrees) =>
+        _adorner.UpdatePreview(
+            bounds is { } value ? ToAvaloniaRect(value) : null,
+            rotationDegrees);
+
+    void ICanvasGesturePreviewSurface.UpdateSnapGuides(
+        IReadOnlyList<SnapGuideLine>? guides,
+        SlideTransformCore transform) =>
+        _adorner.UpdateSnapGuides(guides, transform);
+
+    void ICanvasGesturePreviewSurface.UpdateTransformPreview(CanvasMultiTransformPlan plan)
+    {
+        _adorner.UpdateTransformPreview(plan);
+        _canvas.UpdateTransformPreview(plan);
+    }
+
+    void ICanvasGesturePreviewSurface.UpdateGeometryPreview(
+        string handleName,
+        CanvasGesturePoint screenPoint) =>
+        _adorner.UpdateGeometryPreview(
+            handleName,
+            new Point(screenPoint.X, screenPoint.Y));
+
+    void ICanvasGesturePreviewSurface.UpdateMarquee(SlideScreenRect bounds) =>
+        _adorner.UpdateMarquee(ToAvaloniaRect(bounds));
 
     // ── Resize gesture ─────────────────────────────────────────────────────────
 

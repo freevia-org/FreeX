@@ -22,7 +22,7 @@ namespace FreeP.App.Rendering.Wpf;
 ///         projector so the logic is fully unit-testable.</item>
 /// </list>
 /// </summary>
-public sealed partial class CanvasGestureHandler : IDisposable
+public sealed partial class CanvasGestureHandler : IDisposable, ICanvasGesturePreviewSurface
 {
     // ── Wiring ────────────────────────────────────────────────────────────────────────────────
 
@@ -282,61 +282,49 @@ public sealed partial class CanvasGestureHandler : IDisposable
         _adorner.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
         _adorner.UpdateGeometryPreview(null, null);
         _adorner.UpdateMarquee(null);
-        _adorner.UpdateSnapGuides(null, SlideTransform.Identity);
+        _adorner.UpdateSnapGuides(null, SlideTransformCore.Identity);
     }
 
     // ── Move gesture ──────────────────────────────────────────────────────────────────────────
 
     private void ApplyPreviewPlan(CanvasGesturePreviewPlan plan, SlideTransform transform)
     {
+        var coreTransform = ToCoreTransform(transform);
         var visual = CanvasGesturePreviewProjector.Project(
             plan,
             _editor.CurrentSlide,
             _editor.Presentation,
-            ToCoreTransform(transform));
-        switch (visual.Kind)
-        {
-            case CanvasGestureKind.Move:
-                _adorner.UpdatePreview(
-                    visual.PreviewBounds is { } bounds ? ToWpfRect(bounds) : null);
-                _adorner.UpdateSnapGuides(
-                    visual.SnapGuides.Count > 0 ? visual.SnapGuides : null,
-                    transform);
-                break;
-
-            case CanvasGestureKind.Resize when visual.MultiTransform is { } multiResize:
-                _adorner.UpdateTransformPreview(multiResize);
-                _canvas.UpdateTransformPreview(multiResize);
-                break;
-
-            case CanvasGestureKind.Resize when visual.PreviewBounds is { } resizeBounds:
-                _adorner.UpdatePreview(ToWpfRect(resizeBounds));
-                break;
-
-            case CanvasGestureKind.Rotate when visual.MultiTransform is { } multiRotate:
-                _adorner.UpdateTransformPreview(multiRotate);
-                _canvas.UpdateTransformPreview(multiRotate);
-                break;
-
-            case CanvasGestureKind.Rotate when
-                visual.PreviewBounds is { } rotationBounds &&
-                visual.RotationDegrees is { } angle:
-                _adorner.UpdatePreview(ToWpfRect(rotationBounds), angle);
-                break;
-
-            case CanvasGestureKind.GeometryAdjustment when
-                visual.GeometryHandleName is { } handleName &&
-                visual.GeometryScreenPoint is { } geometryScreen:
-                _adorner.UpdateGeometryPreview(
-                    handleName,
-                    new Point(geometryScreen.X, geometryScreen.Y));
-                break;
-
-            case CanvasGestureKind.Marquee when visual.PreviewBounds is { } marquee:
-                _adorner.UpdateMarquee(ToWpfRect(marquee));
-                break;
-        }
+            coreTransform);
+        CanvasGesturePreviewDispatcher.Apply(visual, coreTransform, this);
     }
+
+    void ICanvasGesturePreviewSurface.UpdatePreview(
+        SlideScreenRect? bounds,
+        double rotationDegrees) =>
+        _adorner.UpdatePreview(
+            bounds is { } value ? ToWpfRect(value) : null,
+            rotationDegrees);
+
+    void ICanvasGesturePreviewSurface.UpdateSnapGuides(
+        IReadOnlyList<SnapGuideLine>? guides,
+        SlideTransformCore transform) =>
+        _adorner.UpdateSnapGuides(guides, transform);
+
+    void ICanvasGesturePreviewSurface.UpdateTransformPreview(CanvasMultiTransformPlan plan)
+    {
+        _adorner.UpdateTransformPreview(plan);
+        _canvas.UpdateTransformPreview(plan);
+    }
+
+    void ICanvasGesturePreviewSurface.UpdateGeometryPreview(
+        string handleName,
+        CanvasGesturePoint screenPoint) =>
+        _adorner.UpdateGeometryPreview(
+            handleName,
+            new Point(screenPoint.X, screenPoint.Y));
+
+    void ICanvasGesturePreviewSurface.UpdateMarquee(SlideScreenRect bounds) =>
+        _adorner.UpdateMarquee(ToWpfRect(bounds));
 
     // ── Resize gesture ────────────────────────────────────────────────────────────────────────
 

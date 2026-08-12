@@ -148,9 +148,9 @@ public sealed partial class SelectionAdorner : Adorner
     /// Pass null or an empty list to clear guides.  <paramref name="transform"/> is used
     /// to convert slide-DIP guide positions to screen space.
     /// </summary>
-    public void UpdateSnapGuides(IReadOnlyList<SnapGuideLine>? guides, SlideTransform transform)
+    public void UpdateSnapGuides(IReadOnlyList<SnapGuideLine>? guides, SlideTransformCore transform)
     {
-        _state.UpdateSnapGuides(guides, transform.Core);
+        _state.UpdateSnapGuides(guides, transform);
         InvalidateVisual();
     }
 

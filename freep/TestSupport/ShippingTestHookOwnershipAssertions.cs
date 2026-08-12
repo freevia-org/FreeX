@@ -10,6 +10,19 @@ namespace FreeP.TestSupport;
 
 internal static class ShippingTestHookOwnershipAssertions
 {
+    internal static readonly string[] ForbiddenDiagnosticMemberNames =
+    [
+        "LastCommentNavigationPlan",
+        "LastSmartArtTextPaneApplyResult",
+        "IsLayoutPickerVisible",
+        "AltTextPaneTitleLabel",
+        "ProofingPaneIssueRowCount",
+        "MediaVolumePercent",
+        "AnimationPaneItemCount",
+        "PrintOptionsPaneHeading",
+        "BackstageEntries",
+    ];
+
     internal static readonly string[] ForbiddenSourceTokens =
     [
         "ForTests",
@@ -20,6 +33,7 @@ internal static class ShippingTestHookOwnershipAssertions
         "TestResponder",
         "TestHook",
         "BuildResultForTest",
+        .. ForbiddenDiagnosticMemberNames,
     ];
 
     internal static IReadOnlyList<string> FindShippingSourceViolations(string projectDirectory) =>
@@ -95,7 +109,8 @@ internal static class ShippingTestHookOwnershipAssertions
                 name.Contains("ForAccessibilityTests", StringComparison.Ordinal) ||
                 name.Contains("TestResponder", StringComparison.Ordinal) ||
                 name.Contains("TestHook", StringComparison.Ordinal) ||
-                name.Contains("BuildResultForTest", StringComparison.Ordinal))
+                name.Contains("BuildResultForTest", StringComparison.Ordinal) ||
+                ForbiddenDiagnosticMemberNames.Contains(name, StringComparer.Ordinal))
             {
                 names.Add(name);
             }

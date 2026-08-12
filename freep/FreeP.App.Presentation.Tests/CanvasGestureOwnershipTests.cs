@@ -34,6 +34,12 @@ public sealed class CanvasGestureOwnershipTests
         router.Should().Contain("HandlePointerPressed(CanvasGesturePressRequest request)");
         router.Should().Contain("PreviewPointer(");
         router.Should().Contain("public static class CanvasGesturePreviewProjector");
+        var dispatcher = ReadRepoFile(
+            "freep",
+            "FreeP.App.Presentation",
+            "CanvasGesturePreviewDispatcher.cs");
+        dispatcher.Should().Contain("public static class CanvasGesturePreviewDispatcher");
+        dispatcher.Should().Contain("switch (visual.Kind)");
         router.Should().Contain("SlideCanvasGeometryPlanner.EmuBoundsToScreen(");
         router.Should().Contain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(");
         router.Should().Contain("CompletePointer(");
@@ -51,6 +57,7 @@ public sealed class CanvasGestureOwnershipTests
             adapter.Should().Contain("_gestureRouter.HandlePointerPressed(");
             adapter.Should().Contain("_gestureRouter.PreviewPointer(");
             adapter.Should().Contain("CanvasGesturePreviewProjector.Project(");
+            adapter.Should().Contain("CanvasGesturePreviewDispatcher.Apply(");
             adapter.Should().Contain("_gestureRouter.CompletePointer(");
             adapter.Should().Contain("_gestureRouter.HandleKeyDown(");
             adapter.Should().Contain("CreatePressRequest(");
@@ -73,6 +80,7 @@ public sealed class CanvasGestureOwnershipTests
             adapter.Should().NotContain("ShapeHitTester.MarqueeHitTest");
             adapter.Should().NotContain("SlideCanvasGeometryPlanner.EmuBoundsToScreen(");
             adapter.Should().NotContain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(");
+            adapter.Should().NotContain("switch (visual.Kind)");
             adapter.Should().NotContain("_editor.Select(");
             adapter.Should().NotContain("_editor.ClearSelection(");
             adapter.Should().NotContain("_editor.MoveSelected(");
