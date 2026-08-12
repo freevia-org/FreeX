@@ -506,7 +506,7 @@ function Test-ToolGeneratedContentMatches {
         throw "$Label is missing. Run $GeneratorScriptName to create it."
     }
 
-    $actual = Get-Content -LiteralPath $ActualPath -Raw
+    $actual = [System.IO.File]::ReadAllText($ActualPath)
     $expected = $ExpectedContent
     if ($NormalizeNewlines) {
         $expected = $expected -replace "`r`n", "`n"

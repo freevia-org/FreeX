@@ -932,8 +932,8 @@ try {
     $markdownContent = ($markdown -join "`n").TrimEnd() + "`n"
 
     if ($Check) {
-        Test-ToolGeneratedContentMatches -ExpectedContent $jsonContent -ActualPath $resolvedJsonPath -Label "Dedup residual JSON metrics" -GeneratorScriptName "tools/Measure-DedupResiduals.ps1"
-        Test-ToolGeneratedContentMatches -ExpectedContent $markdownContent -ActualPath $resolvedMarkdownPath -Label "Dedup residual Markdown metrics" -GeneratorScriptName "tools/Measure-DedupResiduals.ps1"
+        Test-ToolGeneratedContentMatches -ExpectedContent $jsonContent -ActualPath $resolvedJsonPath -Label "Dedup residual JSON metrics" -GeneratorScriptName "tools/Measure-DedupResiduals.ps1" -NormalizeNewlines
+        Test-ToolGeneratedContentMatches -ExpectedContent $markdownContent -ActualPath $resolvedMarkdownPath -Label "Dedup residual Markdown metrics" -GeneratorScriptName "tools/Measure-DedupResiduals.ps1" -NormalizeNewlines
         Write-Host "Dedup residual metrics are deterministic and current."
     }
     else {
