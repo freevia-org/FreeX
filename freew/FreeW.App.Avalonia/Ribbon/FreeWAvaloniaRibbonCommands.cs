@@ -1194,13 +1194,18 @@ internal static class FreeWAvaloniaRibbonCommands
         DocumentView editor,
         FreeWRibbonHostExecutionPorts callbacks)
     {
-        RegisterFloatingPositionCommands(r, editor, "image", "Image", callbacks.OpenImagePositionDialog);
+        var imageObjectCommands = CreateFloatingObjectCommandPorts(
+            editor,
+            "Image",
+            callbacks.OpenImagePositionDialog,
+            callbacks.OpenImageSizeDialog);
+        RegisterFloatingPositionCommands(r, "image", imageObjectCommands);
         r.Bind(FreeWRibbonCommandAction.ImageAdjustDialog, new SelectedImageDialogCommand(
             editor,
             callbacks.OpenImageAdjustDialog));
-        r.Bind(FreeWRibbonCommandAction.ImageSize, new SelectedImageDialogCommand(
-            editor,
-            callbacks.OpenImageSizeDialog));
+        r.Bind(
+            FreeWRibbonCommandAction.ImageSize,
+            FreeWRibbonFloatingObjectCommandFactory.CreateSize(imageObjectCommands));
         r.Bind(FreeWRibbonCommandAction.ImageAltText, new SelectedImageDialogCommand(
             editor,
             callbacks.OpenImageAltTextDialog));
@@ -1218,14 +1223,24 @@ internal static class FreeWAvaloniaRibbonCommands
                     () => new RibbonCommandState(
                         IsEnabled: editor.SelectedFloatingImage() is not null)));
         }
-        RegisterFloatingPositionCommands(r, editor, "shape", "Shape", callbacks.OpenShapePositionDialog);
-        r.Bind(FreeWRibbonCommandAction.ShapeSize, new FloatingObjectSizeCommand(editor, "Shape", callbacks.OpenShapeSizeDialog));
+        var shapeObjectCommands = CreateFloatingObjectCommandPorts(
+            editor,
+            "Shape",
+            callbacks.OpenShapePositionDialog,
+            callbacks.OpenShapeSizeDialog);
+        RegisterFloatingPositionCommands(r, "shape", shapeObjectCommands);
+        r.Bind(
+            FreeWRibbonCommandAction.ShapeSize,
+            FreeWRibbonFloatingObjectCommandFactory.CreateSize(shapeObjectCommands));
         foreach (var preset in FreeWRibbonDefinitionData.FloatingSizePresets)
         {
             var captured = preset;
             r.Register(
                 $"freew.shape-size-{captured.Suffix}",
-                new FloatingObjectSizePresetCommand(editor, "Shape", captured));
+                FreeWRibbonFloatingObjectCommandFactory.CreateSizePreset(
+                    shapeObjectCommands,
+                    captured.WidthPt,
+                    captured.HeightPt));
         }
 
         r.Bind(FreeWRibbonCommandAction.ShapeAltText, new FloatingObjectAltTextCommand(editor, callbacks.OpenShapeAltTextDialog));
@@ -1354,20 +1369,64 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private static void RegisterFloatingPositionCommands(
         IRibbonCommandRegistry r,
-        DocumentView editor,
         string prefix,
-        string requiredKind,
-        Action? openDialog = null)
+        FreeWRibbonFloatingObjectCommandPorts ports)
     {
-        r.Register($"freew.{prefix}-position", new FloatingObjectPositionCommand(editor, requiredKind, openDialog));
+        r.Register(
+            $"freew.{prefix}-position",
+            FreeWRibbonFloatingObjectCommandFactory.CreatePosition(ports));
         foreach (var preset in FreeWRibbonDefinitionData.FloatingPositionPresets)
         {
             var captured = preset;
             r.Register(
                 $"freew.{prefix}-position-{captured.Suffix}",
-                new FloatingObjectPositionPresetCommand(editor, requiredKind, captured));
+                FreeWRibbonFloatingObjectCommandFactory.CreatePositionPreset(
+                    ports,
+                    new FreeWRibbonObjectPositionInput(
+                        captured.HorizontalOffsetPt,
+                        captured.VerticalOffsetPt,
+                        captured.HorizontalAnchor,
+                        captured.VerticalAnchor)));
         }
     }
+
+    private static FreeWRibbonFloatingObjectCommandPorts CreateFloatingObjectCommandPorts(
+        DocumentView editor,
+        string requiredKind,
+        Action? openPositionDialog,
+        Action? openSizeDialog) =>
+        new(
+            HasSelection: () => requiredKind == "Shape"
+                ? editor.SelectedFloatingShape() is not null
+                : editor.SelectedFloatingInfo?.Kind == requiredKind,
+            ApplyPosition: position =>
+            {
+                if (requiredKind == "Shape")
+                {
+                    editor.SetSelectedShapePosition(
+                        position.HorizontalOffsetPt,
+                        position.VerticalOffsetPt,
+                        position.HorizontalAnchor,
+                        position.VerticalAnchor);
+                }
+                else
+                {
+                    editor.SetFloatingPosition(
+                        position.HorizontalOffsetPt,
+                        position.VerticalOffsetPt,
+                        position.HorizontalAnchor,
+                        position.VerticalAnchor);
+                }
+            },
+            ApplySize: (widthPt, heightPt) =>
+            {
+                if (requiredKind == "Shape")
+                    editor.SetSelectedShapeSize(widthPt, heightPt);
+                else
+                    editor.SetFloatingSize(widthPt, heightPt);
+            },
+            OpenPositionDialog: openPositionDialog,
+            OpenSizeDialog: openSizeDialog);
 
     private sealed class SelectedImageDialogCommand(
         DocumentView editor,
@@ -1410,144 +1469,6 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: !editor.IsEditingLocked);
-    }
-
-    private sealed class FloatingObjectPositionCommand(
-        DocumentView editor,
-        string requiredKind,
-        Action? openDialog) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!IsEnabled())
-                return;
-
-            if (!FreeWRibbonNumericValueParser.TryParseObjectPosition(
-                    context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    out var position))
-            {
-                openDialog?.Invoke();
-                return;
-            }
-
-            if (requiredKind == "Shape")
-                editor.SetSelectedShapePosition(
-                    position.HorizontalOffsetPt,
-                    position.VerticalOffsetPt,
-                    position.HorizontalAnchor,
-                    position.VerticalAnchor);
-            else
-                editor.SetFloatingPosition(
-                    position.HorizontalOffsetPt,
-                    position.VerticalOffsetPt,
-                    position.HorizontalAnchor,
-                    position.VerticalAnchor);
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
-
-        private bool IsEnabled() => requiredKind == "Shape"
-            ? editor.SelectedFloatingShape() is not null
-            : editor.SelectedFloatingInfo?.Kind == requiredKind;
-
-    }
-
-    private sealed class FloatingObjectPositionPresetCommand(
-        DocumentView editor,
-        string requiredKind,
-        FreeWFloatingPositionPreset preset) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!IsEnabled())
-                return;
-
-            if (requiredKind == "Shape")
-            {
-                editor.SetSelectedShapePosition(
-                    preset.HorizontalOffsetPt,
-                    preset.VerticalOffsetPt,
-                    preset.HorizontalAnchor,
-                    preset.VerticalAnchor);
-            }
-            else
-            {
-                editor.SetFloatingPosition(
-                    preset.HorizontalOffsetPt,
-                    preset.VerticalOffsetPt,
-                    preset.HorizontalAnchor,
-                    preset.VerticalAnchor);
-            }
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
-
-        private bool IsEnabled() => requiredKind == "Shape"
-            ? editor.SelectedFloatingShape() is not null
-            : editor.SelectedFloatingInfo?.Kind == requiredKind;
-    }
-
-    private sealed class FloatingObjectSizeCommand(
-        DocumentView editor,
-        string requiredKind,
-        Action? openDialog) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (!IsEnabled())
-                return;
-
-            if (FreeWRibbonNumericValueParser.TryParseObjectSize(
-                    context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    out var size))
-            {
-                ApplySize(size.WidthPt, size.HeightPt);
-            }
-            else if (string.IsNullOrWhiteSpace(context.SelectedValue))
-                openDialog?.Invoke();
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
-
-        private void ApplySize(double widthPt, double heightPt)
-        {
-            if (requiredKind == "Shape")
-                editor.SetSelectedShapeSize(widthPt, heightPt);
-            else
-                editor.SetFloatingSize(widthPt, heightPt);
-        }
-
-        private bool IsEnabled() => (requiredKind == "Shape"
-                ? editor.SelectedFloatingShape() is not null
-                : editor.SelectedFloatingInfo?.Kind == requiredKind)
-            && editor.GetSelectedFloatingSize() is not null;
-
-    }
-
-    private sealed class FloatingObjectSizePresetCommand(
-        DocumentView editor,
-        string requiredKind,
-        FreeWFloatingSizePreset preset) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            if (IsEnabled())
-            {
-                if (requiredKind == "Shape")
-                    editor.SetSelectedShapeSize(preset.WidthPt, preset.HeightPt);
-                else
-                    editor.SetFloatingSize(preset.WidthPt, preset.HeightPt);
-            }
-        }
-
-        public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
-
-        private bool IsEnabled() => (requiredKind == "Shape"
-                ? editor.SelectedFloatingShape() is not null
-                : editor.SelectedFloatingInfo?.Kind == requiredKind)
-            && editor.GetSelectedFloatingSize() is not null;
     }
 
     private sealed class FloatingObjectAltTextCommand(

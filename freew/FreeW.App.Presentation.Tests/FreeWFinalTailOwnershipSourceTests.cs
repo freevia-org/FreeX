@@ -105,6 +105,31 @@ public sealed class FreeWFinalTailOwnershipSourceTests
         }
     }
 
+    [Fact]
+    public void FloatingObjectCommandsSharePortableParsingAndEligibilityPolicy()
+    {
+        var wpf = Read("freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs");
+        var avalonia = Read("freew", "FreeW.App.Avalonia", "Ribbon", "FreeWAvaloniaRibbonCommands.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("FreeWRibbonFloatingObjectCommandFactory.CreatePosition(");
+            source.Should().Contain("FreeWRibbonFloatingObjectCommandFactory.CreateSize(");
+            source.Should().Contain("FreeWRibbonDefinitionData.FloatingPositionPresets");
+            source.Should().NotContain("private sealed class FloatingObjectPositionCommand");
+            source.Should().NotContain("private sealed class FloatingObjectSizeCommand");
+        }
+
+        wpf.Should().NotContain("private sealed class ImagePositionCommand");
+        wpf.Should().NotContain("private sealed class ImageSizeCommand");
+        wpf.Should().NotContain("private sealed class ShapePositionCommand");
+        wpf.Should().NotContain("private sealed class ShapeSizeCommand");
+        wpf.Should().Contain("HasSelection: target =>");
+        wpf.Should().Contain("CanArrange: editor.CanArrangeFloatingObjects");
+        wpf.Should().NotContain("HasSelection: static _ => true");
+        wpf.Should().NotContain("CanArrange: static _ => true");
+    }
+
     private static void AssertFriendCondition(string expectedCondition, string friend, params string[] parts)
     {
         var project = XDocument.Load(TestWorkspaceFileLocator.Find(parts));

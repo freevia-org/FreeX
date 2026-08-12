@@ -7476,6 +7476,9 @@ public sealed partial class DocumentView : RichTextBox
     /// Aligns/distributes floating objects through the shared model command. WPF keeps its historic
     /// document-wide behavior unless the user has an explicit multi-selection.
     /// </summary>
+    public bool CanArrangeFloatingObjects(FloatingObjectArrangeKind kind) =>
+        ObjectEdits.CanArrange(kind, FloatingArrangeLocations());
+
     public bool ArrangeFloatingObjects(FloatingObjectArrangeKind kind)
     {
         CommitToModel();

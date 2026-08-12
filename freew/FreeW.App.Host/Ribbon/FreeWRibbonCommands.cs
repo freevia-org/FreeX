@@ -21,6 +21,7 @@ using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Speech;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
+using FreeW.Ribbon.Definitions;
 
 namespace FreeW.App.Host;
 
@@ -415,12 +416,15 @@ internal static class FreeWRibbonCommands
         // the exact same InsertImage path as Insert Picture.
         registry.Bind(FreeWRibbonCommandAction.ScreenClipping, new ScreenClippingCommand(editor));
         // Insert tab — Illustrations: resize the selected inline image (height scales proportionally).
-        registry.Bind(FreeWRibbonCommandAction.ImageSize, new ImageSizeCommand(editor));
+        var imageObjectCommands = CreateFloatingObjectCommandPorts(editor, ObjectFormatTarget.Picture);
+        registry.Bind(
+            FreeWRibbonCommandAction.ImageSize,
+            FreeWRibbonFloatingObjectCommandFactory.CreateSize(imageObjectCommands));
         // Insert tab — Illustrations: set the selected image's accessibility alt text (wp:docPr @descr),
         // and align the image's (image-only) paragraph left/center/right. Both mutate the model + re-render.
         registry.Bind(FreeWRibbonCommandAction.ImageAltText, new ImageAltTextCommand(editor));
         // Picture Format tab — Arrange > Position.
-        registry.Register("freew.image-position", new ImagePositionCommand(editor));
+        RegisterFloatingPositionCommands(registry, "image", imageObjectCommands);
         // Picture Format tab — Adjust > Corrections (brightness/contrast presets + dialog).
         foreach (var preset in ImageAdjustmentCommandPlanner.AdjustmentPresets
                      .Where(item => item.Channel is ImageAdjustmentChannel.Brightness or ImageAdjustmentChannel.Contrast))
@@ -534,11 +538,24 @@ internal static class FreeWRibbonCommands
                 editor.InsertChart(chart);
         }));
         // Shape Size: reuse ImageSizeDialog (same W/H in points).
-        registry.Bind(FreeWRibbonCommandAction.ShapeSize, new ShapeSizeCommand(editor));
+        var shapeObjectCommands = CreateFloatingObjectCommandPorts(editor, ObjectFormatTarget.Shape);
+        registry.Bind(
+            FreeWRibbonCommandAction.ShapeSize,
+            FreeWRibbonFloatingObjectCommandFactory.CreateSize(shapeObjectCommands));
+        foreach (var preset in FreeWRibbonDefinitionData.FloatingSizePresets)
+        {
+            var captured = preset;
+            registry.Register(
+                $"freew.shape-size-{captured.Suffix}",
+                FreeWRibbonFloatingObjectCommandFactory.CreateSizePreset(
+                    shapeObjectCommands,
+                    captured.WidthPt,
+                    captured.HeightPt));
+        }
         // Alt Text: text prompt for shape or WordArt.
         registry.Bind(FreeWRibbonCommandAction.ShapeAltText, new ShapeAltTextCommand(editor));
         // Drawing Tools > Arrange — Position (opens the same dialog as image-position, applied to shape).
-        registry.Register("freew.shape-position", new ShapePositionCommand(editor));
+        RegisterFloatingPositionCommands(registry, "shape", shapeObjectCommands);
 
         // ── WordArt style gallery — original four + extended eleven (W24) ─────────────────────────
         registry.Register("freew.wordart-style", new ActionRibbonCommand(() =>
@@ -1385,24 +1402,137 @@ internal static class FreeWRibbonCommands
         return FreeWRibbonExecutionProfile.Build(registry).Registry;
     }
 
+    private static void RegisterFloatingPositionCommands(
+        FreeWRibbonCommandBindingPorts registry,
+        string prefix,
+        FreeWRibbonFloatingObjectCommandPorts ports)
+    {
+        registry.Register(
+            $"freew.{prefix}-position",
+            FreeWRibbonFloatingObjectCommandFactory.CreatePosition(ports));
+        foreach (var preset in FreeWRibbonDefinitionData.FloatingPositionPresets)
+        {
+            var captured = preset;
+            registry.Register(
+                $"freew.{prefix}-position-{captured.Suffix}",
+                FreeWRibbonFloatingObjectCommandFactory.CreatePositionPreset(
+                    ports,
+                    new FreeWRibbonObjectPositionInput(
+                        captured.HorizontalOffsetPt,
+                        captured.VerticalOffsetPt,
+                        captured.HorizontalAnchor,
+                        captured.VerticalAnchor)));
+        }
+    }
+
+    private static FreeWRibbonFloatingObjectCommandPorts CreateFloatingObjectCommandPorts(
+        DocumentView editor,
+        ObjectFormatTarget target) =>
+        new(
+            HasSelection: () => target == ObjectFormatTarget.Picture
+                ? editor.SelectedImage() is not null
+                : editor.SelectedShape() is not null,
+            ApplyPosition: position =>
+            {
+                if (target == ObjectFormatTarget.Picture)
+                {
+                    editor.SetSelectedImagePosition(
+                        position.HorizontalOffsetPt,
+                        position.VerticalOffsetPt,
+                        position.HorizontalAnchor,
+                        position.VerticalAnchor);
+                }
+                else
+                {
+                    editor.SetSelectedShapePosition(
+                        position.HorizontalOffsetPt,
+                        position.VerticalOffsetPt,
+                        position.HorizontalAnchor,
+                        position.VerticalAnchor);
+                }
+            },
+            ApplySize: (widthPt, heightPt) =>
+            {
+                if (target == ObjectFormatTarget.Picture)
+                    editor.SetSelectedImageSize(widthPt, heightPt);
+                else
+                    editor.SetSelectedShapeSize(widthPt, heightPt);
+            },
+            OpenPositionDialog: () => OpenFloatingPositionDialog(editor, target),
+            OpenSizeDialog: () => OpenFloatingSizeDialog(editor, target),
+            PrepareExecution: () => editor.Focus());
+
+    private static void OpenFloatingPositionDialog(DocumentView editor, ObjectFormatTarget target)
+    {
+        if (target == ObjectFormatTarget.Picture)
+        {
+            if (editor.SelectedImage() is not { } image)
+                return;
+            var result = ImagePositionDialog.Prompt(
+                Window.GetWindow(editor),
+                image.HorizontalOffsetPt,
+                image.VerticalOffsetPt,
+                image.HorizontalAnchor,
+                image.VerticalAnchor);
+            if (result is { } position)
+            {
+                editor.SetSelectedImagePosition(
+                    position.HOffset,
+                    position.VOffset,
+                    position.HAnchor,
+                    position.VAnchor);
+            }
+            return;
+        }
+
+        if (editor.GetSelectedShapePosition() is not { } shapePosition)
+            return;
+        var shapeResult = ImagePositionDialog.Prompt(
+            Window.GetWindow(editor),
+            shapePosition.HorizontalOffsetPt,
+            shapePosition.VerticalOffsetPt,
+            shapePosition.HorizontalAnchor,
+            shapePosition.VerticalAnchor,
+            shapePosition.IsGroupLocal ? "Shape Position in Group" : "Shape Position",
+            shapePosition.IsGroupLocal);
+        if (shapeResult is { } positionResult)
+        {
+            editor.SetSelectedShapePosition(
+                positionResult.HOffset,
+                positionResult.VOffset,
+                positionResult.HAnchor,
+                positionResult.VAnchor);
+        }
+    }
+
+    private static void OpenFloatingSizeDialog(DocumentView editor, ObjectFormatTarget target)
+    {
+        var dimensions = target == ObjectFormatTarget.Picture
+            ? editor.SelectedImage() is { } image
+                ? (image.WidthPt, image.HeightPt)
+                : ((double WidthPt, double HeightPt)?)null
+            : editor.SelectedShape() is { } shape
+                ? (shape.WidthPt, shape.HeightPt)
+                : null;
+        if (dimensions is not { } current)
+            return;
+
+        if (ImageSizeDialog.Prompt(Window.GetWindow(editor), current.WidthPt, current.HeightPt) is not { } result)
+            return;
+        if (target == ObjectFormatTarget.Picture)
+            editor.SetSelectedImageSize(result.Width, result.Height);
+        else
+            editor.SetSelectedShapeSize(result.Width, result.Height);
+    }
+
     private static FreeWRibbonFloatingExecutionPorts CreateFloatingExecutionPorts(DocumentView editor) =>
         new(
             PrepareExecution: () => editor.Focus(),
-            HasSelection: static _ => true,
+            HasSelection: target => target == ObjectFormatTarget.Picture
+                ? editor.SelectedImage() is not null
+                : editor.SelectedShape() is not null,
             ApplyWrap: (target, wrapping) =>
             {
-                var selected = target == ObjectFormatTarget.Picture
-                    ? editor.SelectedImage() is not null
-                    : editor.SelectedShape() is not null;
-                if (!selected)
-                {
-                    DialogMessageHelper.ShowInfo(
-                        Window.GetWindow(editor),
-                        target == ObjectFormatTarget.Picture ? "Select a picture first." : "Select a shape first.",
-                        "Wrap Text");
-                    return;
-                }
-
                 if (target == ObjectFormatTarget.Picture)
                     editor.SetSelectedImageWrapping(wrapping);
                 else
@@ -1410,7 +1540,7 @@ internal static class FreeWRibbonCommands
             },
             ApplyTransform: (_, command) =>
             {
-                var applied = command.Kind switch
+                return command.Kind switch
                 {
                     ObjectFormatTransformKind.Rotate =>
                         editor.RotateSelectedFloating(command.RotationDeltaDegrees),
@@ -1420,27 +1550,8 @@ internal static class FreeWRibbonCommands
                         editor.FlipSelectedFloating(horizontal: false),
                     _ => throw new ArgumentOutOfRangeException(nameof(command), command, null)
                 };
-                if (!applied)
-                    DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a floating object first.", "Rotate / Flip");
-                return applied;
             },
-            ApplyZOrder: (target, operation) =>
-            {
-                var selected = target == ObjectFormatTarget.Picture
-                    ? editor.SelectedImage() is not null
-                    : editor.SelectedShape() is not null;
-                var applied = selected && editor.ChangeSelectedFloatingZOrder(operation);
-                if (!applied)
-                {
-                    DialogMessageHelper.ShowInfo(
-                        Window.GetWindow(editor),
-                        target == ObjectFormatTarget.Picture
-                            ? "Select a floating picture first."
-                            : "Select a floating shape first.",
-                        "Z-Order");
-                }
-                return applied;
-            },
+            ApplyZOrder: (_, operation) => editor.ChangeSelectedFloatingZOrder(operation),
             ApplySize: (target, dimension, points) =>
             {
                 if (target == ObjectFormatTarget.Picture && editor.SelectedImage() is { } image)
@@ -1459,35 +1570,12 @@ internal static class FreeWRibbonCommands
             ApplyParagraphAlignment: (target, alignment) =>
             {
                 if (target == ObjectFormatTarget.Picture)
-                {
-                    if (editor.SelectedImage() is null)
-                    {
-                        DialogMessageHelper.ShowInfo(
-                            Window.GetWindow(editor),
-                            "Select an image first, then choose an image alignment.",
-                            "FreeW");
-                        return;
-                    }
                     editor.SetSelectedImageAlignment(alignment);
-                }
                 else
                     editor.SetSelectedShapeAlignment(alignment);
             },
-            CanArrange: static _ => true,
-            Arrange: kind =>
-            {
-                if (!editor.ArrangeFloatingObjects(kind)
-                    && kind is FloatingObjectArrangeKind.DistributeHorizontal
-                        or FloatingObjectArrangeKind.DistributeVertical)
-                {
-                    DialogMessageHelper.ShowInfo(
-                        Window.GetWindow(editor),
-                        "Select at least two floating objects to distribute.",
-                        kind == FloatingObjectArrangeKind.DistributeVertical
-                            ? "Distribute Vertically"
-                            : "Distribute Horizontally");
-                }
-            },
+            CanArrange: editor.CanArrangeFloatingObjects,
+            Arrange: kind => editor.ArrangeFloatingObjects(kind),
             SelectedShape: editor.SelectedShape,
             SetShapeKind: editor.SetSelectedShapeKind,
             ConvertShapeToFreeform: editor.ConvertSelectedShapeToFreeform,
@@ -3018,36 +3106,6 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Insert > Illustrations > Image Size: prompt for a new width; the view scales height proportionally.
-    private sealed class ImageSizeCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var image = editor.SelectedImage();
-            if (image is null)
-            {
-                DialogMessageHelper.ShowInfo(
-                    Window.GetWindow(editor),
-                    "Select an image first, then choose Image Size.",
-                    "FreeW");
-                return;
-            }
-
-            if (FreeWRibbonNumericValueParser.TryParseObjectSize(
-                    context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    out var parsedSize))
-            {
-                editor.SetSelectedImageSize(parsedSize.WidthPt, parsedSize.HeightPt);
-                return;
-            }
-
-            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), image.WidthPt, image.HeightPt) is { } size)
-                editor.SetSelectedImageSize(size.Width, size.Height);
-        }
-    }
-
     // Insert > Illustrations > Alt Text: prompt for the selected image's accessibility description
     // (seeded from its current alt text) and store it on the model image. A blank entry clears it; the
     // text round-trips through docx as wp:docPr/@descr and surfaces as the image tooltip/automation name.
@@ -3071,41 +3129,6 @@ internal static class FreeWRibbonCommands
             // A null result is a cancel (leave unchanged); an empty/blank string clears the alt text.
             if (text is not null)
                 editor.SetSelectedImageAltText(text);
-        }
-    }
-
-    // Picture Format > Arrange > Position: open the position dialog for floating offset + anchors.
-    private sealed class ImagePositionCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var image = editor.SelectedImage();
-            if (image is null)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a picture first.", "Position");
-                return;
-            }
-
-            if (FreeWRibbonNumericValueParser.TryParseObjectPosition(
-                    context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    out var parsedPosition))
-            {
-                editor.SetSelectedImagePosition(
-                    parsedPosition.HorizontalOffsetPt,
-                    parsedPosition.VerticalOffsetPt,
-                    parsedPosition.HorizontalAnchor,
-                    parsedPosition.VerticalAnchor);
-                return;
-            }
-
-            var result = ImagePositionDialog.Prompt(
-                Window.GetWindow(editor),
-                image.HorizontalOffsetPt, image.VerticalOffsetPt,
-                image.HorizontalAnchor, image.VerticalAnchor);
-            if (result is { } r)
-                editor.SetSelectedImagePosition(r.HOffset, r.VOffset, r.HAnchor, r.VAnchor);
         }
     }
 
@@ -8203,71 +8226,6 @@ internal static class FreeWRibbonCommands
                 else
                     editor.SetSelectedWordArtAltText(text);
             }
-        }
-    }
-
-    // Drawing Format > Arrange > Position: open the position dialog for the selected shape's floating offset + anchors.
-    private sealed class ShapePositionCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var position = editor.GetSelectedShapePosition();
-            if (position is null)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Position");
-                return;
-            }
-
-            if (FreeWRibbonNumericValueParser.TryParseObjectPosition(
-                    context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    out var parsedPosition))
-            {
-                editor.SetSelectedShapePosition(
-                    parsedPosition.HorizontalOffsetPt,
-                    parsedPosition.VerticalOffsetPt,
-                    parsedPosition.HorizontalAnchor,
-                    parsedPosition.VerticalAnchor);
-                return;
-            }
-
-            var result = ImagePositionDialog.Prompt(
-                Window.GetWindow(editor),
-                position.Value.HorizontalOffsetPt,
-                position.Value.VerticalOffsetPt,
-                position.Value.HorizontalAnchor,
-                position.Value.VerticalAnchor,
-                position.Value.IsGroupLocal ? "Shape Position in Group" : "Shape Position",
-                position.Value.IsGroupLocal);
-            if (result is { } r)
-                editor.SetSelectedShapePosition(r.HOffset, r.VOffset, r.HAnchor, r.VAnchor);
-        }
-    }
-
-    private sealed class ShapeSizeCommand(DocumentView editor) : IRibbonCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.Focus();
-            var shape = editor.SelectedShape();
-            if (shape is null)
-            {
-                DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Size");
-                return;
-            }
-
-            if (FreeWRibbonNumericValueParser.TryParseObjectSize(
-                    context.SelectedValue,
-                    CultureInfo.InvariantCulture,
-                    out var parsedSize))
-            {
-                editor.SetSelectedShapeSize(parsedSize.WidthPt, parsedSize.HeightPt);
-                return;
-            }
-
-            if (ImageSizeDialog.Prompt(Window.GetWindow(editor), shape.WidthPt, shape.HeightPt) is { } size)
-                editor.SetSelectedShapeSize(size.Width, size.Height);
         }
     }
 
