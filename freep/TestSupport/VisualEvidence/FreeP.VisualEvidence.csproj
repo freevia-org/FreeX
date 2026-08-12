@@ -10,8 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="FreeP.App.Host" />
-    <InternalsVisibleTo Include="FreeP" />
+    <InternalsVisibleTo Include="FreeP.VisualEvidence.Wpf" />
+    <InternalsVisibleTo Include="FreeP.VisualEvidence.Avalonia" />
     <InternalsVisibleTo Include="FreeP.RenderCompare" />
     <InternalsVisibleTo Include="FreeP.RenderCompare.Tests" />
   </ItemGroup>

@@ -13,6 +13,7 @@
     <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeP.ico" Link="Resources\FreeP.ico" />
     <!-- Tests construct the shell window + backstage directly. -->
     <InternalsVisibleTo Include="FreeP.App.Host.Tests" />
+    <InternalsVisibleTo Include="FreeP.VisualEvidence.Wpf" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,7 +37,6 @@
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\FreeP.App.Media\FreeP.App.Media.csproj" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
-    <ProjectReference Include="..\TestSupport\VisualEvidence\FreeP.VisualEvidence.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording.Windows\FreeP.App.Recording.Windows.csproj" />
     <!-- SlideShowController was relocated to FreeP.App.Presentation for cross-platform reuse. -->

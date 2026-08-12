@@ -39,7 +39,6 @@
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
-    <ProjectReference Include="..\TestSupport\VisualEvidence\FreeP.VisualEvidence.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
     <ProjectReference Include="..\FreeP.App.Recording.Windows\FreeP.App.Recording.Windows.csproj"
                       Condition="'$(TargetPlatformIdentifier)' == 'Windows'" />
@@ -64,6 +63,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="FreeP.App.Avalonia.Tests" />
+    <InternalsVisibleTo Include="FreeP.VisualEvidence.Avalonia" />
     <Using Include="FreeP.App.Localization.LocalizedUiText" Alias="UiText" />
   </ItemGroup>
 

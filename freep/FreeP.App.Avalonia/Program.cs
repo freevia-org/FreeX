@@ -24,34 +24,21 @@ internal static class Program
                 PrepareLaunch,
                 startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
 
+    internal static int RunToolHost(Action<MainWindow> coordinator)
+    {
+        ArgumentNullException.ThrowIfNull(coordinator);
+        App.ExternalStartupCoordinator = coordinator;
+        App.StartupArguments = [];
+        return SisterAvaloniaProgramRunner.Run(
+            [],
+            new SisterAvaloniaProgramSpec(
+                FreePApplicationStartupDescriptor.ProductIdentity,
+                startupArguments => SisterAvaloniaLaunchPreparation.Continue(startupArguments),
+                startupArguments => BuildAvaloniaApp().StartWithClassicDesktopLifetime(startupArguments)));
+    }
+
     private static SisterAvaloniaLaunchPreparation PrepareLaunch(string[] args)
     {
-        if (AvaloniaWholeWindowVisualEvidenceCapture.TryParse(args, out var wholeWindowOutput, out var wholeWindowScenario, out var wholeWindowError))
-        {
-            if (wholeWindowError is not null)
-            {
-                Console.Error.WriteLine(wholeWindowError);
-                return SisterAvaloniaLaunchPreparation.Exit(2);
-            }
-
-            App.WholeWindowVisualEvidenceOutputRoot = wholeWindowOutput;
-            App.WholeWindowVisualEvidenceScenarioId = wholeWindowScenario;
-            args = [];
-        }
-
-        if (AvaloniaDialogPaneVisualEvidenceCapture.TryParse(args, out var evidenceOutput, out var evidenceScenario, out var evidenceError))
-        {
-            if (evidenceError is not null)
-            {
-                Console.Error.WriteLine(evidenceError);
-                return SisterAvaloniaLaunchPreparation.Exit(2);
-            }
-
-            App.DialogPaneVisualEvidenceOutputRoot = evidenceOutput;
-            App.DialogPaneVisualEvidenceScenarioId = evidenceScenario;
-            args = [];
-        }
-
         if (!PhysicalValidationOptions.TryParse(
                 args,
                 out var physicalValidationOptions,

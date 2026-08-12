@@ -15,10 +15,7 @@ public sealed class App : Application
     internal static StartupDirtyTraceOptions? StartupDirtyTraceOptions { get; set; }
     internal static PhysicalValidationOptions? PhysicalValidationOptions { get; set; }
     internal static AccessibilityValidationOptions? AccessibilityValidationOptions { get; set; }
-    internal static string? DialogPaneVisualEvidenceOutputRoot { get; set; }
-    internal static string? DialogPaneVisualEvidenceScenarioId { get; set; }
-    internal static string? WholeWindowVisualEvidenceOutputRoot { get; set; }
-    internal static string? WholeWindowVisualEvidenceScenarioId { get; set; }
+    internal static Action<MainWindow>? ExternalStartupCoordinator { get; set; }
     internal static Theme ActiveTheme { get; private set; } = BrandThemes.FreeP;
 
     public override void OnFrameworkInitializationCompleted()
@@ -52,19 +49,14 @@ public sealed class App : Application
                     optionsStore: optionsStore),
                 mainWindow =>
                 {
+                    if (ExternalStartupCoordinator is { } externalStartupCoordinator)
+                    {
+                        externalStartupCoordinator(mainWindow);
+                        return;
+                    }
                     if (StartupDirtyTraceOptions is { } startupDirtyTraceOptions)
                     {
                         StartupDirtyTraceCoordinator.Start(mainWindow, startupDirtyTraceOptions);
-                        return;
-                    }
-                    if (WholeWindowVisualEvidenceOutputRoot is { } wholeWindowOutputRoot)
-                    {
-                        AvaloniaWholeWindowVisualEvidenceCapture.Start(mainWindow, wholeWindowOutputRoot, WholeWindowVisualEvidenceScenarioId);
-                        return;
-                    }
-                    if (DialogPaneVisualEvidenceOutputRoot is { } outputRoot)
-                    {
-                        AvaloniaDialogPaneVisualEvidenceCapture.Start(mainWindow, outputRoot, DialogPaneVisualEvidenceScenarioId);
                         return;
                     }
                     if (PhysicalValidationOptions is { } physicalValidationOptions)

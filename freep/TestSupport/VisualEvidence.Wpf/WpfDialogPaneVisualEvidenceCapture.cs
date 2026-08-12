@@ -11,9 +11,10 @@ using Free.Shared.Drawing;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
+using FreeP.App.Host;
 using FreeP.VisualEvidence;
 
-namespace FreeP.App.Host;
+namespace FreeP.VisualEvidence.Wpf;
 
 internal static class WpfDialogPaneVisualEvidenceCapture
 {
@@ -102,7 +103,8 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 owner.Show();
                 NormalizeOwnerContentSize(owner);
                 owner.Activate();
-                var routeHost = owner.CreateDialogPaneVisualEvidenceRouteHost();
+                var access = owner.CreateVisualCaptureAdapter();
+                var routeHost = new WpfDialogPaneVisualEvidenceRouteHost(access);
                 var dialogAdapter = new WpfDialogPaneVisualEvidenceAdapter(owner);
                 var assertions = preparation.PrepareRoute(routeHost).ToList();
                 Window target = owner;
@@ -134,7 +136,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
                 var raster = Capture(captureRoot, imagePath);
                 var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? target
-                    : owner.DialogPaneVisualEvidenceMetadataRoot(scenario);
+                    : access.DialogMetadataRoot(scenario.RouteId);
                 var comparisonRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? captureRoot
                     : metadataRoot as FrameworkElement ?? captureRoot;
@@ -224,7 +226,7 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         public Window CreateHeaderFooter(DialogPaneVisualEvidenceHeaderFooterPreparation preparation)
         {
             var dialog = new HeaderFooterDialog(owner.Editor, preparation.InitialFocus);
-            dialog.PrepareForVisualEvidence(
+            dialog.SetInputForTests(
                 preparation.ShowDateTime,
                 preparation.ShowFooter,
                 preparation.ShowSlideNumber,
@@ -259,14 +261,14 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         public bool ApplyHyperlinkValidation(
             Window dialog,
             DialogPaneVisualEvidenceHyperlinkInput input) =>
-            Require<HyperlinkDialog>(dialog).ApplyForVisualEvidence(
+            Require<HyperlinkDialog>(dialog).ApplyInputForTests(
                 input.TargetKind,
                 input.Url,
                 input.SelectedSlideIndex,
                 input.Tooltip);
 
         public void PrepareCustomShowsValidation(Window dialog) =>
-            Require<CustomShowDialog>(dialog).PrepareValidationForVisualEvidence();
+            Require<CustomShowDialog>(dialog).PrepareMissingNameForTests();
 
         public DialogPaneVisualEvidenceValidationResult PrepareSlideSizeLoadedState(Window dialog)
         {
@@ -277,13 +279,49 @@ internal static class WpfDialogPaneVisualEvidenceCapture
         public DialogPaneVisualEvidenceValidationResult PrepareChartDataLoadedState(Window dialog)
         {
             var chart = Require<ChartDataDialog>(dialog);
-            return new(chart.PrepareValidationForVisualEvidence(), chart.ValidationText);
+            return new(chart.PrepareInvalidValueForTests(), chart.ValidationText);
         }
 
         private static TDialog Require<TDialog>(Window dialog)
             where TDialog : Window =>
             dialog as TDialog ?? throw new InvalidOperationException(
                 $"Expected {typeof(TDialog).Name}, but received {dialog.GetType().Name}.");
+    }
+
+    private sealed class WpfDialogPaneVisualEvidenceRouteHost(MainWindow.WpfVisualCaptureAdapter access)
+        : IDialogPaneVisualEvidenceRouteHost
+    {
+        public IReadOnlyList<uint> SelectedShapeIds => access.SelectedShapeIds;
+        public int SlideCount => access.SlideCount;
+        public int CurrentShapeCount => access.CurrentShapeCount;
+        public string? CurrentLayoutId => access.CurrentLayoutId;
+        public bool IsTablePickerVisible => access.IsTablePickerVisible;
+        public bool IsLayoutPickerVisible => access.IsLayoutPickerVisible;
+        public DialogPaneVisualEvidenceChoiceState ChoiceState => new(
+            access.TableChoiceCount,
+            access.DefaultTableChoiceCount,
+            access.CurrentLayoutChoiceCount,
+            access.DisabledLayoutChoiceCount);
+
+        public void LoadPresentation(FreeP.Core.Model.Presentation presentation) => access.LoadPresentation(presentation);
+        public void SelectShape(uint shapeId) => access.SelectShape(shapeId);
+        public void RefreshCanvas() => access.RefreshCanvas();
+        public void ShowReviewCommentsPane() => access.ShowCommentsPane();
+        public void SelectFirstReviewComment() => access.SelectFirstComment();
+        public void ShowAccessibilityCheckerPane() => access.ShowAccessibilityPane();
+        public void SelectFirstAccessibilityIssue() => access.SelectFirstAccessibilityIssue();
+        public void ShowAltTextPane() => access.ShowAltTextPane();
+        public void ShowReadingOrderPane() => access.ShowReadingOrderPane();
+        public void ShowProofingPane() => access.ShowProofingPane();
+        public void SelectFirstProofingIssue() => access.SelectFirstProofingIssue();
+        public void ShowMediaCaptionPane() => access.ShowMediaCaptionPane();
+        public void ShowSmartArtTextPane() => access.ShowSmartArtTextPane();
+        public void EnsureAnimationPaneVisible() => access.EnsureAnimationPaneVisible();
+        public void ShowPrintOptionsPane() => access.ShowPrintOptionsPane();
+        public void OpenTablePicker() => access.OpenTablePicker();
+        public void OpenLayoutPicker() => access.OpenLayoutPicker();
+        public void HideTablePicker() => access.HideTablePicker();
+        public void HideLayoutPicker() => access.HideLayoutPicker();
     }
 
     private static void FocusFirstInputIfNeeded(

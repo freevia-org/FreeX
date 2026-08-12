@@ -6,10 +6,10 @@ public sealed class VisualEvidenceRasterStatisticsSourceTests
 {
     private static readonly string[][] CaptureSourcePaths =
     [
-        ["freep", "FreeP.App.Host", "WpfWholeWindowVisualEvidenceCapture.cs"],
-        ["freep", "FreeP.App.Host", "WpfDialogPaneVisualEvidenceCapture.cs"],
-        ["freep", "FreeP.App.Avalonia", "AvaloniaWholeWindowVisualEvidenceCapture.cs"],
-        ["freep", "FreeP.App.Avalonia", "AvaloniaDialogPaneVisualEvidenceCapture.cs"],
+        ["freep", "TestSupport", "VisualEvidence.Wpf", "WpfWholeWindowVisualEvidenceCapture.cs"],
+        ["freep", "TestSupport", "VisualEvidence.Wpf", "WpfDialogPaneVisualEvidenceCapture.cs"],
+        ["freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCapture.cs"],
+        ["freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaDialogPaneVisualEvidenceCapture.cs"],
     ];
 
     [Fact]

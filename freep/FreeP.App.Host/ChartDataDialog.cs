@@ -157,7 +157,7 @@ public sealed class ChartDataDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return _session.BuildCommitPlan();
     }
 
-    internal bool PrepareValidationForVisualEvidence()
+    internal bool PrepareInvalidValueForTests()
     {
         if (_grid.Items.Count == 0 || _grid.Columns.Count < 2)
             return false;

@@ -7,9 +7,10 @@ using Free.Shared.Drawing;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Wpf;
 using FreeP.App.Compositor;
+using FreeP.App.Host;
 using FreeP.VisualEvidence;
 
-namespace FreeP.App.Host;
+namespace FreeP.VisualEvidence.Wpf;
 
 internal static class WpfWholeWindowVisualEvidenceCapture
 {
@@ -93,11 +94,12 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                 owner.Show();
                 NormalizeContentSize(owner);
                 owner.Activate();
-                var assertions = owner.PrepareWholeWindowVisualEvidence(scenario, fixture);
+                var coordinator = new WpfWholeWindowVisualEvidenceCoordinator(owner.CreateVisualCaptureAdapter());
+                var assertions = coordinator.Prepare(scenario, fixture);
                 PumpLayout(owner);
                 owner.Activate();
                 PumpLayout(owner);
-                owner.NormalizeWholeWindowVisualEvidenceShellState(scenario);
+                coordinator.Normalize(scenario);
                 owner.UpdateLayout();
 
                 var root = owner.Content as FrameworkElement
@@ -115,7 +117,7 @@ internal static class WpfWholeWindowVisualEvidenceCapture
                     clientPath,
                     WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
                     WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
-                var semantic = owner.CaptureWholeWindowVisualEvidenceSemanticState(scenario, assertions);
+                var semantic = coordinator.CaptureSemantic(scenario, assertions);
                 captures.Add(new WholeWindowVisualEvidenceCapture(
                     scenario.Id,
                     "wpf",

@@ -134,7 +134,7 @@ internal sealed class CustomShowDialog : Window
         int targetDropIndex) =>
         ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
 
-    internal void PrepareValidationForVisualEvidence()
+    internal void PrepareMissingNameForTests()
     {
         _nameBox.Text = string.Empty;
         OnCreate();

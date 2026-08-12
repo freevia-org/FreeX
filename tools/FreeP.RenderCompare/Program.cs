@@ -155,9 +155,9 @@ internal static class Program
 
         var outputDirectory = Path.GetFullPath(args[0]);
         var wpfExecutable = ReadOption(args, "--wpf-exe") ?? Path.GetFullPath(
-            Path.Combine("freep", "FreeP.App.Host", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeP.App.Host.exe"));
+            Path.Combine("freep", "TestSupport", "VisualEvidence.Wpf", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeP.VisualEvidence.Wpf.exe"));
         var avaloniaExecutable = ReadOption(args, "--avalonia-exe") ?? Path.GetFullPath(
-            Path.Combine("freep", "FreeP.App.Avalonia", "bin", "Release", "net10.0", "FreeP.exe"));
+            Path.Combine("freep", "TestSupport", "VisualEvidence.Avalonia", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeP.VisualEvidence.Avalonia.exe"));
         var timeoutSeconds = int.TryParse(ReadOption(args, "--timeout-seconds"), out var parsedTimeout)
             ? parsedTimeout
             : 30;
@@ -185,9 +185,9 @@ internal static class Program
 
         var outputDirectory = Path.GetFullPath(args[0]);
         var wpfExecutable = ReadOption(args, "--wpf-exe") ?? Path.GetFullPath(
-            Path.Combine("freep", "FreeP.App.Host", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeP.App.Host.exe"));
+            Path.Combine("freep", "TestSupport", "VisualEvidence.Wpf", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeP.VisualEvidence.Wpf.exe"));
         var avaloniaExecutable = ReadOption(args, "--avalonia-exe") ?? Path.GetFullPath(
-            Path.Combine("freep", "FreeP.App.Avalonia", "bin", "Release", "net10.0", "FreeP.exe"));
+            Path.Combine("freep", "TestSupport", "VisualEvidence.Avalonia", "bin", "Release", "net10.0-windows10.0.19041.0", "FreeP.VisualEvidence.Avalonia.exe"));
         var timeoutSeconds = int.TryParse(ReadOption(args, "--timeout-seconds"), out var parsedTimeout)
             ? parsedTimeout
             : 30;

@@ -204,7 +204,7 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         string dateTimeFieldType = "datetime1",
         string fixedDateTimeText = "")
     {
-        PrepareForVisualEvidence(
+        SetInputForTests(
             showDateTime,
             showFooter,
             showSlideNumber,
@@ -217,7 +217,7 @@ public sealed class HeaderFooterDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return LastApplyPlan?.ShouldApply == true;
     }
 
-    internal void PrepareForVisualEvidence(
+    internal void SetInputForTests(
         bool showDateTime,
         bool showFooter,
         bool showSlideNumber,

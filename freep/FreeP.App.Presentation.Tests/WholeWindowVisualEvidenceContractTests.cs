@@ -256,8 +256,8 @@ public sealed class WholeWindowVisualEvidenceContractTests
             "WholeWindowVisualEvidenceContract.cs"));
         var hosts = new[]
         {
-            File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.WholeWindowVisualEvidence.cs")),
-            File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.WholeWindowVisualEvidence.cs")),
+            File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Wpf", "WpfWholeWindowVisualEvidenceCoordinator.cs")),
+            File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCoordinator.cs")),
         };
 
         owner.Should().Contain("public static class WholeWindowVisualEvidencePreparationSession")
@@ -291,17 +291,19 @@ public sealed class WholeWindowVisualEvidenceContractTests
         {
             (
                 MainWindow: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs")),
-                Capture: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.WholeWindowVisualEvidence.cs"))),
+                Capture: File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Wpf", "WpfWholeWindowVisualEvidenceCoordinator.cs")),
+                Adapter: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.VisualCaptureAdapter.cs"))),
             (
                 MainWindow: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs")),
-                Capture: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.WholeWindowVisualEvidence.cs"))),
+                Capture: File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCoordinator.cs")),
+                Adapter: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.VisualCaptureAdapter.cs"))),
         };
 
         foreach (var host in hosts)
         {
             host.Capture.Should().Contain("case WholeWindowVisualEvidenceActivationKind.MediaCaptionPane:")
-                .And.Contain("ShowMediaCaptionPane();")
-                .And.Contain("if (IsMediaCaptionPaneVisible) result.Add(\"accessibility.media-caption-pane\")");
+                .And.Contain("access.ShowMediaCaptionPane();");
+            host.Adapter.Should().Contain("if (owner.IsMediaCaptionPaneVisible) result.Add(\"accessibility.media-caption-pane\")");
             host.MainWindow.Should().Contain("ShowMediaCaptionPane() =>")
                 .And.Contain("_mediaPaneHostCoordinator.Show();")
                 .And.Contain("HideMediaCaptionPane() => _mediaPaneHostCoordinator.Hide();");

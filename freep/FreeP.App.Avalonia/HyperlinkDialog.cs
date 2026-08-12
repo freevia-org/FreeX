@@ -30,7 +30,7 @@ internal sealed class HyperlinkDialog : Window
 
     internal Hyperlink? Result => _session.Result;
 
-    internal bool ApplyForVisualEvidence(
+    internal bool ApplyInputForTests(
         HyperlinkDialogTargetKind targetKind,
         string url,
         int selectedSlideIndex,

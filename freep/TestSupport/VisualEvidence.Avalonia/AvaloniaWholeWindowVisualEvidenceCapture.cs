@@ -4,10 +4,11 @@ using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Free.Shared.Drawing;
+using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.VisualEvidence;
 
-namespace FreeP.App.Avalonia;
+namespace FreeP.VisualEvidence.Avalonia;
 
 internal static class AvaloniaWholeWindowVisualEvidenceCapture
 {
@@ -68,11 +69,12 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
             try
             {
                 var fixture = DialogPaneVisualEvidenceFixtureFactory.Create();
-                var assertions = anchor.PrepareWholeWindowVisualEvidence(scenario, fixture);
+                var coordinator = new AvaloniaWholeWindowVisualEvidenceCoordinator(anchor.CreateVisualCaptureAdapter());
+                var assertions = coordinator.Prepare(scenario, fixture);
                 await PumpLayout();
                 anchor.Activate();
                 await PumpLayout();
-                anchor.NormalizeWholeWindowVisualEvidenceShellState(scenario);
+                coordinator.Normalize(scenario);
 
                 var scenarioOutput = FreePVisualEvidenceCaptureOrchestration.CreateScenarioOutputPlan(
                     outputRoot,
@@ -87,7 +89,7 @@ internal static class AvaloniaWholeWindowVisualEvidenceCapture
                     clientPath,
                     WholeWindowVisualEvidenceCatalog.LogicalClientWidth,
                     WholeWindowVisualEvidenceCatalog.LogicalClientHeight);
-                var semantic = anchor.CaptureWholeWindowVisualEvidenceSemanticState(scenario, assertions);
+                var semantic = coordinator.CaptureSemantic(scenario, assertions);
                 captures.Add(new WholeWindowVisualEvidenceCapture(
                     scenario.Id,
                     "avalonia",

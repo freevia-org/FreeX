@@ -142,7 +142,7 @@ internal sealed class HeaderFooterDialog : Window
         string dateTimeFieldType = "datetime1",
         string fixedDateTimeText = "")
     {
-        PrepareForVisualEvidence(
+        SetInputForTests(
             showDateTime,
             showFooter,
             showSlideNumber,
@@ -154,7 +154,7 @@ internal sealed class HeaderFooterDialog : Window
         return Apply(scope);
     }
 
-    internal void PrepareForVisualEvidence(
+    internal void SetInputForTests(
         bool showDateTime,
         bool showFooter,
         bool showSlideNumber,

@@ -9,10 +9,11 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Drawing;
+using FreeP.App.Avalonia;
 using FreeP.App.Compositor;
 using FreeP.VisualEvidence;
 
-namespace FreeP.App.Avalonia;
+namespace FreeP.VisualEvidence.Avalonia;
 
 internal static class AvaloniaDialogPaneVisualEvidenceCapture
 {
@@ -77,7 +78,8 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
             try
             {
                 var preparation = DialogPaneVisualEvidencePreparationSession.Create(scenario);
-                var routeHost = anchor.CreateDialogPaneVisualEvidenceRouteHost();
+                var access = anchor.CreateVisualCaptureAdapter();
+                var routeHost = new AvaloniaDialogPaneVisualEvidenceRouteHost(access);
                 var dialogAdapter = new AvaloniaDialogPaneVisualEvidenceAdapter(anchor);
                 var assertions = preparation.PrepareRoute(routeHost).ToList();
                 Window target = anchor;
@@ -97,7 +99,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
 
                 var metadataRoot = scenario.SurfaceKind == DialogPaneVisualEvidenceSurfaceKind.Dialog
                     ? target
-                    : anchor.DialogPaneVisualEvidenceMetadataRoot(scenario);
+                    : access.DialogMetadataRoot(scenario.RouteId);
                 if (scenario.RouteId == "review.comments-pane")
                 {
                     Descendants(metadataRoot).OfType<ScrollViewer>().FirstOrDefault()?.SetCurrentValue(
@@ -199,7 +201,7 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         public Window CreateHeaderFooter(DialogPaneVisualEvidenceHeaderFooterPreparation preparation)
         {
             var dialog = new HeaderFooterDialog(owner.Editor, preparation.InitialFocus);
-            dialog.PrepareForVisualEvidence(
+            dialog.SetInputForTests(
                 preparation.ShowDateTime,
                 preparation.ShowFooter,
                 preparation.ShowSlideNumber,
@@ -234,14 +236,14 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         public bool ApplyHyperlinkValidation(
             Window dialog,
             DialogPaneVisualEvidenceHyperlinkInput input) =>
-            Require<HyperlinkDialog>(dialog).ApplyForVisualEvidence(
+            Require<HyperlinkDialog>(dialog).ApplyInputForTests(
                 input.TargetKind,
                 input.Url,
                 input.SelectedSlideIndex,
                 input.Tooltip);
 
         public void PrepareCustomShowsValidation(Window dialog) =>
-            Require<CustomShowDialog>(dialog).PrepareValidationForVisualEvidence();
+            Require<CustomShowDialog>(dialog).PrepareMissingNameForTests();
 
         public DialogPaneVisualEvidenceValidationResult PrepareSlideSizeLoadedState(Window dialog)
         {
@@ -252,13 +254,49 @@ internal static class AvaloniaDialogPaneVisualEvidenceCapture
         public DialogPaneVisualEvidenceValidationResult PrepareChartDataLoadedState(Window dialog)
         {
             var chart = Require<ChartDataDialog>(dialog);
-            return new(chart.PrepareValidationForVisualEvidence(), chart.ValidationText);
+            return new(chart.PrepareInvalidValueForTests(), chart.ValidationText);
         }
 
         private static TDialog Require<TDialog>(Window dialog)
             where TDialog : Window =>
             dialog as TDialog ?? throw new InvalidOperationException(
                 $"Expected {typeof(TDialog).Name}, but received {dialog.GetType().Name}.");
+    }
+
+    private sealed class AvaloniaDialogPaneVisualEvidenceRouteHost(MainWindow.AvaloniaVisualCaptureAdapter access)
+        : IDialogPaneVisualEvidenceRouteHost
+    {
+        public IReadOnlyList<uint> SelectedShapeIds => access.SelectedShapeIds;
+        public int SlideCount => access.SlideCount;
+        public int CurrentShapeCount => access.CurrentShapeCount;
+        public string? CurrentLayoutId => access.CurrentLayoutId;
+        public bool IsTablePickerVisible => access.IsTablePickerVisible;
+        public bool IsLayoutPickerVisible => access.IsLayoutPickerVisible;
+        public DialogPaneVisualEvidenceChoiceState ChoiceState => new(
+            access.TableChoiceCount,
+            access.DefaultTableChoiceCount,
+            access.CurrentLayoutChoiceCount,
+            access.DisabledLayoutChoiceCount);
+
+        public void LoadPresentation(FreeP.Core.Model.Presentation presentation) => access.LoadPresentation(presentation);
+        public void SelectShape(uint shapeId) => access.SelectShape(shapeId);
+        public void RefreshCanvas() => access.RefreshCanvas();
+        public void ShowReviewCommentsPane() => access.ShowCommentsPane();
+        public void SelectFirstReviewComment() => access.SelectFirstComment();
+        public void ShowAccessibilityCheckerPane() => access.ShowAccessibilityPane();
+        public void SelectFirstAccessibilityIssue() => access.SelectFirstAccessibilityIssue();
+        public void ShowAltTextPane() => access.ShowAltTextPane();
+        public void ShowReadingOrderPane() => access.ShowReadingOrderPane();
+        public void ShowProofingPane() => access.ShowProofingPane();
+        public void SelectFirstProofingIssue() => access.SelectFirstProofingIssue();
+        public void ShowMediaCaptionPane() => access.ShowMediaCaptionPane();
+        public void ShowSmartArtTextPane() => access.ShowSmartArtTextPane();
+        public void EnsureAnimationPaneVisible() => access.EnsureAnimationPaneVisible();
+        public void ShowPrintOptionsPane() => access.ShowPrintOptionsPane();
+        public void OpenTablePicker() => access.OpenTablePicker();
+        public void OpenLayoutPicker() => access.OpenLayoutPicker();
+        public void HideTablePicker() => access.HideTablePicker();
+        public void HideLayoutPicker() => access.HideLayoutPicker();
     }
 
     private static void FocusFirstInputIfNeeded(

@@ -200,7 +200,7 @@ public sealed class HyperlinkDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     // ── OK handler ────────────────────────────────────────────────────────────────
 
-    internal bool ApplyForVisualEvidence(
+    internal bool ApplyInputForTests(
         HyperlinkDialogTargetKind targetKind,
         string url,
         int selectedSlideIndex,

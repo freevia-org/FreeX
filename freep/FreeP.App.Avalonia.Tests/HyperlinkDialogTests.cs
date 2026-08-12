@@ -94,7 +94,7 @@ public sealed class HyperlinkDialogTests
             var dialog = new HyperlinkDialog(CreateRequest());
             var validation = GetField<TextBlock>(dialog, "_validationText");
 
-            dialog.ApplyForVisualEvidence(
+            dialog.ApplyInputForTests(
                 HyperlinkDialogTargetKind.Url,
                 "not a url",
                 0,
@@ -104,7 +104,7 @@ public sealed class HyperlinkDialogTests
             validation.IsVisible.Should().BeTrue();
             dialog.Result.Should().BeNull();
 
-            dialog.ApplyForVisualEvidence(
+            dialog.ApplyInputForTests(
                 HyperlinkDialogTargetKind.Url,
                 "https://example.test/accepted",
                 0,

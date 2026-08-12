@@ -19,12 +19,6 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (WpfWholeWindowVisualEvidenceCapture.TryRun(args, out var wholeWindowCaptureExitCode))
-            return wholeWindowCaptureExitCode;
-
-        if (WpfDialogPaneVisualEvidenceCapture.TryRun(args, out var captureExitCode))
-            return captureExitCode;
-
         // TODO(velopack): if/when a shared Velopack bootstrap helper lands, call it here before the WPF
         // Application is created. The scaffold ships without self-update.
 

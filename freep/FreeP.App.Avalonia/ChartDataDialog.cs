@@ -188,7 +188,7 @@ internal sealed class ChartDataDialog : Window
 
     internal string ValidationText => _validationText.Text ?? string.Empty;
 
-    internal bool PrepareValidationForVisualEvidence()
+    internal bool PrepareInvalidValueForTests()
     {
         var first = _valueBoxes.FirstOrDefault();
         if (first is null)

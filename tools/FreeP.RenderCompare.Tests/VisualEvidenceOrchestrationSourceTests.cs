@@ -8,13 +8,13 @@ public sealed class VisualEvidenceOrchestrationSourceTests
         var sources = new[]
         {
             TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-                "freep", "FreeP.App.Host", "WpfDialogPaneVisualEvidenceCapture.cs"),
+                "freep", "TestSupport", "VisualEvidence.Wpf", "WpfDialogPaneVisualEvidenceCapture.cs"),
             TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-                "freep", "FreeP.App.Host", "WpfWholeWindowVisualEvidenceCapture.cs"),
+                "freep", "TestSupport", "VisualEvidence.Wpf", "WpfWholeWindowVisualEvidenceCapture.cs"),
             TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-                "freep", "FreeP.App.Avalonia", "AvaloniaDialogPaneVisualEvidenceCapture.cs"),
+                "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaDialogPaneVisualEvidenceCapture.cs"),
             TestWorkspaceFileLocator.ReadAllTextFromWorkspaceRoot(
-                "freep", "FreeP.App.Avalonia", "AvaloniaWholeWindowVisualEvidenceCapture.cs"),
+                "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCapture.cs"),
         };
 
         sources.Should().AllSatisfy(source =>
