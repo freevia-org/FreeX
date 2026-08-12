@@ -434,6 +434,10 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var mainSource = DialogSourceTestSupport.ReadHostSources("MainWindow.xaml.cs");
         var keyTipSource = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyTips.cs");
+        var globalUsings = DialogSourceTestSupport.ReadHostSources("KeyboardShortcutGlobalUsings.cs");
+        var portableSession = DialogSourceTestSupport.ReadPresentationSources(
+            "Ribbon",
+            "FreeXRibbonKeyTipInputSession.cs");
 
         mainSource.Should().NotContain("private void EnterRibbonKeyTipMode(");
         mainSource.Should().NotContain("private void HandleActiveRibbonKeyTip(");
@@ -451,7 +455,10 @@ public sealed partial class MainWindowSourceHygieneTests
         keyTipSource.Should().Contain("private void EnterRibbonMenuKeyTipScope(");
         keyTipSource.Should().Contain("private bool TryInvokeTopLevelQatKeyTip(");
         keyTipSource.Should().Contain("private IEnumerable<FrameworkElement> GetVisibleKeyTipElements(");
-        keyTipSource.Should().Contain("private enum RibbonKeyTipScope");
+        keyTipSource.Should().NotContain("private enum RibbonKeyTipScope");
+        globalUsings.Should().Contain(
+            "RibbonKeyTipScope = FreeX.App.Presentation.Ribbon.FreeXRibbonKeyTipInputScope");
+        portableSession.Should().Contain("public enum FreeXRibbonKeyTipInputScope");
         keyTipSource.Should().Contain("RibbonKeyTipRouting");
     }
 

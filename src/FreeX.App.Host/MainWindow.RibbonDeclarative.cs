@@ -1,13 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
 
@@ -97,67 +93,12 @@ public partial class MainWindow
             WireRenderedFormatPainterDoubleClick(renderedByName);
             PopulateAndWireRenderedHomeCombos(renderedByName);
             PopulateAndWireRenderedPageLayoutCombos(renderedByName);
-
-            if (Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_CAPTURE") == "1")
-                Dispatcher.BeginInvoke(new Action(CaptureDeclarativeRibbon), DispatcherPriority.ContextIdle);
         }
         catch (Exception ex)
         {
             // Ribbon materialization must not take down the rest of the workbook shell.
             System.Diagnostics.Debug.WriteLine($"Declarative ribbon swap failed: {ex}");
         }
-    }
-
-    /// <summary>Renders the live (swapped) ribbon tab strip to a PNG and exits — capture-mode proof.</summary>
-    private void CaptureDeclarativeRibbon()
-    {
-        try
-        {
-            if (RibbonTabs is null)
-                return;
-
-            if (double.TryParse(Environment.GetEnvironmentVariable("FREEX_RIBBON_DECLARATIVE_WIDTH"),
-                    System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var forcedWidth) &&
-                forcedWidth > 0)
-            {
-                WindowState = WindowState.Normal;
-                Width = forcedWidth;
-            }
-
-            RibbonTabs.UpdateLayout();
-            var width = (int)Math.Ceiling(RibbonTabs.ActualWidth);
-            var height = (int)Math.Ceiling(RibbonTabs.ActualHeight);
-            if (width <= 0 || height <= 0)
-                return;
-
-            var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-            bitmap.Render(RibbonTabs);
-
-            var outputPath = Path.Combine(FindScreenshotDirectory(), "home_live.png");
-            Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            var encoder = new PngBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(bitmap));
-            using var stream = File.Create(outputPath);
-            encoder.Save(stream);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Declarative ribbon capture failed: {ex}");
-        }
-        finally
-        {
-            Application.Current?.Shutdown();
-        }
-    }
-
-    private static string FindScreenshotDirectory()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "FreeX.slnx")))
-            dir = dir.Parent;
-
-        var root = dir?.FullName ?? AppContext.BaseDirectory;
-        return Path.Combine(root, "screenshots", "ribbon-declarative");
     }
 
     /// <summary>
