@@ -94,6 +94,64 @@ public sealed class PresentationFileCommandSessionTests : IDisposable
     }
 
     [Fact]
+    public void StartupPlanner_FiltersToPresentationsAndRoutesAdditionalDecksToNativeWindows()
+    {
+        var first = Path.Combine(TempDirectory, "first.pptx");
+        var second = Path.Combine(TempDirectory, "second.fxp");
+
+        var plan = PresentationStartupOpenPlanner.Plan(
+            [Path.Combine(TempDirectory, "ignored.docx"), first, second],
+            fileExists: _ => true);
+
+        plan.Entries.Should().Equal(
+            new StartupFileOpenEntry(first, OpenInNewWindow: false),
+            new StartupFileOpenEntry(second, OpenInNewWindow: true));
+    }
+
+    [Fact]
+    public async Task StartupSession_UsesFileCommandFailureAndCanDeferNativeFeedback()
+    {
+        var lifecycle = new FakeLifecyclePort();
+        var feedback = new FakeFeedbackPort();
+        var commands = CreateSession(
+            Presentation.CreateEmpty,
+            _ => { },
+            lifecycle,
+            new FakePickerPort(),
+            feedback: feedback);
+        var startup = new PresentationStartupOpenSession(commands);
+        var missingPath = Path.Combine(TempDirectory, "missing.pptx");
+        var plan = startup.Plan([missingPath], fileExists: _ => false);
+
+        var result = await startup.ReportFirstUnopenableAsync(plan, reportFeedback: false);
+
+        result.Should().NotBeNull();
+        result!.Status.Should().Be(PresentationFileCommandStatus.Failed);
+        result.Path.Should().Be(missingPath);
+        lifecycle.CurrentPath.Should().BeNull();
+        feedback.Results.Should().BeEmpty();
+
+        await startup.ReportFeedbackAsync(result);
+
+        feedback.Results.Should().ContainSingle().Which.Should().BeSameAs(result);
+    }
+
+    [Fact]
+    public void Hosts_DelegateStartupOpeningToPortableSession()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var wpf = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs"));
+        var avalonia = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("new PresentationStartupOpenSession(_fileSession)");
+            source.Should().Contain("startupOpenSession.Plan(");
+            source.Should().NotContain("PresentationFilePersistenceWorkflow.Open(startupPresentation)");
+        }
+    }
+
+    [Fact]
     public async Task ExportCommands_OrchestratePortableRenderAndNativeVideoPorts()
     {
         var pdfPath = Path.Combine(TempDirectory, "deck.pdf");

@@ -132,7 +132,7 @@ public sealed class FilePickerPlannerSourceTests
         ports.Should().NotContain("SaveFilePickerAsync(");
         ports.Should().NotContain("new FilePickerFileType(descriptor.DisplayName)");
         ports.Should().NotContain("Patterns = descriptor.Patterns.ToArray()");
-        source.Should().Contain("IsSupportedPresentationPath(a)");
+        source.Should().Contain("startupOpenSession.Plan(startupArguments)");
         ports.Should().NotContain("PptxFileType");
         ports.Should().NotContain("new FilePickerFileType(\"Images\")");
         ports.Should().NotContain("Title         = \"Open Presentation\"");

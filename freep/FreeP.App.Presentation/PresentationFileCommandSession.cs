@@ -570,6 +570,17 @@ public sealed class PresentationFileCommandSession
         CancellationToken cancellationToken = default) =>
         OpenPathCoreAsync(path, suppressRecentFiles, cancellationToken);
 
+    internal Task<PresentationFileCommandResult> OpenStartupPathAsync(
+        string path,
+        bool reportFeedback,
+        CancellationToken cancellationToken = default) =>
+        OpenPathCoreAsync(path, suppressRecentFiles: false, cancellationToken, reportFeedback);
+
+    internal Task ReportResultAsync(
+        PresentationFileCommandResult result,
+        CancellationToken cancellationToken = default) =>
+        ReportFeedbackAsync(result, cancellationToken);
+
     public async Task<PresentationFileCommandResult> OpenRecentPathAsync(
         string path,
         CancellationToken cancellationToken = default)
@@ -998,7 +1009,8 @@ public sealed class PresentationFileCommandSession
     private async Task<PresentationFileCommandResult> OpenPathCoreAsync(
         string path,
         bool suppressRecentFiles,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool reportFeedback = true)
     {
         try
         {
@@ -1013,7 +1025,8 @@ public sealed class PresentationFileCommandSession
                     SisterAppFileTextPlanner.FormatOpened(
                         PresentationFileTextResources.Presentation,
                         Path.GetFileName(path))),
-                cancellationToken);
+                cancellationToken,
+                reportFeedback);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -1023,7 +1036,8 @@ public sealed class PresentationFileCommandSession
                     PresentationFileTextResources.ErrorSummary(PresentationFileCommand.Open),
                     ex,
                     path),
-                cancellationToken);
+                cancellationToken,
+                reportFeedback);
         }
     }
 
@@ -1133,12 +1147,18 @@ public sealed class PresentationFileCommandSession
 
     private async Task<PresentationFileCommandResult> CompleteAsync(
         PresentationFileCommandResult result,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool reportFeedback = true)
     {
         LastResult = result;
-        if (_feedback is not null)
-            await _feedback.ReportAsync(result, cancellationToken);
+        if (reportFeedback)
+            await ReportFeedbackAsync(result, cancellationToken);
         return result;
     }
+
+    private Task ReportFeedbackAsync(
+        PresentationFileCommandResult result,
+        CancellationToken cancellationToken) =>
+        _feedback?.ReportAsync(result, cancellationToken) ?? Task.CompletedTask;
 
 }

@@ -634,8 +634,19 @@ public sealed partial class MainWindow : Window,
 
         Closed += (_, _) => _workareaSession.Dispose();
         _workareaSession.Initialize();
-        if (startupFilePaths is { Count: > 0 })
-            FileOpenPath(startupFilePaths[0]);
+        var startupOpenSession = new PresentationStartupOpenSession(_fileSession);
+        var startupOpenPlan = startupOpenSession.Plan(startupFilePaths ?? []);
+        var primaryStartupEntry = startupOpenPlan.Entries.FirstOrDefault(entry => !entry.OpenInNewWindow);
+        if (primaryStartupEntry is not null)
+            RunFileCommand(startupOpenSession.OpenAsync(primaryStartupEntry));
+        else
+            RunOptionalFileCommand(startupOpenSession.ReportFirstUnopenableAsync(startupOpenPlan));
+
+        var additionalStartupEntries = startupOpenPlan.Entries
+            .Where(entry => entry.OpenInNewWindow)
+            .ToArray();
+        if (additionalStartupEntries.Length > 0)
+            Loaded += (_, _) => OpenAdditionalStartupPresentations(additionalStartupEntries);
     }
 
     // ── Editor construction ───────────────────────────────────────────────────────
@@ -4409,6 +4420,20 @@ public sealed partial class MainWindow : Window,
 
     private static bool RunFileCommand(Task<PresentationFileCommandResult> command) =>
         command.GetAwaiter().GetResult().Succeeded;
+
+    private static bool RunOptionalFileCommand(Task<PresentationFileCommandResult?> command) =>
+        command.GetAwaiter().GetResult()?.Succeeded == true;
+
+    private void OpenAdditionalStartupPresentations(IReadOnlyList<StartupFileOpenEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            var window = new MainWindow(_options, _optionsStore, _messageService);
+            window.Show();
+            var startupOpenSession = new PresentationStartupOpenSession(window._fileSession);
+            RunFileCommand(startupOpenSession.OpenAsync(entry));
+        }
+    }
 
     private void ShowBackstage() => ShowBackstage("Info");
 

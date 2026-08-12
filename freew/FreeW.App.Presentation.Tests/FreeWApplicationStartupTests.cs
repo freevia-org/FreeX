@@ -62,6 +62,20 @@ public sealed class FreeWApplicationStartupTests : IDisposable
     }
 
     [Fact]
+    public void TryOpenStartupDocument_NormalizesLocalFileUrisThroughSharedPlanning()
+    {
+        var adapter = new FakeDocumentAdapter();
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        var path = WriteText("Opened from URI.docx", "startup body");
+
+        var result = FreeWApplicationStartup.TryOpenStartupDocument([new Uri(path).AbsoluteUri], workflow);
+
+        result.Should().NotBeNull();
+        result!.SavedPath.Should().Be(path);
+        result.Document.PlainText.Should().Be("startup body");
+    }
+
+    [Fact]
     public void Hosts_ConsumeNeutralProfileWhilePlatformStartupRemainsLocal()
     {
         var avaloniaProgram = ReadSource("freew", "FreeW.App.Avalonia", "Program.cs");
@@ -92,6 +106,8 @@ public sealed class FreeWApplicationStartupTests : IDisposable
         neutralStartup.Should().NotContain("using System.Windows");
         neutralStartup.Should().NotContain("Dispatcher");
         neutralStartup.Should().NotContain("MainWindow");
+        neutralStartup.Should().Contain("StartupFileOpenPlanner.Plan(");
+        neutralStartup.Should().Contain("MaximumOpenableFiles: 1");
     }
 
     [Fact]

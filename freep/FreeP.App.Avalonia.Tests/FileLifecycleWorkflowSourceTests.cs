@@ -78,8 +78,9 @@ public sealed class FileLifecycleWorkflowSourceTests
         source.Should().NotContain("Content = \"Don't save\"");
         source.Should().NotContain("FileLifecyclePlanner.PlanSave(");
         source.Should().NotContain("new FileCommandSession");
-        source.Should().Contain("PresentationFilePersistenceWorkflow.Open(startupPresentation)");
-        source.Should().Contain("PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path)");
+        source.Should().Contain("new PresentationStartupOpenSession(_fileSession)");
+        source.Should().Contain("startupOpenSession.Plan(startupArguments)");
+        source.Should().NotContain("PresentationFilePersistenceWorkflow.Open(startupPresentation)");
         source.Should().NotContain("PresentationFilePersistenceWorkflow.Save(");
         source.Should().NotContain("PresentationFileDialogPlanner.");
         source.Should().NotContain("v1: proceed without a save-changes dialog");

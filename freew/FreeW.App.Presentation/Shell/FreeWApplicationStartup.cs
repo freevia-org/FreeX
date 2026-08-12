@@ -30,14 +30,18 @@ public static class FreeWApplicationStartup
         ArgumentNullException.ThrowIfNull(startupArguments);
         ArgumentNullException.ThrowIfNull(persistence);
 
-        var path = startupArguments.FirstOrDefault(argument =>
-            File.Exists(argument) && persistence.CanOpenPath(argument));
-        if (path is null)
+        var plan = StartupFileOpenPlanner.Plan(
+            startupArguments,
+            new StartupFileOpenPolicy(
+                persistence.CanOpenPath,
+                MaximumOpenableFiles: 1));
+        var entry = plan.Entries.SingleOrDefault();
+        if (entry is null)
             return null;
 
         try
         {
-            return persistence.Open(path);
+            return persistence.Open(entry.Path);
         }
         catch (Exception)
         {

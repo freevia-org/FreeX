@@ -84,8 +84,8 @@ public sealed class StartupFileOpenPlannerTests
     public void FreeX_hosts_realize_the_portable_startup_file_plan()
     {
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find(
-            "src",
-            "FreeX.App.Services",
+            "shared",
+            "Free.Shared.AppServices",
             "StartupFileOpenPlanner.cs"));
         var wpfSource = File.ReadAllText(RepositoryFileLocator.Find(
             "src",

@@ -890,37 +890,44 @@ public sealed partial class MainWindow : Window,
 
         // ── Initial content ───────────────────────────────────────────────────
 
-        var startupPresentation = startupArguments
-            .FirstOrDefault(a => IsSupportedPresentationPath(a) && File.Exists(a));
+        var startupOpenSession = new PresentationStartupOpenSession(_fileSession);
+        var startupOpenPlan = startupOpenSession.Plan(startupArguments);
+        var primaryStartupEntry = startupOpenPlan.Entries.FirstOrDefault(entry => !entry.OpenInNewWindow);
         RecordStartupObservation(
-            startupPresentation is null ? "startup-load-not-requested" : "startup-load-begin");
+            primaryStartupEntry is null && !startupOpenPlan.ShouldReportMissingPath
+                ? "startup-load-not-requested"
+                : "startup-load-begin");
 
-        Exception? startupOpenError = null;
-        if (startupPresentation is not null)
+        PresentationFileCommandResult? startupOpenResult;
+        if (primaryStartupEntry is not null)
         {
-            try
-            {
-                var result = PresentationFilePersistenceWorkflow.Open(startupPresentation);
-                LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
+            startupOpenResult = startupOpenSession
+                .OpenAsync(primaryStartupEntry, reportFeedback: false)
+                .GetAwaiter()
+                .GetResult();
+            if (startupOpenResult.Succeeded)
                 RecordStartupObservation("startup-load-saved");
-                _statusText.Text = SisterAppFileTextPlanner.FormatOpened(FileText, Path.GetFileName(startupPresentation));
-            }
-            catch (Exception ex)
+            else
             {
-                startupOpenError = ex;
                 LoadPresentationAsSaved(_presentation, path: null);
                 RecordStartupObservation("startup-load-failed-fallback-saved");
-                _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
-                    FileText,
-                    FileText.OpenCommand,
-                    ex.Message);
             }
         }
         else
         {
+            startupOpenResult = startupOpenSession
+                .ReportFirstUnopenableAsync(startupOpenPlan, reportFeedback: false)
+                .GetAwaiter()
+                .GetResult();
             LoadPresentationAsSaved(_presentation, path: null);
-            RecordStartupObservation("startup-empty-saved");
+            RecordStartupObservation(startupOpenResult is null
+                ? "startup-empty-saved"
+                : "startup-load-failed-fallback-saved");
         }
+
+        var additionalStartupEntries = startupOpenPlan.Entries
+            .Where(entry => entry.OpenInNewWindow)
+            .ToArray();
 
         RecordStartupObservation("startup-seeds-complete");
 
@@ -929,12 +936,14 @@ public sealed partial class MainWindow : Window,
         UpdateStatus();
         RecordStartupObservation("constructor-complete");
         RegisterStartupOpenedObservation();
-        if (startupOpenError is not null)
+        if (startupOpenResult is not null || additionalStartupEntries.Length > 0)
         {
-            var error = startupOpenError;
-            Opened += async (_, _) => await _fileWorkflow.ShowFileCommandErrorAsync(
-                PresentationFileTextResources.ErrorSummary(PresentationFileCommand.Open),
-                error);
+            Opened += async (_, _) =>
+            {
+                if (startupOpenResult is not null)
+                    await startupOpenSession.ReportFeedbackAsync(startupOpenResult);
+                await OpenAdditionalStartupPresentationsAsync(additionalStartupEntries);
+            };
         }
 
         if (_nativeOutputCapabilityDetector is not null)
@@ -946,6 +955,22 @@ public sealed partial class MainWindow : Window,
         _ownerFocusRestoreCount++;
         Activate();
         Focus();
+    }
+
+    private async Task OpenAdditionalStartupPresentationsAsync(
+        IReadOnlyList<StartupFileOpenEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            var window = new MainWindow(
+                [],
+                loadRecentFilesStore: null,
+                options: _options,
+                optionsStore: _optionsStore);
+            window.Show();
+            var startupOpenSession = new PresentationStartupOpenSession(window._fileSession);
+            await startupOpenSession.OpenAsync(entry);
+        }
     }
 
     private void ApplyWindowIcon() =>
@@ -6338,9 +6363,6 @@ public sealed partial class MainWindow : Window,
     private async Task<bool> TrySavePresentationFileAsync(string path) =>
         (await _fileSession.SavePathAsync(path)).Succeeded;
 
-
-    private static bool IsSupportedPresentationPath(string path) =>
-        PresentationFilePersistenceWorkflow.IsSupportedPresentationPath(path);
 
     // ── Presentation load ──────────────────────────────────────────────────────
 
