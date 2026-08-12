@@ -278,6 +278,18 @@
   <data name="PivotSort_ValueField" xml:space="preserve">
     <value>Value field:</value>
   </data>
+  <data name="PivotSort_ValueFieldRequired" xml:space="preserve">
+    <value>Add a PivotTable value field before sorting by values.</value>
+  </data>
+  <data name="ClipboardFeedback_CopyMultipleSelectionUnsupported" xml:space="preserve">
+    <value>Copy does not support multiple selected ranges yet.</value>
+  </data>
+  <data name="ClipboardFeedback_CutMultipleSelectionUnsupported" xml:space="preserve">
+    <value>Cut does not support multiple selected ranges yet.</value>
+  </data>
+  <data name="ClipboardFeedback_ReadFailed" xml:space="preserve">
+    <value>The clipboard is busy. Try pasting again.</value>
+  </data>
   <!-- PivotTable Analyze / PivotChart contextual-tab commands -->
   <data name="PivotAnalyze_SelectPivotPrompt" xml:space="preserve">
     <value>Select a cell inside a PivotTable first.</value>

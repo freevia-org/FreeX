@@ -3392,7 +3392,8 @@ public sealed class WorkbookSession : IDisposable
             // Excel copies a multiple selection only when its areas share the same rows or the
             // same columns; otherwise the command is rejected.
             if (!MultiRangeCopyPlanner.TryPlan(SelectedRanges, out var layout) || layout is null)
-                return WorkbookClipboardTextResult.Failed(CreateMultiRangeClipboardError("Copy"));
+                return WorkbookClipboardTextResult.Failed(
+                    ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut: false).FallbackText);
 
             var blockText = SerializeMultiRangeCopy(layout);
             // The combined block is copied as concatenated values through the text path; clear any
@@ -3428,8 +3429,11 @@ public sealed class WorkbookSession : IDisposable
 
     public WorkbookClipboardTextResult TryCutSelectedRangeText()
     {
-        if (TryCreateMultiRangeClipboardTextResult("Cut", out var result))
-            return result;
+        if (SelectedRanges.Count > 1)
+        {
+            return WorkbookClipboardTextResult.Failed(
+                ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut: true).FallbackText);
+        }
 
         // Same rationale as TryCopySelectedRangeText: use a full-range viewport, not the on-screen
         // Viewport, so cutting a selection taller/wider than the visible area does not blank out the
@@ -3504,7 +3508,7 @@ public sealed class WorkbookSession : IDisposable
                 // host's shared workbook clipboard-session guard.
                 return new WorkbookCellEditResult(
                     false,
-                    "The clipboard is busy. Try pasting again.",
+                    ClipboardFeedbackPlanner.ReadFailed.FallbackText,
                     [],
                     RecalcReport: null);
             }
@@ -3550,7 +3554,7 @@ public sealed class WorkbookSession : IDisposable
             // surface it so the caller can tell the user and let them retry.
             return new WorkbookCellEditResult(
                 false,
-                "The clipboard is busy. Try pasting again.",
+                ClipboardFeedbackPlanner.ReadFailed.FallbackText,
                 [],
                 RecalcReport: null);
         }
@@ -6839,20 +6843,6 @@ public sealed class WorkbookSession : IDisposable
         }
 
         return result;
-    }
-
-    private bool TryCreateMultiRangeClipboardTextResult(
-        string operation,
-        out WorkbookClipboardTextResult result)
-    {
-        if (SelectedRanges.Count <= 1)
-        {
-            result = WorkbookClipboardTextResult.Succeeded(string.Empty);
-            return false;
-        }
-
-        result = WorkbookClipboardTextResult.Failed(CreateMultiRangeClipboardError(operation));
-        return true;
     }
 
     private bool TryCreateMultiRangeClipboardEditResult(

@@ -1,3 +1,4 @@
+using Free.Shared.AppServices;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.PivotUI;
@@ -13,6 +14,11 @@ public enum PivotSortOptionMode
     ValueDescending,
 }
 
+public sealed record PivotSortOptionDescriptor(
+    PivotSortOptionMode Mode,
+    ResourceTextDescriptor Text,
+    string AutomationId);
+
 /// <summary>
 /// Portable, UI-free planning for the PivotTable "More Sort Options" dialog. Resolves the dialog's initial
 /// mode/value-field selection from the field's current <see cref="PivotSortModel"/>, validates a value-sort
@@ -22,8 +28,20 @@ public enum PivotSortOptionMode
 /// </summary>
 public static class PivotSortPlanner
 {
-    public const string ValueSortRequiresValueFieldMessage =
-        "Add a PivotTable value field before sorting by values.";
+    public static IReadOnlyList<PivotSortOptionDescriptor> Options { get; } =
+    [
+        Option(PivotSortOptionMode.LabelAscending, "PivotSort_AscendingByLabels", "Ascending (A to Z) by labels", "PivotSortOptionsLabelAscending"),
+        Option(PivotSortOptionMode.LabelDescending, "PivotSort_DescendingByLabels", "Descending (Z to A) by labels", "PivotSortOptionsLabelDescending"),
+        Option(PivotSortOptionMode.ValueAscending, "PivotSort_AscendingByValues", "Ascending by values", "PivotSortOptionsValueAscending"),
+        Option(PivotSortOptionMode.ValueDescending, "PivotSort_DescendingByValues", "Descending by values", "PivotSortOptionsValueDescending"),
+    ];
+
+    public static ResourceTextDescriptor ValueSortRequiresValueField { get; } = new(
+        "PivotSort_ValueFieldRequired",
+        "Add a PivotTable value field before sorting by values.");
+
+    public static PivotSortOptionDescriptor GetOption(PivotSortOptionMode mode) =>
+        Options.First(option => option.Mode == mode);
 
     /// <summary>The initial dialog mode for a field, from its current sort (defaults to label-ascending).</summary>
     public static PivotSortOptionMode InitialMode(PivotSortModel? currentSort, int sourceFieldIndex)
@@ -73,7 +91,7 @@ public static class PivotSortPlanner
         PivotSortOptionMode mode,
         int dataFieldCount,
         int valueFieldSelectedIndex,
-        out string? error)
+        out ResourceTextDescriptor? error)
     {
         error = null;
         if (!IsValueSort(mode))
@@ -81,7 +99,7 @@ public static class PivotSortPlanner
 
         if (dataFieldCount <= 0 || valueFieldSelectedIndex < 0 || valueFieldSelectedIndex >= dataFieldCount)
         {
-            error = ValueSortRequiresValueFieldMessage;
+            error = ValueSortRequiresValueField;
             return false;
         }
 
@@ -160,4 +178,11 @@ public static class PivotSortPlanner
             .Append(replacement)
             .ToList();
     }
+
+    private static PivotSortOptionDescriptor Option(
+        PivotSortOptionMode mode,
+        string resourceKey,
+        string fallbackLabel,
+        string automationId) =>
+        new(mode, new ResourceTextDescriptor(resourceKey, fallbackLabel), automationId);
 }

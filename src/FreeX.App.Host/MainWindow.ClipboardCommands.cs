@@ -97,7 +97,9 @@ public partial class MainWindow
         if (areas.Count > 1 && (isCut || !MultiRangeCopyPlanner.TryPlan(areas, out _)))
         {
             ShowCommandError(
-                new CommandOutcome(false, CreateMultiRangeClipboardError(isCut ? "Cut" : "Copy")),
+                new CommandOutcome(
+                    false,
+                    ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut).Resolve(UiText.Get)),
                 isCut ? "Cut" : "Copy");
             return;
         }
@@ -312,12 +314,6 @@ public partial class MainWindow
         UpdateViewport();
         RefreshToolbar();
     }
-
-    /// <summary>Matches the phrasing of WorkbookSession's (Avalonia-facing) identical
-    /// CreateMultiRangeClipboardError helper, kept as a separate literal here rather than shared
-    /// since that helper is a private instance member of WorkbookSession.</summary>
-    private static string CreateMultiRangeClipboardError(string operation) =>
-        operation + " does not support multiple selected ranges yet.";
 
     /// <summary>
     /// R82-commands-cutcopy-clipboard-5-3: real Excel invalidates the OS clipboard once a
@@ -552,7 +548,9 @@ public partial class MainWindow
                 // A transient OS-clipboard read failure must not silently fall back to a stale
                 // internal paste of the wrong content — skip the paste and tell the user.
                 ShowCommandError(
-                    new CommandOutcome(false, "The clipboard is busy. Try pasting again."),
+                    new CommandOutcome(
+                        false,
+                        ClipboardFeedbackPlanner.ReadFailed.Resolve(UiText.Get)),
                     "Paste");
                 return;
             }

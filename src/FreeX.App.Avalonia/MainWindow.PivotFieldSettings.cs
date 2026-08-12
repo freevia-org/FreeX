@@ -444,14 +444,14 @@ public sealed partial class MainWindow
         var currentSort = pivot.Sorts.FirstOrDefault(sort => sort.FieldIndex == target.SourceFieldIndex);
         var dataFieldCount = pivot.DataFields.Count;
 
-        var labelAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByLabels"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        var labelDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByLabels"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        var valueAscending = new RadioButton { Content = UiText.Get("PivotSort_AscendingByValues"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        var valueDescending = new RadioButton { Content = UiText.Get("PivotSort_DescendingByValues"), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
-        AutomationProperties.SetAutomationId(labelAscending, "PivotSortOptionsLabelAscending");
-        AutomationProperties.SetAutomationId(labelDescending, "PivotSortOptionsLabelDescending");
-        AutomationProperties.SetAutomationId(valueAscending, "PivotSortOptionsValueAscending");
-        AutomationProperties.SetAutomationId(valueDescending, "PivotSortOptionsValueDescending");
+        var labelAscending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.LabelAscending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var labelDescending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.LabelDescending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var valueAscending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.ValueAscending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var valueDescending = new RadioButton { Content = PivotSortPlanner.GetOption(PivotSortOptionMode.ValueDescending).Text.Resolve(UiText.Get), GroupName = "PivotSortOptions", FontSize = 12, FontFamily = FormulaBarFontFamily };
+        AutomationProperties.SetAutomationId(labelAscending, PivotSortPlanner.GetOption(PivotSortOptionMode.LabelAscending).AutomationId);
+        AutomationProperties.SetAutomationId(labelDescending, PivotSortPlanner.GetOption(PivotSortOptionMode.LabelDescending).AutomationId);
+        AutomationProperties.SetAutomationId(valueAscending, PivotSortPlanner.GetOption(PivotSortOptionMode.ValueAscending).AutomationId);
+        AutomationProperties.SetAutomationId(valueDescending, PivotSortPlanner.GetOption(PivotSortOptionMode.ValueDescending).AutomationId);
 
         var valueFieldBox = new ComboBox { MinWidth = 220 };
         foreach (var dataField in pivot.DataFields)
@@ -515,7 +515,7 @@ public sealed partial class MainWindow
         {
             if (!PivotSortPlanner.TryValidate(CurrentMode(), dataFieldCount, valueFieldBox.SelectedIndex, out var error))
             {
-                ShowEditIssue(error ?? PivotSortPlanner.ValueSortRequiresValueFieldMessage);
+                ShowEditIssue((error ?? PivotSortPlanner.ValueSortRequiresValueField).Resolve(UiText.Get));
                 return;
             }
 

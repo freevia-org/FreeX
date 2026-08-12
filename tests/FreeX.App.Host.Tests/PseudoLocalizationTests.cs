@@ -17,6 +17,14 @@ public sealed partial class PseudoLocalizationTests
         "MainWindow_Content_Copy",
         "MainWindow_TooltipTitle_Paste",
         "MainWindow_TooltipDescription_PasteTheContentsOfTheClipboardCtrlV",
+        "ClipboardFeedback_CopyMultipleSelectionUnsupported",
+        "ClipboardFeedback_CutMultipleSelectionUnsupported",
+        "ClipboardFeedback_ReadFailed",
+        "PivotSort_AscendingByLabels",
+        "PivotSort_DescendingByLabels",
+        "PivotSort_AscendingByValues",
+        "PivotSort_DescendingByValues",
+        "PivotSort_ValueFieldRequired",
         "Options_ChooseDisplayLanguage",
         "Options_AppLanguageRestartMessage",
         "AdvancedFilter_AdvancedFilter",
@@ -50,6 +58,41 @@ public sealed partial class PseudoLocalizationTests
         string.Format(CultureInfo.InvariantCulture, pseudo, 12.3)
             .Should()
             .Contain("12.30");
+    }
+
+    [Fact]
+    public void PivotSortAndClipboardFeedbackResources_PseudoLocalizeWithoutLosingContracts()
+    {
+        string[] keys =
+        [
+            "ClipboardFeedback_CopyMultipleSelectionUnsupported",
+            "ClipboardFeedback_CutMultipleSelectionUnsupported",
+            "ClipboardFeedback_ReadFailed",
+            "PivotSort_AscendingByLabels",
+            "PivotSort_DescendingByLabels",
+            "PivotSort_AscendingByValues",
+            "PivotSort_DescendingByValues",
+            "PivotSort_ValueFieldRequired",
+        ];
+        var neutralValues = ReadNeutralValues();
+
+        foreach (var key in keys)
+        {
+            var neutral = neutralValues[key];
+            var pseudo = PseudoLocalization.Expand(neutral);
+
+            pseudo.Should().NotBe(neutral);
+            pseudo.Length.Should().BeGreaterThan(neutral.Length);
+            CompositePlaceholderTokens(pseudo).Should().BeEquivalentTo(CompositePlaceholderTokens(neutral));
+        }
+
+        using var cultureScope = TestCultureScope.CurrentCultureAndUICulture("qps-ploc");
+        ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut: false).Resolve(UiText.Get)
+            .Should().Be(PseudoLocalization.Expand(neutralValues["ClipboardFeedback_CopyMultipleSelectionUnsupported"]));
+        ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut: true).Resolve(UiText.Get)
+            .Should().Be(PseudoLocalization.Expand(neutralValues["ClipboardFeedback_CutMultipleSelectionUnsupported"]));
+        ClipboardFeedbackPlanner.ReadFailed.Resolve(UiText.Get)
+            .Should().Be(PseudoLocalization.Expand(neutralValues["ClipboardFeedback_ReadFailed"]));
     }
 
     [Theory]

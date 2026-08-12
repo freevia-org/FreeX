@@ -7,6 +7,19 @@ namespace FreeX.App.Services.Tests;
 public sealed class WorkbookSessionClipboardSessionTests
 {
     [Fact]
+    public void ClipboardReadFailure_UsesSharedFeedbackPlannerMessage()
+    {
+        using var session = new WorkbookSessionFactory().CreateNew(240, 320);
+        session.ActiveSheet.SetCell(session.ActiveCell, new TextValue("owned"));
+        _ = session.TryCopySelectedRangeText();
+
+        var result = session.PasteClipboardTextAtActiveCell(null, clipboardReadFailed: true);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be(ClipboardFeedbackPlanner.ReadFailed.FallbackText);
+    }
+
+    [Fact]
     public void CopyResultMarker_AuthorizesInternalPasteDespiteRacyTextProjection()
     {
         using var session = new WorkbookSessionFactory().CreateNew(240, 320);

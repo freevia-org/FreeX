@@ -10,10 +10,7 @@ public sealed class PivotSortOptionsDialog : Window
 {
     private readonly int _sourceFieldIndex;
     private readonly IReadOnlyList<PivotDataFieldModel> _dataFields;
-    private readonly RadioButton _labelAscendingButton = new() { Content = "Ascending (A to Z) by labels", IsChecked = true };
-    private readonly RadioButton _labelDescendingButton = new() { Content = "Descending (Z to A) by labels" };
-    private readonly RadioButton _valueAscendingButton = new() { Content = "Ascending by values" };
-    private readonly RadioButton _valueDescendingButton = new() { Content = "Descending by values" };
+    private readonly Dictionary<PivotSortOptionMode, RadioButton> _modeButtons = [];
     private readonly ComboBox _valueFieldBox = new() { MinWidth = 220 };
 
     public PivotSortOptionsDialog(
@@ -24,9 +21,12 @@ public sealed class PivotSortOptionsDialog : Window
     {
         _sourceFieldIndex = sourceFieldIndex;
         _dataFields = dataFields;
-        ResultSort = new PivotSortModel(PivotSortTarget.Label, PivotSortDirection.Ascending, FieldIndex: sourceFieldIndex);
+        ResultSort = PivotSortPlanner.CreateResult(
+            PivotSortOptionMode.LabelAscending,
+            sourceFieldIndex,
+            valueFieldSelectedIndex: -1);
 
-        Title = $"More Sort Options - {fieldCaption}";
+        Title = UiText.Format("PivotSort_Title", fieldCaption);
         Width = 360;
         Height = 300;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -77,19 +77,29 @@ public sealed class PivotSortOptionsDialog : Window
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
         {
-            Text = $"Sort {fieldCaption}",
+            Text = UiText.Format("PivotSort_Heading", fieldCaption),
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 10)
         });
-        stack.Children.Add(_labelAscendingButton);
-        stack.Children.Add(_labelDescendingButton);
-        stack.Children.Add(_valueAscendingButton);
-        stack.Children.Add(_valueDescendingButton);
+
+        foreach (var option in PivotSortPlanner.Options)
+        {
+            var button = new RadioButton
+            {
+                Content = option.Text.Resolve(UiText.Get),
+                Margin = new Thickness(0, 0, 0, 6),
+                GroupName = "PivotSortOptions",
+            };
+            button.Checked += (_, _) => UpdateValueFieldState();
+            AutomationProperties.SetAutomationId(button, option.AutomationId);
+            _modeButtons.Add(option.Mode, button);
+            stack.Children.Add(button);
+        }
 
         var valuePanel = new StackPanel { Margin = new Thickness(18, 8, 0, 0) };
         var valueLabel = new Label
         {
-            Content = "Value field:",
+            Content = UiText.Get("PivotSort_ValueField"),
             Target = _valueFieldBox,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 4)
@@ -99,16 +109,8 @@ public sealed class PivotSortOptionsDialog : Window
         stack.Children.Add(valuePanel);
 
         _valueFieldBox.ItemsSource = _dataFields.Select(field => field.Name).ToList();
-        _valueFieldBox.SelectedIndex = _dataFields.Count == 0 ? -1 : 0;
         AutomationProperties.SetAutomationId(_valueFieldBox, "PivotSortOptionsValueFieldBox");
         AutomationProperties.SetHelpText(_valueFieldBox, UiText.Get("PivotSortOptions_ValueFieldHelpText"));
-
-        foreach (var button in new[] { _labelAscendingButton, _labelDescendingButton, _valueAscendingButton, _valueDescendingButton })
-        {
-            button.Margin = new Thickness(0, 0, 0, 6);
-            button.GroupName = "PivotSortOptions";
-            button.Checked += (_, _) => UpdateValueFieldState();
-        }
 
         root.Children.Add(stack);
         return root;
@@ -116,67 +118,48 @@ public sealed class PivotSortOptionsDialog : Window
 
     private void LoadState(PivotSortModel? currentSort)
     {
-        if (currentSort is null || currentSort.FieldIndex != _sourceFieldIndex)
-            return;
-
-        if (currentSort.Target == PivotSortTarget.Value)
-        {
-            if (currentSort.Direction == PivotSortDirection.Descending)
-                _valueDescendingButton.IsChecked = true;
-            else
-                _valueAscendingButton.IsChecked = true;
-
-            if (currentSort.DataFieldIndex >= 0 && currentSort.DataFieldIndex < _dataFields.Count)
-                _valueFieldBox.SelectedIndex = currentSort.DataFieldIndex;
-            return;
-        }
-
-        if (currentSort.Direction == PivotSortDirection.Descending)
-            _labelDescendingButton.IsChecked = true;
+        ButtonFor(PivotSortPlanner.InitialMode(currentSort, _sourceFieldIndex)).IsChecked = true;
+        _valueFieldBox.SelectedIndex = PivotSortPlanner.InitialValueFieldIndex(
+            currentSort,
+            _sourceFieldIndex,
+            _dataFields.Count);
     }
 
     private void OkButton_Click(object sender, RoutedEventArgs e)
     {
-        if ((_valueAscendingButton.IsChecked == true || _valueDescendingButton.IsChecked == true) &&
-            (_valueFieldBox.SelectedIndex < 0 || _valueFieldBox.SelectedIndex >= _dataFields.Count))
+        if (!PivotSortPlanner.TryValidate(
+                CurrentMode(),
+                _dataFields.Count,
+                _valueFieldBox.SelectedIndex,
+                out var error))
         {
-            DialogMessageHelper.ShowWarning(this, "Add a PivotTable value field before sorting by values.", Title);
+            DialogMessageHelper.ShowWarning(
+                this,
+                (error ?? PivotSortPlanner.ValueSortRequiresValueField).Resolve(UiText.Get),
+                Title);
             _valueFieldBox.Focus();
             Keyboard.Focus(_valueFieldBox);
             return;
         }
 
-        ResultSort = CreateResultSort();
+        ResultSort = PivotSortPlanner.CreateResult(CurrentMode(), _sourceFieldIndex, _valueFieldBox.SelectedIndex);
         DialogResult = true;
-    }
-
-    private PivotSortModel CreateResultSort()
-    {
-        if (_valueAscendingButton.IsChecked == true || _valueDescendingButton.IsChecked == true)
-        {
-            return new PivotSortModel(
-                PivotSortTarget.Value,
-                _valueDescendingButton.IsChecked == true ? PivotSortDirection.Descending : PivotSortDirection.Ascending,
-                DataFieldIndex: Math.Max(0, _valueFieldBox.SelectedIndex),
-                FieldIndex: _sourceFieldIndex);
-        }
-
-        return new PivotSortModel(
-            PivotSortTarget.Label,
-            _labelDescendingButton.IsChecked == true ? PivotSortDirection.Descending : PivotSortDirection.Ascending,
-            FieldIndex: _sourceFieldIndex);
     }
 
     private void UpdateValueFieldState()
     {
-        var enabled = _dataFields.Count > 0 &&
-            (_valueAscendingButton.IsChecked == true || _valueDescendingButton.IsChecked == true);
-        _valueFieldBox.IsEnabled = enabled;
+        _valueFieldBox.IsEnabled = PivotSortPlanner.ValueFieldEnabled(CurrentMode(), _dataFields.Count);
     }
+
+    private PivotSortOptionMode CurrentMode()
+        => _modeButtons.FirstOrDefault(pair => pair.Value.IsChecked == true).Key;
+
+    private RadioButton ButtonFor(PivotSortOptionMode mode) => _modeButtons[mode];
 
     private void FocusInitialKeyboardTarget()
     {
-        _labelAscendingButton.Focus();
-        Keyboard.Focus(_labelAscendingButton);
+        var initialButton = ButtonFor(PivotSortOptionMode.LabelAscending);
+        initialButton.Focus();
+        Keyboard.Focus(initialButton);
     }
 }

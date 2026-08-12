@@ -16,6 +16,28 @@ public sealed class PivotSortPlannerTests
     }
 
     [Fact]
+    public void Options_ExposeLocalizedDescriptorsInStableRendererOrder()
+    {
+        PivotSortPlanner.Options.Select(option => option.Mode).Should().Equal(
+            PivotSortOptionMode.LabelAscending,
+            PivotSortOptionMode.LabelDescending,
+            PivotSortOptionMode.ValueAscending,
+            PivotSortOptionMode.ValueDescending);
+        PivotSortPlanner.Options.Select(option => option.Text.ResourceKey).Should().Equal(
+            "PivotSort_AscendingByLabels",
+            "PivotSort_DescendingByLabels",
+            "PivotSort_AscendingByValues",
+            "PivotSort_DescendingByValues");
+        PivotSortPlanner.Options.Select(option => option.AutomationId).Should().Equal(
+            "PivotSortOptionsLabelAscending",
+            "PivotSortOptionsLabelDescending",
+            "PivotSortOptionsValueAscending",
+            "PivotSortOptionsValueDescending");
+        PivotSortPlanner.GetOption(PivotSortOptionMode.ValueDescending).Text.FallbackText
+            .Should().Be("Descending by values");
+    }
+
+    [Fact]
     public void InitialMode_ReadsLabelAndValueSorts()
     {
         var labelDesc = new PivotSortModel(PivotSortTarget.Label, PivotSortDirection.Descending, FieldIndex: 0);
@@ -48,7 +70,9 @@ public sealed class PivotSortPlannerTests
     public void TryValidate_ValueSortRequiresSelectableField()
     {
         PivotSortPlanner.TryValidate(PivotSortOptionMode.ValueAscending, 0, -1, out var error).Should().BeFalse();
-        error.Should().Be(PivotSortPlanner.ValueSortRequiresValueFieldMessage);
+        error.Should().BeSameAs(PivotSortPlanner.ValueSortRequiresValueField);
+        error!.ResourceKey.Should().Be("PivotSort_ValueFieldRequired");
+        error.FallbackText.Should().Be("Add a PivotTable value field before sorting by values.");
 
         PivotSortPlanner.TryValidate(PivotSortOptionMode.ValueAscending, 2, 1, out _).Should().BeTrue();
         PivotSortPlanner.TryValidate(PivotSortOptionMode.LabelAscending, 0, -1, out _).Should().BeTrue();

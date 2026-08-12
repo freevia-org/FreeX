@@ -36,8 +36,8 @@ public partial class MainWindow
     /// aliases SortAZMenuItem_Click/SortZAMenuItem_Click/SortCustomMenuItem_Click, which delegate
     /// straight into these) all gated only on SheetGrid.SelectedRange with no check of
     /// SheetGrid.SelectedRanges, so a second Ctrl+click area was silently dropped. Mirrors the
-    /// identical refusal ExecuteCopy/ExecuteCut already apply for the same multi-area scenario
-    /// (CreateMultiRangeClipboardError, MainWindow.ClipboardCommands.cs), and the shared Avalonia
+    /// identical refusal ExecuteCopy/ExecuteCut already apply for the same multi-area scenario,
+    /// and the shared Avalonia
     /// session's SortSelectedRange overloads (WorkbookSession.cs) get the same refusal.
     /// </summary>
     private bool TryRejectMultiAreaSort(GridRange range)
@@ -45,9 +45,12 @@ public partial class MainWindow
         if (GetCurrentSelectionRanges(range).Count <= 1)
             return false;
 
-        ShowCommandError(new CommandOutcome(false, CreateMultiRangeClipboardError("Sort")), "Sort");
+        ShowCommandError(new CommandOutcome(false, CreateMultiRangeSortError()), "Sort");
         return true;
     }
+
+    private static string CreateMultiRangeSortError() =>
+        "Sort does not support multiple selected ranges yet.";
 
     private void SortAscButton_Click(object sender, RoutedEventArgs e)
     {

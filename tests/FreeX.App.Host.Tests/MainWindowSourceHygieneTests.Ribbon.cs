@@ -228,6 +228,23 @@ public sealed partial class MainWindowSourceHygieneTests
     }
 
     [Fact]
+    public void ClipboardFeedback_IsOwnedByPortableServicesPlanner()
+    {
+        var clipboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ClipboardCommands.cs");
+        var workbookSessionSource = DialogSourceTestSupport.ReadAppServicesSource("WorkbookSession.cs");
+
+        clipboardSource.Should().Contain("ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut).Resolve(UiText.Get)");
+        clipboardSource.Should().Contain("ClipboardFeedbackPlanner.ReadFailed.Resolve(UiText.Get)");
+        clipboardSource.Should().NotContain("does not support multiple selected ranges yet.");
+        clipboardSource.Should().NotContain("The clipboard is busy. Try pasting again.");
+
+        workbookSessionSource.Should().Contain("ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut: false).FallbackText");
+        workbookSessionSource.Should().Contain("ClipboardFeedbackPlanner.MultiRangeSelectionUnsupported(isCut: true).FallbackText");
+        workbookSessionSource.Should().Contain("ClipboardFeedbackPlanner.ReadFailed.FallbackText");
+        workbookSessionSource.Should().NotContain("The clipboard is busy. Try pasting again.");
+    }
+
+    [Fact]
     public void PasteSpecialExternalText_RoutesToLiteralTextPaste()
     {
         var clipboardSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ClipboardCommands.cs");
