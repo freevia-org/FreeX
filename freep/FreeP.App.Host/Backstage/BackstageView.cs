@@ -19,7 +19,7 @@ namespace FreeP.App.Host.Backstage;
 /// FreeP's Office-style Backstage, built on the shared Backstage frame, theme, entry builder, pane resources,
 /// and pane specs. Hosts still provide live presentation values and command adapters.
 /// </summary>
-internal sealed class BackstageView : UserControl
+internal sealed partial class BackstageView : UserControl
 {
     private static readonly SisterBackstageTheme Theme = SisterBackstageTheme.FreeP;
 
@@ -71,16 +71,6 @@ internal sealed class BackstageView : UserControl
     internal string? EvidencePaneLabel => _evidencePaneLabel;
 
     internal bool IsOpen => Visibility == Visibility.Visible;
-
-    internal bool ApplyCustomPrintRangeForTests(string rangeText)
-    {
-        if (_customRangeInput is null || _customRangeApplyButton is null)
-            return false;
-
-        _customRangeInput.Text = rangeText;
-        _customRangeApplyButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-        return true;
-    }
 
     internal UIElement? CurrentPaneContent => _backstage.Frame.CurrentPaneContent;
 

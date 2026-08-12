@@ -24,9 +24,11 @@ public sealed partial class MainWindow
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (_owner._openPickerOverrideForTests is { } pickerOverride)
+            Task<string?>? overrideTask = null;
+            _owner.ResolveOpenPickerOverride(request.PickerPlan, ref overrideTask);
+            if (overrideTask is not null)
             {
-                var overriddenPath = await pickerOverride(request.PickerPlan);
+                var overriddenPath = await overrideTask;
                 return overriddenPath is null
                     ? PresentationFilePickerResult.Cancelled
                     : PresentationFilePickerResult.Selected(overriddenPath);
@@ -55,27 +57,23 @@ public sealed partial class MainWindow
             CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (request.Command == PresentationFileCommand.SaveAs &&
-                _owner._savePickerOverrideForTests is { } saveOverride)
+            Task<string?>? overrideTask = null;
+            if (request.Command == PresentationFileCommand.SaveAs)
+                _owner.ResolveSavePickerOverride(request.PickerPlan, ref overrideTask);
+            if (overrideTask is not null)
             {
-                var overriddenPath = await saveOverride(request.PickerPlan);
+                var overriddenPath = await overrideTask;
                 return overriddenPath is null
                     ? PresentationFilePickerResult.Cancelled
                     : PresentationFilePickerResult.Selected(overriddenPath);
             }
 
-            if (request.Command == PresentationFileCommand.ExportVideo &&
-                _owner.VideoPickerOverrideForTests is { } videoOverride)
+            Task<PresentationFilePickerResult>? videoOverrideTask = null;
+            if (request.Command == PresentationFileCommand.ExportVideo)
+                _owner.ResolveVideoPickerOverride(request.PickerPlan, ref videoOverrideTask);
+            if (videoOverrideTask is not null)
             {
-                var selection = await videoOverride(request.PickerPlan);
-                if (selection is null)
-                    return PresentationFilePickerResult.Cancelled;
-                return selection.LocalPath is { } selectedPath
-                    ? PresentationFilePickerResult.Selected(selectedPath)
-                    : PresentationFilePickerResult.NonLocal(
-                        SisterAppFileTextPlanner.FormatSelectedFileNotLocalPath(
-                            FileText,
-                            PresentationExportPlanner.VideoExportCommandText));
+                return await videoOverrideTask;
             }
 
             if (!AvaloniaFilePickerService.CanSave(_owner.StorageProvider))

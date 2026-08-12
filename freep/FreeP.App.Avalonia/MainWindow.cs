@@ -79,6 +79,15 @@ public sealed partial class MainWindow : Window,
     partial void ConfigureSlideShowObserver(SlideShowWindow window);
     partial void OverrideCloseCancellation(ref bool cancel);
     partial void ObserveNativeOutputDetectionCompleted();
+    partial void ResolveOpenPickerOverride(FileOpenPickerPlan plan, ref Task<string?>? selectionTask);
+    partial void ResolveSavePickerOverride(FileSavePickerPlan plan, ref Task<string?>? selectionTask);
+    partial void ResolveVideoPickerOverride(
+        FileSavePickerPlan plan,
+        ref Task<PresentationFilePickerResult>? resultTask);
+    partial void ResolvePictureBulletPayloadOverride(ref Task<PresentationPictureBulletPayload?>? payloadTask);
+    partial void ResolveHyperlinkDialogOverride(
+        HyperlinkDialogRequest request,
+        ref Task<Hyperlink?>? resultTask);
 
     private static readonly ProductThemeResourceProfile ThemeResources = ProductThemeResourceProfiles.FreeP;
 
@@ -95,9 +104,6 @@ public sealed partial class MainWindow : Window,
     private readonly PresentationFileCommandSession _fileSession;
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly PresentationPlatformClipboardSession _clipboardService;
-    private Func<FileOpenPickerPlan, Task<string?>>? _openPickerOverrideForTests;
-    private Func<FileSavePickerPlan, Task<string?>>? _savePickerOverrideForTests;
-    internal Func<FileSavePickerPlan, Task<VideoPickerSelectionForTests?>>? VideoPickerOverrideForTests { get; set; }
     private int _ownerFocusRestoreCount;
     private readonly PresentationClipboardOperationQueue _clipboardOperationQueue = new();
     private readonly FreePOptions _options;
@@ -445,8 +451,6 @@ public sealed partial class MainWindow : Window,
     internal HeaderFooterApplyPlan? LastHeaderFooterApplyPlan { get; private set; }
     internal HyperlinkDialogRequest? LastHyperlinkDialogRequest { get; private set; }
     internal HyperlinkDialogApplyPlan? LastHyperlinkDialogApplyPlan { get; private set; }
-    internal Func<HyperlinkDialogRequest, Task<Hyperlink?>>? HyperlinkDialogResultProviderForTests { get; set; }
-    internal Func<Task<PresentationPictureBulletPayload?>>? PictureBulletPayloadProviderForTests { get; set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationHandoutLayoutPlan? LastHandoutLayoutPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
@@ -684,13 +688,6 @@ public sealed partial class MainWindow : Window,
         _printCustomRangeApplyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         return true;
     }
-    internal bool ApplyBackstageCustomPrintRangeForTests(string rangeText) =>
-        _backstage.ApplyCustomPrintRangeForTests(rangeText);
-    internal IReadOnlyList<(string AutomationId, bool IsEnabled)> BackstagePrintActionsForTests =>
-        _backstage.PrintActionsForTests;
-    internal bool InvokeBackstagePrintActionForTests(string automationId) =>
-        _backstage.InvokePrintActionForTests(automationId);
-    internal Task<PrintSubmissionResult> BackstagePrintOperationForTests => _backstagePrintOperation;
     internal bool IsBackstageOpen => _backstage.IsOpen;
     internal string? CurrentBackstagePaneLabel => _backstage.CurrentPaneLabel;
     internal IReadOnlyList<SisterBackstageEntryPlan<Control>> BackstageEntries => _backstage.Entries;
@@ -3025,11 +3022,13 @@ public sealed partial class MainWindow : Window,
 
     private async Task ApplyPictureBulletFromFileAsync()
     {
-        if (PictureBulletPayloadProviderForTests is { } provider)
+        Task<PresentationPictureBulletPayload?>? payloadOverride = null;
+        ResolvePictureBulletPayloadOverride(ref payloadOverride);
+        if (payloadOverride is not null)
         {
             try
             {
-                var payload = await provider();
+                var payload = await payloadOverride;
                 if (payload is not null && ApplyImportedPictureBullet(payload))
                 {
                     _statusText.Text = PresentationShellTextCatalog.Resolve(
@@ -3241,8 +3240,10 @@ public sealed partial class MainWindow : Window,
             selectedRunHyperlink);
         LastHyperlinkDialogRequest = request.DialogRequest;
 
-        var result = HyperlinkDialogResultProviderForTests is { } provider
-            ? await provider(request.DialogRequest)
+        Task<Hyperlink?>? resultOverride = null;
+        ResolveHyperlinkDialogOverride(request.DialogRequest, ref resultOverride);
+        var result = resultOverride is not null
+            ? await resultOverride
             : await ShowHyperlinkDialogAsync(request.DialogRequest);
 
         var workflowResult = _hyperlinkWorkflowSession.Apply(
@@ -3549,14 +3550,6 @@ public sealed partial class MainWindow : Window,
         (target is { IsVisible: true, Focusable: true } ? target : _slideCanvas).Focus();
     }
 
-    internal void ShowBackstageForTests() => ShowBackstage();
-
-    internal bool ActivateBackstageEntryForTests(string label) => _backstage.TryActivateEntry(label);
-
-    internal Control? CurrentBackstagePaneContentForTests => _backstage.CurrentPaneContent;
-
-    internal bool HandleBackstageKeyForTests(Key key) => _backstage.HandleKey(key);
-
     private void OpenRecentPath(string path) => _ = OpenRecentPathAsync(path);
 
     private async Task<bool> OpenRecentPathAsync(string path) =>
@@ -3564,17 +3557,6 @@ public sealed partial class MainWindow : Window,
 
     private async Task<bool> FileOpenAsync() =>
         (await _fileSession.OpenAsync()).Succeeded;
-
-    internal Task<bool> FileOpenAsyncForTests() => FileOpenAsync();
-    internal Task<bool> FileSaveAsAsyncForTests() => FileSaveAsAsync();
-
-    internal void SetFilePickerOverridesForTests(
-        Func<FileOpenPickerPlan, Task<string?>>? openPicker,
-        Func<FileSavePickerPlan, Task<string?>>? savePicker)
-    {
-        _openPickerOverrideForTests = openPicker;
-        _savePickerOverrideForTests = savePicker;
-    }
 
     // Opens the modal FreeP Options editor. On OK it applies the edited settings live (by mutating the
     // shared _options instance the Backstage and file-command session read) and persists it through the shared
@@ -4085,8 +4067,6 @@ public sealed partial class MainWindow : Window,
         return LastVideoExportPlan;
     }
 
-    internal Task<bool> FileExportVideoAsyncForTests() => FileExportVideoAsync();
-
     private async Task<bool> FileExportVideoAsync() =>
         (await _fileSession.ExportVideoAsync()).Succeeded;
 
@@ -4114,14 +4094,6 @@ public sealed partial class MainWindow : Window,
             result.Message ?? PresentationFileTextResources.VideoExportFailed,
             outputPath);
     }
-
-    internal void CancelNativeOutputForTests()
-    {
-        _nativeOutputCancellation?.Cancel();
-        _printCancellation?.Cancel();
-    }
-
-    internal sealed record VideoPickerSelectionForTests(string? LocalPath);
 
     private static PresentationNativePrintHandoffHostCapabilities BuildNativePrintHostCapabilities(
         IPlatformPrintService printService)

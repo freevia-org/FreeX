@@ -274,8 +274,6 @@ public sealed partial class MainWindow : Window,
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
     internal PresentationPrintOutputPackage? LastPrintOutputPackage { get; private set; }
     internal PresentationPrintBackstagePlan? LastPrintBackstagePlan { get; private set; }
-    internal PresentationPrintBackstagePlan? LastFilePrintBackstagePlanForTests =>
-        _fileSession.LastPrintBackstagePlan;
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
@@ -4532,22 +4530,9 @@ public sealed partial class MainWindow : Window,
         ShowBackstage("Print");
     }
 
-    internal void ShowBackstageForTests() => ShowBackstage();
-
     internal bool IsBackstageOpen => _backstage.IsOpen;
 
     internal string? CurrentBackstagePaneLabel => _backstage.EvidencePaneLabel;
-
-    internal bool ActivateBackstageEntryForTests(string label)
-    {
-        _backstage.Show(label);
-        return _backstage.CurrentPaneContent is not null;
-    }
-
-    internal UIElement? CurrentBackstagePaneContentForTests => _backstage.CurrentPaneContent;
-
-    internal bool ApplyBackstagePrintCustomRangeForTests(string rangeText) =>
-        _backstage.ApplyCustomPrintRangeForTests(rangeText);
 
     // ── Ribbon ────────────────────────────────────────────────────────────────────
 

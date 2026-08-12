@@ -18,7 +18,7 @@ namespace FreeP.App.Avalonia.Backstage;
 /// FreeP's in-window Avalonia File screen. Pane content is rebuilt on navigation so document, print,
 /// recent-file, account, and option values always reflect the live host state.
 /// </summary>
-internal sealed class BackstageView : UserControl
+internal sealed partial class BackstageView : UserControl
 {
     private static readonly IBrush PrimaryInk = new SolidColorBrush(Color.FromRgb(0x19, 0x1F, 0x28));
     private static readonly IBrush SecondaryInk = new SolidColorBrush(Color.FromRgb(0x5E, 0x67, 0x74));
@@ -102,32 +102,6 @@ internal sealed class BackstageView : UserControl
     internal bool TryActivateEntry(string label) => _frame.TryActivateEntry(label);
 
     internal bool HandleKey(Key key) => _frame.HandleKey(key);
-
-    internal bool ApplyCustomPrintRangeForTests(string rangeText)
-    {
-        if (_customRangeInput is null || _customRangeApplyButton is null)
-            return false;
-
-        _customRangeInput.Text = rangeText;
-        _customRangeApplyButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        return true;
-    }
-
-    internal IReadOnlyList<(string AutomationId, bool IsEnabled)> PrintActionsForTests =>
-        _printActionButtons
-            .Select(action => (action.AutomationId, action.Button.IsEnabled))
-            .ToArray();
-
-    internal bool InvokePrintActionForTests(string automationId)
-    {
-        var action = _printActionButtons.FirstOrDefault(
-            candidate => candidate.AutomationId == automationId);
-        if (action.Button is null)
-            return false;
-
-        action.Button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        return true;
-    }
 
     private Control BuildInfoPane()
     {

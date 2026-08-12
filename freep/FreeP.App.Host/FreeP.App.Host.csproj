@@ -14,6 +14,24 @@
     <IntermediateOutputPath>obj\VisualEvidence\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(FreePHostAccess)' == 'true'">
+    <OutputPath>bin\HostAccess\$(Configuration)\</OutputPath>
+    <IntermediateOutputPath>obj\HostAccess\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(FreePHostAccess)' == 'true' Or '$(FreePVisualEvidenceHost)' == 'true'">
+    <Compile Include="..\TestSupport\HostAccess.Wpf\MainWindow.TestAccess.cs"
+             Link="MainWindow.TestAccess.cs" />
+    <Compile Include="..\TestSupport\HostAccess.Wpf\BackstageView.TestAccess.cs"
+             Link="Backstage\BackstageView.TestAccess.cs" />
+  </ItemGroup>
+
+  <ItemDefinitionGroup Condition="'$(FreePHostAccess)' == 'true'">
+    <ProjectReference>
+      <GlobalPropertiesToRemove>FreePHostAccess</GlobalPropertiesToRemove>
+    </ProjectReference>
+  </ItemDefinitionGroup>
+
   <ItemGroup Condition="'$(FreePVisualEvidenceHost)' == 'true'">
     <Compile Include="..\TestSupport\VisualEvidence.Wpf\MainWindow.VisualCaptureAdapter.cs"
              Link="MainWindow.VisualCaptureAdapter.cs" />
