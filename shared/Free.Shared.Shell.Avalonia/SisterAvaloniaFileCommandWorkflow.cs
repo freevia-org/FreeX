@@ -16,7 +16,9 @@ public sealed record SisterAvaloniaFileTitleSpec(
     WindowTitleApplicationPlacement ApplicationPlacement = WindowTitleApplicationPlacement.ApplicationThenDocument,
     SisterAvaloniaFileTitleDisplayName DocumentDisplayName = SisterAvaloniaFileTitleDisplayName.FileName,
     string UntitledDisplayName = FileCommandSession.DefaultUntitledDisplayName,
-    bool CollapseCleanUntitledTitle = false);
+    bool CollapseCleanUntitledTitle = false,
+    string WindowSuffix = "",
+    string GroupSuffix = "");
 
 /// <summary>
 /// Thin Avalonia shell wrapper around <see cref="FileCommandWorkflow"/> for sister document apps.
@@ -97,6 +99,9 @@ public sealed class SisterAvaloniaFileCommandWorkflow
     public void MarkDirtyWithPath(string? path, Action? beforeChanged = null) =>
         _workflow.MarkDirtyWithPath(path, beforeChanged);
 
+    public void ApplyDocumentState(string? path, bool isDirty, Action? beforeChanged = null) =>
+        _workflow.ApplyDocumentState(path, isDirty, beforeChanged);
+
     public bool New(string action, Action loadNewDocument, Action? beforeChanged = null) =>
         _workflow.New(action, loadNewDocument, beforeChanged);
 
@@ -174,6 +179,8 @@ public sealed class SisterAvaloniaFileCommandWorkflow
             isDirty: _workflow.IsDirty,
             dirtyMarker: _titleSpec.DirtyMarker,
             separator: _titleSpec.Separator,
+            windowSuffix: _titleSpec.WindowSuffix,
+            groupSuffix: _titleSpec.GroupSuffix,
             applicationPlacement: _titleSpec.ApplicationPlacement);
     }
 

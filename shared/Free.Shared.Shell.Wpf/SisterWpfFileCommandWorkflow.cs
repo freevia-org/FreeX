@@ -62,6 +62,9 @@ public sealed class SisterWpfFileCommandWorkflow
     public void MarkDirtyWithPath(string? path, Action? beforeChanged = null) =>
         _workflow.MarkDirtyWithPath(path, beforeChanged);
 
+    public void ApplyDocumentState(string? path, bool isDirty, Action? beforeChanged = null) =>
+        _workflow.ApplyDocumentState(path, isDirty, beforeChanged);
+
     public bool New(string action, Action loadNewDocument, Action? beforeChanged = null) =>
         _workflow.New(action, loadNewDocument, beforeChanged);
 

@@ -260,6 +260,8 @@ public sealed class MainWindow : Window
     private readonly FreeWOptions _options;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
     private readonly IUserMessageService? _messageService;
+    private readonly FreeWDocumentWindowPlanner _documentWindowPlanner;
+    private readonly int _documentWindowNumber;
 
     public MainWindow() : this(new FreeWOptions())
     {
@@ -270,10 +272,17 @@ public sealed class MainWindow : Window
         ApplicationOptionsStore<FreeWOptions>? optionsStore = null,
         IUserMessageService? messageService = null,
         IReadOnlyList<string>? startupFilePaths = null,
-        bool suppressStartupRecoveryOffer = false)
+        bool suppressStartupRecoveryOffer = false,
+        FreeWDocumentWindowPlanner? documentWindowPlanner = null,
+        int documentWindowNumber = 1)
     {
+        if (documentWindowNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(documentWindowNumber));
+
         _options = options ?? new FreeWOptions();
         _messageService = messageService;
+        _documentWindowPlanner = documentWindowPlanner ?? new FreeWDocumentWindowPlanner();
+        _documentWindowNumber = documentWindowNumber;
         // No store supplied (e.g. constructed in isolation / tests) → a no-op in-memory store so editing
         // still round-trips through the dialog and applies live, just without touching the real profile.
         _optionsStore = optionsStore ?? ApplicationOptionsStore<FreeWOptions>.ForPath(
@@ -953,7 +962,8 @@ public sealed class MainWindow : Window
             ApplicationName: "FreeW",
             IsDirty: _file.IsDirty,
             DirtyMarker: " *",
-            Separator: " \u2014 "));
+            Separator: " \u2014 ",
+            WindowSuffix: FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)));
     }
 
     // Recompute the live status-bar counts. When there is a non-empty selection, show that selection's
@@ -2242,24 +2252,20 @@ public sealed class MainWindow : Window
     internal void ApplyReadModeColumnWidthForTests(string token) => ApplyReadModeColumnWidth(token);
     internal void ApplyReadModePageColorForTests(string token) => ApplyReadModePageColor(token);
 
-    // Feature 5 — New Window: open a fresh MainWindow. If the current document has a saved path, load it
-    // into the new window (read-only by design — both windows can edit independently, last-save wins).
-    // If the document is new/unsaved, just open a new blank window. The note in the title makes it clear.
+    // Feature 5 — New Window: the shared planner snapshots the live model and owns numbering/file state;
+    // WPF only commits its native editor, constructs a native window, and loads the resulting plan.
     private void OpenNewWindow()
     {
-        var newWindow = new MainWindow(_options, messageService: _messageService);
-        var path = _file.CurrentPath;
-        if (path is not null && System.IO.File.Exists(path))
-        {
-            newWindow.Show();
-            newWindow._file.OpenRecentPath(path);
-            newWindow.Title = $"FreeW — {System.IO.Path.GetFileName(path)} (second view)";
-        }
-        else
-        {
-            newWindow.Title = "FreeW — (second view)";
-            newWindow.Show();
-        }
+        _editor.CommitToModel();
+        var plan = _documentWindowPlanner.CreateNext(_editor.Model, _file.CurrentPath, _file.IsDirty);
+        var newWindow = new MainWindow(
+            _options,
+            _optionsStore,
+            _messageService,
+            documentWindowPlanner: _documentWindowPlanner,
+            documentWindowNumber: plan.WindowNumber);
+        newWindow._file.LoadDocumentWindow(plan);
+        newWindow.Show();
     }
 
     // R133-remediation: AutosaveCoordinator.OfferRecovery/RecoverUnsavedDocuments call this for

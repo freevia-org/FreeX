@@ -98,6 +98,8 @@ public sealed partial class MainWindow : Window
     private IReadOnlyList<Button> _quickAccessButtons = [];
     private readonly FreeWOptions _options;
     private readonly ApplicationOptionsStore<FreeWOptions> _optionsStore;
+    private readonly FreeWDocumentWindowPlanner _documentWindowPlanner;
+    private readonly int _documentWindowNumber;
     private readonly AutosaveAdapter _autosave;
     private readonly NavigationPane _navPane;
     private readonly ReviewingPane _reviewingPane;
@@ -192,9 +194,16 @@ public sealed partial class MainWindow : Window
         Func<bool, string, Task<string?>>? askHeaderFooterText = null,
         Action<DocumentView, string>? savePrintPdf = null,
         Action<DocumentView, string, PrintSelection>? saveSelectedPrintPdf = null,
-        bool suppressStartupRecoveryOffer = false)
+        bool suppressStartupRecoveryOffer = false,
+        FreeWDocumentWindowPlanner? documentWindowPlanner = null,
+        int documentWindowNumber = 1)
     {
+        if (documentWindowNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(documentWindowNumber));
+
         _optionsStore = optionsStore;
+        _documentWindowPlanner = documentWindowPlanner ?? new FreeWDocumentWindowPlanner();
+        _documentWindowNumber = documentWindowNumber;
         _screenClipService = screenClipService ?? new AvaloniaScreenClipService();
         _printService = printService ?? PlatformPrintServiceFactory.Create();
         _showPrintSelectionDialog = showPrintSelectionDialog ??
@@ -234,7 +243,8 @@ public sealed partial class MainWindow : Window
             titleSpec: new SisterAvaloniaFileTitleSpec(
                 ApplicationName: DefaultTitle,
                 Separator: " \u2014 ",
-                ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
+                ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication,
+                WindowSuffix: FreeWDocumentWindowPlanner.FormatWindowSuffix(_documentWindowNumber)),
             maxRecentEntries: () => _options.RecentFilesCap,
             onChanged: OnFileWorkflowChanged,
             saveAsync: SaveAsync,
@@ -1327,23 +1337,25 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// AV-VIEW: Window → New Window. Opens a second top-level window showing the same document content.
-    /// The document is round-tripped through the in-memory docx serializer so the second window edits an
-    /// independent copy (TextDocument has no deep-clone), matching the spirit of Word's "new window on the
-    /// same document". Wired to <c>freew.new-window</c>.
+    /// AV-VIEW: Window → New Window. The shared planner snapshots the live model and owns numbering/file
+    /// state; Avalonia only constructs a native window and loads the resulting plan.
     /// </summary>
     private void OpenNewWindow()
     {
         try
         {
-            using var buffer = new MemoryStream();
-            DocxWriter.Write(_editor.Document, buffer);
-            buffer.Position = 0;
-            var copy = DocxReader.Read(buffer);
-
-            var second = new MainWindow();
-            second.LoadDocumentContent(copy);
-            second.Title = Title + " : 2";
+            var plan = _documentWindowPlanner.CreateNext(
+                _editor.Document,
+                _fileWorkflow.CurrentPath,
+                _fileWorkflow.IsDirty);
+            var second = new MainWindow(
+                Array.Empty<string>(),
+                _options,
+                _optionsStore,
+                documentWindowPlanner: _documentWindowPlanner,
+                documentWindowNumber: plan.WindowNumber);
+            second.LoadDocumentContent(plan.Document);
+            second._fileWorkflow.ApplyDocumentState(plan.CurrentPath, plan.IsDirty);
             second.Show();
         }
         catch (Exception ex)

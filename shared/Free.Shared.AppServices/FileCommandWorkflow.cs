@@ -57,6 +57,30 @@ public sealed class FileCommandWorkflow
         Notify(beforeChanged);
     }
 
+    /// <summary>
+    /// Restores the file identity carried by an in-memory document snapshot without registering a
+    /// duplicate recent-file entry. This is shared so WPF and Avalonia new-window/recovery adapters
+    /// cannot diverge on the path/dirty-state matrix.
+    /// </summary>
+    public void ApplyDocumentState(string? path, bool isDirty, Action? beforeChanged = null)
+    {
+        var normalizedPath = string.IsNullOrWhiteSpace(path) ? null : path;
+
+        if (isDirty)
+        {
+            MarkDirtyWithPath(normalizedPath, beforeChanged);
+            return;
+        }
+
+        if (normalizedPath is null)
+        {
+            MarkSavedWithoutPath(beforeChanged);
+            return;
+        }
+
+        MarkSavedWithPath(normalizedPath, suppressRecentFiles: true, beforeChanged);
+    }
+
     public bool New(string action, Action loadNewDocument, Action? beforeChanged = null)
     {
         ArgumentNullException.ThrowIfNull(loadNewDocument);
