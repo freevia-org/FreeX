@@ -237,7 +237,6 @@ public sealed class MainWindowHeadlessTests : IDisposable
         var printService = new RecordingPrintService();
         PrintSubmissionResult? result = null;
         MainWindow? window = null;
-        Task<PrintSubmissionResult>? printTask = null;
         var capabilities = new LinuxNativeOutputCapabilities(
             LinuxVideoEncoderCapability.Unavailable("no encoder"));
 
@@ -255,15 +254,14 @@ public sealed class MainWindowHeadlessTests : IDisposable
 
         if (!ran) return;
         PresentationNativePrintHandoffPlan? handoff = null;
-        var planRan = await OnUiThread(() =>
+        var planRan = await OnUiThreadAsync(async () =>
         {
             handoff = window!.RefreshNativePrintHandoffPlan();
-            printTask = window.ExecutePrintForTests();
+            result = await window.ExecutePrintForTests();
         });
         if (!planRan) return;
         handoff!.CanOpenNativePrintDialog.Should().BeTrue();
-        result = await printTask!;
-        result.Succeeded.Should().BeTrue(result.Message);
+        result!.Succeeded.Should().BeTrue(result.Message);
         printService.PdfBytes.Should().NotBeNullOrEmpty();
         printService.PdfBytes!.AsSpan().StartsWith("%PDF-"u8).Should().BeTrue();
         printService.PdfExistedDuringSubmission.Should().BeTrue();
@@ -277,10 +275,11 @@ public sealed class MainWindowHeadlessTests : IDisposable
         PresentationPrintRequest? printedRequest = null;
         IReadOnlyList<(string AutomationId, bool IsEnabled)> actions = [];
         MainWindow? window = null;
+        PrintSubmissionResult? result = null;
         var capabilities = new LinuxNativeOutputCapabilities(
             LinuxVideoEncoderCapability.Unavailable("no encoder"));
 
-        var ran = await OnUiThread(() =>
+        var ran = await OnUiThreadAsync(async () =>
         {
             window = new MainWindow(
                 Array.Empty<string>(),
@@ -301,15 +300,14 @@ public sealed class MainWindowHeadlessTests : IDisposable
             actions.Should().HaveCount(window.LastPrintBackstagePlan!.LayoutChoices.Count);
             actions.Should().OnlyContain(action => action.IsEnabled);
             window.InvokeBackstagePrintActionForTests(actions[0].AutomationId).Should().BeTrue();
+            result = await window.BackstagePrintOperationForTests;
         });
 
         if (!ran) return;
-        var result = await window!.BackstagePrintOperationForTests;
-
-        result.Succeeded.Should().BeTrue(result.Message);
+        result!.Succeeded.Should().BeTrue(result.Message);
         printedRequest.Should().NotBeNull();
         printedRequest!.Layout.Should().Be(
-            window.LastPrintBackstagePlan!.LayoutChoices[0].Layout.Layout);
+            window!.LastPrintBackstagePlan!.LayoutChoices[0].Layout.Layout);
         printService.PdfBytes.Should().NotBeNullOrEmpty();
     }
 
