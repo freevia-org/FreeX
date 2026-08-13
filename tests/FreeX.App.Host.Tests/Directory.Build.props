@@ -1,0 +1,12 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..\'))" />
+
+  <!-- Every UI-lane batch compiles the canonical Host test assembly. Keep restore, generated,
+       and output files project-local so parallel solution builds cannot race over shared paths. -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' != 'FreeX.App.Host.Tests'">
+    <BaseIntermediateOutputPath>obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <BaseOutputPath>bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <VSTestResultsDirectory>$(MSBuildProjectDirectory)\TestResults\$(MSBuildProjectName)</VSTestResultsDirectory>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,73 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <!-- Batch projects retain the friend-assembly identity used by production and validation hosts. -->
+    <AssemblyName>FreeX.App.Host.Tests</AssemblyName>
+    <!-- Each batch has its own generated tree. Exclude every sibling tree from default source globs. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(MSBuildThisFileDirectory)obj\**;$(MSBuildThisFileDirectory)bin\**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="FreeX.App.Localization.LocalizedUiText" Alias="UiText" />
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="Free.Shared.Drawing" />
+    <Using Include="Free.Shared.Ribbon" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonMetadata" Alias="RibbonMetadata" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonMetadataRole" Alias="RibbonMetadataRole" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonCommandContentLayout" Alias="RibbonCommandContentLayout" />
+    <Using Include="Free.Shared.Ribbon.Wpf.RibbonTooltip" Alias="RibbonTooltip" />
+    <Using Include="FreeX.Ribbon.Definitions" />
+    <Using Include="FreeX.App.Services.Ribbon" />
+    <Using Include="FreeX.App.Presentation.FormulaBar" />
+    <Using Include="FreeX.App.Presentation.Charts.Editing" />
+    <Using Include="FreeX.App.Presentation.Consolidate" />
+    <Using Include="Free.Shared.Localization" />
+    <Using Include="FreeX.App.Presentation.PivotUI" />
+    <Using Include="FreeX.App.Presentation.Shell" />
+    <Using Include="FreeX.App.Presentation.TextToColumns" />
+    <Using Include="FreeX.App.Presentation.NamedRanges" />
+    <Using Include="FreeX.App.Presentation.Protection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)..\CommandTestInfrastructure\TestCommandContext.cs" Link="TestCommandContext.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\FreeX\TestFileAdapter.cs" Link="TestFileAdapter.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)..\SharedTestInfrastructure\Ribbon\RibbonDefinitionValidator.cs"
+             Link="TestSupport\RibbonDefinitionValidator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\FreeX.ParityCapture.Wpf\FreeX.ParityCapture.Wpf.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\FreeX.Validation.Wpf\FreeX.Validation.Wpf.csproj" Aliases="ValidationWpf" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\src\FreeX.App.Host\FreeX.App.Host.csproj" Aliases="ProductionWpf" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\tools\FreeX.ParityCapture.Support\FreeX.ParityCapture.Support.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Drawing\Free.Shared.Drawing.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Localization\Free.Shared.Localization.csproj" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\..\shared\Free.Shared.Theme.Wpf\Free.Shared.Theme.Wpf.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Free.Shared.IO.FileFormatDescriptor" Alias="FileFormatDescriptor" />
+    <Using Include="Free.Shared.Opc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Free.Shared.AppServices" />
+    <Using Include="FreeX.App.Services" />
+    <Using Include="FreeX.App.Presentation" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Free.Shared.Shell" />
+  </ItemGroup>
+</Project>
