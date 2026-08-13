@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
@@ -659,59 +658,23 @@ public sealed class MainWindowSheetTabKeyboardTests
     private sealed class MainWindowHarness : IDisposable
     {
         private readonly MainWindow _window;
-        private readonly MethodInfo _insertNewSheet;
-        private readonly MethodInfo _sheetTabMouseRightButtonDown;
-        private readonly MethodInfo _updateSheetTabNavigation;
-        private readonly MethodInfo _tryFocusCurrentSheetTab;
-        private readonly MethodInfo _tryOpenFocusedSheetTabContextMenu;
-        private readonly MethodInfo _tryHandleFocusedSheetTabKeyboardNavigation;
-        private readonly MethodInfo _sheetTabContextMenuOpened;
-        private readonly MethodInfo _refreshSheetTabs;
-        private readonly MethodInfo _sheetCtxSelectAllSheetsClick;
         private FrameworkElement? _routedSheetTabTarget;
 
         private MainWindowHarness(MainWindow window)
         {
             _window = window;
-            _insertNewSheet = typeof(MainWindow)
-                .GetMethod("InsertNewSheet", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InsertNewSheet");
-            _sheetTabMouseRightButtonDown = typeof(MainWindow)
-                .GetMethod("SheetTab_MouseRightButtonDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SheetTab_MouseRightButtonDown");
-            _updateSheetTabNavigation = typeof(MainWindow)
-                .GetMethod("UpdateSheetTabNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateSheetTabNavigation");
-            _tryFocusCurrentSheetTab = typeof(MainWindow)
-                .GetMethod("TryFocusCurrentSheetTab", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryFocusCurrentSheetTab");
-            _tryOpenFocusedSheetTabContextMenu = typeof(MainWindow)
-                .GetMethod("TryOpenFocusedSheetTabContextMenu", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryOpenFocusedSheetTabContextMenu");
-            _tryHandleFocusedSheetTabKeyboardNavigation = typeof(MainWindow)
-                .GetMethod("TryHandleFocusedSheetTabKeyboardNavigation", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFocusedSheetTabKeyboardNavigation");
-            _sheetTabContextMenuOpened = typeof(MainWindow)
-                .GetMethod("SheetTabContextMenu_Opened", BindingFlags.Static | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SheetTabContextMenu_Opened");
-            _refreshSheetTabs = typeof(MainWindow)
-                .GetMethod("RefreshSheetTabs", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetTabs");
-            _sheetCtxSelectAllSheetsClick = typeof(MainWindow)
-                .GetMethod("SheetCtxSelectAllSheets_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SheetCtxSelectAllSheets_Click");
         }
 
         public string? FocusedSheetTabName =>
-            FocusedSheetTabTarget?.DataContext?.GetType().GetProperty("Name")?.GetValue(FocusedSheetTabTarget.DataContext)?.ToString();
+            (FocusedSheetTabTarget?.DataContext as SheetTabViewModel)?.Name;
 
         public MainWindow Window => _window;
 
         public string? ActiveSheetTabName =>
             SheetTabViewModels
-                .FirstOrDefault(viewModel => GetBoolProperty(viewModel, "IsActive"))
+                .FirstOrDefault(viewModel => viewModel.IsActive)
                 is { } active
-                    ? GetStringProperty(active, "Name")
+                    ? active.Name
                     : null;
 
         public bool AddSheetButtonHasKeyboardFocus =>
@@ -726,10 +689,8 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         public IReadOnlyList<string> GroupedSheetTabNames =>
             SheetTabViewModels
-                .Where(viewModel => GetBoolProperty(viewModel, "IsGrouped"))
-                .Select(viewModel => GetStringProperty(viewModel, "Name"))
-                .Where(name => name is not null)
-                .Cast<string>()
+                .Where(viewModel => viewModel.IsGrouped)
+                .Select(viewModel => viewModel.Name)
                 .ToList();
 
         public bool SheetTabContextMenuIsOpen => RoutedOrActiveSheetTabTarget?.ContextMenu?.IsOpen == true;
@@ -753,15 +714,15 @@ public sealed class MainWindowSheetTabKeyboardTests
         public string DebugSheetTabs =>
             string.Join("; ", SheetTabTargets.Select(element =>
             {
-                var dataContext = element.DataContext;
-                var name = dataContext?.GetType().GetProperty("Name")?.GetValue(dataContext)?.ToString();
-                var active = dataContext?.GetType().GetProperty("IsActive")?.GetValue(dataContext);
+                var dataContext = element.DataContext as SheetTabViewModel;
+                var name = dataContext?.Name;
+                var active = dataContext?.IsActive;
                 return $"{name}:active={active}:focus={element.IsKeyboardFocusWithin}:menu={element.ContextMenu?.IsOpen}:placement={ReferenceEquals(element.ContextMenu?.PlacementTarget, element)}";
             })) + $" routed={_routedSheetTabTarget?.ContextMenu?.IsOpen}:{ReferenceEquals(_routedSheetTabTarget?.ContextMenu?.PlacementTarget, _routedSheetTabTarget)} focused={Keyboard.FocusedElement?.GetType().Name}";
 
         public bool FocusCurrentSheetTab()
         {
-            var focused = (bool)_tryFocusCurrentSheetTab.Invoke(_window, [])!;
+            var focused = _window.TryFocusCurrentSheetTabForTest();
             PumpDispatcher();
             return focused;
         }
@@ -770,7 +731,7 @@ public sealed class MainWindowSheetTabKeyboardTests
         {
             var sheet = CurrentWorkbook.Sheets.Single(sheet => string.Equals(sheet.Name, name, StringComparison.Ordinal));
             sheet.IsProtected = isProtected;
-            _refreshSheetTabs.Invoke(_window, null);
+            _window.RefreshSheetTabsForTest();
             _window.UpdateLayout();
             PumpDispatcher();
             _window.UpdateLayout();
@@ -804,7 +765,7 @@ public sealed class MainWindowSheetTabKeyboardTests
                 RoutedEvent = Keyboard.KeyDownEvent
             };
 
-            var handled = (bool)_tryHandleFocusedSheetTabKeyboardNavigation.Invoke(_window, [args])!;
+            var handled = _window.TryHandleFocusedSheetTabKeyboardNavigationForTest(args);
             _window.UpdateLayout();
             PumpDispatcher();
             _window.UpdateLayout();
@@ -813,7 +774,7 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         public void InsertNewSheet()
         {
-            _insertNewSheet.Invoke(_window, null);
+            _window.InsertNewSheetForTest();
             _window.UpdateLayout();
             PumpDispatcher();
         }
@@ -821,7 +782,7 @@ public sealed class MainWindowSheetTabKeyboardTests
         public void UpdateSheetTabNavigation(int iterations = 1)
         {
             for (var i = 0; i < iterations; i++)
-                _updateSheetTabNavigation.Invoke(_window, null);
+                _window.UpdateSheetTabNavigationForTest();
 
             _window.UpdateLayout();
             PumpDispatcher();
@@ -836,14 +797,14 @@ public sealed class MainWindowSheetTabKeyboardTests
                 Source = target
             };
 
-            _sheetTabMouseRightButtonDown.Invoke(_window, [target, args]);
+            _window.RaiseSheetTabRightClickForTest(target, args);
             _window.UpdateLayout();
             PumpDispatcher();
         }
 
         public void SelectAllSheetsFromContextMenu()
         {
-            _sheetCtxSelectAllSheetsClick.Invoke(_window, [this, new RoutedEventArgs()]);
+            _window.SelectAllSheetsFromContextMenuForTest();
             _window.UpdateLayout();
             PumpDispatcher();
         }
@@ -855,15 +816,15 @@ public sealed class MainWindowSheetTabKeyboardTests
             _routedSheetTabTarget!.Focus();
             Keyboard.Focus(_routedSheetTabTarget);
 
-            var opened = (bool)_tryOpenFocusedSheetTabContextMenu.Invoke(_window, [])!;
+            var opened = _window.TryOpenFocusedSheetTabContextMenuForTest();
             opened.Should().BeTrue("the focused sheet tab route should open the sheet-tab context menu before worksheet fallback");
             if (_routedSheetTabTarget.ContextMenu is { } menu)
-                _sheetTabContextMenuOpened.Invoke(null, [menu, new RoutedEventArgs(ContextMenu.OpenedEvent, menu)]);
+                _window.RaiseSheetTabContextMenuOpenedForTest(menu);
         }
 
         public bool RouteFocusedSheetTabContextMenu()
         {
-            var routed = (bool)_tryOpenFocusedSheetTabContextMenu.Invoke(_window, [])!;
+            var routed = _window.TryOpenFocusedSheetTabContextMenuForTest();
             _window.UpdateLayout();
             PumpDispatcher();
             _window.UpdateLayout();
@@ -918,22 +879,21 @@ public sealed class MainWindowSheetTabKeyboardTests
 
         private FrameworkElement? ActiveSheetTabTarget =>
             SheetTabTargets.FirstOrDefault(element =>
-                element.DataContext?.GetType().GetProperty("IsActive")?.GetValue(element.DataContext) is true);
+                element.DataContext is SheetTabViewModel { IsActive: true });
 
         private FrameworkElement? RoutedOrActiveSheetTabTarget => _routedSheetTabTarget ?? ActiveSheetTabTarget;
 
-        private IReadOnlyList<object> SheetTabViewModels =>
+        private IReadOnlyList<SheetTabViewModel> SheetTabViewModels =>
             SheetTabTargets
                 .Select(element => element.DataContext)
-                .Where(dataContext => dataContext is not null)
-                .Cast<object>()
+                .OfType<SheetTabViewModel>()
                 .Distinct()
                 .ToList();
 
         private FrameworkElement SheetTabTarget(string name) =>
             SheetTabTargets.Single(element =>
-                element.DataContext is { } viewModel &&
-                string.Equals(GetStringProperty(viewModel, "Name"), name, StringComparison.Ordinal));
+                element.DataContext is SheetTabViewModel viewModel &&
+                string.Equals(viewModel.Name, name, StringComparison.Ordinal));
 
         private FrameworkElement? SheetTabLockIcon(string name) =>
             WpfTestTree.FindVisualDescendants<FrameworkElement>(SheetTabTarget(name))
@@ -964,12 +924,6 @@ public sealed class MainWindowSheetTabKeyboardTests
                     .ToList();
             }
         }
-
-        private static bool GetBoolProperty(object source, string propertyName) =>
-            source.GetType().GetProperty(propertyName)?.GetValue(source) is true;
-
-        private static string? GetStringProperty(object source, string propertyName) =>
-            source.GetType().GetProperty(propertyName)?.GetValue(source)?.ToString();
 
     }
 

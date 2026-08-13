@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using FluentAssertions;
 using FreeX.Core.Calc;
@@ -299,54 +298,18 @@ public sealed class MainWindowMouseResizeTests
     {
         private readonly MainWindow _window;
         private readonly CountingViewportService _viewportService;
-        private readonly MethodInfo _onColumnResizing;
-        private readonly MethodInfo _onColumnResized;
-        private readonly MethodInfo _onColumnAutoFitRequested;
-        private readonly MethodInfo _onRowResizing;
-        private readonly MethodInfo _onRowResized;
-        private readonly MethodInfo _onRowAutoFitRequested;
-        private readonly MethodInfo _onResizeCanceled;
-        private readonly MethodInfo _executeUndo;
-        private readonly FieldInfo _currentSheetIdField;
 
         private MainWindowHarness(MainWindow window, CountingViewportService viewportService)
         {
             _window = window;
             _viewportService = viewportService;
-            _onColumnResizing = typeof(MainWindow)
-                .GetMethod("OnColumnResizing", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnColumnResizing");
-            _onColumnResized = typeof(MainWindow)
-                .GetMethod("OnColumnResized", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnColumnResized");
-            _onColumnAutoFitRequested = typeof(MainWindow)
-                .GetMethod("OnColumnAutoFitRequested", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnColumnAutoFitRequested");
-            _onRowResizing = typeof(MainWindow)
-                .GetMethod("OnRowResizing", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnRowResizing");
-            _onRowResized = typeof(MainWindow)
-                .GetMethod("OnRowResized", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnRowResized");
-            _onRowAutoFitRequested = typeof(MainWindow)
-                .GetMethod("OnRowAutoFitRequested", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnRowAutoFitRequested");
-            _onResizeCanceled = typeof(MainWindow)
-                .GetMethod("OnResizeCanceled", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "OnResizeCanceled");
-            _executeUndo = typeof(MainWindow)
-                .GetMethod("ExecuteUndo", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteUndo");
-            _currentSheetIdField = typeof(MainWindow)
-                .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
         }
 
         public Sheet CurrentSheet
         {
             get
             {
-                var sheetId = (SheetId)_currentSheetIdField.GetValue(_window)!;
+                var sheetId = _window.CurrentSheetIdForTest;
                 return CurrentWorkbook.GetSheet(sheetId) ?? throw new InvalidOperationException("Current sheet was not found.");
             }
         }
@@ -373,13 +336,13 @@ public sealed class MainWindowMouseResizeTests
 
         public void PreviewColumnResize(uint col, double width)
         {
-            _onColumnResizing.Invoke(_window, [col, width]);
+            _window.PreviewColumnResizeForTest(col, width);
             PumpDispatcher();
         }
 
         public void CommitColumnResize(uint col, double width)
         {
-            _onColumnResized.Invoke(_window, [col, width]);
+            _window.CommitColumnResizeForTest(col, width);
             PumpDispatcher();
         }
 
@@ -392,37 +355,37 @@ public sealed class MainWindowMouseResizeTests
 
         public void CancelResizePreview()
         {
-            _onResizeCanceled.Invoke(_window, []);
+            _window.CancelResizePreviewForTest();
             PumpDispatcher();
         }
 
         public void AutoFitColumn(uint col)
         {
-            _onColumnAutoFitRequested.Invoke(_window, [col]);
+            _window.AutoFitColumnForTest(col);
             PumpDispatcher();
         }
 
         public void PreviewRowResize(uint row, double height)
         {
-            _onRowResizing.Invoke(_window, [row, height]);
+            _window.PreviewRowResizeForTest(row, height);
             PumpDispatcher();
         }
 
         public void CommitRowResize(uint row, double height)
         {
-            _onRowResized.Invoke(_window, [row, height]);
+            _window.CommitRowResizeForTest(row, height);
             PumpDispatcher();
         }
 
         public void AutoFitRow(uint row)
         {
-            _onRowAutoFitRequested.Invoke(_window, [row]);
+            _window.AutoFitRowForTest(row);
             PumpDispatcher();
         }
 
         public bool Undo()
         {
-            var result = (bool)_executeUndo.Invoke(_window, [])!;
+            var result = _window.ExecuteUndoForTest();
             PumpDispatcher();
             return result;
         }

@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -22,136 +21,11 @@ public sealed partial class MainWindowFormulaBarSyncTests
     {
         private readonly MainWindow _window;
         private readonly ICommandBus _commandBus;
-        private readonly FieldInfo _currentSheetIdField;
-        private readonly FieldInfo _formulaEditCellField;
-        private readonly FieldInfo _formulaRangeEditingSessionField;
-        private readonly PropertyInfo _selectionAnchorProperty;
-        private readonly FieldInfo _selectionCursorField;
-        private readonly FieldInfo _inlineEditorField;
-        private readonly MethodInfo _commitEdit;
-        private readonly MethodInfo _commitEditAcrossSelection;
-        private readonly MethodInfo _insertNewSheet;
-        private readonly MethodInfo _selectSingleSheetTab;
-        private readonly MethodInfo _updateViewport;
-        private readonly MethodInfo _refreshSheetTabs;
-        private readonly MethodInfo _setActiveCell;
-        private readonly MethodInfo _showInlineEditor;
-        private readonly MethodInfo _executeClearSelection;
-        private readonly MethodInfo _formulaBarKeyDown;
-        private readonly MethodInfo _inlineEditorKeyDown;
-        private readonly MethodInfo _cellAddressBoxKeyDown;
-        private readonly MethodInfo _insertRawFormulaFunction;
-        private readonly MethodInfo _insertDefinedNameIntoFormula;
-        private readonly MethodInfo _formulaBarExpandButtonClick;
-        private readonly MethodInfo _editActiveCellInFormulaBar;
-        private readonly MethodInfo _tryApplyFormulaRangeSelection;
-        private readonly MethodInfo _raiseFormulaReferenceGripDragForTest;
-        private readonly MethodInfo _tryHandleFormulaSheetTabClick;
-        private readonly MethodInfo _tryToggleFormulaRangeEntrySelectionMode;
-        private readonly MethodInfo _selectRow;
-        private readonly MethodInfo _selectColumn;
-        private readonly MethodInfo _addAdditionalRowSelection;
-        private readonly MethodInfo _selectAll;
 
         private MainWindowHarness(MainWindow window, ICommandBus commandBus)
         {
             _window = window;
             _commandBus = commandBus;
-            _currentSheetIdField = typeof(MainWindow)
-                .GetField("_currentSheetId", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_currentSheetId");
-            _formulaEditCellField = typeof(MainWindow)
-                .GetField("_formulaEditCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_formulaEditCell");
-            _formulaRangeEditingSessionField = typeof(MainWindow)
-                .GetField("_formulaRangeEditingSession", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_formulaRangeEditingSession");
-            _selectionAnchorProperty = typeof(MainWindow)
-                .GetProperty("_selectionAnchor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMemberException(nameof(MainWindow), "_selectionAnchor");
-            _selectionCursorField = typeof(MainWindow)
-                .GetField("_selectionCursor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_selectionCursor");
-            _inlineEditorField = typeof(MainWindow)
-                .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
-            _commitEdit = typeof(MainWindow)
-                .GetMethod("CommitEdit", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CommitEdit");
-            _commitEditAcrossSelection = typeof(MainWindow)
-                .GetMethod("CommitEditAcrossSelection", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CommitEditAcrossSelection");
-            _insertNewSheet = typeof(MainWindow)
-                .GetMethod("InsertNewSheet", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InsertNewSheet");
-            _selectSingleSheetTab = typeof(MainWindow)
-                .GetMethod("SelectSingleSheetTab", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SelectSingleSheetTab");
-            _updateViewport = typeof(MainWindow)
-                .GetMethod("UpdateViewport", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "UpdateViewport");
-            _refreshSheetTabs = typeof(MainWindow)
-                .GetMethod("RefreshSheetTabs", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RefreshSheetTabs");
-            _setActiveCell = typeof(MainWindow)
-                .GetMethod("SetActiveCell", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SetActiveCell");
-            _showInlineEditor = typeof(MainWindow)
-                .GetMethod("ShowInlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ShowInlineEditor");
-            _executeClearSelection = typeof(MainWindow)
-                .GetMethod("ExecuteClearSelection", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "ExecuteClearSelection");
-            _formulaBarKeyDown = typeof(MainWindow)
-                .GetMethod("FormulaBar_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FormulaBar_KeyDown");
-            _inlineEditorKeyDown = typeof(MainWindow)
-                .GetMethod("InlineEditor_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InlineEditor_KeyDown");
-            _cellAddressBoxKeyDown = typeof(MainWindow)
-                .GetMethod("CellAddressBox_KeyDown", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "CellAddressBox_KeyDown");
-            _insertRawFormulaFunction = typeof(MainWindow)
-                .GetMethod("InsertRawFormulaFunction", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InsertRawFormulaFunction");
-            _insertDefinedNameIntoFormula = typeof(MainWindow)
-                .GetMethod("InsertDefinedNameIntoFormula", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "InsertDefinedNameIntoFormula");
-            _formulaBarExpandButtonClick = typeof(MainWindow)
-                .GetMethod("FormulaBarExpandBtn_Click", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "FormulaBarExpandBtn_Click");
-            _editActiveCellInFormulaBar = typeof(MainWindow)
-                .GetMethod("EditActiveCellInFormulaBar", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "EditActiveCellInFormulaBar");
-            _tryApplyFormulaRangeSelection = typeof(MainWindow)
-                .GetMethod(
-                    "TryApplyFormulaRangeSelection",
-                    BindingFlags.Instance | BindingFlags.NonPublic,
-                    binder: null,
-                    types: [typeof(CellAddress), typeof(bool)],
-                    modifiers: null)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryApplyFormulaRangeSelection");
-            _raiseFormulaReferenceGripDragForTest = typeof(MainWindow)
-                .GetMethod("RaiseFormulaReferenceGripDragForTest", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "RaiseFormulaReferenceGripDragForTest");
-            _tryHandleFormulaSheetTabClick = typeof(MainWindow)
-                .GetMethod("TryHandleFormulaSheetTabClick", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryHandleFormulaSheetTabClick");
-            _tryToggleFormulaRangeEntrySelectionMode = typeof(MainWindow)
-                .GetMethod("TryToggleFormulaRangeEntrySelectionMode", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "TryToggleFormulaRangeEntrySelectionMode");
-            _selectRow = typeof(MainWindow)
-                .GetMethod("SelectRow", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SelectRow");
-            _selectColumn = typeof(MainWindow)
-                .GetMethod("SelectColumn", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SelectColumn");
-            _addAdditionalRowSelection = typeof(MainWindow)
-                .GetMethod("AddAdditionalRowSelection", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "AddAdditionalRowSelection");
-            _selectAll = typeof(MainWindow)
-                .GetMethod("SelectAll", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?? throw new MissingMethodException(nameof(MainWindow), "SelectAll");
         }
 
         /// <summary>
@@ -166,11 +40,11 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public bool FormulaRangeEntryMode => FormulaRangeEditingSession.PointMode;
 
         private FormulaRangeEditingSession FormulaRangeEditingSession =>
-            (FormulaRangeEditingSession)_formulaRangeEditingSessionField.GetValue(_window)!;
+            _window.FormulaRangeEditingSessionForTest;
 
-        public CellAddress? SelectionAnchor => (CellAddress?)_selectionAnchorProperty.GetValue(_window);
+        public CellAddress? SelectionAnchor => _window.SelectionAnchorForTest;
 
-        public CellAddress? SelectionCursor => (CellAddress?)_selectionCursorField.GetValue(_window);
+        public CellAddress? SelectionCursor => _window.SelectionCursorForTest;
 
         public string CellAddressBoxText => CellAddressBox.Text;
 
@@ -188,9 +62,9 @@ public sealed partial class MainWindowFormulaBarSyncTests
             }
         }
 
-        public SheetId CurrentSheetId => (SheetId)_currentSheetIdField.GetValue(_window)!;
+        public SheetId CurrentSheetId => _window.CurrentSheetIdForTest;
 
-        public CellAddress? FormulaEditCell => (CellAddress?)_formulaEditCellField.GetValue(_window);
+        public CellAddress? FormulaEditCell => _window.FormulaEditCellForTest;
 
         public Workbook ActiveWorkbook => Workbook;
 
@@ -294,7 +168,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public void SelectActiveCell(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _setActiveCell.Invoke(_window, [new CellAddress(sheet.Id, row, col)]);
+            _window.SetActiveCellForTest(new CellAddress(sheet.Id, row, col));
             PumpDispatcher();
         }
 
@@ -313,35 +187,35 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public void SetFormulaEditCell(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _formulaEditCellField.SetValue(_window, new CellAddress(sheet.Id, row, col));
+            _window.SetFormulaEditCellForTest(new CellAddress(sheet.Id, row, col));
             PumpDispatcher();
         }
 
         public bool CommitEditAcrossSelection(bool fillFormulaEditCellOnly)
         {
-            var committed = (bool)_commitEditAcrossSelection.Invoke(_window, [fillFormulaEditCellOnly])!;
+            var committed = _window.CommitEditAcrossSelectionForTest(fillFormulaEditCellOnly);
             PumpDispatcher();
             return committed;
         }
 
         public bool CommitEdit()
         {
-            var committed = (bool)_commitEdit.Invoke(_window, null)!;
+            var committed = _window.CommitEditForTest();
             PumpDispatcher();
             return committed;
         }
 
         public void InsertNewSheet()
         {
-            _insertNewSheet.Invoke(_window, null);
+            _window.InsertNewSheetForTest();
             PumpDispatcher();
         }
 
         public void SelectSheet(SheetId sheetId)
         {
-            _selectSingleSheetTab.Invoke(_window, [sheetId]);
-            _updateViewport.Invoke(_window, null);
-            _refreshSheetTabs.Invoke(_window, null);
+            _window.SelectSingleSheetTabForTest(sheetId);
+            _window.UpdateViewportForTest();
+            _window.RefreshSheetTabsForTest();
             PumpDispatcher();
         }
 
@@ -353,20 +227,20 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public void SelectFormulaSheetTab(SheetId sheetId, ModifierKeys modifiers)
         {
-            ((bool)_tryHandleFormulaSheetTabClick.Invoke(_window, [sheetId, modifiers])!).Should().BeTrue();
+            _window.TryHandleFormulaSheetTabClickForTest(sheetId, modifiers).Should().BeTrue();
             PumpDispatcher();
         }
 
         public void SetCurrentSheetForFormulaPoint(SheetId sheetId)
         {
-            _currentSheetIdField.SetValue(_window, sheetId);
+            _window.SetCurrentSheetForFormulaPointForTest(sheetId);
             PumpDispatcher();
         }
 
         public void ShowInlineEditor(uint row, uint col)
         {
             var sheet = Workbook.Sheets[0];
-            _showInlineEditor.Invoke(_window, [new CellAddress(sheet.Id, row, col), null]);
+            _window.ShowInlineEditorForTest(new CellAddress(sheet.Id, row, col));
             PumpDispatcher();
         }
 
@@ -377,80 +251,74 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public bool ApplyFormulaRangeSelection(uint row, uint col, bool extend)
         {
             var sheet = Workbook.Sheets[0];
-            var applied = (bool)_tryApplyFormulaRangeSelection.Invoke(
-                _window,
-                [new CellAddress(sheet.Id, row, col), extend])!;
+            var applied = _window.TryApplyFormulaRangeSelectionForTest(
+                new CellAddress(sheet.Id, row, col), extend);
             PumpDispatcher();
             return applied;
         }
 
         public bool ApplyFormulaRangeSelection(SheetId sheetId, uint row, uint col, bool extend)
         {
-            var applied = (bool)_tryApplyFormulaRangeSelection.Invoke(
-                _window,
-                [new CellAddress(sheetId, row, col), extend])!;
+            var applied = _window.TryApplyFormulaRangeSelectionForTest(
+                new CellAddress(sheetId, row, col), extend);
             PumpDispatcher();
             return applied;
         }
 
         public bool RaiseFormulaReferenceGripDrag(int highlightIndex, uint row, uint col)
         {
-            var applied = (bool)_raiseFormulaReferenceGripDragForTest.Invoke(
-                _window,
-                [highlightIndex, new CellAddress(CurrentSheetId, row, col)])!;
+            var applied = _window.RaiseFormulaReferenceGripDragForTest(
+                highlightIndex, new CellAddress(CurrentSheetId, row, col));
             PumpDispatcher();
             return applied;
         }
 
         public void ToggleFormulaRangeEntrySelectionMode(ModifierKeys modifiers)
         {
-            var toggled = (bool)_tryToggleFormulaRangeEntrySelectionMode.Invoke(
-                _window,
-                [Key.F8, modifiers])!;
+            var toggled = _window.TryToggleFormulaRangeEntrySelectionModeForTest(Key.F8, modifiers);
             toggled.Should().BeTrue("F8 selection mode should be handled while formula Point mode is active");
             PumpDispatcher();
         }
 
         public void SelectWholeRow(uint row)
         {
-            _selectRow.Invoke(_window, [row]);
+            _window.SelectRowForTest(row);
             PumpDispatcher();
         }
 
         public void SelectWholeColumn(uint col)
         {
-            _selectColumn.Invoke(_window, [col]);
+            _window.SelectColumnForTest(col);
             PumpDispatcher();
         }
 
         public void AddWholeRowFormulaReference(uint row)
         {
-            _addAdditionalRowSelection.Invoke(_window, [row]);
+            _window.AddAdditionalRowSelectionForTest(row);
             PumpDispatcher();
         }
 
         public void SelectWholeGrid()
         {
-            _selectAll.Invoke(_window, null);
+            _window.SelectAllForTest();
             PumpDispatcher();
         }
 
         public void InsertFormulaFunction(string functionName)
         {
-            _insertRawFormulaFunction.Invoke(_window, [functionName]);
+            _window.InsertRawFormulaFunctionForTest(functionName);
             PumpDispatcher();
         }
 
         public void InsertDefinedNameIntoFormula(string name)
         {
-            _insertDefinedNameIntoFormula.Invoke(_window, [name]);
+            _window.InsertDefinedNameIntoFormulaForTest(name);
             PumpDispatcher();
         }
 
         public void ToggleFormulaBarExpansion()
         {
-            var button = (Button)_window.FindName("FormulaBarExpandBtn");
-            _formulaBarExpandButtonClick.Invoke(_window, [button, new RoutedEventArgs()]);
+            _window.ToggleFormulaBarExpansionForTest();
             PumpDispatcher();
         }
 
@@ -463,7 +331,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public void EditActiveCellInFormulaBar()
         {
-            _editActiveCellInFormulaBar.Invoke(_window, null);
+            _window.EditActiveCellInFormulaBarForTest();
             PumpDispatcher();
         }
 
@@ -514,7 +382,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _cellAddressBoxKeyDown.Invoke(_window, [CellAddressBox, args]);
+            _window.RaiseCellAddressBoxKeyDownForTest(args);
             PumpDispatcher();
             return args.Handled;
         }
@@ -527,7 +395,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _formulaBarKeyDown.Invoke(_window, [((TextBox)_window.FindName("FormulaBar")), args]);
+            _window.RaiseFormulaBarKeyDownForTest(args);
             PumpDispatcher();
             return args.Handled;
         }
@@ -541,7 +409,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
             {
                 RoutedEvent = Keyboard.KeyDownEvent
             };
-            _inlineEditorKeyDown.Invoke(_window, [inlineEditor, args]);
+            _window.RaiseInlineEditorKeyDownForTest(args);
             PumpDispatcher();
             return args.Handled;
         }
@@ -571,7 +439,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         public void ClearSelectedContents()
         {
-            _executeClearSelection.Invoke(_window, null);
+            _window.ExecuteClearSelectionForTest();
             PumpDispatcher();
         }
 
@@ -614,7 +482,7 @@ public sealed partial class MainWindowFormulaBarSyncTests
 
         private Workbook Workbook => _window.Session.Workbook;
 
-        private TextBox? InlineEditor => (TextBox?)_inlineEditorField.GetValue(_window);
+        private TextBox? InlineEditor => _window.InlineEditorForTest;
 
         private bool IsFocused(IInputElement element) =>
             ReferenceEquals(Keyboard.FocusedElement, element) ||
