@@ -22116,21 +22116,27 @@ public sealed class DocumentView : Control
 
         // Prefer the first revision whose owning block index is at/after the caret block; else the first.
         var caretBlock = _caret.Block;
-        var index = -1;
+        RevisionEntry? entry = null;
         for (var i = 0; i < entries.Count; i++)
         {
             if (entries[i].BlockIndex >= caretBlock)
             {
-                index = i;
+                entry = entries[i];
                 break;
             }
         }
-        if (index < 0)
-            index = 0;
+        entry ??= entries[0];
 
-        _bus.Execute(accept ? new AcceptOneRevisionCommand(index) : new RejectOneRevisionCommand(index));
-        return true;
+        return accept ? AcceptRevision(entry) : RejectRevision(entry);
     }
+
+    /// <summary>Accepts one reviewing-pane entry through the shared undoable revision command path.</summary>
+    public bool AcceptRevision(RevisionEntry entry) =>
+        RevisionResolutionCoordinator.Accept(_bus, _doc, entry);
+
+    /// <summary>Rejects one reviewing-pane entry through the shared undoable revision command path.</summary>
+    public bool RejectRevision(RevisionEntry entry) =>
+        RevisionResolutionCoordinator.Reject(_bus, _doc, entry);
 
     /// <summary>
     /// Accept every tracked change: insertions become ordinary text, deletions are removed. Undoable as a
@@ -22138,10 +22144,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool AcceptAllRevisions()
     {
-        if (!TrackChanges.HasRevisions(_doc))
-            return false;
-        _bus.Execute(new AcceptAllRevisionsCommand());
-        return true;
+        return RevisionResolutionCoordinator.AcceptAll(_bus, _doc);
     }
 
     /// <summary>
@@ -22150,10 +22153,7 @@ public sealed class DocumentView : Control
     /// </summary>
     public bool RejectAllRevisions()
     {
-        if (!TrackChanges.HasRevisions(_doc))
-            return false;
-        _bus.Execute(new RejectAllRevisionsCommand());
-        return true;
+        return RevisionResolutionCoordinator.RejectAll(_bus, _doc);
     }
 
     /// <summary>

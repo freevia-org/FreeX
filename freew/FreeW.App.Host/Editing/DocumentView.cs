@@ -17581,24 +17581,22 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Accept every tracked change in the document: insertions become ordinary text, deletions are
-    /// removed. Commits pending edits first, then re-renders so the resolved text shows immediately.
+    /// removed. Commits pending edits first, then records the resolution as one shared undo step.
     /// </summary>
     public void AcceptAllRevisions()
     {
         CommitToModel();
-        TrackChanges.AcceptAll(_model);
-        Render();
+        RevisionResolutionCoordinator.AcceptAll(_commands, _model);
     }
 
     /// <summary>
     /// Reject every tracked change in the document: insertions are removed, deletions become ordinary
-    /// text. Commits pending edits first, then re-renders so the resolved text shows immediately.
+    /// text. Commits pending edits first, then records the resolution as one shared undo step.
     /// </summary>
     public void RejectAllRevisions()
     {
         CommitToModel();
-        TrackChanges.RejectAll(_model);
-        Render();
+        RevisionResolutionCoordinator.RejectAll(_commands, _model);
     }
 
     /// <summary>
@@ -17614,28 +17612,22 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Accept exactly one tracked change (the one described by <paramref name="entry"/>), leaving every
-    /// other revision pending. Re-renders so the resolved text shows immediately. Returns true when the
+    /// other revision pending. Uses the shared undoable command path. Returns true when the
     /// entry resolved (false when it was already stale). The caller must re-list revisions afterwards.
     /// </summary>
     public bool AcceptRevision(RevisionEntry entry)
     {
-        var resolved = RevisionList.Accept(_model, entry);
-        if (resolved)
-            Render();
-        return resolved;
+        return RevisionResolutionCoordinator.Accept(_commands, _model, entry);
     }
 
     /// <summary>
     /// Reject exactly one tracked change (the one described by <paramref name="entry"/>), leaving every
-    /// other revision pending. Re-renders so the resolved text shows immediately. Returns true when the
+    /// other revision pending. Uses the shared undoable command path. Returns true when the
     /// entry resolved (false when it was already stale). The caller must re-list revisions afterwards.
     /// </summary>
     public bool RejectRevision(RevisionEntry entry)
     {
-        var resolved = RevisionList.Reject(_model, entry);
-        if (resolved)
-            Render();
-        return resolved;
+        return RevisionResolutionCoordinator.Reject(_commands, _model, entry);
     }
 
     /// <summary>

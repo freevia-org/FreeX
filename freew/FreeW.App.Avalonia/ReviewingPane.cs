@@ -12,19 +12,15 @@ namespace FreeW.App.Avalonia;
 /// <summary>
 /// FreeW Avalonia reviewing pane: tracked-changes list with Accept / Reject per-entry and Accept-All /
 /// Reject-All bulk actions. Mirrors the WPF host's Reviewing Pane behaviour using Avalonia controls.
-/// Consumes <see cref="RevisionList"/> (enumerate, per-entry accept/reject) and
-/// <see cref="TrackChanges"/> (bulk accept/reject, has-revisions) from the portable model tier;
-/// does NOT duplicate any model logic.
+/// Consumes the portable revision model and shared resolution coordinator; it does not duplicate mutation
+/// or undo logic.
 ///
 /// Construction: pass the <see cref="DocumentView"/> once. Wire
 /// <see cref="DocumentView.DocumentChanged"/> to call <see cref="Refresh"/>. Toggle
 /// <see cref="IsVisible"/> via the Review ribbon command (<c>freew.reviewingpane</c>); defaults to hidden.
 ///
-/// Accept/reject are fully wired: each entry row has Accept and Reject buttons that call
-/// <see cref="RevisionList.Accept"/> / <see cref="RevisionList.Reject"/> directly, then raise
-/// <see cref="DocumentView.DocumentChanged"/> so the editor re-renders and the pane re-populates.
-/// The Accept-All / Reject-All header buttons call <see cref="TrackChanges.AcceptAll"/> /
-/// <see cref="TrackChanges.RejectAll"/> then do the same.
+/// Accept/reject are fully wired: per-entry and bulk buttons delegate to <see cref="DocumentView"/>, which
+/// routes every resolution through <see cref="RevisionResolutionCoordinator"/> and the document undo bus.
 /// </summary>
 public sealed class ReviewingPane : SidePaneBase
 {
@@ -180,41 +176,24 @@ public sealed class ReviewingPane : SidePaneBase
 
     internal void AcceptEntry(RevisionEntry entry)
     {
-        RevisionList.Accept(_editor.Document, entry);
-        NotifyDocumentMutated();
+        _editor.AcceptRevision(entry);
     }
 
     internal void RejectEntry(RevisionEntry entry)
     {
-        RevisionList.Reject(_editor.Document, entry);
-        NotifyDocumentMutated();
+        _editor.RejectRevision(entry);
     }
 
     // ── Bulk handlers ─────────────────────────────────────────────────────────
 
     private void OnAcceptAll(object? sender, RoutedEventArgs e)
     {
-        TrackChanges.AcceptAll(_editor.Document);
-        NotifyDocumentMutated();
+        _editor.AcceptAllRevisions();
     }
 
     private void OnRejectAll(object? sender, RoutedEventArgs e)
     {
-        TrackChanges.RejectAll(_editor.Document);
-        NotifyDocumentMutated();
-    }
-
-    // ── Document refresh ──────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Signals the editor that the document model was mutated outside the command bus (accept/reject
-    /// bypass undo/redo, matching Word's behaviour). The editor re-renders and raises
-    /// <see cref="DocumentView.DocumentChanged"/>, which re-triggers <see cref="Refresh"/> via the
-    /// <see cref="MainWindow"/> wiring.
-    /// </summary>
-    private void NotifyDocumentMutated()
-    {
-        _editor.InvalidateAfterExternalMutation();
+        _editor.RejectAllRevisions();
     }
 
     // ── Test-support ──────────────────────────────────────────────────────────
