@@ -237,7 +237,8 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
 
     public DocumentInspectorDialog(InspectionResult result)
     {
-        Title = UiText.Get("DocumentInspector_Title");
+        var text = DocumentInspectorDialogPlanner.Text;
+        Title = text.Title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -254,15 +255,15 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
         {
             body.Children.Add(new TextBlock
             {
-                Text = UiText.Get("DocumentInspector_Clean_Message"),
+                Text = text.CleanMessage,
                 TextWrapping = TextWrapping.Wrap,
             });
         }
 
-        _comments = AddCheck(body, UiText.Get("DocumentInspector_Comments_Label"), result.Comments);
-        _revisions = AddCheck(body, UiText.Get("DocumentInspector_Revisions_Label"), result.Revisions);
-        _properties = AddCheck(body, UiText.Get("DocumentInspector_Properties_Label"), result.NonEmptyProperties);
-        _bookmarks = AddCheck(body, UiText.Get("DocumentInspector_Bookmarks_Label"), result.Bookmarks);
+        _comments = AddCheck(body, text.Comments.Label, result.Comments);
+        _revisions = AddCheck(body, text.Revisions.Label, result.Revisions);
+        _properties = AddCheck(body, text.Properties.Label, result.NonEmptyProperties);
+        _bookmarks = AddCheck(body, text.Bookmarks.Label, result.Bookmarks);
 
         var actionPlans = DocumentInspectorDialogPlanner.ActionButtons;
         var removePlan = actionPlans[0];

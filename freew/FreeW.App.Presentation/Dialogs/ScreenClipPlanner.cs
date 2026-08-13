@@ -7,6 +7,69 @@ public readonly record struct ScreenPixelRect(int X, int Y, int Width, int Heigh
     public bool IsEmpty => Width <= 0 || Height <= 0;
 }
 
+public readonly record struct ScreenClipPoint(double X, double Y);
+
+public readonly record struct ScreenClipSelectionBounds(
+    double Left,
+    double Top,
+    double Width,
+    double Height);
+
+public readonly record struct ScreenClipSelectionUpdate(
+    ScreenClipPoint Origin,
+    ScreenClipPoint Current,
+    ScreenClipSelectionBounds Bounds);
+
+/// <summary>Owns the toolkit-neutral pointer lifecycle for a screen-clipping drag.</summary>
+public sealed class ScreenClipSelectionSession
+{
+    private ScreenClipPoint? _origin;
+
+    public bool IsDragging => _origin is not null;
+
+    public ScreenClipSelectionUpdate Begin(double x, double y)
+    {
+        var origin = Point(x, y);
+        _origin = origin;
+        return BuildUpdate(origin, origin);
+    }
+
+    public ScreenClipSelectionUpdate? Update(double x, double y) =>
+        _origin is { } origin
+            ? BuildUpdate(origin, Point(x, y))
+            : null;
+
+    public ScreenClipSelectionUpdate? Complete(double x, double y)
+    {
+        if (_origin is not { } origin)
+            return null;
+
+        _origin = null;
+        return BuildUpdate(origin, Point(x, y));
+    }
+
+    public void Cancel() => _origin = null;
+
+    private static ScreenClipSelectionUpdate BuildUpdate(ScreenClipPoint origin, ScreenClipPoint current) =>
+        new(
+            origin,
+            current,
+            new ScreenClipSelectionBounds(
+                Math.Min(origin.X, current.X),
+                Math.Min(origin.Y, current.Y),
+                Math.Abs(current.X - origin.X),
+                Math.Abs(current.Y - origin.Y)));
+
+    private static ScreenClipPoint Point(double x, double y)
+    {
+        if (!double.IsFinite(x))
+            throw new ArgumentOutOfRangeException(nameof(x));
+        if (!double.IsFinite(y))
+            throw new ArgumentOutOfRangeException(nameof(y));
+        return new ScreenClipPoint(x, y);
+    }
+}
+
 public readonly record struct ScreenClipImageInsertionPlan(
     ImageFormat Format,
     double WidthPt,

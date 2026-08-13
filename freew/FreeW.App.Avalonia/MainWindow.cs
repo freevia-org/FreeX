@@ -903,7 +903,7 @@ public sealed partial class MainWindow : Window
             position.VerticalOffsetPt,
             position.HorizontalAnchor,
             position.VerticalAnchor,
-            position.IsGroupLocal ? "Shape Position in Group" : "Shape Position",
+            ObjectFormatCommandPlanner.ShapePositionDialogTitle(position.IsGroupLocal),
             position.IsGroupLocal);
         if (result is not null)
             _editor.SetSelectedShapePosition(
@@ -1338,7 +1338,7 @@ public sealed partial class MainWindow : Window
     {
         var reportWindow = new MainWindow
         {
-            Title = UiText.Get("MailMerge_ErrorReport_WindowTitle")
+            Title = FreeWUiTextCatalog.MailMergeErrorReportWindowTitle
         };
         reportWindow.LoadDocumentContent(report);
         reportWindow.Show();

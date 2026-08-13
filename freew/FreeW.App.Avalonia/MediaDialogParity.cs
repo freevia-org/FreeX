@@ -293,15 +293,15 @@ internal sealed class ChartSizeDialog : FreeWDialogWindow
                 CultureInfo.CurrentCulture,
                 UiText.Get,
                 out var result,
-                out var errorMessage))
+                out var validation))
         {
             Close(result);
             return;
         }
 
-        _status.Text = errorMessage ?? UiText.Get("ChartSize_Width_Validation");
+        _status.Text = validation!.Message;
         AvaloniaCompactDialogChrome.FocusAndSelect(
-            errorMessage == UiText.Get("ChartSize_Height_Validation") ? _height : _width);
+            validation.Field == ChartSizeDialogField.Height ? _height : _width);
     }
 }
 

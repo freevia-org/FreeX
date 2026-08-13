@@ -23,8 +23,9 @@ internal sealed class DocumentInspectorDialog : Free.Shared.Ribbon.Wpf.DialogWin
 
     private DocumentInspectorDialog(Window owner, InspectionResult result)
     {
+        var text = DocumentInspectorDialogPlanner.Text;
         Owner = owner;
-        Title = UiText.Get("DocumentInspector_Title");
+        Title = text.Title;
         Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -35,21 +36,17 @@ internal sealed class DocumentInspectorDialog : Free.Shared.Ribbon.Wpf.DialogWin
         panel.Children.Add(new TextBlock
         {
             Text = result.IsClean
-                ? UiText.Get("DocumentInspector_Clean_Message")
-                : UiText.Get("DocumentInspector_Review_Message"),
+                ? text.CleanMessage
+                : text.ReviewMessage,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 12),
             Foreground = new SolidColorBrush(Color.FromRgb(0x40, 0x40, 0x40))
         });
 
-        _comments = AddRow(panel, UiText.Get("DocumentInspector_Comments_Label"), result.Comments,
-            UiText.Get("DocumentInspector_Comments_HelpText"));
-        _revisions = AddRow(panel, UiText.Get("DocumentInspector_Revisions_Label"), result.Revisions,
-            UiText.Get("DocumentInspector_Revisions_HelpText"));
-        _properties = AddRow(panel, UiText.Get("DocumentInspector_Properties_Label"), result.NonEmptyProperties,
-            UiText.Get("DocumentInspector_Properties_HelpText"));
-        _bookmarks = AddRow(panel, UiText.Get("DocumentInspector_Bookmarks_Label"), result.Bookmarks,
-            UiText.Get("DocumentInspector_Bookmarks_HelpText"));
+        _comments = AddRow(panel, text.Comments.Label, result.Comments, text.Comments.HelpText);
+        _revisions = AddRow(panel, text.Revisions.Label, result.Revisions, text.Revisions.HelpText);
+        _properties = AddRow(panel, text.Properties.Label, result.NonEmptyProperties, text.Properties.HelpText);
+        _bookmarks = AddRow(panel, text.Bookmarks.Label, result.Bookmarks, text.Bookmarks.HelpText);
 
         var removePlan = DocumentInspectorDialogPlanner.ActionButtons[0];
         var remove = new Button

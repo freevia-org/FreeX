@@ -46,7 +46,7 @@ public sealed class ScreenClipImageFactoryOwnershipTests
         avaloniaService.Should().Contain("owner.WindowState = WindowState.Minimized");
         avaloniaService.Should().Contain("owner.Activate()");
         avaloniaWindow.Should().Contain("_screenClipService.CaptureAsync(this)");
-        avaloniaWindow.Should().Contain("Could not capture the screen clip:");
+        avaloniaWindow.Should().Contain("ScreenClip_Failed_Status_Format");
         avaloniaWindow.Should().Contain("_editor.Focus()");
         avaloniaWindow.Should().Contain("editor.InsertInlineImage(");
     }

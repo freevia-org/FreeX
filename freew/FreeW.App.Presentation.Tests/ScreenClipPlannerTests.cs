@@ -5,6 +5,34 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ScreenClipPlannerTests
 {
     [Fact]
+    public void SelectionSession_NormalizesReverseDragAndCompletesLifecycle()
+    {
+        var session = new ScreenClipSelectionSession();
+
+        session.Update(1, 2).Should().BeNull();
+        session.Begin(12, 18).Bounds.Should().Be(new ScreenClipSelectionBounds(12, 18, 0, 0));
+        session.IsDragging.Should().BeTrue();
+        session.Update(5, 7)!.Value.Bounds.Should().Be(new ScreenClipSelectionBounds(5, 7, 7, 11));
+        session.Complete(4, 6)!.Value.Bounds.Should().Be(new ScreenClipSelectionBounds(4, 6, 8, 12));
+        session.IsDragging.Should().BeFalse();
+        session.Complete(0, 0).Should().BeNull();
+    }
+
+    [Fact]
+    public void SelectionSession_CancelClearsDragAndRejectsNonFinitePoints()
+    {
+        var session = new ScreenClipSelectionSession();
+        session.Begin(1, 2);
+
+        session.Cancel();
+
+        session.IsDragging.Should().BeFalse();
+        session.Update(3, 4).Should().BeNull();
+        var act = () => session.Begin(double.NaN, 0);
+        act.Should().Throw<ArgumentOutOfRangeException>();
+    }
+
+    [Fact]
     public void OverlayScaleMappingRetainsOriginIndependentMidpointRounding()
     {
         ScreenClipPlanner.BuildPhysicalSelection(

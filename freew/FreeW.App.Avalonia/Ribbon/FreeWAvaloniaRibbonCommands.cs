@@ -194,11 +194,11 @@ internal static class FreeWAvaloniaRibbonCommands
         // Existing quick-style buttons — now routed through the model-backed, undoable ApplyNamedStyle
         // so the paragraph picks up the real built-in style (seeded if absent) instead of just a font tweak.
         r.Bind(FreeWRibbonCommandAction.Style, new ParagraphStyleCommand(formatting));
-        r.Bind(FreeWRibbonCommandAction.StyleNormal,   new ActionRibbonCommand(() => editor.ApplyNamedStyle("Normal")));
-        r.Bind(FreeWRibbonCommandAction.StyleHeading1, new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading1")));
-        r.Bind(FreeWRibbonCommandAction.StyleHeading2, new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading2")));
-        r.Bind(FreeWRibbonCommandAction.StyleHeading3, new ActionRibbonCommand(() => editor.ApplyNamedStyle("Heading3")));
-        r.Bind(FreeWRibbonCommandAction.StyleTitle,    new ActionRibbonCommand(() => editor.ApplyNamedStyle("Title")));
+        foreach (var binding in FreeWRibbonSemanticCatalog.QuickStyles)
+        {
+            var captured = binding;
+            r.Bind(captured.Action, new ActionRibbonCommand(() => editor.ApplyNamedStyle(captured.StyleId)));
+        }
 
         // Styles gallery dropdown — opener no-op; one freew.style.<id> command per built-in style applies
         // that named style (paragraph styles set StyleId; character styles overlay run formatting).
@@ -618,15 +618,10 @@ internal static class FreeWAvaloniaRibbonCommands
         FreeWRibbonEditorCommandFamilyBuilder family,
         DocumentView editor)
     {
-        family.Bind(FreeWRibbonCommandAction.HfEditHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("header")));
-        family.Bind(FreeWRibbonCommandAction.HfEditFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
-        family.Bind(FreeWRibbonCommandAction.HfEditFirstHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("first-header")));
-        family.Bind(FreeWRibbonCommandAction.HfEditFirstFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("first-footer")));
-        family.Bind(FreeWRibbonCommandAction.HfEditEvenHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("even-header")));
-        family.Bind(FreeWRibbonCommandAction.HfEditEvenFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("even-footer")));
-
-        family.Bind(FreeWRibbonCommandAction.HfGoToHeader, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("header")));
-        family.Bind(FreeWRibbonCommandAction.HfGoToFooter, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
+        foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterEditSlots)
+            BindHeaderFooterSlot(family, editor, binding);
+        foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterNavigationSlots)
+            BindHeaderFooterSlot(family, editor, binding);
         family.Bind(FreeWRibbonCommandAction.HfClose, new ActionRibbonCommand(editor.CloseHeaderFooterEditing));
 
         family.Bind(FreeWRibbonCommandAction.HfDifferentFirstPage, new PageSettingCommand(
@@ -645,6 +640,15 @@ internal static class FreeWAvaloniaRibbonCommands
         family.Bind(FreeWRibbonCommandAction.HfInsertPageNumberFooter, new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
         family.Bind(FreeWRibbonCommandAction.HfInsertDatetime, new ActionRibbonCommand(editor.InsertHeaderFooterDateTime));
         family.Bind(FreeWRibbonCommandAction.HfInsertField, new ActionRibbonCommand(editor.InsertHeaderFooterDocumentInfo));
+    }
+
+    private static void BindHeaderFooterSlot(
+        FreeWRibbonEditorCommandFamilyBuilder family,
+        DocumentView editor,
+        FreeWRibbonHeaderFooterSlotBinding binding)
+    {
+        var slotName = HeaderFooterDialogPlanner.SlotNameFor(binding.Slot);
+        family.Bind(binding.Action, new ActionRibbonCommand(() => editor.EditHeaderFooterSlot(slotName)));
     }
 
     private static IRibbonCommand HeaderFooterTextCommand(
@@ -768,8 +772,8 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         public RibbonCommandState GetState() =>
-            new(Value: (editor.GetCaretFormatting().Run.FontSizePt ?? 11)
-                .ToString("0.##", CultureInfo.InvariantCulture));
+            new(Value: FreeWRibbonNumericValueParser.FormatInvariant(
+                editor.GetCaretFormatting().Run.FontSizePt ?? 11));
     }
 
     private sealed class ParagraphValueCommand(

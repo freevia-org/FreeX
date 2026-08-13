@@ -980,6 +980,33 @@ public sealed class SourceManagementDialogPlannerTests
     }
 
     [Fact]
+    public void PrimaryAuthorRowCollection_RendersAndReadsThroughNativeAdapters()
+    {
+        var nativeRows = new List<string[]>();
+        var rows = new SourceManagementAuthorRowCollection<string[]>(
+            row => [row.First, row.Middle, row.Last],
+            row => new SourceManagementAuthorPersonRow(row[0], row[1], row[2]),
+            nativeRows.Add,
+            nativeRows.Clear);
+
+        rows.Render(
+        [
+            new SourceManagementAuthorPersonRow("Ada", string.Empty, "Lovelace"),
+            new SourceManagementAuthorPersonRow("Grace", "B.", "Hopper")
+        ]);
+        nativeRows[0][1] = "Augusta";
+
+        rows.Read().Should().Equal(
+            new SourceManagementAuthorPersonRow("Ada", "Augusta", "Lovelace"),
+            new SourceManagementAuthorPersonRow("Grace", "B.", "Hopper"));
+
+        rows.Render([new SourceManagementAuthorPersonRow("Katherine", string.Empty, "Johnson")]);
+        nativeRows.Should().ContainSingle();
+        rows.Read().Should().ContainSingle()
+            .Which.Should().Be(new SourceManagementAuthorPersonRow("Katherine", string.Empty, "Johnson"));
+    }
+
+    [Fact]
     public void PrimaryAuthorEditorSession_AddsRemovesAndClearsFinalPersonalRow()
     {
         var session = new SourceManagementAuthorEditorSession(

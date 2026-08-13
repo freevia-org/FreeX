@@ -24,10 +24,10 @@ public sealed class ChartSizeDialogPlannerTests
                 new ChartSizeDialogInput("320.5", "180"),
                 CultureInfo.InvariantCulture,
                 out var result,
-                out var errorMessage)
+                out var validation)
             .Should().BeTrue();
 
-        errorMessage.Should().BeNull();
+        validation.Should().BeNull();
         result.Should().Be(new ChartSizeDialogResult(320.5, 180));
     }
 
@@ -47,10 +47,14 @@ public sealed class ChartSizeDialogPlannerTests
                 new ChartSizeDialogInput(widthText, heightText),
                 CultureInfo.InvariantCulture,
                 out var result,
-                out var errorMessage)
+                out var validation)
             .Should().BeFalse();
 
         result.Should().BeNull();
-        errorMessage.Should().Be(expectedMessage);
+        validation.Should().NotBeNull();
+        validation!.Message.Should().Be(expectedMessage);
+        validation.Field.Should().Be(expectedMessage == ChartSizeDialogPlanner.WidthValidationMessage
+            ? ChartSizeDialogField.Width
+            : ChartSizeDialogField.Height);
     }
 }

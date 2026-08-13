@@ -2265,7 +2265,7 @@ public sealed partial class MainWindow : Window
     {
         var reportWindow = new MainWindow(_options, messageService: _messageService);
         reportWindow._editor.LoadModel(report);
-        reportWindow.Title = UiText.Get("MailMerge_ErrorReport_WindowTitle");
+        reportWindow.Title = FreeWUiTextCatalog.MailMergeErrorReportWindowTitle;
         reportWindow.Show();
         reportWindow._editor.Focus();
     }

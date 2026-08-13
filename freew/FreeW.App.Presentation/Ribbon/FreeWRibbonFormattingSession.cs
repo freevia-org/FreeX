@@ -100,7 +100,7 @@ public sealed class FreeWRibbonFormattingSession
         && points >= 0;
 
     public static string FormatPoints(double points) =>
-        points.ToString("0.##", CultureInfo.InvariantCulture);
+        FreeWRibbonNumericValueParser.FormatInvariant(points);
 
     public static string? ResolveParagraphStyleId(TextDocument document, string? choice)
     {

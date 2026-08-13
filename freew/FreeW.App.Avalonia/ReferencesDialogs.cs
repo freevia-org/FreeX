@@ -860,7 +860,7 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
     {
         var session = new SourceManagementAuthorEditorSession(entry);
         var initial = session.CurrentPlan;
-        var rowControls = new List<RowControls>();
+        var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
 
         Title = SourceManagementDialogPlanner.PrimaryAuthorEditorTitle;
         Width = 460;
@@ -895,32 +895,24 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
         };
         var corporateBox = NewAuthorTextBox(initial.CorporateAuthor, minWidth: 360);
 
-        void AddPersonRow(SourceManagementAuthorPersonRow row)
-        {
-            var grid = CreatePersonRowGrid();
-            var first = NewAuthorTextBox(row.First);
-            var middle = NewAuthorTextBox(row.Middle);
-            var last = NewAuthorTextBox(row.Last, minWidth: 140);
-            AddGridChild(grid, first, 0);
-            AddGridChild(grid, middle, 1);
-            AddGridChild(grid, last, 2);
-            rowsPanel.Children.Add(grid);
-            rowControls.Add(new RowControls(first, middle, last, grid));
-        }
-
-        IReadOnlyList<SourceManagementAuthorPersonRow> ReadPersonRows() =>
-            rowControls.Select(row => new SourceManagementAuthorPersonRow(
+        var personRows = new SourceManagementAuthorRowCollection<RowControls>(
+            row =>
+            {
+                var grid = CreatePersonRowGrid();
+                var first = NewAuthorTextBox(row.First);
+                var middle = NewAuthorTextBox(row.Middle);
+                var last = NewAuthorTextBox(row.Last, minWidth: 140);
+                AddGridChild(grid, first, 0);
+                AddGridChild(grid, middle, 1);
+                AddGridChild(grid, last, 2);
+                return new RowControls(first, middle, last, grid);
+            },
+            row => new SourceManagementAuthorPersonRow(
                 row.First.Text ?? string.Empty,
                 row.Middle.Text ?? string.Empty,
-                row.Last.Text ?? string.Empty)).ToArray();
-
-        void RenderPersonRows(IReadOnlyList<SourceManagementAuthorPersonRow> rows)
-        {
-            rowsPanel.Children.Clear();
-            rowControls.Clear();
-            foreach (var row in rows)
-                AddPersonRow(row);
-        }
+                row.Last.Text ?? string.Empty),
+            row => rowsPanel.Children.Add(row.Host),
+            () => rowsPanel.Children.Clear());
 
         void ApplyMode(SourceManagementAuthorEditorPlan plan)
         {
@@ -929,7 +921,7 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
             corporateBox.IsEnabled = plan.CorporateAuthorFieldEnabled;
         }
 
-        RenderPersonRows(initial.PersonalRows);
+        personRows.Render(initial.PersonalRows);
 
         var header = CreatePersonRowGrid();
         AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorFirstNameLabel), 0);
@@ -939,12 +931,12 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
         peoplePanel.Children.Add(rowsPanel);
 
         var addRow = Button(SourceManagementDialogPlanner.AddAuthorRowButtonLabel, () =>
-            RenderPersonRows(session.AddPersonalAuthorRow(
-                ReadPersonRows(),
+            personRows.Render(session.AddPersonalAuthorRow(
+                personRows.Read(),
                 corporateBox.Text).PersonalRows));
         var removeRow = Button(SourceManagementDialogPlanner.RemoveAuthorRowButtonLabel, () =>
-            RenderPersonRows(session.RemoveFinalPersonalAuthorRow(
-                ReadPersonRows(),
+            personRows.Render(session.RemoveFinalPersonalAuthorRow(
+                personRows.Read(),
                 corporateBox.Text).PersonalRows));
         peoplePanel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
             [addRow, removeRow],
@@ -952,19 +944,19 @@ internal sealed class SourceAuthorEditorDialog : FreeWDialogWindow
 
         personalMode.Click += (_, _) => ApplyMode(session.SelectMode(
             SourceManagementAuthorEditorMode.Personal,
-            ReadPersonRows(),
+            personRows.Read(),
             corporateBox.Text));
         corporateMode.Click += (_, _) => ApplyMode(session.SelectMode(
             SourceManagementAuthorEditorMode.Corporate,
-            ReadPersonRows(),
+            personRows.Read(),
             corporateBox.Text));
 
-        var ok = Button("OK", () =>
+        var ok = Button(text.OkButtonLabel, () =>
         {
-            State = session.Accept(ReadPersonRows(), corporateBox.Text);
+            State = session.Accept(personRows.Read(), corporateBox.Text);
             Close();
         }, isDefault: true);
-        var cancel = Button("Cancel", () => Close(), isCancel: true);
+        var cancel = Button(text.CancelButtonLabel, () => Close(), isCancel: true);
 
         var body = new StackPanel { Margin = new Thickness(16) };
         body.Children.Add(personalMode);

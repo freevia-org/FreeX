@@ -37,7 +37,7 @@ public sealed class FreeWRibbonNumericValueCommand(
     }
 
     public RibbonCommandState GetState() =>
-        new(Value: getValue().ToString("0.##", CultureInfo.InvariantCulture));
+        new(Value: FreeWRibbonNumericValueParser.FormatInvariant(getValue()));
 
     private static bool TryGetSelectedValue(RibbonCommandContext context, out string? value)
     {
@@ -62,6 +62,9 @@ public readonly record struct FreeWRibbonSizeInput(double WidthPt, double Height
 
 public static class FreeWRibbonNumericValueParser
 {
+    public static string FormatInvariant(double value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture);
+
     public static bool TryParseScalar(
         string? value,
         CultureInfo culture,

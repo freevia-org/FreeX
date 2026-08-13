@@ -318,8 +318,8 @@ internal static class FreeWRibbonCommands
             return editor.TrySetSelectedRunFormatting(
                 formatting => formatting.FontSizePt is { } size && Math.Abs(size - points) < 0.0001,
                 formatting => formatting with { FontSizePt = points });
-        }, () => (editor.CurrentRunFormatting.FontSizePt ?? 11).ToString(
-            "0.##", System.Globalization.CultureInfo.InvariantCulture));
+        }, () => FreeWRibbonNumericValueParser.FormatInvariant(
+            editor.CurrentRunFormatting.FontSizePt ?? 11));
         registry.Bind(FreeWRibbonCommandAction.FontSize, fontSize);
         stateful.Add(("freew.font-size", fontSize));
         stateStore.SetState("freew.font-size", fontSize.GetState());
@@ -976,12 +976,8 @@ internal static class FreeWRibbonCommands
             onOpenHeaderFooterPane is not null
                 ? new OpenHeaderFooterPaneCommand(editor, slot, onOpenHeaderFooterPane)
                 : new EditHeaderSlotCommand(editor, slot);
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfEditHeader,       HfEditCmd("header"));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfEditFooter,       HfEditCmd("footer"));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfEditEvenHeader,  HfEditCmd("even-header"));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfEditEvenFooter,  HfEditCmd("even-footer"));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfEditFirstHeader, HfEditCmd("first-header"));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfEditFirstFooter, HfEditCmd("first-footer"));
+        foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterEditSlots)
+            headerFooterCommands.Bind(binding.Action, HfEditCmd(HeaderFooterDialogPlanner.SlotNameFor(binding.Slot)));
 
         // Header & Footer Design contextual tab — options toggles (stateful so IsChecked reflects model).
         var diffFirstPage = new DifferentFirstPageToggleCommand(editor);
@@ -1003,14 +999,18 @@ internal static class FreeWRibbonCommands
 
         // Header & Footer Design contextual tab — navigation + close.
         // Go-to-header / go-to-footer open the pane (when available) for the default slots.
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfGoToHeader,
-            onOpenHeaderFooterPane is not null
-                ? new OpenHeaderFooterPaneCommand(editor, "header", onOpenHeaderFooterPane)
-                : new GoToHeaderCommand(editor));
-        headerFooterCommands.Bind(FreeWRibbonCommandAction.HfGoToFooter,
-            onOpenHeaderFooterPane is not null
-                ? new OpenHeaderFooterPaneCommand(editor, "footer", onOpenHeaderFooterPane)
-                : new GoToFooterCommand(editor));
+        foreach (var binding in FreeWRibbonSemanticCatalog.HeaderFooterNavigationSlots)
+        {
+            var slotName = HeaderFooterDialogPlanner.SlotNameFor(binding.Slot);
+            var fallback = binding.Slot == HeaderFooterSlotKind.Header
+                ? (IRibbonCommand)new GoToHeaderCommand(editor)
+                : new GoToFooterCommand(editor);
+            headerFooterCommands.Bind(
+                binding.Action,
+                onOpenHeaderFooterPane is not null
+                    ? new OpenHeaderFooterPaneCommand(editor, slotName, onOpenHeaderFooterPane)
+                    : fallback);
+        }
         // Close Header and Footer: hides the pane (when available) and returns focus to the body.
         headerFooterCommands.Bind(FreeWRibbonCommandAction.HfClose,
             onCloseHeaderFooterPane is not null
@@ -1164,11 +1164,8 @@ internal static class FreeWRibbonCommands
         // delimiter) and turn the caret's table back into delimited paragraphs. Both route through the bus.
         registry.Bind(FreeWRibbonCommandAction.TextToTable, new TextToTableCommand(editor));
 
-        registry.Bind(FreeWRibbonCommandAction.StyleNormal, new ApplyNamedStyleCommand(editor, "Normal"));
-        registry.Bind(FreeWRibbonCommandAction.StyleHeading1, new ApplyNamedStyleCommand(editor, "Heading1"));
-        registry.Bind(FreeWRibbonCommandAction.StyleHeading2, new ApplyNamedStyleCommand(editor, "Heading2"));
-        registry.Bind(FreeWRibbonCommandAction.StyleHeading3, new ApplyNamedStyleCommand(editor, "Heading3"));
-        registry.Bind(FreeWRibbonCommandAction.StyleTitle, new ApplyNamedStyleCommand(editor, "Title"));
+        foreach (var binding in FreeWRibbonSemanticCatalog.QuickStyles)
+            registry.Bind(binding.Action, new ApplyNamedStyleCommand(editor, binding.StyleId));
         registry.Bind(FreeWRibbonCommandAction.StyleClear, new ActionRibbonCommand(() => { editor.Focus(); editor.SetParagraphStyle(null); }));
 
         // Home > Styles: the styles dropdown. Picking an entry sets the selected paragraph(s)' StyleId
@@ -1515,7 +1512,7 @@ internal static class FreeWRibbonCommands
             shapePosition.VerticalOffsetPt,
             shapePosition.HorizontalAnchor,
             shapePosition.VerticalAnchor,
-            shapePosition.IsGroupLocal ? "Shape Position in Group" : "Shape Position",
+            ObjectFormatCommandPlanner.ShapePositionDialogTitle(shapePosition.IsGroupLocal),
             shapePosition.IsGroupLocal);
         if (shapeResult is { } positionResult)
         {
@@ -4943,7 +4940,7 @@ internal static class FreeWRibbonCommands
         {
             var session = new SourceManagementAuthorEditorSession(entry);
             var initial = session.CurrentPlan;
-            var rowControls = new List<RowControls>();
+            var text = SourceManagementDialogPlanner.ResolveText(UiText.Get);
             SourceManagementAuthorEditorState? result = null;
 
             var dialog = new Window
@@ -4979,32 +4976,24 @@ internal static class FreeWRibbonCommands
             };
             var corporateBox = NewAuthorTextBox(initial.CorporateAuthor, minWidth: 360);
 
-            void AddPersonRow(SourceManagementAuthorPersonRow row)
-            {
-                var grid = CreatePersonRowGrid();
-                var first = NewAuthorTextBox(row.First);
-                var middle = NewAuthorTextBox(row.Middle);
-                var last = NewAuthorTextBox(row.Last, minWidth: 140);
-                AddGridChild(grid, first, 0);
-                AddGridChild(grid, middle, 1);
-                AddGridChild(grid, last, 2);
-                rowsPanel.Children.Add(grid);
-                rowControls.Add(new RowControls(first, middle, last, grid));
-            }
-
-            IReadOnlyList<SourceManagementAuthorPersonRow> ReadPersonRows() =>
-                rowControls.Select(row => new SourceManagementAuthorPersonRow(
+            var personRows = new SourceManagementAuthorRowCollection<RowControls>(
+                row =>
+                {
+                    var grid = CreatePersonRowGrid();
+                    var first = NewAuthorTextBox(row.First);
+                    var middle = NewAuthorTextBox(row.Middle);
+                    var last = NewAuthorTextBox(row.Last, minWidth: 140);
+                    AddGridChild(grid, first, 0);
+                    AddGridChild(grid, middle, 1);
+                    AddGridChild(grid, last, 2);
+                    return new RowControls(first, middle, last, grid);
+                },
+                row => new SourceManagementAuthorPersonRow(
                     row.First.Text ?? string.Empty,
                     row.Middle.Text ?? string.Empty,
-                    row.Last.Text ?? string.Empty)).ToArray();
-
-            void RenderPersonRows(IReadOnlyList<SourceManagementAuthorPersonRow> rows)
-            {
-                rowsPanel.Children.Clear();
-                rowControls.Clear();
-                foreach (var row in rows)
-                    AddPersonRow(row);
-            }
+                    row.Last.Text ?? string.Empty),
+                row => rowsPanel.Children.Add(row.Host),
+                () => rowsPanel.Children.Clear());
 
             void ApplyMode(SourceManagementAuthorEditorPlan plan)
             {
@@ -5013,7 +5002,7 @@ internal static class FreeWRibbonCommands
                 corporateBox.IsEnabled = plan.CorporateAuthorFieldEnabled;
             }
 
-            RenderPersonRows(initial.PersonalRows);
+            personRows.Render(initial.PersonalRows);
 
             var header = CreatePersonRowGrid();
             AddGridChild(header, NewHeader(SourceManagementDialogPlanner.AuthorFirstNameLabel), 0);
@@ -5028,8 +5017,8 @@ internal static class FreeWRibbonCommands
                 MinWidth = 72,
                 Margin = new Thickness(0, 4, 8, 0)
             };
-            addRow.Click += (_, _) => RenderPersonRows(session.AddPersonalAuthorRow(
-                ReadPersonRows(),
+            addRow.Click += (_, _) => personRows.Render(session.AddPersonalAuthorRow(
+                personRows.Read(),
                 corporateBox.Text).PersonalRows);
             var removeRow = new System.Windows.Controls.Button
             {
@@ -5037,8 +5026,8 @@ internal static class FreeWRibbonCommands
                 MinWidth = 72,
                 Margin = new Thickness(0, 4, 0, 0)
             };
-            removeRow.Click += (_, _) => RenderPersonRows(session.RemoveFinalPersonalAuthorRow(
-                ReadPersonRows(),
+            removeRow.Click += (_, _) => personRows.Render(session.RemoveFinalPersonalAuthorRow(
+                personRows.Read(),
                 corporateBox.Text).PersonalRows);
             peoplePanel.Children.Add(new System.Windows.Controls.StackPanel
             {
@@ -5048,18 +5037,18 @@ internal static class FreeWRibbonCommands
 
             personalMode.Checked += (_, _) => ApplyMode(session.SelectMode(
                 SourceManagementAuthorEditorMode.Personal,
-                ReadPersonRows(),
+                personRows.Read(),
                 corporateBox.Text));
             corporateMode.Checked += (_, _) => ApplyMode(session.SelectMode(
                 SourceManagementAuthorEditorMode.Corporate,
-                ReadPersonRows(),
+                personRows.Read(),
                 corporateBox.Text));
 
-            var ok = new System.Windows.Controls.Button { Content = UiText.Get("Common_OkText"), IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
-            var cancel = new System.Windows.Controls.Button { Content = UiText.Get("Common_CancelText"), IsCancel = true, MinWidth = 72 };
+            var ok = new System.Windows.Controls.Button { Content = text.OkButtonLabel, IsDefault = true, MinWidth = 72, Margin = new Thickness(0, 0, 8, 0) };
+            var cancel = new System.Windows.Controls.Button { Content = text.CancelButtonLabel, IsCancel = true, MinWidth = 72 };
             ok.Click += (_, _) =>
             {
-                result = session.Accept(ReadPersonRows(), corporateBox.Text);
+                result = session.Accept(personRows.Read(), corporateBox.Text);
                 dialog.DialogResult = true;
             };
 

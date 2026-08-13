@@ -12,26 +12,31 @@ internal sealed partial class ScreenClipOverlay
 
     internal void BeginSelectionForTest(Point point)
     {
-        _origin = point;
-        _dragging = true;
-        UpdateSelectionVisual(point);
+        ApplySelectionVisual(_selectionSession.Begin(point.X, point.Y));
     }
 
     internal ScreenPixelRect? CompleteSelectionForTest(Point point, double renderScale)
     {
-        _dragging = false;
+        var completion = _selectionSession.Complete(point.X, point.Y);
+        if (completion is null)
+            return null;
+
         _result = ScreenClipPlanner.BuildPhysicalSelection(
-            _origin.X,
-            _origin.Y,
-            point.X,
-            point.Y,
+            completion.Value.Origin.X,
+            completion.Value.Origin.Y,
+            completion.Value.Current.X,
+            completion.Value.Current.Y,
             _virtualBounds.X,
             _virtualBounds.Y,
             renderScale);
         return _result;
     }
 
-    internal void CancelForTest() => _result = null;
+    internal void CancelForTest()
+    {
+        _selectionSession.Cancel();
+        _result = null;
+    }
 }
 
 internal sealed partial class OutlineView

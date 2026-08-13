@@ -21,6 +21,10 @@ public sealed record ChartSizeDialogResult(
     double WidthPt,
     double HeightPt);
 
+public sealed record ChartSizeDialogValidation(
+    ChartSizeDialogField Field,
+    string Message);
+
 public static class ChartSizeDialogPlanner
 {
     public const string WidthValidationMessage = "Enter a positive width in points.";
@@ -68,31 +72,35 @@ public static class ChartSizeDialogPlanner
         ChartSizeDialogInput input,
         CultureInfo culture,
         out ChartSizeDialogResult? result,
-        out string? errorMessage)
-        => TryBuildResult(input, culture, getText: null, out result, out errorMessage);
+        out ChartSizeDialogValidation? validation)
+        => TryBuildResult(input, culture, getText: null, out result, out validation);
 
     public static bool TryBuildResult(
         ChartSizeDialogInput input,
         CultureInfo culture,
         Func<string, string?>? getText,
         out ChartSizeDialogResult? result,
-        out string? errorMessage)
+        out ChartSizeDialogValidation? validation)
     {
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(culture);
 
         result = null;
-        errorMessage = null;
+        validation = null;
 
         if (!TryParsePositive(input.WidthText, culture, out var width))
         {
-            errorMessage = Texts[3].Resolve(getText);
+            validation = new ChartSizeDialogValidation(
+                ChartSizeDialogField.Width,
+                Texts[3].Resolve(getText));
             return false;
         }
 
         if (!TryParsePositive(input.HeightText, culture, out var height))
         {
-            errorMessage = Texts[4].Resolve(getText);
+            validation = new ChartSizeDialogValidation(
+                ChartSizeDialogField.Height,
+                Texts[4].Resolve(getText));
             return false;
         }
 

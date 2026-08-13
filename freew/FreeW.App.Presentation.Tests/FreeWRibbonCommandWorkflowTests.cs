@@ -644,6 +644,11 @@ public sealed class FreeWRibbonCommandWorkflowTests
             "FreeW.App.Presentation",
             "Ribbon",
             "FreeWRibbonEditorExecutionProfile.cs");
+        var semanticCatalog = ReadSource(
+            "freew",
+            "FreeW.App.Presentation",
+            "Ribbon",
+            "FreeWRibbonSemanticCatalog.cs");
         var directRegistration = new Regex(
             @"(?:registry|r)\.Register\(\s*""(?<id>freew\.[^""]+)""",
             RegexOptions.CultureInvariant);
@@ -800,10 +805,10 @@ public sealed class FreeWRibbonCommandWorkflowTests
             .ToArray();
 
         RibbonActions(wpf).Should().HaveCountLessThan(Enum.GetValues<FreeWRibbonCommandAction>().Length);
-        RibbonActions(wpf + hostProfile + editorProfile)
+        RibbonActions(wpf + hostProfile + editorProfile + semanticCatalog)
             .Should().BeEquivalentTo(explicitlyOwnedActions);
         RibbonActions(avalonia).Should().HaveCountLessThan(Enum.GetValues<FreeWRibbonCommandAction>().Length);
-        RibbonActions(avalonia + hostProfile + editorProfile)
+        RibbonActions(avalonia + hostProfile + editorProfile + semanticCatalog)
             .Should().BeEquivalentTo(explicitlyOwnedActions);
 
         foreach (var helperPrefix in new[]

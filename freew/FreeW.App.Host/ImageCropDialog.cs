@@ -64,7 +64,7 @@ internal sealed class ImageCropDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var note = new TextBlock
         {
-            Text = UiText.Get("ImageCrop_Instruction"),
+            Text = ImageCropDialogPlanner.Instruction,
             TextWrapping = TextWrapping.Wrap,
             FontSize = 10,
             Margin = new Thickness(0, 6, 0, 0)

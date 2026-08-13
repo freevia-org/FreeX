@@ -8,6 +8,28 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class FreeWRibbonPortableCommandsTests
 {
     [Fact]
+    public void Semantic_catalog_owns_quick_style_and_header_footer_slot_mappings()
+    {
+        FreeWRibbonSemanticCatalog.QuickStyles.Should().Equal(
+            new FreeWRibbonQuickStyleBinding(FreeWRibbonCommandAction.StyleNormal, "Normal"),
+            new FreeWRibbonQuickStyleBinding(FreeWRibbonCommandAction.StyleHeading1, "Heading1"),
+            new FreeWRibbonQuickStyleBinding(FreeWRibbonCommandAction.StyleHeading2, "Heading2"),
+            new FreeWRibbonQuickStyleBinding(FreeWRibbonCommandAction.StyleHeading3, "Heading3"),
+            new FreeWRibbonQuickStyleBinding(FreeWRibbonCommandAction.StyleTitle, "Title"));
+        FreeWRibbonSemanticCatalog.HeaderFooterEditSlots.Select(binding => binding.Slot)
+            .Should().Equal(
+                HeaderFooterSlotKind.Header,
+                HeaderFooterSlotKind.Footer,
+                HeaderFooterSlotKind.EvenHeader,
+                HeaderFooterSlotKind.EvenFooter,
+                HeaderFooterSlotKind.FirstHeader,
+                HeaderFooterSlotKind.FirstFooter);
+        FreeWRibbonSemanticCatalog.HeaderFooterNavigationSlots.Should().Equal(
+            new FreeWRibbonHeaderFooterSlotBinding(FreeWRibbonCommandAction.HfGoToHeader, HeaderFooterSlotKind.Header),
+            new FreeWRibbonHeaderFooterSlotBinding(FreeWRibbonCommandAction.HfGoToFooter, HeaderFooterSlotKind.Footer));
+    }
+
+    [Fact]
     public void Numeric_value_command_parses_current_and_legacy_values_and_reports_state()
     {
         var applied = new List<double>();
@@ -102,6 +124,8 @@ public sealed class FreeWRibbonPortableCommandsTests
                 invariant,
                 out _)
             .Should().BeFalse();
+
+        FreeWRibbonNumericValueParser.FormatInvariant(10.5).Should().Be("10.5");
     }
 
     [Fact]

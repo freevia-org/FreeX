@@ -1,4 +1,5 @@
 using System.Globalization;
+using FreeW.App.Localization;
 
 namespace FreeW.App.Presentation.Dialogs;
 
@@ -39,6 +40,8 @@ public static class ImageCropDialogPlanner
         "Each crop value must be a percentage between 0 and 99.";
     public const string TotalsValidationMessage =
         "Left + Right and Top + Bottom must each total less than 100%.";
+
+    public static string Instruction => Loc.Get("ImageCrop_Instruction");
 
     public static DialogSurfaceSpec<ImageCropDialogField> Surface { get; } = new(
         Title: "Crop Picture",

@@ -68,6 +68,7 @@ public static class FreeWUiTextCatalog
         "Dialog_Note_EndnoteTextLabel",
         "Dialog_Note_Ok",
         "Dialog_Note_Cancel",
+        "MailMerge_ErrorReport_WindowTitle",
     ];
 
     public static string Zoom => Text("Common_Zoom");
@@ -161,6 +162,7 @@ public static class FreeWUiTextCatalog
     public static string EndnoteTextLabel => Text("Dialog_Note_EndnoteTextLabel");
     public static string NoteDialogOk => Text("Dialog_Note_Ok");
     public static string NoteDialogCancel => Text("Dialog_Note_Cancel");
+    public static string MailMergeErrorReportWindowTitle => Text("MailMerge_ErrorReport_WindowTitle");
 
     private static string Text(string resourceKey) => Loc.Get(resourceKey);
     private static string Format(string resourceKey, params object?[] arguments) =>

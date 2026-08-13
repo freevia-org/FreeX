@@ -7,6 +7,44 @@ public sealed record SourceManagementAuthorEditorPlan(
     bool PersonalAuthorFieldsEnabled,
     bool CorporateAuthorFieldEnabled);
 
+public sealed class SourceManagementAuthorRowCollection<TNativeRow>
+{
+    private readonly Func<SourceManagementAuthorPersonRow, TNativeRow> _createRow;
+    private readonly Func<TNativeRow, SourceManagementAuthorPersonRow> _readRow;
+    private readonly Action<TNativeRow> _addRow;
+    private readonly Action _clearRows;
+    private readonly List<TNativeRow> _rows = [];
+
+    public SourceManagementAuthorRowCollection(
+        Func<SourceManagementAuthorPersonRow, TNativeRow> createRow,
+        Func<TNativeRow, SourceManagementAuthorPersonRow> readRow,
+        Action<TNativeRow> addRow,
+        Action clearRows)
+    {
+        _createRow = createRow ?? throw new ArgumentNullException(nameof(createRow));
+        _readRow = readRow ?? throw new ArgumentNullException(nameof(readRow));
+        _addRow = addRow ?? throw new ArgumentNullException(nameof(addRow));
+        _clearRows = clearRows ?? throw new ArgumentNullException(nameof(clearRows));
+    }
+
+    public IReadOnlyList<SourceManagementAuthorPersonRow> Read() =>
+        _rows.Select(_readRow).ToArray();
+
+    public void Render(IReadOnlyList<SourceManagementAuthorPersonRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+        _clearRows();
+        _rows.Clear();
+
+        foreach (var row in rows)
+        {
+            var nativeRow = _createRow(row);
+            _addRow(nativeRow);
+            _rows.Add(nativeRow);
+        }
+    }
+}
+
 public sealed class SourceManagementAuthorEditorSession
 {
     private static readonly SourceManagementAuthorPersonRow EmptyPersonRow = new(

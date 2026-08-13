@@ -13,8 +13,7 @@ internal sealed partial class ScreenClipOverlay : Window
     private readonly Canvas _canvas;
     private readonly Rectangle _selection;
     private readonly PixelRect _virtualBounds;
-    private Point _origin;
-    private bool _dragging;
+    private readonly ScreenClipSelectionSession _selectionSession = new();
     private ScreenPixelRect? _result;
     private TaskCompletionSource<ScreenPixelRect?>? _completion;
 
@@ -81,35 +80,36 @@ internal sealed partial class ScreenClipOverlay : Window
         if (point.Properties.PointerUpdateKind != PointerUpdateKind.LeftButtonPressed)
             return;
 
-        _origin = point.Position;
-        _dragging = true;
-        UpdateSelectionVisual(_origin);
+        ApplySelectionVisual(_selectionSession.Begin(point.Position.X, point.Position.Y));
         args.Pointer.Capture(_canvas);
         args.Handled = true;
     }
 
     private void OnPointerMoved(object? sender, PointerEventArgs args)
     {
-        if (!_dragging)
-            return;
-
-        UpdateSelectionVisual(args.GetPosition(_canvas));
-        args.Handled = true;
+        var current = args.GetPosition(_canvas);
+        if (_selectionSession.Update(current.X, current.Y) is { } update)
+        {
+            ApplySelectionVisual(update);
+            args.Handled = true;
+        }
     }
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs args)
     {
-        if (!_dragging || args.InitialPressMouseButton != MouseButton.Left)
+        if (args.InitialPressMouseButton != MouseButton.Left)
             return;
 
-        _dragging = false;
-        args.Pointer.Capture(null);
         var current = args.GetPosition(_canvas);
+        if (_selectionSession.Complete(current.X, current.Y) is not { } completion)
+            return;
+
+        args.Pointer.Capture(null);
         _result = ScreenClipPlanner.BuildPhysicalSelection(
-            _origin.X,
-            _origin.Y,
-            current.X,
-            current.Y,
+            completion.Origin.X,
+            completion.Origin.Y,
+            completion.Current.X,
+            completion.Current.Y,
             _virtualBounds.X,
             _virtualBounds.Y,
             RenderScaling);
@@ -126,19 +126,18 @@ internal sealed partial class ScreenClipOverlay : Window
         Cancel();
     }
 
-    private void UpdateSelectionVisual(Point current)
+    private void ApplySelectionVisual(ScreenClipSelectionUpdate update)
     {
-        var left = Math.Min(_origin.X, current.X);
-        var top = Math.Min(_origin.Y, current.Y);
-        Canvas.SetLeft(_selection, left);
-        Canvas.SetTop(_selection, top);
-        _selection.Width = Math.Abs(current.X - _origin.X);
-        _selection.Height = Math.Abs(current.Y - _origin.Y);
+        Canvas.SetLeft(_selection, update.Bounds.Left);
+        Canvas.SetTop(_selection, update.Bounds.Top);
+        _selection.Width = update.Bounds.Width;
+        _selection.Height = update.Bounds.Height;
         _selection.IsVisible = true;
     }
 
     private void Cancel()
     {
+        _selectionSession.Cancel();
         _result = null;
         Close();
     }

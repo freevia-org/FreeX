@@ -77,11 +77,11 @@ internal sealed class ChartSizeDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             CultureInfo.CurrentCulture,
             UiText.Get,
             out var result,
-            out var errorMessage))
+            out var validation))
         {
             DialogMessageHelper.ShowWarning(
                 this,
-                errorMessage ?? UiText.Get("ChartSize_Width_Validation"));
+                validation!.Message);
             return;
         }
 
