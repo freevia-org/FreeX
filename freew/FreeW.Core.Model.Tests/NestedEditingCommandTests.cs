@@ -105,6 +105,41 @@ public sealed class NestedEditingCommandTests
             .Should().Equal("before");
     }
 
+    [Fact]
+    public void HeaderFooterParagraphSplitKeepsPreservedTableAndFlatViewsAliasedAcrossUndoRedo()
+    {
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0] = new TableCell("Left");
+        table.Rows[0].Cells[1] = new TableCell("Right");
+        var story = new HeaderFooter { Table = table };
+        story.Paragraphs.AddRange(table.Rows[0].Cells.SelectMany(cell => cell.Paragraphs));
+        var document = TextDocument.CreateEmpty();
+        document.FinalSectionHeadersFooters.Header = story;
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new SpliceHeaderFooterParagraphsCommand(
+            sectionIndex: 0,
+            useFinalSectionStore: true,
+            slot: 0,
+            firstParagraphIndex: 0,
+            () => [new Paragraph("Left A"), new Paragraph("Left B")]));
+
+        story.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Left A", "Left B", "Right");
+        table.Rows[0].Cells[0].Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Left A", "Left B");
+        story.Paragraphs[0].Should().BeSameAs(table.Rows[0].Cells[0].Paragraphs[0]);
+
+        bus.Undo().Should().BeTrue();
+        story.Paragraphs.Select(paragraph => paragraph.PlainText).Should().Equal("Left", "Right");
+        story.Paragraphs[0].Should().BeSameAs(table.Rows[0].Cells[0].Paragraphs[0]);
+
+        bus.Redo().Should().BeTrue();
+        story.Paragraphs.Select(paragraph => paragraph.PlainText)
+            .Should().Equal("Left A", "Left B", "Right");
+        story.Paragraphs[1].Should().BeSameAs(table.Rows[0].Cells[0].Paragraphs[1]);
+    }
+
     private sealed class Context(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document => document;

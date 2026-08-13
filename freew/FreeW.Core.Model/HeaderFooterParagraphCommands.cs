@@ -94,12 +94,16 @@ public sealed class SpliceHeaderFooterParagraphsCommand(
     Func<IReadOnlyList<Paragraph>> buildReplacement) : IDocumentCommand
 {
     private List<Paragraph>? _removed;
+    private HeaderFooterTableParagraphAddress? _tableAddress;
     private int _insertedCount;
 
     public string Label => "Edit header/footer";
 
     public void Apply(IDocumentCommandContext context)
     {
+        _removed = null;
+        _tableAddress = null;
+        _insertedCount = 0;
         var region = HeaderFooterCommandAddress.ResolveSlot(
             context.Document,
             sectionIndex,
@@ -109,10 +113,26 @@ public sealed class SpliceHeaderFooterParagraphsCommand(
             return;
 
         var at = Math.Clamp(firstParagraphIndex, 0, region.Paragraphs.Count - 1);
+        if (!HeaderFooterTableParagraphMap.CanSplice(region, at, removeCount: 1))
+            return;
+
+        var tableAddress = HeaderFooterTableParagraphMap.TryResolveAddress(region, at, out var resolvedAddress)
+            ? resolvedAddress
+            : (HeaderFooterTableParagraphAddress?)null;
         var replacement = buildReplacement();
+        if (tableAddress is not null && replacement.Count == 0)
+            return;
+
         _removed = region.Paragraphs.GetRange(at, 1);
+        _tableAddress = tableAddress;
         region.Paragraphs.RemoveAt(at);
         region.Paragraphs.InsertRange(at, replacement);
+        if (_tableAddress is { } address && region.Table is { } table)
+        {
+            var cellParagraphs = table.Rows[address.RowIndex].Cells[address.CellIndex].Paragraphs;
+            cellParagraphs.RemoveAt(address.CellParagraphIndex);
+            cellParagraphs.InsertRange(address.CellParagraphIndex, replacement);
+        }
         _insertedCount = replacement.Count;
     }
 
@@ -133,7 +153,15 @@ public sealed class SpliceHeaderFooterParagraphsCommand(
         var count = Math.Clamp(_insertedCount, 0, region.Paragraphs.Count - at);
         region.Paragraphs.RemoveRange(at, count);
         region.Paragraphs.InsertRange(at, _removed);
+        if (_tableAddress is { } address && region.Table is { } table)
+        {
+            var cellParagraphs = table.Rows[address.RowIndex].Cells[address.CellIndex].Paragraphs;
+            var cellCount = Math.Clamp(_insertedCount, 0, cellParagraphs.Count - address.CellParagraphIndex);
+            cellParagraphs.RemoveRange(address.CellParagraphIndex, cellCount);
+            cellParagraphs.InsertRange(address.CellParagraphIndex, _removed);
+        }
         _removed = null;
+        _tableAddress = null;
         _insertedCount = 0;
     }
 }
