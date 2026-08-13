@@ -63,9 +63,9 @@ public sealed class CommandInventoryDocumentTests
         var menuToolbarInScope = inventory.MenuToolbarTabs.Sum(tab => tab.Implemented + tab.Partial);
 
         catalog.Should().Contain(
-            $"| Command surface in-scope rows | {commandSurfaceInScope} | From `parity/command-inventory.json`: Implemented + Partial command-surface rows. |");
+            $"| Command surface in-scope rows | {commandSurfaceInScope} | {BuildInventorySnapshotNote(inventory.CommandSurfaceTabs, "command-surface")} |");
         catalog.Should().Contain(
-            $"| Menu/toolbar in-scope rows | {menuToolbarInScope} | Includes the current Draw tab menu/toolbar delta. |");
+            $"| Menu/toolbar in-scope rows | {menuToolbarInScope} | {BuildInventorySnapshotNote(inventory.MenuToolbarTabs, "menu/toolbar")} Includes the current Draw tab menu/toolbar delta. |");
     }
 
     [Fact]
@@ -317,6 +317,15 @@ public sealed class CommandInventoryDocumentTests
 
     private static string NormalizeLineEndings(string text) =>
         text.Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    private static string BuildInventorySnapshotNote(IReadOnlyList<CommandInventoryTab> tabs, string surface)
+    {
+        var implemented = tabs.Sum(tab => tab.Implemented);
+        var partial = tabs.Sum(tab => tab.Partial);
+        var total = tabs.Sum(tab => tab.Implemented + tab.Partial + tab.NotImplemented + tab.Deferred + tab.Excluded);
+        var excluded = tabs.Sum(tab => tab.Excluded);
+        return $"From `parity/command-inventory.json`: Implemented + Partial {surface} rows ({implemented} Implemented + {partial} Partial of {total} total, {excluded} Excluded).";
+    }
 
     private static string Slug(string text) =>
         string.Join("-", text.Split(text.Where(ch => !char.IsLetterOrDigit(ch)).Distinct().ToArray(), StringSplitOptions.RemoveEmptyEntries))

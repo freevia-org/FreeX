@@ -9,17 +9,20 @@ public sealed class SolutionProjectsPreflightTests
     public void SolutionProjectsPreflight_ValidatesSolutionMembership()
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-SolutionProjects.ps1");
+        var toolSupport = WorkspaceFileLocator.ReadAllText("tools", "ToolScriptSupport.ps1");
 
         script.Should().Contain("FreeX.slnx");
         script.Should().Contain("SelectNodes(\"//*[local-name()='Project']\")");
-        script.Should().Contain("Get-ProjectFiles -Directory");
-        script.Should().Contain("Test-IsIgnoredDirectoryName");
+        script.Should().Contain(". (Join-Path $PSScriptRoot \"ToolScriptSupport.ps1\")");
+        script.Should().Contain("Get-ToolProjectFiles -Directory");
         script.Should().Contain("ProjectPathPrefixes");
         script.Should().Contain("ExcludedProjectPathPrefixes");
         script.Should().Contain("Test-IsIncludedProjectPath");
-        script.Should().Contain("*_wpftmp.csproj");
-        script.Should().Contain("$segments -contains \".worktrees\"");
-        script.Should().Contain("$segments -contains \".claude\"");
+        toolSupport.Should().Contain("function Get-ToolProjectFiles");
+        toolSupport.Should().Contain("function Test-ToolIgnoredDirectoryName");
+        toolSupport.Should().Contain("*_wpftmp.csproj");
+        toolSupport.Should().Contain("\".worktrees\"");
+        toolSupport.Should().Contain("\".claude\"");
         script.Should().Contain("\"tools/\"");
         script.Should().Contain("\"shared/\"");
         script.Should().Contain("Duplicate solution project entry");

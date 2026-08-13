@@ -16,6 +16,7 @@ public sealed class TesterReleaseReadinessPreflightTests
         script.Should().Contain("tools\\Test-RepositoryPreflight.ps1");
         script.Should().Contain("group: tester-release");
         script.Should().Contain("signParameters.AllowUnsignedMsix = `$true");
+        script.Should().Contain("Velopack installer/portable/feed artifacts");
         script.Should().Contain("Public-preview preflight requires completed accessibility gate inputs");
         script.Should().Contain("Tester release readiness preflight passed.");
     }

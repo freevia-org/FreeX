@@ -15,7 +15,8 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("| 5. Crash analytics | Complete |");
         source.Should().Contain("| 6. Lightweight usage analytics | Complete |");
         source.Should().Contain("| 7. Auto-update readiness | Complete |");
-        source.Should().Contain("Future Velopack auto-update work");
+        source.Should().Contain("Velopack packaging and the in-app update check/download/apply-and-restart flow are implemented");
+        source.Should().Contain("Remaining follow-up work is release-process hardening");
     }
 
     [Fact]
@@ -42,8 +43,9 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("Help > Check for Updates");
         source.Should().Contain("stable latest release page");
         source.Should().Contain("Velopack");
-        source.Should().Contain("custom `Main`");
-        source.Should().Contain("no background update download");
+        source.Should().Contain("`Program.Main` runs `VelopackBootstrap.Configure().Run()`");
+        source.Should().Contain("to check, download, and apply updates with a restart");
+        source.Should().Contain("the plain `FreeX-latest-win-x64.exe` single-file build and MSIX installs are not Velopack-managed");
     }
 
     [Fact]
@@ -216,7 +218,7 @@ public sealed class TestDistributionPlanTests
         source.Should().Contain("Tester Release");
         source.Should().Contain("release_notes");
         source.Should().Contain("Repository preflight, build, and test");
-        source.Should().Contain("Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, and checksum artifacts");
+        source.Should().Contain("Versioned `.exe`, latest `.exe`, versioned MSIX, latest MSIX, Velopack installer/portable/feed artifacts, and checksum artifacts");
         source.Should().Contain("release/progress.json");
         source.Should().Contain("Keyboard-only smoke validation");
         source.Should().Contain("Screen-reader smoke validation");

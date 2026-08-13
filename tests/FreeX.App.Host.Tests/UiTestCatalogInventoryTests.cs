@@ -2,7 +2,6 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
@@ -30,12 +29,12 @@ public sealed partial class UiTestCatalogInventoryTests
             snapshot,
             "Command surface in-scope rows",
             inventory.CommandSurfaceTabs.Sum(tab => tab.Implemented + tab.Partial),
-            "From `parity/command-inventory.json`: Implemented + Partial command-surface rows.");
+            BuildInventorySnapshotNote(inventory.CommandSurfaceTabs, "command-surface"));
         AssertSnapshotRow(
             snapshot,
             "Menu/toolbar in-scope rows",
             inventory.MenuToolbarTabs.Sum(tab => tab.Implemented + tab.Partial),
-            "Includes the current Draw tab menu/toolbar delta.");
+            $"{BuildInventorySnapshotNote(inventory.MenuToolbarTabs, "menu/toolbar")} Includes the current Draw tab menu/toolbar delta.");
         AssertSnapshotRow(
             snapshot,
             "Top-level ribbon/backstage tabs",
@@ -45,7 +44,7 @@ public sealed partial class UiTestCatalogInventoryTests
             snapshot,
             "Contextual ribbon tab declarations",
             contextualTabs.Count,
-            $"{string.Join(", ", contextualTabs)} from collapsed `MainWindow.xaml` tab declarations.");
+            $"{string.Join(", ", contextualTabs)} from `FreeXRibbon` shared definitions.");
         AssertSnapshotRow(
             snapshot,
             "Dialog source classes",
@@ -55,22 +54,22 @@ public sealed partial class UiTestCatalogInventoryTests
             snapshot,
             "XAML click-wired controls",
             xamlClickWiredControls,
-            "`Click=\"...\"` occurrences in `MainWindow.xaml` on latest synced `origin/main`.");
+            "Renderer-specific `Click=\"...\"` occurrences remaining in `src/FreeX.App.Host/MainWindow.xaml`.");
         AssertSnapshotRow(
             snapshot,
             "Explicit UIA automation ids",
             xamlAutomationIds,
-            "`AutomationProperties.AutomationId=\"...\"` declarations in `MainWindow.xaml`.");
+            "Renderer-specific `AutomationProperties.AutomationId=\"...\"` declarations remaining in `src/FreeX.App.Host/MainWindow.xaml`.");
         AssertSnapshotRow(
             snapshot,
             "Ribbon keytip metadata declarations",
             ribbonKeyTipMetadata,
-            "`RibbonTooltip.KeyTip=\"...\"` declarations in `MainWindow.xaml`.");
+            "Renderer-specific `RibbonTooltip.KeyTip=\"...\"` declarations remaining in `src/FreeX.App.Host/MainWindow.xaml`.");
         AssertSnapshotRow(
             snapshot,
             "Keyboard command shortcut usages",
             keyboardShortcutUsages.MatcherRules,
-            $"{keyboardShortcutUsages.MatcherRules} matcher rules / {keyboardShortcutUsages.DispatcherTargets} dispatcher targets");
+            $"{keyboardShortcutUsages.MatcherRules} renderer-local matcher rules / {keyboardShortcutUsages.DispatcherTargets} host dispatcher targets; shared ribbon definitions own the extracted command metadata.");
         AssertSnapshotRow(
             snapshot,
             "Documented shortcut rows",
@@ -900,33 +899,22 @@ public sealed partial class UiTestCatalogInventoryTests
     }
 
     private static IReadOnlyList<string> ReadVisibleTopLevelRibbonTabs()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        return document
-            .Descendants(presentation + "TabItem")
-            .Where(tab => tab.Attribute("Visibility")?.Value != "Collapsed")
-            .Select(tab => tab.Attribute("Header")?.Value)
-            .Where(header => !string.IsNullOrWhiteSpace(header))
-            .Cast<string>()
-            .Select(header => LocalizedXamlTestSupport.ResolveLocalizedValue(header) ?? header)
+        => FreeXRibbon.Build().VisibleTabs
+            .Select(tab => FreeXRibbonTabPresentationCatalog.GetRequired(tab.Id).EnglishFallback)
             .ToArray();
-    }
 
     private static IReadOnlyList<string> ReadContextualRibbonTabs()
-    {
-        var document = DialogSourceTestSupport.LoadHostXamlDocument("MainWindow.xaml");
-        XNamespace presentation = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
-
-        return document
-            .Descendants(presentation + "TabItem")
-            .Where(tab => tab.Attribute("Visibility")?.Value == "Collapsed")
-            .Select(tab => tab.Attribute("Header")?.Value)
-            .Where(header => !string.IsNullOrWhiteSpace(header))
-            .Cast<string>()
-            .Select(header => LocalizedXamlTestSupport.ResolveLocalizedValue(header) ?? header)
+        => FreeXRibbon.Build().ContextualTabs
+            .Select(tab => FreeXRibbonTabPresentationCatalog.GetRequired(tab.Id).EnglishFallback)
             .ToArray();
+
+    private static string BuildInventorySnapshotNote(IReadOnlyList<CommandInventoryTab> tabs, string surface)
+    {
+        var implemented = tabs.Sum(tab => tab.Implemented);
+        var partial = tabs.Sum(tab => tab.Partial);
+        var total = tabs.Sum(tab => tab.Implemented + tab.Partial + tab.NotImplemented + tab.Deferred + tab.Excluded);
+        var excluded = tabs.Sum(tab => tab.Excluded);
+        return $"From `parity/command-inventory.json`: Implemented + Partial {surface} rows ({implemented} Implemented + {partial} Partial of {total} total, {excluded} Excluded).";
     }
 
     private static IReadOnlyList<string> ReadDialogTypeNames()

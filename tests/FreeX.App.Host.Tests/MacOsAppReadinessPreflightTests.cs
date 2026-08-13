@@ -775,7 +775,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("AddStyledCellBorderOverlay(content, style, borderNeighbors, zoomFactor);");
         script.Should().Contain("DrawingObjectRenderPlanner.Plan(viewport)");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(renderPlan, width, height)");
-        script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
+        script.Should().Contain("UiText.Get(selected ? `\"Automation_Selected`\" : `\"Automation_NotSelected`\"));");
         script.Should().Contain("CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme)");
         script.Should().Contain("CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)");
         script.Should().Contain("CreateDrawingImageSourceRect(crop)");
@@ -2861,7 +2861,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)) { }
                     case WorkbookApplicationCommandIntent.FillDown:
                     case WorkbookApplicationCommandIntent.FillRight:
-                    Header = UiText.Get("Backstage_Home_NoRecentWorkbooks");
+                    Header = UiText.Get("Backstage_Home_NoRecentWorkbooks"),
                     OpenRecentWorkbookMenuPlanner.Create(
                     _recentFiles.Snapshot()
                     File.Exists

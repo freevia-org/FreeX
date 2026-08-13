@@ -20,7 +20,7 @@ public sealed class CrossAppParityDashboardTests
         using var json = JsonDocument.Parse(
             File.ReadAllText(Path.Combine(repoRoot, "docs", "parity", "avalonia-wpf-cross-app-dashboard.json")));
         var root = json.RootElement;
-        root.GetProperty("schema").GetString().Should().Be("freex.parity.cross-app-dashboard.v2");
+        root.GetProperty("schema").GetString().Should().Be("freex.parity.cross-app-dashboard.v3");
         root.GetProperty("scopeBoundary").GetString().Should().Contain("do not prove visual parity");
 
         var freeX = root.GetProperty("apps")[0];

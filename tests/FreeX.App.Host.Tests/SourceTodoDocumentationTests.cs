@@ -46,7 +46,7 @@ public sealed partial class SourceTodoDocumentationTests
             .ToList();
 
         invalidMarkers.Should().BeEmpty(
-            "source TODO/FIXME/HACK/XXX markers must use '// TODO(owner): note (ref: docs/file.md#anchor)' so deferred work remains traceable");
+            "source TODO/FIXME/HACK/XXX markers must use '// TODO(owner): note (ref: docs/file.md#anchor)' or an exact documented legacy mapping so deferred work remains traceable");
     }
 
     private static bool IsTrackedSourceFile(string path)
@@ -66,9 +66,29 @@ public sealed partial class SourceTodoDocumentationTests
             if (!DeferredWorkMarkerRegex().IsMatch(line.Line))
                 continue;
 
-            if (!DocumentedDeferredWorkMarkerRegex().IsMatch(line.Line))
-                yield return $"{relativePath}:{line.Number}: {line.Line.Trim()}";
+            if (DocumentedDeferredWorkMarkerRegex().IsMatch(line.Line) ||
+                IsDocumentedLegacyMarker(repoDirectory, relativePath, line.Line))
+            {
+                continue;
+            }
+
+            yield return $"{relativePath}:{line.Number}: {line.Line.Trim()}";
         }
+    }
+
+    private static bool IsDocumentedLegacyMarker(string repoDirectory, string relativePath, string line)
+    {
+        var marker = LegacyDeferredWorkMarkers.SingleOrDefault(candidate =>
+            candidate.SourcePath == relativePath &&
+            line.Contains(candidate.Marker, StringComparison.Ordinal));
+        if (marker is null)
+            return false;
+
+        var documentPath = Path.Combine(
+            repoDirectory,
+            marker.DocumentPath.Replace('/', Path.DirectorySeparatorChar));
+        return File.Exists(documentPath) &&
+            File.ReadAllText(documentPath).Contains(marker.Heading, StringComparison.Ordinal);
     }
 
     private static IEnumerable<string> FindMojibake(string repoDirectory, string path)
@@ -85,6 +105,15 @@ public sealed partial class SourceTodoDocumentationTests
 
     private static readonly string[] SourceTextExtensions = [".cs", ".xaml", ".props", ".targets", ".resx"];
 
+    private static readonly LegacyDeferredWorkMarker[] LegacyDeferredWorkMarkers =
+    [
+        new(
+            "src/FreeX.Core.Formula/FormulaRewriter.cs",
+            "// TODO(H28 3-D sheet-span refs):",
+            "docs/planning/formula-deferred-work.md",
+            "## H28 3-D Sheet-Span Structural Rewrites")
+    ];
+
     [GeneratedRegex(@"//\s*(TODO|FIXME|HACK|XXX)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DeferredWorkMarkerRegex();
 
@@ -93,4 +122,10 @@ public sealed partial class SourceTodoDocumentationTests
 
     [GeneratedRegex("[\\uFFFD]|(?:\\u00C3|\\u00C2|\\u00E2)[\\u0080-\\u00BF\\u201A-\\u201E\\u20AC\\u2122\\u0152\\u0161\\u017D\\u017E\\u02C6\\u2030\\u2039\\u203A\\u2018-\\u201D]+", RegexOptions.CultureInvariant)]
     private static partial Regex MojibakeRegex();
+
+    private sealed record LegacyDeferredWorkMarker(
+        string SourcePath,
+        string Marker,
+        string DocumentPath,
+        string Heading);
 }
