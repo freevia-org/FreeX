@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -125,6 +126,9 @@ public sealed record SlideShowPresenterViewPlan(
     bool CanSetMediaIntent,
     bool CanApplyRecording)
 {
+    public string? CurrentSlideNumberText =>
+        CurrentSlideNumber?.ToString(CultureInfo.InvariantCulture);
+
     public bool HasNotes =>
         !string.IsNullOrWhiteSpace(NotesText)
         && !string.Equals(

@@ -47,32 +47,53 @@ public sealed class PresenterViewWindow : Window
         Title = surface.Title;
         AutomationProperties.SetName(this, surface.Schema.AccessibleName);
         AutomationProperties.SetAutomationId(this, surface.Schema.AutomationId);
-        Width = 1200;
-        Height = 760;
-        MinWidth = 860;
-        MinHeight = 560;
+        Width = PresentationPresenterViewVisualMetrics.WindowWidth;
+        Height = PresentationPresenterViewVisualMetrics.WindowHeight;
+        MinWidth = PresentationPresenterViewVisualMetrics.WindowMinimumWidth;
+        MinHeight = PresentationPresenterViewVisualMetrics.WindowMinimumHeight;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Background = FreePBrushes.PresenterSurface;
 
-        var root = new Grid { Margin = new Thickness(18) };
+        var root = new Grid
+        {
+            Margin = new Thickness(PresentationPresenterViewVisualMetrics.RootMargin),
+        };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(180) });
+        root.RowDefinitions.Add(new RowDefinition
+        {
+            Height = new GridLength(PresentationPresenterViewVisualMetrics.NotesRowHeight),
+        });
 
-        var header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
+        var header = new Grid
+        {
+            Margin = new Thickness(
+                0,
+                0,
+                0,
+                PresentationPresenterViewVisualMetrics.SectionBottomMargin),
+        };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        _statusText = MakeText(18, FontWeight.SemiBold);
-        _elapsedText = MakeText(18, FontWeight.Normal);
+        _statusText = MakeText(
+            PresentationPresenterViewVisualMetrics.HeaderFontSize,
+            FontWeight.SemiBold);
+        _elapsedText = MakeText(
+            PresentationPresenterViewVisualMetrics.HeaderFontSize,
+            FontWeight.Normal);
         ApplySemantic(_statusText, surface.Field(SlideShowPresenterViewField.Status));
         ApplySemantic(_elapsedText, surface.Field(SlideShowPresenterViewField.Elapsed));
         var controls = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Margin = new Thickness(18, 0, 18, 0),
+            Margin = new Thickness(
+                PresentationPresenterViewVisualMetrics.HeaderControlsSideMargin,
+                0,
+                PresentationPresenterViewVisualMetrics.HeaderControlsSideMargin,
+                0),
         };
         _backButton = MakeActionButton(
             surface.Action(SlideShowPresenterViewAction.Previous),
@@ -82,9 +103,13 @@ public sealed class PresenterViewWindow : Window
             () => ExecuteAction(SlideShowPresenterViewAction.Next));
         _slideNumberBox = new TextBox
         {
-            Width = 48,
-            Height = 28,
-            Margin = new Thickness(6, 0, 0, 0),
+            Width = PresentationPresenterViewVisualMetrics.SlideNumberWidth,
+            Height = PresentationPresenterViewVisualMetrics.SlideNumberHeight,
+            Margin = new Thickness(
+                PresentationPresenterViewVisualMetrics.SlideNumberLeftMargin,
+                0,
+                0,
+                0),
             VerticalContentAlignment = VerticalAlignment.Center,
             PlaceholderText = surface.Field(SlideShowPresenterViewField.SlideNumber).Label,
         };
@@ -116,9 +141,15 @@ public sealed class PresenterViewWindow : Window
         _narrationAndMediaButton = MakeActionButton(
             surface.Action(SlideShowPresenterViewAction.NarrationAndMedia),
             () => ExecuteAction(SlideShowPresenterViewAction.NarrationAndMedia));
-        _recordingStatusText = MakeText(13, FontWeight.Normal);
+        _recordingStatusText = MakeText(
+            PresentationPresenterViewVisualMetrics.RecordingStatusFontSize,
+            FontWeight.Normal);
         _recordingStatusText.Foreground = FreePBrushes.PresenterMutedText;
-        _recordingStatusText.Margin = new Thickness(0, 6, 0, 0);
+        _recordingStatusText.Margin = new Thickness(
+            0,
+            PresentationPresenterViewVisualMetrics.RecordingStatusTopMargin,
+            0,
+            0);
         ApplySemantic(
             _recordingStatusText,
             surface.Field(SlideShowPresenterViewField.RecordingStatus));
@@ -174,11 +205,32 @@ public sealed class PresenterViewWindow : Window
         header.Children.Add(_recordingStatusText);
         root.Children.Add(header);
 
-        var previews = new Grid { Margin = new Thickness(0, 0, 0, 14) };
-        previews.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star) });
-        previews.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        _currentLabel = MakeText(14, FontWeight.SemiBold);
-        _nextLabel = MakeText(14, FontWeight.SemiBold);
+        var previews = new Grid
+        {
+            Margin = new Thickness(
+                0,
+                0,
+                0,
+                PresentationPresenterViewVisualMetrics.SectionBottomMargin),
+        };
+        previews.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(
+                PresentationPresenterViewVisualMetrics.CurrentPreviewColumnWeight,
+                GridUnitType.Star),
+        });
+        previews.ColumnDefinitions.Add(new ColumnDefinition
+        {
+            Width = new GridLength(
+                PresentationPresenterViewVisualMetrics.NextPreviewColumnWeight,
+                GridUnitType.Star),
+        });
+        _currentLabel = MakeText(
+            PresentationPresenterViewVisualMetrics.PreviewLabelFontSize,
+            FontWeight.SemiBold);
+        _nextLabel = MakeText(
+            PresentationPresenterViewVisualMetrics.PreviewLabelFontSize,
+            FontWeight.SemiBold);
         _currentPreview = MakePreview();
         _nextPreview = MakePreview();
         ApplySemantic(_currentPreview, surface.Field(SlideShowPresenterViewField.CurrentPreview));
@@ -199,9 +251,15 @@ public sealed class PresenterViewWindow : Window
         var notesPanel = new Grid();
         notesPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         notesPanel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var notesHeading = MakeText(14, FontWeight.SemiBold);
+        var notesHeading = MakeText(
+            PresentationPresenterViewVisualMetrics.NotesHeadingFontSize,
+            FontWeight.SemiBold);
         notesHeading.Text = surface.Field(SlideShowPresenterViewField.SpeakerNotes).Label;
-        notesHeading.Margin = new Thickness(0, 0, 0, 6);
+        notesHeading.Margin = new Thickness(
+            0,
+            0,
+            0,
+            PresentationPresenterViewVisualMetrics.NotesHeadingBottomMargin);
         _notesText = new TextBox
         {
             IsReadOnly = !_coordinator.CanSetNotes,
@@ -210,7 +268,7 @@ public sealed class PresenterViewWindow : Window
             Background = FreePBrushes.PresenterPanelSurface,
             Foreground = FreePBrushes.White,
             BorderBrush = FreePBrushes.PresenterBorder,
-            Padding = new Thickness(10),
+            Padding = new Thickness(PresentationPresenterViewVisualMetrics.NotesPadding),
         };
         ApplySemantic(_notesText, surface.Field(SlideShowPresenterViewField.SpeakerNotes));
         _notesText.TextChanged += (_, _) =>
@@ -268,8 +326,8 @@ public sealed class PresenterViewWindow : Window
         _nextLabel.Text = plan.NextSlideLabel;
         if (refresh.ShouldUpdateNotesText)
             _notesText.Text = plan.NotesText;
-        if (refresh.ShouldUpdateSlideNumber && plan.CurrentSlideNumber is int currentSlideNumber)
-            _slideNumberBox.Text = currentSlideNumber.ToString();
+        if (refresh.ShouldUpdateSlideNumber && plan.CurrentSlideNumberText is not null)
+            _slideNumberBox.Text = plan.CurrentSlideNumberText;
         _backButton.IsEnabled = plan.CanGoBack;
         _advanceButton.IsEnabled = plan.CanAdvance;
         _recordTimingsButton.Content = plan.RecordTimingsButtonText;
@@ -294,7 +352,11 @@ public sealed class PresenterViewWindow : Window
         Presentation = _presentation,
         HorizontalAlignment = HorizontalAlignment.Stretch,
         VerticalAlignment = VerticalAlignment.Stretch,
-        Margin = new Thickness(0, 6, 0, 0),
+        Margin = new Thickness(
+            0,
+            PresentationPresenterViewVisualMetrics.PreviewTopMargin,
+            0,
+            0),
     };
 
     private void ExecuteAction(SlideShowPresenterViewAction action)
@@ -317,7 +379,9 @@ public sealed class PresenterViewWindow : Window
         var panel = new Grid
         {
             Margin = new Thickness(
-                field.Id == SlideShowPresenterViewField.CurrentPreview ? 0 : 8,
+                field.Id == SlideShowPresenterViewField.CurrentPreview
+                    ? 0
+                    : PresentationPresenterViewVisualMetrics.NextPreviewLeftMargin,
                 0,
                 0,
                 0),
@@ -325,12 +389,18 @@ public sealed class PresenterViewWindow : Window
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        var title = MakeText(13, FontWeight.Normal);
+        var title = MakeText(
+            PresentationPresenterViewVisualMetrics.PreviewTitleFontSize,
+            FontWeight.Normal);
         title.Text = field.Label;
         title.Foreground = FreePBrushes.PresenterMutedText;
         panel.Children.Add(title);
         Grid.SetRow(label, 1);
-        label.Margin = new Thickness(0, 3, 0, 0);
+        label.Margin = new Thickness(
+            0,
+            PresentationPresenterViewVisualMetrics.PreviewLabelTopMargin,
+            0,
+            0);
         panel.Children.Add(label);
         Grid.SetRow(preview, 2);
         panel.Children.Add(preview);
@@ -338,8 +408,9 @@ public sealed class PresenterViewWindow : Window
         {
             Background = FreePBrushes.PresenterSecondarySurface,
             BorderBrush = FreePBrushes.PresenterBorder,
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(10),
+            BorderThickness = new Thickness(
+                PresentationPresenterViewVisualMetrics.PreviewBorderThickness),
+            Padding = new Thickness(PresentationPresenterViewVisualMetrics.PreviewPadding),
             Child = panel,
         };
     }
@@ -359,9 +430,17 @@ public sealed class PresenterViewWindow : Window
         var button = new Button
         {
             Content = plan.Label,
-            Padding = new Thickness(12, 5, 12, 5),
-            Margin = new Thickness(3, 0, 3, 0),
-            MinWidth = 78,
+            Padding = new Thickness(
+                PresentationPresenterViewVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationPresenterViewVisualMetrics.ActionButtonVerticalPadding,
+                PresentationPresenterViewVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationPresenterViewVisualMetrics.ActionButtonVerticalPadding),
+            Margin = new Thickness(
+                PresentationPresenterViewVisualMetrics.ActionButtonSideMargin,
+                0,
+                PresentationPresenterViewVisualMetrics.ActionButtonSideMargin,
+                0),
+            MinWidth = PresentationPresenterViewVisualMetrics.ActionButtonMinimumWidth,
             IsDefault = plan.IsDefault,
         };
         AutomationProperties.SetName(button, plan.AccessibleName);
@@ -385,8 +464,12 @@ public sealed class PresenterViewWindow : Window
         var combo = new ComboBox
         {
             ItemsSource = Enum.GetValues<SlideShowPresenterPointerMode>(),
-            MinWidth = 104,
-            Margin = new Thickness(6, 0, 3, 0),
+            MinWidth = PresentationPresenterViewVisualMetrics.PointerModeMinimumWidth,
+            Margin = new Thickness(
+                PresentationPresenterViewVisualMetrics.PointerModeLeftMargin,
+                0,
+                PresentationPresenterViewVisualMetrics.PointerModeRightMargin,
+                0),
         };
         combo.SelectionChanged += (_, _) =>
             changed(combo.SelectedItem is SlideShowPresenterPointerMode mode ? mode : null);

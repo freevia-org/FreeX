@@ -6,6 +6,31 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SlideShowPresenterSessionDedupTests
 {
     [Fact]
+    public void PresenterViewVisualMetrics_PreserveTheWpfAuthorityGeometry()
+    {
+        PresentationPresenterViewVisualMetrics.WindowWidth.Should().Be(1200);
+        PresentationPresenterViewVisualMetrics.WindowHeight.Should().Be(760);
+        PresentationPresenterViewVisualMetrics.WindowMinimumWidth.Should().Be(860);
+        PresentationPresenterViewVisualMetrics.WindowMinimumHeight.Should().Be(560);
+        PresentationPresenterViewVisualMetrics.RootMargin.Should().Be(18);
+        PresentationPresenterViewVisualMetrics.NotesRowHeight.Should().Be(180);
+        PresentationPresenterViewVisualMetrics.SectionBottomMargin.Should().Be(14);
+        PresentationPresenterViewVisualMetrics.HeaderFontSize.Should().Be(18);
+        PresentationPresenterViewVisualMetrics.SlideNumberWidth.Should().Be(48);
+        PresentationPresenterViewVisualMetrics.SlideNumberHeight.Should().Be(28);
+        PresentationPresenterViewVisualMetrics.RecordingStatusFontSize.Should().Be(13);
+        PresentationPresenterViewVisualMetrics.CurrentPreviewColumnWeight.Should().Be(2);
+        PresentationPresenterViewVisualMetrics.NextPreviewColumnWeight.Should().Be(1);
+        PresentationPresenterViewVisualMetrics.PreviewLabelFontSize.Should().Be(14);
+        PresentationPresenterViewVisualMetrics.PreviewTitleFontSize.Should().Be(13);
+        PresentationPresenterViewVisualMetrics.PreviewBorderThickness.Should().Be(1);
+        PresentationPresenterViewVisualMetrics.PreviewPadding.Should().Be(10);
+        PresentationPresenterViewVisualMetrics.NotesHeadingFontSize.Should().Be(14);
+        PresentationPresenterViewVisualMetrics.ActionButtonMinimumWidth.Should().Be(78);
+        PresentationPresenterViewVisualMetrics.PointerModeMinimumWidth.Should().Be(104);
+    }
+
+    [Fact]
     public void Session_ExecutesStopThenTimingMoveThenNativeNavigation()
     {
         var presentation = MakePresentation(2);
@@ -280,6 +305,7 @@ public sealed class SlideShowPresenterSessionDedupTests
         var plan = presenter.BuildViewPlan();
         plan.ElapsedText.Should().Be("01:05");
         plan.CurrentSlideNumber.Should().Be(1);
+        plan.CurrentSlideNumberText.Should().Be("1");
         plan.CanGoBack.Should().BeFalse();
         plan.CanAdvance.Should().BeTrue();
         plan.CanSetTimingIntent.Should().BeTrue();
@@ -323,6 +349,7 @@ public sealed class SlideShowPresenterSessionDedupTests
         unfocused.ShouldUpdateNotesText.Should().BeTrue();
         unfocused.ShouldUpdateSlideNumber.Should().BeTrue();
         unfocused.ViewPlan.CurrentSlideNumber.Should().Be(1);
+        unfocused.ViewPlan.CurrentSlideNumberText.Should().Be("1");
         notes.Should().Equal("Committed");
     }
 
@@ -492,7 +519,14 @@ public sealed class SlideShowPresenterSessionDedupTests
             source.Should().Contain("SlideCanvas");
             source.Should().Contain("if (refresh.ShouldUpdateNotesText)");
             source.Should().Contain("if (refresh.ShouldUpdateSlideNumber");
+            source.Should().Contain("plan.CurrentSlideNumberText");
+            source.Should().Contain("PresentationPresenterViewVisualMetrics.WindowWidth");
+            source.Should().Contain("PresentationPresenterViewVisualMetrics.RootMargin");
+            source.Should().Contain("PresentationPresenterViewVisualMetrics.SlideNumberWidth");
+            source.Should().Contain("PresentationPresenterViewVisualMetrics.PreviewPadding");
+            source.Should().Contain("PresentationPresenterViewVisualMetrics.ActionButtonMinimumWidth");
             source.Should().Contain("_pointerModeCombo.SelectedItem = plan.PointerMode;");
+            source.Should().NotContain("currentSlideNumber.ToString(");
             source.Should().NotContain("TimeSpan.FromMilliseconds(250)");
             source.Should().NotContain("if (!_notesText.IsFocused");
             source.Should().NotContain("if (!_notesText.IsKeyboardFocusWithin");
