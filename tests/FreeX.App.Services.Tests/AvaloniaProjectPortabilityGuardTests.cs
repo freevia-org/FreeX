@@ -18,6 +18,7 @@ public sealed class AvaloniaProjectPortabilityGuardTests
         "FreeX.Core.IO",
         "FreeX.Core.Model",
         "Free.Shared.Drawing",
+        "Free.Shared.Localization",
         "Free.Shared.Pdf",
         "Free.Shared.Pdf.Skia",
         "Free.Shared.Ribbon",

@@ -304,7 +304,7 @@ public sealed class LinuxFamilyInteractionToolTests
     public void FamilyRunnerUsesCurrentAvaloniaRibbonTabKeyTipsAndFileSurfaceContracts()
     {
         var freeWDefinition = File.ReadAllText(RepositoryFileLocator.Find(
-            "freew", "FreeW.Ribbon.Definitions", "FreeWAvaloniaRibbonDefinition.cs"));
+            "freew", "FreeW.Ribbon.Definitions", "FreeWRibbon.cs"));
         var freeWCanonicalTabs = File.ReadAllText(RepositoryFileLocator.Find(
             "freew", "FreeW.Ribbon.Definitions", "FreeWCanonicalRibbonTabs.Ordinary.cs"));
         var freePResources = File.ReadAllText(RepositoryFileLocator.Find(
@@ -313,7 +313,7 @@ public sealed class LinuxFamilyInteractionToolTests
             "tools", "Run-FamilyLinuxInteractionValidation.ps1"));
 
         freeWDefinition.Should().Contain(".AddInsertTab(capabilities)");
-        freeWCanonicalTabs.Should().Contain(".Tab(\"insert\", \"Insert\", \"I\"");
+        freeWCanonicalTabs.Should().Contain(".Tab(\"insert\", \"Insert\", (capabilities.UsesPortableControls ? \"I\" : \"N\")");
         freePResources.Should().Contain("Ribbon_Tab_Insert_KeyTip").And.Contain("<value>N</value>");
         runner.Should().Contain("RibbonTabKey = \"I\"").And.Contain("RibbonTabKey = \"N\"");
         runner.Should().Contain("WindowPattern = \"FreeW\"").And.Contain("WindowPattern = \"FreeP\"");

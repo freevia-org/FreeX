@@ -8,13 +8,16 @@ public sealed class FreeXHelperDedupOwnershipTests
     public void FormulaEditors_DelegateStructuredReferenceResolutionToCore()
     {
         var core = Read("src", "FreeX.Core.Formula", "StructuredReferenceResolver.cs");
+        var controller = Read("src", "FreeX.App.Presentation", "FormulaBar", "FormulaReferenceEditingController.cs");
         var wpf = Read("src", "FreeX.App.Host", "MainWindow.FormulaReferenceEditing.cs");
         var avalonia = Read("src", "FreeX.App.Avalonia", "MainWindow.cs");
         var renderers = wpf + avalonia;
 
         core.Should().Contain("ResolveEditorReference(");
-        wpf.Should().Contain("StructuredReferenceResolver.ResolveEditorReference(");
-        avalonia.Should().Contain("StructuredReferenceResolver.ResolveEditorReference(");
+        controller.Should().Contain("StructuredReferenceResolver.ResolveEditorReference(");
+        wpf.Should().Contain("FormulaReferenceEditingController.TryApplyKeyboardSelection(");
+        avalonia.Should().Contain("FormulaReferenceEditingController.TryApplyKeyboardSelection(");
+        renderers.Should().NotContain("StructuredReferenceResolver.ResolveEditorReference(");
         renderers.Should().NotContain("var trimmedSelector = selector.Trim()");
         renderers.Should().NotContain("StructuredReferenceResolver.ResolveCurrentRowColumn(");
     }

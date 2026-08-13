@@ -222,6 +222,7 @@ public sealed class TemporaryResourceLeaseTests
     public void RemainingProductionTemporaryFlowsDelegateOwnershipToLeases()
     {
         var linuxOutput = ReadSource("freep", "FreeP.App.Recording", "Recording", "LinuxNativeOutput.cs");
+        var freepAvalonia = ReadSource("freep", "FreeP.App.Avalonia", "MainWindow.cs");
         var videoExportOrchestrator = ReadSource(
             "freep",
             "FreeP.App.Recording",
@@ -231,7 +232,6 @@ public sealed class TemporaryResourceLeaseTests
         var windowsCapture = ReadSource("freep", "FreeP.App.Recording.Windows", "WindowsRecordingCaptureEngine.cs");
         var windowsVideo = ReadSource("freep", "FreeP.App.Recording.Windows", "WindowsNativeVideoExportAdapter.cs");
         var windowsPrint = ReadSource("freep", "FreeP.App.Recording.Windows", "WindowsNativePrintHandoff.cs");
-        var wpfVideo = ReadSource("freep", "FreeP.App.Host", "WpfVideoExportAdapter.cs");
         var transitionSound = ReadSource("freep", "FreeP.App.Host", "TransitionSoundTempFile.cs");
         var slideShowMedia = ReadSource("freep", "FreeP.App.Host", "SlideShowMediaController.cs");
         var oleActivation = ReadSource("freep", "FreeP.App.Presentation", "OleActivationService.cs");
@@ -240,12 +240,12 @@ public sealed class TemporaryResourceLeaseTests
         var screenClip = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "ScreenClipService.cs");
         var readAloudPauseSmoke = ReadSource(
             "freew",
-            "FreeW.App.Avalonia",
-            "Smoke",
+            "TestSupport",
+            "Validation.Avalonia",
             "ReadAloudPauseSmoke.cs");
         var autosave = ReadSource("shared", "Free.Shared.AppServices", "AutosaveSnapshotCoordinator.cs");
 
-        linuxOutput.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
+        freepAvalonia.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
         linuxOutput.Should().Contain("TemporaryDirectoryPrefix: \"freep-video-\"");
         videoExportOrchestrator.Should().Contain("TemporaryDirectoryLease.Create(");
         videoExportOrchestrator.Should().Contain("_options.TemporaryDirectoryPrefix");
@@ -253,8 +253,7 @@ public sealed class TemporaryResourceLeaseTests
         linuxCapture.Should().Contain("TemporaryFileLease.Own(outputPath)");
         windowsCapture.Should().Contain("TemporaryFileLease.CreateForExternalWriter(\"freep_rec_\", \".wav\")");
         windowsVideo.Should().Contain("TemporaryDirectoryPrefix: \"freep-windows-video-\"");
-        windowsPrint.Should().Contain("TemporaryFileLease.Create(\"freep-print-\", \".pdf\")");
-        wpfVideo.Should().NotContain("TemporaryDirectoryLease");
+        windowsPrint.Should().NotContain("TemporaryFileLease");
         transitionSound.Should().Contain("TemporaryFileLease.Create(\"freep_transition_\", extension)");
         slideShowMedia.Should().Contain("TemporaryFileLease.Create(\"freep_media_\", ext)");
         oleActivation.Should().Contain("TemporaryDirectoryLease.Create(string.Empty, root)");
@@ -269,8 +268,8 @@ public sealed class TemporaryResourceLeaseTests
 
         foreach (var source in new[]
                  {
-                     linuxOutput, videoExportOrchestrator, linuxCapture, windowsCapture, windowsVideo, windowsPrint,
-                     wpfVideo, transitionSound, slideShowMedia, oleInPlace, svgRasterizer, screenClip,
+                     linuxOutput, freepAvalonia, videoExportOrchestrator, linuxCapture, windowsCapture, windowsVideo, windowsPrint,
+                     transitionSound, slideShowMedia, oleInPlace, svgRasterizer, screenClip,
                      readAloudPauseSmoke,
                  })
         {

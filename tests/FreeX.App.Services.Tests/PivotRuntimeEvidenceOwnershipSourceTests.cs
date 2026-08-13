@@ -30,7 +30,7 @@ public sealed class PivotRuntimeEvidenceOwnershipSourceTests
         source.Should().Contain("JsonArtifactIO.AppendLine(path, payload)");
         source.Should().NotContain("JsonSerializer.Serialize(payload)");
         source.Should().NotContain("File.AppendAllText(path");
-        program.Should().Contain("PivotRuntimeEvidenceOptions.TryParse(");
+        program.Should().Contain("PivotRuntimeEvidenceOptions.TryParse,");
         program.Should().Contain("RunPivotRuntimeObservationHost(");
     }
 

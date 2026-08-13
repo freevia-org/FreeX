@@ -207,6 +207,9 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         var window = File.ReadAllText(RepositoryFileLocator.Find(
                 "src", "FreeX.App.Avalonia", "MainWindow.cs"))
             .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var physicalEvidence = File.ReadAllText(RepositoryFileLocator.Find(
+                "tools", "FreeX.ParityCapture.Avalonia", "Capture", "MainWindow.NameBoxPhysicalEvidence.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         probe.Should().Contain("print(\"\\x1f\".join(value(key)");
         probe.Should().Contain("IFS=$'\\x1f' read -r baseline_sequence");
@@ -223,6 +226,9 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         releaseEnd.Should().BeGreaterThan(releaseStart);
         window[releaseStart..releaseEnd].Should().Contain(
             "RevertNameBoxAfterCellSelectionDragEnd();\n" +
+            "        RecordOptionalNeutralCellSelection();");
+        physicalEvidence.Should().Contain(
+            "partial void RecordOptionalNeutralCellSelection() =>\n" +
             "        RecordNameBoxDropdownPhysicalEvidence(item: null, stage: \"neutral-cell-selected\");");
 
         var selectCellStart = window.IndexOf(
