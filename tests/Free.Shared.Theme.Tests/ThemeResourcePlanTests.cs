@@ -106,6 +106,9 @@ public sealed class ThemeResourcePlanTests
             source.Should().NotContain("AddTypo(\"Body\"");
         }
 
-        wpfSource.Should().Contain("foreach (var sharedBrush in plan.SharedBrushes)");
+        foreach (var source in new[] { wpfSource, avaloniaSource })
+            source.Should().Contain("foreach (var sharedBrush in plan.SharedBrushes)");
+
+        avaloniaSource.Should().NotContain("AddAliasBrush");
     }
 }
