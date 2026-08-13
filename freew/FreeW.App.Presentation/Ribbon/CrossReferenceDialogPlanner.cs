@@ -24,6 +24,28 @@ public sealed record CrossReferenceDialogChoice(
     CrossRefInsertAs InsertAs,
     bool Hyperlink);
 
+/// <summary>
+/// WPF-authority geometry for the paired Cross-reference dialogs. Avalonia-prefixed values are
+/// native-template compensations required to realize that same layout.
+/// </summary>
+public readonly record struct CrossReferenceDialogVisualMetrics(
+    double TypeListMinWidth,
+    double InsertAsListMinWidth,
+    double TargetListMinWidth,
+    double ChoiceListHeight,
+    double TargetListHeight,
+    double HyperlinkTopMargin,
+    double TopRowBottomMargin,
+    double ColumnSpacing,
+    double LabelTopMargin,
+    double LabelBottomMargin,
+    double OuterMargin,
+    double ActionButtonWidth,
+    double ActionRowTopMargin,
+    double AvaloniaListItemHeight,
+    string AvaloniaInactiveSelectionBackgroundHex,
+    string AvaloniaInactiveSelectionBorderHex);
+
 public static class CrossReferenceDialogPlanner
 {
     public const string AutomationId = "CrossReferenceDialog";
@@ -39,6 +61,24 @@ public static class CrossReferenceDialogPlanner
     public const string TargetLabel = "For which item:";
     public const string HyperlinkLabel = "Insert as hyperlink";
     public const string MissingTargetMessage = "Select an item to reference.";
+
+    public static CrossReferenceDialogVisualMetrics VisualMetrics { get; } = new(
+        TypeListMinWidth: 150,
+        InsertAsListMinWidth: 180,
+        TargetListMinWidth: 300,
+        ChoiceListHeight: 170,
+        TargetListHeight: 200,
+        HyperlinkTopMargin: 10,
+        TopRowBottomMargin: 10,
+        ColumnSpacing: 12,
+        LabelTopMargin: 8,
+        LabelBottomMargin: 4,
+        OuterMargin: 16,
+        ActionButtonWidth: 80,
+        ActionRowTopMargin: 14,
+        AvaloniaListItemHeight: 21,
+        AvaloniaInactiveSelectionBackgroundHex: "#F0F0F0",
+        AvaloniaInactiveSelectionBorderHex: "#ABADB3");
 
     public static IReadOnlyList<DialogActionButtonPlan> ActionButtons { get; } =
     [

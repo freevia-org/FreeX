@@ -5,6 +5,62 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class CrossReferenceDialogPlannerTests
 {
     [Fact]
+    public void VisualMetrics_PreservePairedWpfAuthorityGeometry()
+    {
+        CrossReferenceDialogPlanner.VisualMetrics.Should().Be(
+            new CrossReferenceDialogVisualMetrics(
+                TypeListMinWidth: 150,
+                InsertAsListMinWidth: 180,
+                TargetListMinWidth: 300,
+                ChoiceListHeight: 170,
+                TargetListHeight: 200,
+                HyperlinkTopMargin: 10,
+                TopRowBottomMargin: 10,
+                ColumnSpacing: 12,
+                LabelTopMargin: 8,
+                LabelBottomMargin: 4,
+                OuterMargin: 16,
+                ActionButtonWidth: 80,
+                ActionRowTopMargin: 14,
+                AvaloniaListItemHeight: 21,
+                AvaloniaInactiveSelectionBackgroundHex: "#F0F0F0",
+                AvaloniaInactiveSelectionBorderHex: "#ABADB3"));
+    }
+
+    [Fact]
+    public void Renderers_ProjectSharedVisualMetricsWithoutLocalGeometryPolicy()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Host", "CrossReferenceDialog.cs"));
+        var avaloniaFile = File.ReadAllText(Path.Combine(
+            root, "freew", "FreeW.App.Avalonia", "ReferencesDialogs.cs"));
+        var avalonia = avaloniaFile[..avaloniaFile.IndexOf(
+            "internal sealed class SourceConflictResolutionDialog", StringComparison.Ordinal)];
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("CrossReferenceDialogPlanner.VisualMetrics");
+            source.Should().Contain("Layout.TypeListMinWidth");
+            source.Should().Contain("Layout.InsertAsListMinWidth");
+            source.Should().Contain("Layout.TargetListMinWidth");
+            source.Should().Contain("Layout.ChoiceListHeight");
+            source.Should().Contain("Layout.TargetListHeight");
+            source.Should().Contain("Layout.OuterMargin");
+            source.Should().Contain("Layout.ActionButtonWidth");
+            source.Should().Contain("Layout.ActionRowTopMargin");
+        }
+
+        wpf.Should().NotContain("MinWidth = 150");
+        wpf.Should().NotContain("new Thickness(16)");
+        avalonia.Should().NotContain("MinWidth = 150");
+        avalonia.Should().NotContain("new Thickness(16)");
+        avalonia.Should().Contain("Layout.AvaloniaListItemHeight");
+        avalonia.Should().Contain("Layout.AvaloniaInactiveSelectionBackgroundHex");
+        avalonia.Should().Contain("Layout.AvaloniaInactiveSelectionBorderHex");
+    }
+
+    [Fact]
     public void BuildTypeChoices_UsesWordOrderAndFriendlyLabels()
     {
         var choices = CrossReferenceDialogPlanner.BuildTypeChoices();

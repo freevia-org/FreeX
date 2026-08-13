@@ -20,6 +20,9 @@ namespace FreeW.App.Host;
 /// </summary>
 internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
+    private static readonly CrossReferenceDialogVisualMetrics Layout =
+        CrossReferenceDialogPlanner.VisualMetrics;
+
     private readonly CrossReferenceDialogSession _session;
     private readonly ListBox _typeList;
     private readonly ListBox _insertAsList;
@@ -41,8 +44,8 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _typeList = new ListBox
         {
-            MinWidth = 150,
-            Height = 170,
+            MinWidth = Layout.TypeListMinWidth,
+            Height = Layout.ChoiceListHeight,
             ItemsSource = _session.TypeChoices,
             SelectedIndex = _session.State.TypeIndex,
         };
@@ -50,12 +53,20 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _typeList,
             CrossReferenceDialogPlanner.TypeAutomationId);
 
-        _insertAsList = new ListBox { MinWidth = 180, Height = 170 };
+        _insertAsList = new ListBox
+        {
+            MinWidth = Layout.InsertAsListMinWidth,
+            Height = Layout.ChoiceListHeight
+        };
         System.Windows.Automation.AutomationProperties.SetAutomationId(
             _insertAsList,
             CrossReferenceDialogPlanner.InsertAsAutomationId);
 
-        _targetList = new ListBox { MinWidth = 300, Height = 200 };
+        _targetList = new ListBox
+        {
+            MinWidth = Layout.TargetListMinWidth,
+            Height = Layout.TargetListHeight
+        };
         System.Windows.Automation.AutomationProperties.SetAutomationId(
             _targetList,
             CrossReferenceDialogPlanner.TargetAutomationId);
@@ -65,7 +76,7 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             Content = CrossReferenceDialogPlanner.HyperlinkLabel,
             IsChecked = true,
-            Margin = new Thickness(0, 10, 0, 0)
+            Margin = new Thickness(0, Layout.HyperlinkTopMargin, 0, 0)
         };
         System.Windows.Automation.AutomationProperties.SetAutomationId(
             _hyperlinkBox,
@@ -89,9 +100,9 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private UIElement BuildLayout()
     {
         // Top row: reference type | insert reference to. Bottom: the target list spanning, then options + buttons.
-        var topRow = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        var topRow = new Grid { Margin = new Thickness(0, 0, 0, Layout.TopRowBottomMargin) };
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
+        topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Layout.ColumnSpacing) });
         topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         topRow.Children.Add(LabeledColumn(CrossReferenceDialogPlanner.ReferenceTypeLabel, _typeList, column: 0));
@@ -104,12 +115,12 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var cancelPlan = actionPlans[1];
         var buttons = DialogButtonRowFactory.Create(
             Accept,
-            buttonWidth: 80,
-            rowMargin: new Thickness(0, 14, 0, 0),
+            buttonWidth: Layout.ActionButtonWidth,
+            rowMargin: new Thickness(0, Layout.ActionRowTopMargin, 0, 0),
             acceptContent: acceptPlan.Label,
             cancelContent: cancelPlan.Label);
 
-        var panel = new StackPanel { Margin = new Thickness(16) };
+        var panel = new StackPanel { Margin = new Thickness(Layout.OuterMargin) };
         panel.Children.Add(topRow);
         panel.Children.Add(_hyperlinkBox);
         panel.Children.Add(targetColumn);
@@ -122,7 +133,11 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private static StackPanel LabeledColumn(string label, UIElement control, int column)
     {
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 0) };
-        stack.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 8, 0, 4) });
+        stack.Children.Add(new TextBlock
+        {
+            Text = label,
+            Margin = new Thickness(0, Layout.LabelTopMargin, 0, Layout.LabelBottomMargin)
+        });
         stack.Children.Add(control);
         if (column >= 0)
             Grid.SetColumn(stack, column);
