@@ -53,6 +53,13 @@
     <Project Path="tests/FreeX.App.Services.Tests/FreeX.App.Services.Tests.csproj" />
     <Project Path="tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj" />
     <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj" />
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch1.csproj" />
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch2.csproj" />
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch3.csproj" />
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch4.csproj" />
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch5.csproj" />
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch6.csproj" />
+    <Project Path="tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.Batch7.csproj" />
     <Project Path="tests/FreeX.App.Host.Logic.Tests/FreeX.App.Host.Logic.Tests.csproj" />
     <Project Path="tests/FreeX.App.Localization.Tests/FreeX.App.Localization.Tests.csproj" />
     <Project Path="tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj" />
