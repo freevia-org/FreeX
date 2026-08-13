@@ -27,9 +27,24 @@ public sealed record RibbonCheckBox(RibbonCommandId CommandId, string Label)
 public sealed record RibbonLabel(RibbonCommandId CommandId, string Label)
     : RibbonControl(CommandId, Label);
 
+/// <summary>
+/// A closed combo-box choice whose stable value is command protocol and whose label is presentation.
+/// </summary>
+public sealed record RibbonComboBoxChoice(string Value, string Label);
+
 public sealed record RibbonComboBox(RibbonCommandId CommandId, string Label)
     : RibbonControl(CommandId, Label)
 {
+    /// <summary>
+    /// Typed choices for semantic/enumerated controls. Renderers display <see cref="RibbonComboBoxChoice.Label"/>
+    /// and dispatch or match state with <see cref="RibbonComboBoxChoice.Value"/>.
+    /// </summary>
+    public IReadOnlyList<RibbonComboBoxChoice> Choices { get; init; } = Array.Empty<RibbonComboBoxChoice>();
+
+    /// <summary>
+    /// Legacy values that are both display text and command protocol. Retained for editable and
+    /// unmigrated controls.
+    /// </summary>
     public IReadOnlyList<string> Items { get; init; } = Array.Empty<string>();
 
     /// <summary>Explicit width in DIPs (e.g. a narrow font-size box). Null = renderer default.</summary>

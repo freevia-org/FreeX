@@ -526,7 +526,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 RequiredGroup(wpf, "animations", "animation-timing").KeyTip!,
                 RequiredGroup(wpf, "animations", "animation-pane").Header,
                 RequiredGroup(wpf, "animations", "animation-pane").KeyTip!,
-                RequiredCombo(wpf, "freep.transition.advance-after").Items[0],
+                RequiredCombo(wpf, "freep.transition.advance-after").Choices[0].Label,
             };
 
             values.AddRange(ControlText(wpf,
@@ -585,7 +585,7 @@ public sealed class FreePRibbonDefinitionProfileTests
                 "freep.anim.move-earlier",
                 "freep.anim.move-later",
                 "freep.anim.pane"));
-            values.AddRange(RequiredCombo(wpf, "freep.anim.trigger").Items);
+            values.AddRange(RequiredCombo(wpf, "freep.anim.trigger").Choices.Select(static choice => choice.Label));
 
             return values.ToArray();
         });
@@ -754,27 +754,27 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.superscript",
             "freep.subscript");
         wpfSize.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
-        wpfColor.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
-        wpfFill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
-        wpfAnchor.Items.Should().Equal(FreePRibbonDefinitionData.TableCellAnchorOptions);
-        wpfBorder.Items.Should().Equal(FreePRibbonDefinitionData.TableCellBorderOptions);
-        wpfInset.Items.Should().Equal(FreePRibbonDefinitionData.TableCellInsetOptions);
-        wpfRowHeight.Items.Should().Equal(FreePRibbonDefinitionData.TableRowHeightOptions);
-        wpfTextAutoFit.Items.Should().Equal(FreePRibbonDefinitionData.TextAutoFitOptions);
-        wpfTextDirection.Items.Should().Equal(FreePRibbonDefinitionData.TextVerticalTypeOptions);
-        wpfTextColumns.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnCountOptions);
-        wpfTextColumnSpacing.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnSpacingOptions);
+        wpfColor.Choices.Should().Equal(FreePRibbonDefinitionData.FontColorChoices);
+        wpfFill.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellFillChoices);
+        wpfAnchor.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellAnchorChoices);
+        wpfBorder.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellBorderChoices);
+        wpfInset.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellInsetChoices);
+        wpfRowHeight.Choices.Should().Equal(FreePRibbonDefinitionData.TableRowHeightChoices);
+        wpfTextAutoFit.Choices.Should().Equal(FreePRibbonDefinitionData.TextAutoFitChoices);
+        wpfTextDirection.Choices.Should().Equal(FreePRibbonDefinitionData.TextVerticalTypeChoices);
+        wpfTextColumns.Choices.Should().Equal(FreePRibbonDefinitionData.TextColumnCountChoices);
+        wpfTextColumnSpacing.Choices.Should().Equal(FreePRibbonDefinitionData.TextColumnSpacingChoices);
         size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
-        color.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
-        fill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
-        anchor.Items.Should().Equal(FreePRibbonDefinitionData.TableCellAnchorOptions);
-        border.Items.Should().Equal(FreePRibbonDefinitionData.TableCellBorderOptions);
-        inset.Items.Should().Equal(FreePRibbonDefinitionData.TableCellInsetOptions);
-        rowHeight.Items.Should().Equal(FreePRibbonDefinitionData.TableRowHeightOptions);
-        textAutoFit.Items.Should().Equal(FreePRibbonDefinitionData.TextAutoFitOptions);
-        textDirection.Items.Should().Equal(FreePRibbonDefinitionData.TextVerticalTypeOptions);
-        textColumns.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnCountOptions);
-        textColumnSpacing.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnSpacingOptions);
+        color.Choices.Should().Equal(FreePRibbonDefinitionData.FontColorChoices);
+        fill.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellFillChoices);
+        anchor.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellAnchorChoices);
+        border.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellBorderChoices);
+        inset.Choices.Should().Equal(FreePRibbonDefinitionData.TableCellInsetChoices);
+        rowHeight.Choices.Should().Equal(FreePRibbonDefinitionData.TableRowHeightChoices);
+        textAutoFit.Choices.Should().Equal(FreePRibbonDefinitionData.TextAutoFitChoices);
+        textDirection.Choices.Should().Equal(FreePRibbonDefinitionData.TextVerticalTypeChoices);
+        textColumns.Choices.Should().Equal(FreePRibbonDefinitionData.TextColumnCountChoices);
+        textColumnSpacing.Choices.Should().Equal(FreePRibbonDefinitionData.TextColumnSpacingChoices);
     }
 
     [Fact]
@@ -804,34 +804,34 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
-    public void Semantic_combo_items_project_portable_choice_labels_and_tokens_are_unique()
+    public void Semantic_combo_choices_project_portable_labels_and_tokens_are_unique()
     {
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.FontColors,
+            FreePRibbonDefinitionData.FontColorChoices,
             FreePRibbonChoiceCatalog.ColorChoices);
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.TextAutoFitOptions,
+            FreePRibbonDefinitionData.TextAutoFitChoices,
             FreePRibbonChoiceCatalog.TextAutoFitChoices);
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.TextVerticalTypeOptions,
+            FreePRibbonDefinitionData.TextVerticalTypeChoices,
             FreePRibbonChoiceCatalog.TextVerticalTypeChoices);
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.TextColumnCountOptions,
+            FreePRibbonDefinitionData.TextColumnCountChoices,
             FreePRibbonChoiceCatalog.TextColumnCountChoices);
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.TextColumnSpacingOptions,
+            FreePRibbonDefinitionData.TextColumnSpacingChoices,
             FreePRibbonChoiceCatalog.TextColumnSpacingChoices);
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.TableCellAnchorOptions,
+            FreePRibbonDefinitionData.TableCellAnchorChoices,
             FreePRibbonChoiceCatalog.TableCellAnchorChoices);
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.TableCellBorderOptions,
+            FreePRibbonDefinitionData.TableCellBorderChoices,
             FreePRibbonChoiceCatalog.TableCellBorderChoices);
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.TableCellInsetOptions,
+            FreePRibbonDefinitionData.TableCellInsetChoices,
             FreePRibbonChoiceCatalog.TableCellInsetChoices);
         AssertChoiceProjection(
-            FreePRibbonDefinitionData.TableRowHeightOptions,
+            FreePRibbonDefinitionData.TableRowHeightChoices,
             FreePRibbonChoiceCatalog.TableRowHeightChoices);
 
         var tokens = FreePRibbonChoiceCatalog.ColorChoices.Select(static choice => choice.Token)
@@ -1597,9 +1597,10 @@ public sealed class FreePRibbonDefinitionProfileTests
         ?? throw new InvalidOperationException($"Ribbon control '{commandId}' is not a combo box.");
 
     private static void AssertChoiceProjection<TDescriptor>(
-        IEnumerable<string> actualLabels,
+        IEnumerable<RibbonComboBoxChoice> actualChoices,
         IReadOnlyList<FreePRibbonChoice<TDescriptor>> choices) =>
-        actualLabels.Should().Equal(choices.Select(static choice => choice.Label));
+        actualChoices.Should().Equal(choices.Select(static choice =>
+            new RibbonComboBoxChoice(choice.Token, choice.Label)));
 
     private static IEnumerable<string> ControlText(RibbonDefinition definition, params string[] commandIds)
     {

@@ -116,70 +116,70 @@ public static class FreePRibbon
         });
         group.ComboBox("freep.font-color", FreePRibbonText.FontColorLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.FontColors,
+            Choices = FreePRibbonDefinitionData.FontColorChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.FontColor, RibbonCommandIconAccent.Color),
             KeyTip = FreePRibbonText.FontColorKeyTip,
             Width = 96
         });
         group.ComboBox("freep.text-autofit", FreePRibbonText.TextAutoFitLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TextAutoFitOptions,
+            Choices = FreePRibbonDefinitionData.TextAutoFitChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox),
             KeyTip = FreePRibbonText.TextAutoFitKeyTip,
             Width = 160
         });
         group.ComboBox("freep.text-direction", FreePRibbonText.TextDirectionLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TextVerticalTypeOptions,
+            Choices = FreePRibbonDefinitionData.TextVerticalTypeChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextBox),
             KeyTip = FreePRibbonText.TextDirectionKeyTip,
             Width = 160
         });
         group.ComboBox("freep.text-columns", FreePRibbonText.TextColumnsLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TextColumnCountOptions,
+            Choices = FreePRibbonDefinitionData.TextColumnCountChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextColumns),
             KeyTip = FreePRibbonText.TextColumnsKeyTip,
             Width = 96
         });
         group.ComboBox("freep.text-column-spacing", FreePRibbonText.TextColumnSpacingLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TextColumnSpacingOptions,
+            Choices = FreePRibbonDefinitionData.TextColumnSpacingChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextColumns),
             KeyTip = FreePRibbonText.TextColumnSpacingKeyTip,
             Width = 112
         });
         group.ComboBox("freep.table-cell-fill", FreePRibbonText.TableCellFillLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableCellFillColors,
+            Choices = FreePRibbonDefinitionData.TableCellFillChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill, RibbonCommandIconAccent.Color),
             KeyTip = FreePRibbonText.TableCellFillKeyTip,
             Width = 96
         });
         group.ComboBox("freep.table-cell-anchor", FreePRibbonText.TableCellAnchorLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableCellAnchorOptions,
+            Choices = FreePRibbonDefinitionData.TableCellAnchorChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Align),
             KeyTip = FreePRibbonText.TableCellAnchorKeyTip,
             Width = 100
         });
         group.ComboBox("freep.table-cell-border", FreePRibbonText.TableCellBorderLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableCellBorderOptions,
+            Choices = FreePRibbonDefinitionData.TableCellBorderChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border, RibbonCommandIconAccent.Border),
             KeyTip = FreePRibbonText.TableCellBorderKeyTip,
             Width = 132
         });
         group.ComboBox("freep.table-cell-inset", FreePRibbonText.TableCellInsetLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableCellInsetOptions,
+            Choices = FreePRibbonDefinitionData.TableCellInsetChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Margins),
             KeyTip = FreePRibbonText.TableCellInsetKeyTip,
             Width = 132
         });
         group.ComboBox("freep.table-row-height", FreePRibbonText.TableRowHeightLabel, control => control with
         {
-            Items = FreePRibbonDefinitionData.TableRowHeightOptions,
+            Choices = FreePRibbonDefinitionData.TableRowHeightChoices,
             Icon = new RibbonCommandIcon(RibbonCommandIconKind.Size),
             KeyTip = FreePRibbonText.TableRowHeightKeyTip,
             Width = 100
@@ -1146,7 +1146,7 @@ public static class FreePRibbon
         {
             group.ComboBox("freep.transition.duration", FreePRibbonText.TransitionDurationCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.TransitionDurations,
+                Choices = FreePRibbonDefinitionData.TransitionDurationChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
                 KeyTip = FreePRibbonText.TransitionDurationCommand.KeyTip,
                 Width = 90
@@ -1155,7 +1155,7 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Next, FreePRibbonText.TransitionAdvanceOnClickCommand.KeyTip);
             group.ComboBox("freep.transition.advance-after", FreePRibbonText.TransitionAdvanceAfterCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.TransitionAdvanceAfterOptions,
+                Choices = FreePRibbonDefinitionData.TransitionAdvanceAfterChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
                 KeyTip = FreePRibbonText.TransitionAdvanceAfterCommand.KeyTip,
                 Width = 90
@@ -1236,21 +1236,21 @@ public static class FreePRibbon
         {
             group.ComboBox("freep.anim.trigger", FreePRibbonText.AnimationTriggerCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.AnimationTriggers,
+                Choices = FreePRibbonDefinitionData.AnimationTriggerChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.Next),
                 KeyTip = FreePRibbonText.AnimationTriggerCommand.KeyTip,
                 Width = profile.AnimationTriggerWidth
             });
             group.ComboBox("freep.anim.duration", FreePRibbonText.AnimationDurationCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.AnimationDurations,
+                Choices = FreePRibbonDefinitionData.AnimationDurationChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
                 KeyTip = FreePRibbonText.AnimationDurationCommand.KeyTip,
                 Width = 90
             });
             group.ComboBox("freep.anim.delay", FreePRibbonText.AnimationDelayCommand.Label, control => control with
             {
-                Items = FreePRibbonDefinitionData.AnimationDelays,
+                Choices = FreePRibbonDefinitionData.AnimationDelayChoices,
                 Icon = new RibbonCommandIcon(RibbonCommandIconKind.History),
                 KeyTip = FreePRibbonText.AnimationDelayCommand.KeyTip,
                 Width = 90

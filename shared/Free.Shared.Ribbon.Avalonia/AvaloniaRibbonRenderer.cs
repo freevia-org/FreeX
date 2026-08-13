@@ -1954,8 +1954,17 @@ public static class AvaloniaRibbonRenderer
             ClipToBounds = false,
             Tag = combo.CommandId.Value,
         };
-        foreach (var item in combo.Items)
-            box.Items.Add(item);
+        if (combo.Choices.Count > 0)
+        {
+            box.DisplayMemberBinding = new Binding(nameof(RibbonComboBoxChoice.Label));
+            foreach (var choice in combo.Choices)
+                box.Items.Add(choice);
+        }
+        else
+        {
+            foreach (var item in combo.Items)
+                box.Items.Add(item);
+        }
         var executionState = ComboExecutionStates.GetOrCreateValue(box);
         RibbonCommandState? state = null;
         if (registry is not null
@@ -1971,7 +1980,7 @@ public static class AvaloniaRibbonRenderer
         try
         {
             var stateIndex = state?.Value is { Length: > 0 } value
-                ? combo.Items.ToList().FindIndex(item => string.Equals(item, value, StringComparison.Ordinal))
+                ? FindComboValueIndex(box, value)
                 : -1;
             if (stateIndex >= 0)
                 box.SelectedIndex = stateIndex;
@@ -1980,7 +1989,7 @@ public static class AvaloniaRibbonRenderer
                 box.SelectedIndex = -1;
                 box.Text = stateValue;
             }
-            else if (combo.Items.Count > 0)
+            else if (box.Items.Count > 0)
                 box.SelectedIndex = 0;
         }
         finally
@@ -2257,8 +2266,19 @@ public static class AvaloniaRibbonRenderer
 
     private static string? ResolveComboValue(ComboBox box)
     {
+        if (box.SelectedItem is RibbonComboBoxChoice choice)
+            return choice.Value;
+
         var value = box.SelectedItem?.ToString();
-        return string.IsNullOrWhiteSpace(value) ? box.Text : value;
+        if (!string.IsNullOrWhiteSpace(value))
+            return value;
+
+        var typedChoice = box.Items
+            .OfType<RibbonComboBoxChoice>()
+            .FirstOrDefault(item =>
+                string.Equals(item.Label, box.Text, StringComparison.Ordinal) ||
+                string.Equals(item.Value, box.Text, StringComparison.Ordinal));
+        return typedChoice?.Value ?? box.Text;
     }
 
     private static void ClearPendingComboSelection(ComboExecutionState executionState)
@@ -2273,18 +2293,30 @@ public static class AvaloniaRibbonRenderer
         executionState.IsSynchronizing = true;
         try
         {
-            var matchingIndex = combo.Items.ToList().FindIndex(item =>
-                string.Equals(item?.ToString(), value, StringComparison.Ordinal));
+            var matchingIndex = FindComboValueIndex(combo, value);
             if (combo.SelectedIndex != matchingIndex)
                 combo.SelectedIndex = matchingIndex;
-            if (!string.Equals(combo.Text, value, StringComparison.Ordinal))
-                combo.Text = value;
+            var displayText = matchingIndex >= 0 && combo.Items[matchingIndex] is RibbonComboBoxChoice choice
+                ? choice.Label
+                : value;
+            if (!string.Equals(combo.Text, displayText, StringComparison.Ordinal))
+                combo.Text = displayText;
         }
         finally
         {
             executionState.IsSynchronizing = false;
             ClearPendingComboSelection(executionState);
         }
+    }
+
+    private static int FindComboValueIndex(ComboBox combo, string value)
+    {
+        var items = combo.Items.ToList();
+        return items.FindIndex(item => item switch
+        {
+            RibbonComboBoxChoice choice => string.Equals(choice.Value, value, StringComparison.Ordinal),
+            _ => string.Equals(item?.ToString(), value, StringComparison.Ordinal),
+        });
     }
 
     private static void SetCheckBoxStateWithoutExecuting(CheckBox checkBox, bool isChecked)

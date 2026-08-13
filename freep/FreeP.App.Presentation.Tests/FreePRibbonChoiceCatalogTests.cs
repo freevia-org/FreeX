@@ -100,4 +100,29 @@ public sealed class FreePRibbonChoiceCatalogTests
         insetSide.Should().Be(TableCellInsetSide.Bottom);
         insetPt.Should().Be(5.5);
     }
+
+    [Fact]
+    public void TimingChoiceParsersConvergeForStableTokensAndLegacyLabels()
+    {
+        foreach (var choice in FreePRibbonChoiceCatalog.TransitionDurationChoices)
+        {
+            PresentationTransitionCommandPlanner.TryParseSeconds(choice.Label, false, out var fromLabel)
+                .Should().BeTrue();
+            FreePRibbonChoiceCatalog.TryResolve(
+                    choice.Token,
+                    FreePRibbonChoiceCatalog.TransitionDurationChoices,
+                    out var fromToken)
+                .Should().BeTrue();
+            fromLabel.Should().Be(choice.Descriptor);
+            fromToken.Should().Be(choice.Descriptor);
+        }
+
+        foreach (var choice in FreePRibbonChoiceCatalog.AnimationTriggerChoices)
+        {
+            PresentationAnimationCommandPlanner.TryParseTrigger(choice.Token, out var fromToken).Should().BeTrue();
+            PresentationAnimationCommandPlanner.TryParseTrigger(choice.Label, out var fromLabel).Should().BeTrue();
+            fromToken.Should().Be(choice.Descriptor);
+            fromLabel.Should().Be(choice.Descriptor);
+        }
+    }
 }

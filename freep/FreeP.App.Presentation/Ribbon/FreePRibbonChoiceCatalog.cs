@@ -1,3 +1,5 @@
+using Free.Shared.Ribbon;
+using FreeP.App.Localization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -97,6 +99,71 @@ public static class FreePRibbonChoiceCatalog
             Choice("table-row-height.0.75in", "0.75in", EmuPerInch * 3 / 4),
             Choice("table-row-height.1in", "1in", EmuPerInch),
             Choice("table-row-height.1.5in", "1.5in", EmuPerInch * 3 / 2));
+
+    public static IReadOnlyList<FreePRibbonChoice<int>> TransitionDurationChoices =>
+        ReadOnly(
+            Choice("transition-duration.500ms", "0.50s", 500, "0.5s"),
+            Choice("transition-duration.750ms", "0.75s", 750),
+            Choice("transition-duration.1000ms", "1.00s", 1000, "1s"),
+            Choice("transition-duration.1500ms", "1.50s", 1500, "1.5s"),
+            Choice("transition-duration.2000ms", "2.00s", 2000, "2s"));
+
+    public static IReadOnlyList<FreePRibbonChoice<int>> TransitionAdvanceAfterChoices =>
+        ReadOnly(
+            Choice(
+                "transition-advance-after.none",
+                Loc.Get("Ribbon_Option_TransitionAdvanceAfterNone_Label"),
+                0,
+                "(none)",
+                "none"),
+            Choice("transition-advance-after.1000ms", "1s", 1000),
+            Choice("transition-advance-after.2000ms", "2s", 2000),
+            Choice("transition-advance-after.3000ms", "3s", 3000),
+            Choice("transition-advance-after.5000ms", "5s", 5000),
+            Choice("transition-advance-after.10000ms", "10s", 10000));
+
+    public static IReadOnlyList<FreePRibbonChoice<AnimationTrigger>> AnimationTriggerChoices =>
+        ReadOnly(
+            Choice(
+                "animation-trigger.on-click",
+                Loc.Get("Ribbon_Option_AnimationTriggerOnClick_Label"),
+                AnimationTrigger.OnClick,
+                "On Click",
+                "OnClick"),
+            Choice(
+                "animation-trigger.with-previous",
+                Loc.Get("Ribbon_Option_AnimationTriggerWithPrevious_Label"),
+                AnimationTrigger.WithPrevious,
+                "With Previous",
+                "WithPrevious"),
+            Choice(
+                "animation-trigger.after-previous",
+                Loc.Get("Ribbon_Option_AnimationTriggerAfterPrevious_Label"),
+                AnimationTrigger.AfterPrevious,
+                "After Previous",
+                "AfterPrevious"));
+
+    public static IReadOnlyList<FreePRibbonChoice<int>> AnimationDurationChoices =>
+        ReadOnly(
+            Choice("animation-duration.250ms", "0.25s", 250),
+            Choice("animation-duration.500ms", "0.50s", 500, "0.5s"),
+            Choice("animation-duration.1000ms", "1.00s", 1000, "1s"),
+            Choice("animation-duration.1500ms", "1.50s", 1500, "1.5s"),
+            Choice("animation-duration.2000ms", "2.00s", 2000, "2s"));
+
+    public static IReadOnlyList<FreePRibbonChoice<int>> AnimationDelayChoices =>
+        ReadOnly(
+            Choice("animation-delay.0ms", "0s", 0),
+            Choice("animation-delay.250ms", "0.25s", 250),
+            Choice("animation-delay.500ms", "0.50s", 500, "0.5s"),
+            Choice("animation-delay.1000ms", "1.00s", 1000, "1s"),
+            Choice("animation-delay.2000ms", "2.00s", 2000, "2s"));
+
+    public static IReadOnlyList<RibbonComboBoxChoice> RibbonChoices<TDescriptor>(
+        IReadOnlyList<FreePRibbonChoice<TDescriptor>> choices) =>
+        choices
+            .Select(static choice => new RibbonComboBoxChoice(choice.Token, choice.Label))
+            .ToArray();
 
     public static string[] Labels<TDescriptor>(IReadOnlyList<FreePRibbonChoice<TDescriptor>> choices) =>
         choices.Select(static choice => choice.Label).ToArray();

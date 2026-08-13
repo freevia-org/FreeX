@@ -33,4 +33,23 @@ public class RibbonDefinitionTests
         definition.VisibleTabs.Should().ContainSingle(t => t.Id == "home");
         definition.ContextualTabs.Should().ContainSingle(t => t.Id == "chart");
     }
+
+    [Fact]
+    public void ComboBox_TypedChoicesKeepProtocolValuesSeparateFromLabels_AndLegacyItemsRemainAvailable()
+    {
+        var combo = new RibbonComboBox("theme", "Theme")
+        {
+            Choices =
+            [
+                new RibbonComboBoxChoice("theme.office", "Office"),
+                new RibbonComboBoxChoice("theme.slate", "Slate"),
+            ],
+            Items = ["Legacy"],
+        };
+
+        combo.Choices.Should().Equal(
+            new RibbonComboBoxChoice("theme.office", "Office"),
+            new RibbonComboBoxChoice("theme.slate", "Slate"));
+        combo.Items.Should().Equal("Legacy");
+    }
 }

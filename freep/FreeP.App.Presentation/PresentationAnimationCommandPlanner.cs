@@ -235,7 +235,11 @@ public static class PresentationAnimationCommandPlanner
             case PresentationAnimationCommandIntentKind.SetDuration:
                 return TryApplyToSelectedShapeAnimation(editor, animation =>
                 {
-                    if (!AnimationPanePlanner.TryParseDuration(selectedValue ?? string.Empty, out int durationMs))
+                    if (!FreePRibbonChoiceCatalog.TryResolve(
+                            selectedValue,
+                            FreePRibbonChoiceCatalog.AnimationDurationChoices,
+                            out int durationMs) &&
+                        !AnimationPanePlanner.TryParseDuration(selectedValue ?? string.Empty, out durationMs))
                     {
                         return null;
                     }
@@ -248,7 +252,11 @@ public static class PresentationAnimationCommandPlanner
             case PresentationAnimationCommandIntentKind.SetDelay:
                 return TryApplyToSelectedShapeAnimation(editor, animation =>
                 {
-                    if (!AnimationPanePlanner.TryParseDelay(selectedValue ?? string.Empty, out int delayMs))
+                    if (!FreePRibbonChoiceCatalog.TryResolve(
+                            selectedValue,
+                            FreePRibbonChoiceCatalog.AnimationDelayChoices,
+                            out int delayMs) &&
+                        !AnimationPanePlanner.TryParseDelay(selectedValue ?? string.Empty, out delayMs))
                     {
                         return null;
                     }
@@ -616,6 +624,14 @@ public static class PresentationAnimationCommandPlanner
 
     public static bool TryParseTrigger(string? selectedValue, out AnimationTrigger trigger)
     {
+        if (FreePRibbonChoiceCatalog.TryResolve(
+                selectedValue,
+                FreePRibbonChoiceCatalog.AnimationTriggerChoices,
+                out trigger))
+        {
+            return true;
+        }
+
         var text = selectedValue?.Trim();
         if (string.IsNullOrEmpty(text))
         {

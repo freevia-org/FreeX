@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -32,7 +33,13 @@ public sealed record RibbonWpfRendererOptions(
 
 public static class RibbonWpfRenderer
 {
+    private sealed class ComboExecutionState
+    {
+        public bool IsSynchronizing { get; set; }
+    }
+
     private const int MaxRowsPerColumn = 3;
+    private static readonly ConditionalWeakTable<ComboBox, ComboExecutionState> ComboExecutionStates = new();
 
     public static FrameworkElement BuildTabContent(
         RibbonTab tab,
@@ -664,15 +671,29 @@ public static class RibbonWpfRenderer
             IsEditable = true,
             Background = Brushes.White
         };
-        foreach (var item in combo.Items)
-            box.Items.Add(item);
-        if (combo.Items.Count > 0)
+        if (combo.Choices.Count > 0)
+        {
+            box.DisplayMemberPath = nameof(RibbonComboBoxChoice.Label);
+            foreach (var choice in combo.Choices)
+                box.Items.Add(choice);
+        }
+        else
+        {
+            foreach (var item in combo.Items)
+                box.Items.Add(item);
+        }
+        if (box.Items.Count > 0)
             box.SelectedIndex = 0;
+        var executionState = ComboExecutionStates.GetOrCreateValue(box);
         WireMetadata(box, combo, registry, stateStore, RibbonWpfRendererOptions.Default);
         if (registry is not null)
         {
             var commandId = combo.CommandId;
-            box.SelectionChanged += (_, _) => ExecuteComboValue(box, commandId, registry);
+            box.SelectionChanged += (_, _) =>
+            {
+                if (!executionState.IsSynchronizing)
+                    ExecuteComboValue(box, commandId, registry);
+            };
             box.KeyDown += (_, e) =>
             {
                 if (e.Key != Key.Enter)
@@ -689,10 +710,26 @@ public static class RibbonWpfRenderer
         if (!registry.TryGet(commandId, out var command) || command is null)
             return;
 
-        var value = box.SelectedItem?.ToString();
+        var value = ResolveComboValue(box);
         if (string.IsNullOrWhiteSpace(value))
             value = box.Text;
         ExecuteGuarded(command, commandId, RibbonCommandContext.ForSelectedValue(value));
+    }
+
+    private static string? ResolveComboValue(ComboBox box)
+    {
+        if (box.SelectedItem is RibbonComboBoxChoice choice)
+            return choice.Value;
+
+        if (box.SelectedItem is not null)
+            return box.SelectedItem.ToString();
+
+        var typedChoice = box.Items
+            .OfType<RibbonComboBoxChoice>()
+            .FirstOrDefault(item =>
+                string.Equals(item.Label, box.Text, System.StringComparison.Ordinal) ||
+                string.Equals(item.Value, box.Text, System.StringComparison.Ordinal));
+        return typedChoice?.Value ?? box.Text;
     }
 
     /// <summary>
@@ -838,8 +875,8 @@ public static class RibbonWpfRenderer
                     if (toggle.IsChecked != state.IsChecked)
                         toggle.IsChecked = state.IsChecked;
                     break;
-                case ComboBox combo when state.Value is { } value && !string.Equals(combo.Text, value, System.StringComparison.Ordinal):
-                    combo.Text = value;
+                case ComboBox combo when state.Value is { } value:
+                    SetComboValueWithoutExecuting(combo, value);
                     break;
             }
         }
@@ -852,6 +889,46 @@ public static class RibbonWpfRenderer
 
         // Apply any state already set before the control existed (e.g. an initial selection refresh).
         Apply(stateStore.GetState(commandId));
+    }
+
+    private static void SetComboValueWithoutExecuting(ComboBox combo, string value)
+    {
+        var executionState = ComboExecutionStates.GetOrCreateValue(combo);
+        executionState.IsSynchronizing = true;
+        try
+        {
+            var matchingChoice = combo.Items
+                .OfType<RibbonComboBoxChoice>()
+                .FirstOrDefault(choice => string.Equals(choice.Value, value, System.StringComparison.Ordinal));
+            if (matchingChoice is not null)
+            {
+                if (!ReferenceEquals(combo.SelectedItem, matchingChoice))
+                    combo.SelectedItem = matchingChoice;
+                if (!string.Equals(combo.Text, matchingChoice.Label, System.StringComparison.Ordinal))
+                    combo.Text = matchingChoice.Label;
+                return;
+            }
+
+            var matchingItem = combo.Items
+                .OfType<string>()
+                .FirstOrDefault(item => string.Equals(item, value, System.StringComparison.Ordinal));
+            if (matchingItem is not null)
+            {
+                if (!Equals(combo.SelectedItem, matchingItem))
+                    combo.SelectedItem = matchingItem;
+                if (!string.Equals(combo.Text, matchingItem, System.StringComparison.Ordinal))
+                    combo.Text = matchingItem;
+                return;
+            }
+
+            combo.SelectedIndex = -1;
+            if (!string.Equals(combo.Text, value, System.StringComparison.Ordinal))
+                combo.Text = value;
+        }
+        finally
+        {
+            executionState.IsSynchronizing = false;
+        }
     }
 
     // Passes the actual clicked WPF element to the command so host handlers that inspect their sender

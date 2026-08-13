@@ -295,26 +295,26 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
-    public void Cmd_TransitionDuration_UsesRibbonContextSelectedValue()
+    public void Cmd_TransitionDuration_UsesStableRibbonChoiceValue()
     {
         var (ed, _) = MakeSession();
         var reg = MakeRegistry(ed);
         Exec(reg, "freep.transition.fade");
 
-        Exec(reg, "freep.transition.duration", RibbonCommandContext.ForSelectedValue("1.50s"));
+        Exec(reg, "freep.transition.duration", RibbonCommandContext.ForSelectedValue("transition-duration.1500ms"));
 
         Assert.Equal(TransitionKind.Fade, ed.CurrentSlideTransition?.Kind);
         Assert.Equal(1500, ed.CurrentSlideTransition?.DurationMs);
     }
 
     [Fact]
-    public void Cmd_TransitionAdvanceAfter_UsesRibbonContextSelectedValue()
+    public void Cmd_TransitionAdvanceAfter_UsesStableRibbonChoiceValue()
     {
         var (ed, _) = MakeSession();
         var reg = MakeRegistry(ed);
         Exec(reg, "freep.transition.fade");
 
-        Exec(reg, "freep.transition.advance-after", RibbonCommandContext.ForSelectedValue("3s"));
+        Exec(reg, "freep.transition.advance-after", RibbonCommandContext.ForSelectedValue("transition-advance-after.3000ms"));
 
         Assert.Equal(3000, ed.CurrentSlideTransition?.AdvanceAfterMs);
     }
@@ -524,7 +524,7 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
-    public void Cmd_AnimTiming_UsesSelectedRibbonValues()
+    public void Cmd_AnimTiming_UsesStableRibbonChoiceValues()
     {
         var (ed, pres) = MakeSession();
         var shapeId = pres.Slides[0].Shapes[0].Id;
@@ -539,9 +539,9 @@ public class RibbonTransitionsAnimationsTests
         });
 
         var reg = MakeRegistry(ed);
-        Exec(reg, "freep.anim.trigger", RibbonCommandContext.ForSelectedValue("After Previous"));
-        Exec(reg, "freep.anim.duration", RibbonCommandContext.ForSelectedValue("1.50s"));
-        Exec(reg, "freep.anim.delay", RibbonCommandContext.ForSelectedValue("0.25s"));
+        Exec(reg, "freep.anim.trigger", RibbonCommandContext.ForSelectedValue("animation-trigger.after-previous"));
+        Exec(reg, "freep.anim.duration", RibbonCommandContext.ForSelectedValue("animation-duration.1500ms"));
+        Exec(reg, "freep.anim.delay", RibbonCommandContext.ForSelectedValue("animation-delay.250ms"));
 
         Assert.Equal(AnimationTrigger.AfterPrevious, ed.CurrentSlideAnimations[0].Trigger);
         Assert.Equal(1500, ed.CurrentSlideAnimations[0].DurationMs);
