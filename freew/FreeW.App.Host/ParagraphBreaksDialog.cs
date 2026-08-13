@@ -14,6 +14,9 @@ namespace FreeW.App.Host;
 /// </summary>
 internal static class ParagraphBreaksDialog
 {
+    private static readonly ParagraphDialogVisualMetrics Layout =
+        ParagraphBreaksDialogPlanner.VisualMetrics;
+
     /// <summary>
     /// Show the Paragraph dialog seeded from <paramref name="current"/>. Returns the edited values, or
     /// null if cancelled.
@@ -26,7 +29,7 @@ internal static class ParagraphBreaksDialog
         var dialog = new Window
         {
             Title = surface.Title,
-            Width = 380,
+            Width = Layout.WindowWidth,
             SizeToContent = SizeToContent.Height,
             ResizeMode = ResizeMode.NoResize,
             WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner,
@@ -46,7 +49,7 @@ internal static class ParagraphBreaksDialog
         {
             Content = surface.Field(ParagraphBreaksDialogField.ContextualSpacing).Label,
             IsChecked = state.ContextualSpacing,
-            Margin = new Thickness(0, 4, 0, 0),
+            Margin = ToThickness(Layout.WpfContextualSpacingMargin),
         };
         WpfDialogSurfaceSemantics.Apply(leftBox, surface.Field(ParagraphBreaksDialogField.Left));
         WpfDialogSurfaceSemantics.Apply(rightBox, surface.Field(ParagraphBreaksDialogField.Right));
@@ -56,7 +59,7 @@ internal static class ParagraphBreaksDialog
         WpfDialogSurfaceSemantics.Apply(contextualSpacingCheck, surface.Field(ParagraphBreaksDialogField.ContextualSpacing));
 
         var specialAmtBox = NumberBox(state.SpecialAmountText);
-        var specialBox = new ComboBox { MinWidth = 120, Margin = new Thickness(0, 0, 0, 8) };
+        var specialBox = new ComboBox { MinWidth = Layout.NumericFieldMinWidth };
         foreach (var item in ParagraphIndentDialogPlanner.SpecialItems)
             specialBox.Items.Add(item.Label);
         specialBox.SelectedIndex = state.SpecialIndex;
@@ -66,7 +69,7 @@ internal static class ParagraphBreaksDialog
         WpfDialogSurfaceSemantics.Apply(specialBox, surface.Field(ParagraphBreaksDialogField.Special));
         WpfDialogSurfaceSemantics.Apply(specialAmtBox, surface.Field(ParagraphBreaksDialogField.SpecialAmount));
 
-        var indentsPanel = new Grid { Margin = new Thickness(10) };
+        var indentsPanel = new Grid { Margin = ToThickness(Layout.WpfTabContentMargin) };
         indentsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         indentsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var i = 0; i < 8; i++)
@@ -83,12 +86,12 @@ internal static class ParagraphBreaksDialog
         Grid.SetColumnSpan(contextualSpacingCheck, 2);
         indentsPanel.Children.Add(contextualSpacingCheck);
 
-        var keepWithNextCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.KeepWithNext).Label, IsChecked = state.KeepWithNext, Margin = new Thickness(0, 0, 0, 6) };
-        var keepLinesTogetherCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.KeepLinesTogether).Label, IsChecked = state.KeepLinesTogether, Margin = new Thickness(0, 0, 0, 6) };
-        var widowControlCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.WidowControl).Label, IsChecked = state.WidowControl, Margin = new Thickness(0, 0, 0, 6) };
-        var pageBreakBeforeCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.PageBreakBefore).Label, IsChecked = state.PageBreakBefore, Margin = new Thickness(0, 0, 0, 6) };
-        var suppressHyphensCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.SuppressAutoHyphens).Label, IsChecked = state.SuppressAutoHyphens, Margin = new Thickness(0, 0, 0, 6) };
-        var suppressLineNumbersCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.SuppressLineNumbers).Label, IsChecked = state.SuppressLineNumbers, Margin = new Thickness(0, 0, 0, 6) };
+        var keepWithNextCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.KeepWithNext).Label, IsChecked = state.KeepWithNext, Margin = ToThickness(Layout.CheckBoxMargin) };
+        var keepLinesTogetherCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.KeepLinesTogether).Label, IsChecked = state.KeepLinesTogether, Margin = ToThickness(Layout.CheckBoxMargin) };
+        var widowControlCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.WidowControl).Label, IsChecked = state.WidowControl, Margin = ToThickness(Layout.CheckBoxMargin) };
+        var pageBreakBeforeCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.PageBreakBefore).Label, IsChecked = state.PageBreakBefore, Margin = ToThickness(Layout.CheckBoxMargin) };
+        var suppressHyphensCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.SuppressAutoHyphens).Label, IsChecked = state.SuppressAutoHyphens, Margin = ToThickness(Layout.CheckBoxMargin) };
+        var suppressLineNumbersCheck = new CheckBox { Content = surface.Field(ParagraphBreaksDialogField.SuppressLineNumbers).Label, IsChecked = state.SuppressLineNumbers, Margin = ToThickness(Layout.CheckBoxMargin) };
         WpfDialogSurfaceSemantics.Apply(keepWithNextCheck, surface.Field(ParagraphBreaksDialogField.KeepWithNext));
         WpfDialogSurfaceSemantics.Apply(keepLinesTogetherCheck, surface.Field(ParagraphBreaksDialogField.KeepLinesTogether));
         WpfDialogSurfaceSemantics.Apply(widowControlCheck, surface.Field(ParagraphBreaksDialogField.WidowControl));
@@ -96,12 +99,12 @@ internal static class ParagraphBreaksDialog
         WpfDialogSurfaceSemantics.Apply(suppressHyphensCheck, surface.Field(ParagraphBreaksDialogField.SuppressAutoHyphens));
         WpfDialogSurfaceSemantics.Apply(suppressLineNumbersCheck, surface.Field(ParagraphBreaksDialogField.SuppressLineNumbers));
 
-        var breaksPanel = new StackPanel { Margin = new Thickness(10) };
+        var breaksPanel = new StackPanel { Margin = ToThickness(Layout.WpfTabContentMargin) };
         var paginationHeading = new TextBlock
         {
             Text = surface.Field(ParagraphBreaksDialogField.PaginationSection).Label,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = ToThickness(Layout.SectionHeadingMargin)
         };
         WpfDialogSurfaceSemantics.Apply(
             paginationHeading,
@@ -111,12 +114,12 @@ internal static class ParagraphBreaksDialog
         breaksPanel.Children.Add(keepLinesTogetherCheck);
         breaksPanel.Children.Add(widowControlCheck);
         breaksPanel.Children.Add(pageBreakBeforeCheck);
-        breaksPanel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 8) });
+        breaksPanel.Children.Add(new Separator { Margin = ToThickness(Layout.SectionSeparatorMargin) });
         var formattingExceptionsHeading = new TextBlock
         {
             Text = surface.Field(ParagraphBreaksDialogField.FormattingExceptionsSection).Label,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = ToThickness(Layout.SectionHeadingMargin)
         };
         WpfDialogSurfaceSemantics.Apply(
             formattingExceptionsHeading,
@@ -182,9 +185,12 @@ internal static class ParagraphBreaksDialog
             DialogFocus.FocusAndSelect(target);
         }
 
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 10, 0, 0));
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: Layout.ActionButtonWidth,
+            rowMargin: ToThickness(Layout.WpfActionRowMargin));
 
-        var root = new StackPanel { Margin = new Thickness(12) };
+        var root = new StackPanel { Margin = ToThickness(Layout.WpfRootMargin) };
         root.Children.Add(tabs);
         root.Children.Add(buttons);
         dialog.Content = root;
@@ -196,8 +202,8 @@ internal static class ParagraphBreaksDialog
     private static TextBox NumberBox(string text) => new()
     {
         Text = text,
-        MinWidth = 120,
-        Margin = new Thickness(0, 0, 0, 8),
+        MinWidth = Layout.NumericFieldMinWidth,
+        Margin = ToThickness(Layout.FieldControlMargin),
     };
 
     private static void AddGridRow(Grid grid, int row, string label, UIElement field)
@@ -206,7 +212,7 @@ internal static class ParagraphBreaksDialog
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 4, 8, 4),
+            Margin = ToThickness(Layout.FieldLabelMargin),
         };
         Grid.SetRow(block, row);
         Grid.SetColumn(block, 0);
@@ -215,7 +221,10 @@ internal static class ParagraphBreaksDialog
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
         if (field is FrameworkElement fe)
-            fe.Margin = new Thickness(0, 4, 0, 4);
+            fe.Margin = ToThickness(Layout.FieldControlMargin);
         grid.Children.Add(field);
     }
+
+    private static Thickness ToThickness(ParagraphDialogThickness value) =>
+        new(value.Left, value.Top, value.Right, value.Bottom);
 }

@@ -21,6 +21,8 @@ public sealed class ParagraphDialog : FreeWDialogWindow
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
     private static readonly DialogSurfaceSpec<ParagraphBreaksDialogField> Surface =
         ParagraphBreaksDialogPlanner.Surface;
+    private static readonly ParagraphDialogVisualMetrics Layout =
+        ParagraphBreaksDialogPlanner.VisualMetrics;
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
@@ -67,7 +69,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         // reserves the native WPF frame and supplies the remaining client height, so these tab panes
         // must consume the same two client-area heights as WPF rather than growing from Avalonia's
         // default control templates.
-        PageLayoutDialogChrome.Configure(this, Surface, 380);
+        PageLayoutDialogChrome.Configure(this, Surface, Layout.WindowWidth);
         TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         var state = ParagraphBreaksDialogPlanner.BuildInitialState(current, DialogCulture);
         _left = NumberBox(state.LeftText);
@@ -75,7 +77,7 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         _special = PageLayoutDialogChrome.Combo(
             ParagraphIndentDialogPlanner.SpecialItems.Select(item => item.Label),
             state.SpecialIndex,
-            120,
+            Layout.NumericFieldMinWidth,
             DialogChromeStyle);
         _special.HorizontalAlignment = HorizontalAlignment.Stretch;
         _specialAmount = NumberBox(state.SpecialAmountText);
@@ -105,28 +107,48 @@ public sealed class ParagraphDialog : FreeWDialogWindow
 
         _tabs = new TabControl
         {
-            Margin = new Thickness(12, 12, 11, 0),
+            Margin = ToThickness(Layout.AvaloniaTabsMargin),
             Padding = new Thickness(0),
-            Height = 253,
+            Height = Layout.AvaloniaIndentsTabHeight,
         };
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabs,
             DialogChromeStyle,
-            contentPaneMargin: new Thickness(0, -1, 0, 0));
-        var indentsTab = new TabItem { Header = Surface.Field(ParagraphBreaksDialogField.IndentsAndSpacingTab).Label, Width = 123, Content = BuildIndentsTab() };
-        var breaksTab = new TabItem { Header = Surface.Field(ParagraphBreaksDialogField.LineAndPageBreaksTab).Label, Width = 122, Content = BuildBreaksTab() };
+            contentPaneMargin: ToThickness(Layout.AvaloniaTabPaneMargin));
+        var indentsTab = new TabItem
+        {
+            Header = Surface.Field(ParagraphBreaksDialogField.IndentsAndSpacingTab).Label,
+            Width = Layout.AvaloniaIndentsTabHeaderWidth,
+            Content = BuildIndentsTab(),
+        };
+        var breaksTab = new TabItem
+        {
+            Header = Surface.Field(ParagraphBreaksDialogField.LineAndPageBreaksTab).Label,
+            Width = Layout.AvaloniaBreaksTabHeaderWidth,
+            Content = BuildBreaksTab(),
+        };
         PageLayoutDialogChrome.ApplySurface(indentsTab, Surface.Field(ParagraphBreaksDialogField.IndentsAndSpacingTab));
         PageLayoutDialogChrome.ApplySurface(breaksTab, Surface.Field(ParagraphBreaksDialogField.LineAndPageBreaksTab));
         _tabs.Items.Add(indentsTab);
         _tabs.Items.Add(breaksTab);
-        _tabs.SelectionChanged += (_, _) => _tabs.Height = _tabs.SelectedIndex == 1 ? 235 : 253;
-        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(12, 8, 11, 0));
+        _tabs.SelectionChanged += (_, _) =>
+            _tabs.Height = _tabs.SelectedIndex == 1
+                ? Layout.AvaloniaBreaksTabHeight
+                : Layout.AvaloniaIndentsTabHeight;
+        AvaloniaCompactDialogChrome.ApplyValidationStatus(
+            _status,
+            DialogChromeStyle,
+            ToThickness(Layout.AvaloniaValidationMargin));
 
         var root = new StackPanel();
         root.Children.Add(_tabs);
         root.Children.Add(_status);
-        var actions = PageLayoutDialogChrome.Actions(Accept, () => Close(null), DialogChromeStyle, 72);
-        actions.Margin = new Thickness(12, 10, 11, 11);
+        var actions = PageLayoutDialogChrome.Actions(
+            Accept,
+            () => Close(null),
+            DialogChromeStyle,
+            Layout.ActionButtonWidth);
+        actions.Margin = ToThickness(Layout.AvaloniaActionRowMargin);
         root.Children.Add(actions);
         Content = root;
 
@@ -140,8 +162,8 @@ public sealed class ParagraphDialog : FreeWDialogWindow
 
     private Control BuildIndentsTab()
     {
-        var grid = new Grid { Margin = new Thickness(9, 12, 12, 10) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(104)));
+        var grid = new Grid { Margin = ToThickness(Layout.AvaloniaIndentsTabContentMargin) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(Layout.AvaloniaLabelColumnWidth)));
         grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
         for (var row = 0; row < 8; row++)
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
@@ -154,19 +176,19 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         AddGridRow(grid, 6, Surface.Field(ParagraphBreaksDialogField.LineSpacing).Label, _lineSpacing);
         Grid.SetRow(_contextualSpacing, 7);
         Grid.SetColumnSpan(_contextualSpacing, 2);
-        _contextualSpacing.Margin = new Thickness(3, 4, 0, 0);
+        _contextualSpacing.Margin = ToThickness(Layout.AvaloniaContextualSpacingMargin);
         grid.Children.Add(_contextualSpacing);
         return grid;
     }
 
     private Control BuildBreaksTab()
     {
-        var panel = new StackPanel { Margin = new Thickness(10) };
+        var panel = new StackPanel { Margin = ToThickness(Layout.WpfTabContentMargin) };
         var paginationHeading = new TextBlock
         {
             Text = Surface.Field(ParagraphBreaksDialogField.PaginationSection).Label,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = ToThickness(Layout.SectionHeadingMargin),
         };
         PageLayoutDialogChrome.ApplySurface(
             paginationHeading,
@@ -176,12 +198,12 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         panel.Children.Add(_keepLinesTogether);
         panel.Children.Add(_widowControl);
         panel.Children.Add(_pageBreakBefore);
-        panel.Children.Add(new Separator { Margin = new Thickness(0, 4, 0, 8) });
+        panel.Children.Add(new Separator { Margin = ToThickness(Layout.SectionSeparatorMargin) });
         var formattingExceptionsHeading = new TextBlock
         {
             Text = Surface.Field(ParagraphBreaksDialogField.FormattingExceptionsSection).Label,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = ToThickness(Layout.SectionHeadingMargin),
         };
         PageLayoutDialogChrome.ApplySurface(
             formattingExceptionsHeading,
@@ -261,11 +283,15 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         foreach (var checkBox in new[] { _keepWithNext, _keepLinesTogether, _widowControl, _pageBreakBefore, _suppressHyphens, _suppressLineNumbers, _contextualSpacing })
             FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);
         foreach (var button in this.GetVisualDescendants().OfType<Button>())
-            AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, 72, button.IsDefault);
+            AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, Layout.ActionButtonWidth, button.IsDefault);
     }
 
     private static TextBox NumberBox(string text) =>
-        PageLayoutDialogChrome.NumberBox(text, 120, DialogChromeStyle, stretch: true);
+        PageLayoutDialogChrome.NumberBox(
+            text,
+            Layout.NumericFieldMinWidth,
+            DialogChromeStyle,
+            stretch: true);
 
     private static void AddGridRow(Grid grid, int row, string label, Control field)
     {
@@ -273,13 +299,13 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 4, 8, 4),
+            Margin = ToThickness(Layout.FieldLabelMargin),
         };
         Grid.SetRow(block, row);
         Grid.SetColumn(block, 0);
         grid.Children.Add(block);
 
-        field.Margin = new Thickness(0, 4, 0, 4);
+        field.Margin = ToThickness(Layout.FieldControlMargin);
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
         grid.Children.Add(field);
@@ -289,9 +315,17 @@ public sealed class ParagraphDialog : FreeWDialogWindow
         DialogFieldSurfaceSpec<ParagraphBreaksDialogField> field,
         bool value)
     {
-        var box = new CheckBox { Content = field.Label, IsChecked = value, Margin = new Thickness(0, 0, 0, 6) };
+        var box = new CheckBox
+        {
+            Content = field.Label,
+            IsChecked = value,
+            Margin = ToThickness(Layout.CheckBoxMargin),
+        };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
         PageLayoutDialogChrome.ApplySurface(box, field);
         return box;
     }
+
+    private static Thickness ToThickness(ParagraphDialogThickness value) =>
+        new(value.Left, value.Top, value.Right, value.Bottom);
 }

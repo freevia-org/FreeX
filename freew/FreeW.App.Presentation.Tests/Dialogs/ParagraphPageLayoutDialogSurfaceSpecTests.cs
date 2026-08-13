@@ -30,6 +30,50 @@ public sealed class ParagraphPageLayoutDialogSurfaceSpecTests
     }
 
     [Fact]
+    public void ParagraphVisualMetricsOwnWpfAuthorityAndAvaloniaTemplateCompensation()
+    {
+        var metrics = ParagraphBreaksDialogPlanner.VisualMetrics;
+
+        metrics.WindowWidth.Should().Be(380);
+        metrics.NumericFieldMinWidth.Should().Be(120);
+        metrics.ActionButtonWidth.Should().Be(72);
+        metrics.WpfRootMargin.Should().Be(new ParagraphDialogThickness(12, 12, 12, 12));
+        metrics.WpfTabContentMargin.Should().Be(new ParagraphDialogThickness(10, 10, 10, 10));
+        metrics.FieldLabelMargin.Should().Be(new ParagraphDialogThickness(0, 4, 8, 4));
+        metrics.FieldControlMargin.Should().Be(new ParagraphDialogThickness(0, 4, 0, 4));
+        metrics.WpfContextualSpacingMargin.Should().Be(new ParagraphDialogThickness(0, 4, 0, 0));
+        metrics.CheckBoxMargin.Should().Be(new ParagraphDialogThickness(0, 0, 0, 6));
+        metrics.SectionHeadingMargin.Should().Be(new ParagraphDialogThickness(0, 0, 0, 8));
+        metrics.SectionSeparatorMargin.Should().Be(new ParagraphDialogThickness(0, 4, 0, 8));
+        metrics.WpfActionRowMargin.Should().Be(new ParagraphDialogThickness(0, 10, 0, 0));
+        metrics.AvaloniaTabsMargin.Should().Be(new ParagraphDialogThickness(12, 12, 11, 0));
+        metrics.AvaloniaIndentsTabContentMargin.Should().Be(new ParagraphDialogThickness(9, 12, 12, 10));
+        metrics.AvaloniaContextualSpacingMargin.Should().Be(new ParagraphDialogThickness(3, 4, 0, 0));
+        metrics.AvaloniaTabPaneMargin.Should().Be(new ParagraphDialogThickness(0, -1, 0, 0));
+        metrics.AvaloniaValidationMargin.Should().Be(new ParagraphDialogThickness(12, 8, 11, 0));
+        metrics.AvaloniaActionRowMargin.Should().Be(new ParagraphDialogThickness(12, 10, 11, 11));
+        metrics.AvaloniaLabelColumnWidth.Should().Be(104);
+        metrics.AvaloniaIndentsTabHeight.Should().Be(253);
+        metrics.AvaloniaBreaksTabHeight.Should().Be(235);
+        metrics.AvaloniaIndentsTabHeaderWidth.Should().Be(123);
+        metrics.AvaloniaBreaksTabHeaderWidth.Should().Be(122);
+    }
+
+    [Theory]
+    [InlineData("FreeW.App.Host", "ParagraphBreaksDialog.cs")]
+    [InlineData("FreeW.App.Avalonia", "ParagraphDialog.cs")]
+    public void ParagraphRenderersConsumeSharedVisualMetrics(string project, string fileName)
+    {
+        var source = ReadSource(project, fileName);
+
+        source.Should().Contain("ParagraphBreaksDialogPlanner.VisualMetrics");
+        source.Should().Contain("Layout.NumericFieldMinWidth");
+        source.Should().Contain("Layout.FieldLabelMargin");
+        source.Should().Contain("Layout.FieldControlMargin");
+        source.Should().Contain("Layout.ActionButtonWidth");
+    }
+
+    [Fact]
     public void CompactParagraphSurfacePreservesIntentionalWording()
     {
         var surface = ParagraphIndentDialogPlanner.CompactSurface;

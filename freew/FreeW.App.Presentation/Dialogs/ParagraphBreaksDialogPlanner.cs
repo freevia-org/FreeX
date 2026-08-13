@@ -77,11 +77,51 @@ public sealed record ParagraphBreaksDialogResult(
     bool SuppressLineNumbers,
     bool ContextualSpacing);
 
+public readonly record struct ParagraphDialogThickness(
+    double Left,
+    double Top,
+    double Right,
+    double Bottom);
+
+/// <summary>
+/// WPF-authority layout metrics for the paired Paragraph dialogs. Avalonia-prefixed values are
+/// native-template compensation required to reproduce that authority; renderers only translate
+/// these neutral values into their toolkit geometry types.
+/// </summary>
+public sealed record ParagraphDialogVisualMetrics
+{
+    public double WindowWidth { get; init; } = 380;
+    public double NumericFieldMinWidth { get; init; } = 120;
+    public double ActionButtonWidth { get; init; } = 72;
+    public ParagraphDialogThickness WpfRootMargin { get; init; } = new(12, 12, 12, 12);
+    public ParagraphDialogThickness WpfTabContentMargin { get; init; } = new(10, 10, 10, 10);
+    public ParagraphDialogThickness FieldLabelMargin { get; init; } = new(0, 4, 8, 4);
+    public ParagraphDialogThickness FieldControlMargin { get; init; } = new(0, 4, 0, 4);
+    public ParagraphDialogThickness WpfContextualSpacingMargin { get; init; } = new(0, 4, 0, 0);
+    public ParagraphDialogThickness CheckBoxMargin { get; init; } = new(0, 0, 0, 6);
+    public ParagraphDialogThickness SectionHeadingMargin { get; init; } = new(0, 0, 0, 8);
+    public ParagraphDialogThickness SectionSeparatorMargin { get; init; } = new(0, 4, 0, 8);
+    public ParagraphDialogThickness WpfActionRowMargin { get; init; } = new(0, 10, 0, 0);
+    public ParagraphDialogThickness AvaloniaTabsMargin { get; init; } = new(12, 12, 11, 0);
+    public ParagraphDialogThickness AvaloniaIndentsTabContentMargin { get; init; } = new(9, 12, 12, 10);
+    public ParagraphDialogThickness AvaloniaContextualSpacingMargin { get; init; } = new(3, 4, 0, 0);
+    public ParagraphDialogThickness AvaloniaTabPaneMargin { get; init; } = new(0, -1, 0, 0);
+    public ParagraphDialogThickness AvaloniaValidationMargin { get; init; } = new(12, 8, 11, 0);
+    public ParagraphDialogThickness AvaloniaActionRowMargin { get; init; } = new(12, 10, 11, 11);
+    public double AvaloniaLabelColumnWidth { get; init; } = 104;
+    public double AvaloniaIndentsTabHeight { get; init; } = 253;
+    public double AvaloniaBreaksTabHeight { get; init; } = 235;
+    public double AvaloniaIndentsTabHeaderWidth { get; init; } = 123;
+    public double AvaloniaBreaksTabHeaderWidth { get; init; } = 122;
+}
+
 public static class ParagraphBreaksDialogPlanner
 {
     public const string LeftIndentAutomationId = "paragraph-left-indent";
     public const string ValidationMessage =
         "Enter valid non-negative values in points; line spacing must be positive.";
+
+    public static ParagraphDialogVisualMetrics VisualMetrics { get; } = new();
 
     public static DialogSurfaceSpec<ParagraphBreaksDialogField> Surface { get; } = new(
         Title: "Paragraph",
