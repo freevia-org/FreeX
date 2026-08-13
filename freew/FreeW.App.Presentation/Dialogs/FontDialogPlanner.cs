@@ -109,6 +109,35 @@ public sealed record FontDialogSurfaceSpec(
         Effects.First(effect => effect.Kind == kind);
 }
 
+public readonly record struct FontDialogThickness(
+    double Left,
+    double Top,
+    double Right,
+    double Bottom);
+
+/// <summary>
+/// WPF-authority layout metrics for the paired Font dialogs. Avalonia-prefixed values are native-template
+/// compensation required to reproduce that authority; renderers only translate these neutral values into
+/// their toolkit thickness types.
+/// </summary>
+public sealed record FontDialogVisualMetrics
+{
+    public FontDialogThickness WpfRootMargin { get; init; } = new(12, 12, 12, 12);
+    public FontDialogThickness WpfTabContentMargin { get; init; } = new(10, 10, 10, 10);
+    public FontDialogThickness AvaloniaRootMargin { get; init; } = new(12, 12, 11, 12);
+    public FontDialogThickness AvaloniaFontTabContentMargin { get; init; } = new(12, 12, 11, 6);
+    public FontDialogThickness AvaloniaAdvancedTabContentMargin { get; init; } = new(10, 12, 10, 10);
+    public FontDialogThickness AvaloniaTabPaneMargin { get; init; } = new(-12, -1, -12, 0);
+    public FontDialogThickness FieldLabelMargin { get; init; } = new(0, 0, 0, 2);
+    public FontDialogThickness FieldControlMargin { get; init; } = new(0, 0, 0, 8);
+    public FontDialogThickness WpfEffectsLabelMargin { get; init; } = new(0, 4, 0, 2);
+    public FontDialogThickness AvaloniaEffectsLabelMargin { get; init; } = new(0, 3, 0, 2);
+    public FontDialogThickness ActionRowMargin { get; init; } = new(0, 10, 0, 0);
+    public FontDialogThickness AvaloniaValidationMargin { get; init; } = new(0, 6, 0, 0);
+    public double EffectTrailingMargin { get; init; } = 12;
+    public double EffectBottomMargin { get; init; } = 4;
+}
+
 public sealed record FontDialogInitialState(
     string FontFamilyText,
     string FontSizeText,
@@ -476,6 +505,8 @@ public static class FontDialogPlanner
     public const string PositionValidationMessage = "Enter a valid position offset in points.";
     public const string StylisticSetValidationMessage = "Stylistic set must be a number from 1 to 20, or blank.";
     public const string StylisticSetToolTip = "OpenType stylistic set id (1–20), or blank for none";
+
+    public static FontDialogVisualMetrics VisualMetrics { get; } = new();
 
     public static readonly FontDialogTextCatalog Text = new(
         Title: "Font",

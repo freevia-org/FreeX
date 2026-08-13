@@ -65,6 +65,24 @@ public sealed class FontDialogPlannerTests
     }
 
     [Fact]
+    public void VisualMetrics_OwnWpfAuthorityAndAvaloniaTemplateCompensation()
+    {
+        var metrics = FontDialogPlanner.VisualMetrics;
+
+        metrics.WpfRootMargin.Should().Be(new FontDialogThickness(12, 12, 12, 12));
+        metrics.WpfTabContentMargin.Should().Be(new FontDialogThickness(10, 10, 10, 10));
+        metrics.AvaloniaRootMargin.Should().Be(new FontDialogThickness(12, 12, 11, 12));
+        metrics.AvaloniaFontTabContentMargin.Should().Be(new FontDialogThickness(12, 12, 11, 6));
+        metrics.AvaloniaAdvancedTabContentMargin.Should().Be(new FontDialogThickness(10, 12, 10, 10));
+        metrics.AvaloniaTabPaneMargin.Should().Be(new FontDialogThickness(-12, -1, -12, 0));
+        metrics.FieldLabelMargin.Should().Be(new FontDialogThickness(0, 0, 0, 2));
+        metrics.FieldControlMargin.Should().Be(new FontDialogThickness(0, 0, 0, 8));
+        metrics.ActionRowMargin.Should().Be(new FontDialogThickness(0, 10, 0, 0));
+        metrics.EffectTrailingMargin.Should().Be(12);
+        metrics.EffectBottomMargin.Should().Be(4);
+    }
+
+    [Fact]
     public void AvaloniaProductionValidationUsesTheSharedWarningFeedbackPort()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
