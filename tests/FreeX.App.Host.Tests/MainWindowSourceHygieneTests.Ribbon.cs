@@ -1443,8 +1443,7 @@ public sealed partial class MainWindowSourceHygieneTests
             "",
             "MainWindow.xaml.cs",
             "MainWindow.Ribbon.cs",
-            "MainWindow.RibbonDeclarative.cs",
-            "Ribbon\\RibbonWpfRenderer.cs");
+            "MainWindow.RibbonDeclarative.cs");
         var rendererSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonWpfRenderer.cs");
         var panelSource = DialogSourceTestSupport.ReadSharedRibbonWpfSource("RibbonAdaptivePanel.cs");
         var sharedWpfDirectory = Path.GetDirectoryName(
@@ -1455,6 +1454,7 @@ public sealed partial class MainWindowSourceHygieneTests
         File.Exists(Path.Combine(hostDirectory, "RibbonAdaptiveStateApplicator.cs")).Should().BeFalse();
         File.Exists(Path.Combine(hostDirectory, "RibbonCollapsedGroupPresentationPlanner.cs")).Should().BeFalse();
         File.Exists(Path.Combine(hostDirectory, "RibbonResizeThresholdGate.cs")).Should().BeFalse();
+        File.Exists(Path.Combine(hostDirectory, "Ribbon", "RibbonWpfRenderer.cs")).Should().BeFalse();
         File.Exists(Path.Combine(definitionDirectory, "RibbonAdaptiveLayoutEngine.cs")).Should().BeFalse();
         File.Exists(Path.Combine(definitionDirectory, "RibbonAdaptiveTabProfiles.cs")).Should().BeFalse();
         File.Exists(Path.Combine(definitionDirectory, "RibbonAdaptivePriorityPlanner.cs")).Should().BeFalse();

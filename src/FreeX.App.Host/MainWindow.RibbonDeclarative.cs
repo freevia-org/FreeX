@@ -53,7 +53,12 @@ public partial class MainWindow
                 if (definitionTab.Groups.Count == 0)
                     continue;
 
-                var content = RibbonWpfRenderer.BuildTabContent(definitionTab, this, registry, _ribbonState);
+                var content = Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.BuildTabContent(
+                    definitionTab,
+                    this,
+                    registry,
+                    _ribbonState,
+                    RibbonWpfRendererOptions.FreeXHost);
 
                 // The Home tab keeps the HomeRibbonPanel backplane in its rendered subtree so commands
                 // injected into it at runtime (Excel add-ins / tests) still surface as keytip candidates.
@@ -202,7 +207,9 @@ public partial class MainWindow
     {
         public void Execute(RibbonCommandContext context)
         {
-            var sender = (context.Parameters.TryGetValue(RibbonWpfRenderer.SenderKey, out var value)
+            var sender = (context.Parameters.TryGetValue(
+                    Free.Shared.Ribbon.Wpf.RibbonWpfRenderer.SenderKey,
+                    out var value)
                     ? value
                     : null)
                 ?? fallbackSender
