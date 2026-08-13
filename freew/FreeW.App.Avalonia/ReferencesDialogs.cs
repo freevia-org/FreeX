@@ -91,6 +91,7 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
             if (!_updatingControls)
                 _session.UpdateTarget(_targetList.SelectedIndex);
         };
+        _targetList.DoubleTapped += async (_, _) => await AcceptAsync();
         _hyperlinkBox.IsCheckedChanged += (_, _) =>
             _session.UpdateHyperlink(_hyperlinkBox.IsChecked == true);
 
