@@ -933,7 +933,7 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            var opened = window.ShowMediaCaptionPane();
+            var opened = window.MediaPaneHost.Show();
 
             opened.ShapeId.Should().Be(mediaShape.Id);
             window.IsMediaCaptionPaneVisible.Should().BeTrue();
@@ -941,14 +941,14 @@ public sealed class ReviewWorkflowAdapterTests
             window.MediaCaptionPaneTrackCount.Should().Be(0);
             window.IsMediaCaptionCreateEnabled.Should().BeFalse();
 
-            window.SetMediaCaptionPaneInput(
+            window.MediaPaneHost.SetCaptionInput(new(
                 "English captions",
                 "en-US",
                 "ppt/media/demo-captions.vtt",
-                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n");
+                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n"));
             window.IsMediaCaptionCreateEnabled.Should().BeTrue();
 
-            var create = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Create);
+            var create = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Create);
 
             create.Succeeded.Should().BeTrue();
             create.TrackIndex.Should().Be(0);
@@ -962,27 +962,27 @@ public sealed class ReviewWorkflowAdapterTests
             window.LastMediaTranscriptPlan!.Tracks.Should().ContainSingle()
                 .Which.Cues.Single().Text.Should().Be("Initial cue");
 
-            window.SetMediaCaptionPaneInput(
+            window.MediaPaneHost.SetCaptionInput(new(
                 "English captions",
                 "en-US",
                 "ppt/media/demo-captions.vtt",
-                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n",
+                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n"),
                 selectedTrackIndex: 0);
-            var replace = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Replace);
+            var replace = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Replace);
 
             replace.Succeeded.Should().BeTrue();
             window.LastMediaTranscriptPlan!.Tracks.Should().ContainSingle()
                 .Which.Cues.Single().Text.Should().Be("Updated cue");
 
-            var delete = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
+            var delete = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Delete);
 
             delete.Succeeded.Should().BeTrue();
             mediaShape.Media.CaptionTracks.Should().BeEmpty();
             window.MediaCaptionPaneTrackCount.Should().Be(0);
 
-            window.HideMediaCaptionPane();
+            window.MediaPaneHost.Hide();
             window.IsMediaCaptionPaneVisible.Should().BeFalse();
-            window.ShowMediaCaptionPane();
+            window.MediaPaneHost.Show();
             window.IsMediaCaptionPaneVisible.Should().BeTrue();
         }
         finally
@@ -1007,12 +1007,12 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.ShowMediaCaptionPane();
+            window.MediaPaneHost.Show();
             window.MediaVolumePercent.Should().Be(80);
 
-            window.SetMediaVolumePaneInput(25);
+            window.MediaPaneHost.SetVolumeInput(25);
             window.MediaVolumePercent.Should().Be(25);
-            window.ApplyMediaVolumePane().Should().BeTrue();
+            window.MediaPaneHost.ApplyVolume().Should().BeTrue();
 
             mediaShape.Media!.VolumePercent.Should().Be(25);
             window.IsDirty.Should().BeTrue();
@@ -1039,19 +1039,19 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.ShowMediaCaptionPane();
+            window.MediaPaneHost.Show();
             window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
             window.MediaLoop.Should().BeFalse();
             window.MediaRewindAfterPlaying.Should().BeFalse();
             window.MediaPlayFullScreen.Should().BeFalse();
 
-            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true, true, true, true, 3);
+            window.MediaPaneHost.SetPlaybackInput(MediaPlaybackStartMode.Automatically, true, true, true, true, 3);
             window.MediaPlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
             window.MediaLoop.Should().BeTrue();
             window.MediaRewindAfterPlaying.Should().BeTrue();
             window.MediaPlayFullScreen.Should().BeTrue();
             window.MediaStopAfterSlides.Should().Be(3);
-            window.ApplyMediaPlaybackPane().Should().BeTrue();
+            window.MediaPaneHost.ApplyPlayback().Should().BeTrue();
 
             mediaShape.Media!.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.Automatically);
             mediaShape.Media.Loop.Should().BeTrue();
@@ -1082,9 +1082,9 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.SetMediaTimingPaneInput(125, 250, 500, 750);
-            window.MediaTrimStartMilliseconds.Should().Be(125);
-            window.ApplyMediaTimingPane().Should().BeTrue();
+            window.MediaPaneHost.SetTimingInput(125, 250, 500, 750);
+            window.MediaPaneHost.CaptureTiming().MutationPlan.TrimStartMilliseconds.Should().Be(125);
+            window.MediaPaneHost.ApplyTiming().Should().BeTrue();
 
             mediaShape.Media!.TrimStartMilliseconds.Should().Be(125);
             mediaShape.Media.TrimEndMilliseconds.Should().Be(250);
@@ -1114,14 +1114,14 @@ public sealed class ReviewWorkflowAdapterTests
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.SetMediaBookmarkPaneInput("Intro", 1250.25);
-            window.ApplyMediaBookmarkCreatePane().Should().BeTrue();
-            window.MediaBookmarkCount.Should().Be(1);
-            window.SetMediaBookmarkPaneInput("Demo", 2500);
-            window.ApplyMediaBookmarkReplacePane().Should().BeTrue();
+            window.MediaPaneHost.SetBookmarkInput("Intro", 1250.25);
+            window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Create).Should().BeTrue();
+            window.MediaPaneHost.BookmarkCount.Should().Be(1);
+            window.MediaPaneHost.SetBookmarkInput("Demo", 2500);
+            window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Replace).Should().BeTrue();
             mediaShape.Media!.Bookmarks.Single().Name.Should().Be("Demo");
-            window.ApplyMediaBookmarkDeletePane().Should().BeTrue();
-            window.MediaBookmarkCount.Should().Be(0);
+            window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Delete).Should().BeTrue();
+            window.MediaPaneHost.BookmarkCount.Should().Be(0);
             window.IsDirty.Should().BeTrue();
         }
         finally

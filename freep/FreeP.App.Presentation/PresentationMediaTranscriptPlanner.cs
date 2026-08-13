@@ -258,6 +258,12 @@ public sealed record PresentationMediaCaptionAuthoringPanePlan(
     public PresentationMediaCaptionAuthoringTrackPlan? SelectedTrack =>
         Tracks.FirstOrDefault(track => track.TrackIndex == SelectedTrackIndex);
 
+    public PresentationMediaCaptionAuthoringActionPlan GetRequiredAction(string commandId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandId);
+        return Actions.Single(action => action.CommandId == commandId);
+    }
+
     public string Heading => PresentationPaneTextResources.BuildMediaCaptionsHeading(ShapeName);
 }
 

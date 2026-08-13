@@ -5773,18 +5773,18 @@ public sealed class MainWindowHeadlessTests : IDisposable
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            opened = window.ShowMediaCaptionPane();
+            opened = window.MediaPaneHost.Show();
             visible = window.IsMediaCaptionPaneVisible;
             heading = window.MediaCaptionPaneHeading;
             createEnabledBeforeInput = window.IsMediaCaptionCreateEnabled;
 
-            window.SetMediaCaptionPaneInput(
+            window.MediaPaneHost.SetCaptionInput(new(
                 "English captions",
                 "en-US",
                 "ppt/media/demo-captions.vtt",
-                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n");
+                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n"));
             createEnabledAfterInput = window.IsMediaCaptionCreateEnabled;
-            create = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Create);
+            create = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Create);
             mutation = window.LastMediaCaptionAuthoringMutationPlan;
             transcriptAfterCreate = window.LastMediaTranscriptPlan;
             trackCountAfterCreate = window.MediaCaptionPaneTrackCount;
@@ -5792,20 +5792,20 @@ public sealed class MainWindowHeadlessTests : IDisposable
             deleteEnabledAfterCreate = window.IsMediaCaptionDeleteEnabled;
             dirty = window.IsDirty;
 
-            window.SetMediaCaptionPaneInput(
+            window.MediaPaneHost.SetCaptionInput(new(
                 "English captions",
                 "en-US",
                 "ppt/media/demo-captions.vtt",
-                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n",
+                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n"),
                 selectedTrackIndex: 0);
-            replace = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Replace);
+            replace = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Replace);
             transcriptAfterReplace = window.LastMediaTranscriptPlan;
 
-            delete = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
+            delete = window.MediaPaneHost.ApplyCaption(PresentationMediaCaptionAuthoringIntentKind.Delete);
             trackCountAfterDelete = window.MediaCaptionPaneTrackCount;
-            window.HideMediaCaptionPane();
+            window.MediaPaneHost.Hide();
             visibleAfterHide = window.IsMediaCaptionPaneVisible;
-            window.ShowMediaCaptionPane();
+            window.MediaPaneHost.Show();
             visibleAfterReopen = window.IsMediaCaptionPaneVisible;
         });
 
@@ -5860,10 +5860,10 @@ public sealed class MainWindowHeadlessTests : IDisposable
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.ShowMediaCaptionPane();
+            window.MediaPaneHost.Show();
             window.MediaVolumePercent.Should().Be(80);
-            window.SetMediaVolumePaneInput(25);
-            applied = window.ApplyMediaVolumePane();
+            window.MediaPaneHost.SetVolumeInput(25);
+            applied = window.MediaPaneHost.ApplyVolume();
             volume = mediaShape.Media!.VolumePercent;
             dirty = window.IsDirty;
         });
@@ -5895,9 +5895,9 @@ public sealed class MainWindowHeadlessTests : IDisposable
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.ShowMediaCaptionPane();
-            window.SetMediaPlaybackPaneInput(MediaPlaybackStartMode.Automatically, true, true, true, true);
-            applied = window.ApplyMediaPlaybackPane();
+            window.MediaPaneHost.Show();
+            window.MediaPaneHost.SetPlaybackInput(MediaPlaybackStartMode.Automatically, true, true, true, true);
+            applied = window.MediaPaneHost.ApplyPlayback();
             startMode = mediaShape.Media!.PlaybackStartMode;
             loop = mediaShape.Media.Loop;
             mediaShape.Media.RewindAfterPlaying.Should().BeTrue();
@@ -5935,8 +5935,8 @@ public sealed class MainWindowHeadlessTests : IDisposable
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.SetMediaTimingPaneInput(125, 250, 500, 750);
-            applied = window.ApplyMediaTimingPane();
+            window.MediaPaneHost.SetTimingInput(125, 250, 500, 750);
+            applied = window.MediaPaneHost.ApplyTiming();
             trimStart = mediaShape.Media!.TrimStartMilliseconds;
             trimEnd = mediaShape.Media.TrimEndMilliseconds;
             fadeIn = mediaShape.Media.FadeInMilliseconds;
@@ -5976,13 +5976,13 @@ public sealed class MainWindowHeadlessTests : IDisposable
             window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
             window.Editor.Select(mediaShape.Id);
 
-            window.SetMediaBookmarkPaneInput("Intro", 1250.25);
-            appliedCreate = window.ApplyMediaBookmarkCreatePane();
-            window.SetMediaBookmarkPaneInput("Demo", 2500);
-            appliedReplace = window.ApplyMediaBookmarkReplacePane();
+            window.MediaPaneHost.SetBookmarkInput("Intro", 1250.25);
+            appliedCreate = window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Create);
+            window.MediaPaneHost.SetBookmarkInput("Demo", 2500);
+            appliedReplace = window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Replace);
             name = mediaShape.Media!.Bookmarks.Single().Name;
-            appliedDelete = window.ApplyMediaBookmarkDeletePane();
-            count = window.MediaBookmarkCount;
+            appliedDelete = window.MediaPaneHost.ApplyBookmark(PresentationMediaBookmarkMutationIntentKind.Delete);
+            count = window.MediaPaneHost.BookmarkCount;
             dirty = window.IsDirty;
         });
 

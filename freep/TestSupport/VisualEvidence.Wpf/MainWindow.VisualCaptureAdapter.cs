@@ -90,7 +90,7 @@ public sealed partial class MainWindow
         if (owner.ProofingPaneIssueRowCount > 0)
             owner.SelectProofingIssueRow(0);
     }
-    internal void ShowMediaCaptionPane() => owner.ShowMediaCaptionPane();
+    internal void ShowMediaCaptionPane() => owner.MediaPaneHost.Show();
     internal void ShowSmartArtTextPane() => owner.ShowSmartArtTextPane();
     internal void EnsureAnimationPaneVisible()
     {

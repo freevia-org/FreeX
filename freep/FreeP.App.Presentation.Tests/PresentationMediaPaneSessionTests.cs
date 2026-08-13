@@ -300,6 +300,40 @@ public sealed class PresentationMediaPaneSessionTests
     }
 
     [Fact]
+    public void HostSnapshotPlanner_NormalizesNativeDefaultsAndTriStatePlayback()
+    {
+        PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(null)
+            .NormalizedVolumePercent.Should().Be(80);
+
+        var playback = PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(
+            startModeIndex: null,
+            loop: null,
+            showWhenStopped: null,
+            rewindAfterPlaying: null,
+            playFullScreen: null,
+            stopAfterSlidesText: null);
+
+        playback.StartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
+        playback.Loop.Should().BeFalse();
+        playback.ShowWhenStopped.Should().BeTrue();
+        playback.RewindAfterPlaying.Should().BeFalse();
+        playback.PlayFullScreen.Should().BeFalse();
+        playback.StopAfterSlides.Should().Be(1);
+    }
+
+    [Fact]
+    public void CaptionPanePlan_ResolvesRequiredActionsByStableCommandId()
+    {
+        var (editor, _) = CreateSelectedMediaEditor();
+        var plan = CreateSession(editor).RefreshCaptionAuthoringPanePlan(null, null, null, null);
+
+        plan.GetRequiredAction(PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId)
+            .Intent.Should().Be(PresentationMediaCaptionAuthoringIntentKind.Close);
+        var missing = () => plan.GetRequiredAction("missing.command");
+        missing.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
     public void MainWindowSourceGuards_KeepMediaTransitionsInHostCoordinator()
     {
         var root = FindWorkspaceRoot();
@@ -315,18 +349,32 @@ public sealed class PresentationMediaPaneSessionTests
             source.Should().Contain("CaptureMediaPlaybackHostSnapshot()");
             source.Should().Contain("CaptureMediaTimingHostSnapshot()");
             source.Should().Contain("CaptureMediaBookmarkHostSnapshot()");
-            source.Should().Contain("_mediaPaneHostCoordinator.Show()");
-            source.Should().Contain("_mediaPaneHostCoordinator.Hide()");
-            source.Should().Contain("_mediaPaneHostCoordinator.SetCaptionInput(");
-            source.Should().Contain("_mediaPaneHostCoordinator.SetVolumeInput(");
-            source.Should().Contain("_mediaPaneHostCoordinator.SetPlaybackInput(");
-            source.Should().Contain("_mediaPaneHostCoordinator.SetTimingInput(");
-            source.Should().Contain("_mediaPaneHostCoordinator.SetBookmarkInput(");
+            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureCaption(");
+            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureVolume(");
+            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CapturePlayback(");
+            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureTiming(");
+            source.Should().Contain("PresentationMediaPaneHostSnapshotPlanner.CaptureBookmark(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyCaption(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyVolume(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyPlayback(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyTiming(");
             source.Should().Contain("_mediaPaneHostCoordinator.ApplyBookmark(");
+            source.Should().Contain("plan.GetRequiredAction(");
+            source.Should().NotContain("GetMediaCaptionPaneAction(");
+            source.Should().NotContain("ShowMediaCaptionPane(");
+            source.Should().NotContain("HideMediaCaptionPane(");
+            source.Should().NotContain("SetMediaCaptionPaneInput(");
+            source.Should().NotContain("SetMediaVolumePaneInput(");
+            source.Should().NotContain("SetMediaPlaybackPaneInput(");
+            source.Should().NotContain("ApplyMediaCaptionPane(");
+            source.Should().NotContain("ApplyMediaVolumePane(");
+            source.Should().NotContain("ApplyMediaPlaybackPane(");
+            source.Should().NotContain("SetMediaTimingPaneInput(");
+            source.Should().NotContain("ApplyMediaTimingPane(");
+            source.Should().NotContain("SetMediaBookmarkPaneInput(");
+            source.Should().NotContain("ApplyMediaBookmarkCreatePane(");
+            source.Should().NotContain("ApplyMediaBookmarkReplacePane(");
+            source.Should().NotContain("ApplyMediaBookmarkDeletePane(");
             source.Should().NotContain("_mediaPaneSession");
             source.Should().NotContain("_mediaCaptionPaneRefreshing");
             source.Should().NotContain("_mediaPaneHostCoordinator.BuildRenderPlan(");

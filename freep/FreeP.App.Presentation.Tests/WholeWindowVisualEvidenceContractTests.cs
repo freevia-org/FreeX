@@ -298,11 +298,11 @@ public sealed class WholeWindowVisualEvidenceContractTests
             (
                 MainWindow: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.cs")),
                 Capture: File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Wpf", "WpfWholeWindowVisualEvidenceCoordinator.cs")),
-                Adapter: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Host", "MainWindow.VisualCaptureAdapter.cs"))),
+                Adapter: File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Wpf", "MainWindow.VisualCaptureAdapter.cs"))),
             (
                 MainWindow: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.cs")),
                 Capture: File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Avalonia", "AvaloniaWholeWindowVisualEvidenceCoordinator.cs")),
-                Adapter: File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Avalonia", "MainWindow.VisualCaptureAdapter.cs"))),
+                Adapter: File.ReadAllText(Path.Combine(root, "freep", "TestSupport", "VisualEvidence.Avalonia", "MainWindow.VisualCaptureAdapter.cs"))),
         };
 
         coordinator.Should().Contain("case WholeWindowVisualEvidenceActivationKind.MediaCaptionPane:")
@@ -312,9 +312,9 @@ public sealed class WholeWindowVisualEvidenceContractTests
             host.Capture.Should().Contain("IWholeWindowVisualEvidenceProbe.ShowMediaCaptionPane()")
                 .And.Contain("_access.ShowMediaCaptionPane();");
             host.Adapter.Should().Contain("if (owner.IsMediaCaptionPaneVisible) result.Add(\"accessibility.media-caption-pane\")");
-            host.MainWindow.Should().Contain("ShowMediaCaptionPane() =>")
-                .And.Contain("_mediaPaneHostCoordinator.Show();")
-                .And.Contain("HideMediaCaptionPane() => _mediaPaneHostCoordinator.Hide();");
+            host.MainWindow.Should().Contain("internal PresentationMediaPaneHostCoordinator MediaPaneHost =>")
+                .And.Contain("_mediaPaneHostCoordinator;")
+                .And.NotContain("ShowMediaCaptionPane()");
         }
     }
 }
