@@ -12,6 +12,8 @@
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
   </PropertyGroup>
 
+  <Import Project="..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props" />
+
   <PropertyGroup Condition="'$(FreeWValidationHost)' == 'true'">
     <OutputPath>bin\Validation\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\Validation\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
@@ -108,22 +110,6 @@
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeW.icns"
              Link="FreeW.icns"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
-    <!-- Reuse the canonical command SVGs that FreeW's WPF host links from FreeX. The shared
-         Avalonia loader resolves these from Resources\CommandIconsSvg at runtime. -->
-    <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
-             Exclude="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\arrange-all.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\breaks.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\eraser.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\new-window.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\paste-special.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-comments.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\show-notes.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\sort.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\strikethrough.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-colors.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-effects.svg;..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\theme-fonts.svg"
-             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
-    <!-- FreeW-specific canonical artwork is owned by the renderer-neutral ribbon definitions project. -->
-    <Content Include="..\FreeW.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
-             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
-             CopyToOutputDirectory="PreserveNewest"
-             CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="..\FreeW.Ribbon.Definitions\Resources\ContentIconsSvg\**\*.svg"
-             Link="Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>

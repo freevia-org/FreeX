@@ -77,20 +77,50 @@ public sealed class RibbonCommandIconAssetTests
     }
 
     [Fact]
-    public void FreeW_project_links_canonical_FreeX_assets_for_output_and_publish()
+    public void FreeW_hosts_import_one_definitions_owned_asset_composition()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var projectPath = Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
-        var project = XDocument.Load(projectPath);
-        var canonicalIcons = project
+        const string importPath = @"..\FreeW.Ribbon.Definitions\FreeW.Ribbon.Assets.props";
+        foreach (var projectPath in new[]
+        {
+            Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"),
+            Path.Combine(root, "freew", "FreeW.App.Avalonia", "FreeW.App.Avalonia.csproj")
+        })
+        {
+            var project = XDocument.Load(projectPath);
+            project.Descendants("Import")
+                .Single(item => (string?)item.Attribute("Project") == importPath)
+                .Should().NotBeNull();
+            project.Descendants("Content")
+                .Should().NotContain(item =>
+                    ((string?)item.Attribute("Include") ?? string.Empty).Contains("CommandIconsSvg"));
+            project.Descendants("Content")
+                .Should().NotContain(item =>
+                    ((string?)item.Attribute("Include") ?? string.Empty).Contains("ContentIconsSvg"));
+        }
+
+        var assetPropsPath = Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "FreeW.Ribbon.Assets.props");
+        var assets = XDocument.Load(assetPropsPath);
+        var canonicalIcons = assets
             .Descendants("Content")
             .Single(item => (string?)item.Attribute("Include") ==
-                @"..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
+                @"$(MSBuildThisFileDirectory)..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
 
         ((string?)canonicalIcons.Attribute("Link")).Should().Be(
             @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
         ((string?)canonicalIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
         ((string?)canonicalIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
+
+        var contentIcons = assets
+            .Descendants("Content")
+            .Single(item => (string?)item.Attribute("Include") ==
+                @"$(MSBuildThisFileDirectory)Resources\ContentIconsSvg\**\*.svg");
+        ((string?)contentIcons.Attribute("Link")).Should().Be(
+            @"Resources\ContentIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
+        ((string?)contentIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
+        contentIcons.Element("CopyToPublishDirectory")!.Value.Should().Be("PreserveNewest");
+        ((string?)contentIcons.Element("CopyToPublishDirectory")!.Attribute("Condition"))
+            .Should().Be("'$(UseWPF)' != 'true'");
 
         foreach (var alias in new[]
         {
@@ -105,11 +135,15 @@ public sealed class RibbonCommandIconAssetTests
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var iconDirectory = Path.Combine(root, "freew", "FreeW.Ribbon.Definitions", "Resources", "CommandIconsSvg");
-        var project = XDocument.Load(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"));
-        var localIcons = project
+        var assets = XDocument.Load(Path.Combine(
+            root,
+            "freew",
+            "FreeW.Ribbon.Definitions",
+            "FreeW.Ribbon.Assets.props"));
+        var localIcons = assets
             .Descendants("Content")
             .Single(item => (string?)item.Attribute("Include") ==
-                @"..\FreeW.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
+                @"$(MSBuildThisFileDirectory)Resources\CommandIconsSvg\**\*.svg");
 
         ((string?)localIcons.Attribute("Link")).Should().Be(
             @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
