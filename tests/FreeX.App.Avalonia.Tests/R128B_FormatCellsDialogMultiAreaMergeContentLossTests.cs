@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -79,7 +78,7 @@ public sealed class R128B_FormatCellsDialogMultiAreaMergeContentLossTests
 
                 // initialTabIndex: 1 selects the Alignment tab (where the Merge Cells checkbox
                 // lives), mirroring a user clicking the Alignment tab after Ctrl+1.
-                var task = InvokePrivateTaskAsync(window, "ShowFormatCellsDialogAsync", 1);
+                var task = window.ShowFormatCellsDialogForTestAsync(1);
                 await DrainInputAsync();
 
                 var formatDialog = FindOwnedWindow(window, "FormatCellsCompactDialog");
@@ -148,7 +147,7 @@ public sealed class R128B_FormatCellsDialogMultiAreaMergeContentLossTests
 
                 window.Session.SelectRanges(activeArea, [siblingArea, activeArea]);
 
-                var task = InvokePrivateTaskAsync(window, "ShowFormatCellsDialogAsync", 1);
+                var task = window.ShowFormatCellsDialogForTestAsync(1);
                 await DrainInputAsync();
 
                 var formatDialog = FindOwnedWindow(window, "FormatCellsCompactDialog");
@@ -199,14 +198,6 @@ public sealed class R128B_FormatCellsDialogMultiAreaMergeContentLossTests
             .FirstOrDefault(b => AutomationProperties.GetAutomationId(b) == automationId);
         button.Should().NotBeNull($"a button with automation id '{automationId}' must be present");
         button!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-    }
-
-    private static Task InvokePrivateTaskAsync(MainWindow window, string methodName, params object[] args)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        return (Task)method.Invoke(window, args)!;
     }
 
     private static async Task DrainInputAsync()

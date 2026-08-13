@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia.Controls;
@@ -42,11 +41,7 @@ public sealed class ChartFormatDialogLifecycleRegressionTests
                     Content = new StackPanel { Children = { initial, second } },
                 };
 
-                var configure = typeof(MainWindow).GetMethod(
-                    "ConfigureChartDialogKeyboardLifecycle",
-                    BindingFlags.Static | BindingFlags.NonPublic)
-                    ?? throw new InvalidOperationException("Missing chart dialog keyboard lifecycle helper.");
-                configure.Invoke(null, [dialog, initial]);
+                MainWindow.ConfigureChartDialogKeyboardLifecycleForTest(dialog, initial);
 
                 dialog.Show(owner);
                 dialog.UpdateLayout();

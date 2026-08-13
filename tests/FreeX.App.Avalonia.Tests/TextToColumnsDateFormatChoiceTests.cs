@@ -1,4 +1,3 @@
-using System.Reflection;
 
 using FluentAssertions;
 
@@ -102,10 +101,6 @@ public sealed class TextToColumnsDateFormatChoiceTests
 
     private static IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)> GetFormatChoices()
     {
-        var property = typeof(MainWindow).GetProperty(
-            "TextToColumnsFormatChoices",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
-        return (IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)>)property.GetValue(null)!;
+        return MainWindow.TextToColumnsFormatChoicesForTest;
     }
 }

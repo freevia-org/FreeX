@@ -1,6 +1,4 @@
-using System.Reflection;
 using System.Threading;
-using System.Threading.Tasks;
 
 using Avalonia.Headless;
 
@@ -39,7 +37,7 @@ public sealed class R23_CalcModeAutomaticExceptDataTablesTests
             // assertion below would be vacuously true.
             window.Session.Workbook.CalculationMode.Should().NotBe(WorkbookCalculationMode.AutomaticExceptDataTables);
 
-            InvokePrivate(window, "SetCalculationModeAutomaticExceptDataTables");
+            window.SetCalculationModeAutomaticExceptDataTablesForTest();
 
             window.Session.Workbook.CalculationMode.Should().Be(
                 WorkbookCalculationMode.AutomaticExceptDataTables,
@@ -59,10 +57,10 @@ public sealed class R23_CalcModeAutomaticExceptDataTablesTests
         {
             var window = new MainWindow([]);
 
-            InvokePrivate(window, "SetCalculationModeAutomaticExceptDataTables");
+            window.SetCalculationModeAutomaticExceptDataTablesForTest();
             var modeAfterExceptDataTables = window.Session.Workbook.CalculationMode;
 
-            InvokePrivate(window, "SetCalculationModeAutomatic");
+            window.SetCalculationModeAutomaticForTest();
             var modeAfterPlainAutomatic = window.Session.Workbook.CalculationMode;
 
             modeAfterExceptDataTables.Should().Be(WorkbookCalculationMode.AutomaticExceptDataTables);
@@ -76,11 +74,4 @@ public sealed class R23_CalcModeAutomaticExceptDataTablesTests
         }, CancellationToken.None);
     }
 
-    private static void InvokePrivate(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        method.Invoke(window, null);
-    }
 }

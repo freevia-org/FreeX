@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -89,7 +88,7 @@ public sealed class R128B_FormatCellsMultiAreaMergeContentWarningTests
                 // The "Merge cells" checkbox lives on the Alignment tab (index 1), so open the dialog
                 // directly on that tab -- TabControl only realizes the selected tab's content into the
                 // visual tree, and this test needs no other tab.
-                var formatCellsTask = InvokePrivateTaskAsync(window, "ShowFormatCellsDialogAsync", 1);
+                var formatCellsTask = window.ShowFormatCellsDialogForTestAsync(1);
                 await DrainInputAsync();
 
                 var formatCellsDialog = FindOwnedWindow(window, "FormatCellsCompactDialog");
@@ -181,7 +180,7 @@ public sealed class R128B_FormatCellsMultiAreaMergeContentWarningTests
 
                 window.Session.SelectRanges(activeArea, [siblingArea, activeArea]);
 
-                var formatCellsTask = InvokePrivateTaskAsync(window, "ShowFormatCellsDialogAsync", 1);
+                var formatCellsTask = window.ShowFormatCellsDialogForTestAsync(1);
                 await DrainInputAsync();
 
                 var formatCellsDialog = FindOwnedWindow(window, "FormatCellsCompactDialog");
@@ -226,14 +225,6 @@ public sealed class R128B_FormatCellsMultiAreaMergeContentWarningTests
             .FirstOrDefault(candidate => AutomationProperties.GetAutomationId(candidate) == automationId);
         match.Should().NotBeNull($"a window with automation id '{automationId}' must be owned by MainWindow");
         return match!;
-    }
-
-    private static Task InvokePrivateTaskAsync(MainWindow window, string methodName, params object[] args)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        return (Task)method.Invoke(window, args)!;
     }
 
     private static async Task DrainInputAsync()

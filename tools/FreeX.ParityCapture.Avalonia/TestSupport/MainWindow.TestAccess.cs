@@ -45,6 +45,7 @@ using FreeX.App.Presentation.SheetUI;
 using FreeX.App.Presentation.Shell;
 using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Presentation.Sparklines;
+using FreeX.App.Presentation.TextToColumns;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Services.Updates;
@@ -708,5 +709,121 @@ public sealed partial class MainWindow
     partial void ResolveLossyFormatFeatureLossConfirmHandler(
         ref Func<string, UserMessageResult>? handler) =>
         handler = LossyFormatFeatureLossConfirmOverrideForTest;
+
+    internal static IReadOnlyList<(TextToColumnsColumnFormat Format, string Label)>
+        TextToColumnsFormatChoicesForTest => TextToColumnsFormatChoices;
+
+    internal void InsertSheetRowsForTest() => InsertSheetRows();
+
+    internal void InsertSheetColumnsForTest() => InsertSheetColumns();
+
+    internal void DeleteSheetRowsForTest() => DeleteSheetRows();
+
+    internal void DeleteSheetColumnsForTest() => DeleteSheetColumns();
+
+    internal void DeleteActiveSheetForTest() => DeleteActiveSheet();
+
+    internal void DuplicateActiveSheetForTest() => DuplicateActiveSheet();
+
+    internal void MoveActiveSheetLeftForTest() => MoveActiveSheetLeft();
+
+    internal void MoveActiveSheetRightForTest() => MoveActiveSheetRight();
+
+    internal void UndoLastEditForTest() => UndoLastEdit();
+
+    internal void RedoLastEditForTest() => RedoLastEdit();
+
+    internal void ClearSelectedRangeContentsForTest() => ClearSelectedRangeContents();
+
+    internal void ClearSelectionAndEditForTest() => ClearSelectionAndEdit();
+
+    internal void SetCalculationModeAutomaticForTest() => SetCalculationModeAutomatic();
+
+    internal void SetCalculationModeAutomaticExceptDataTablesForTest() =>
+        SetCalculationModeAutomaticExceptDataTables();
+
+    internal void DeleteActiveCellNoteForTest() => DeleteActiveCellNote();
+
+    internal void DeleteActiveCellThreadedCommentForTest() => DeleteActiveCellThreadedComment();
+
+    internal Task MergeAndCenterSelectedRangeForTestAsync() => MergeAndCenterSelectedRangeAsync();
+
+    internal Task MergeSelectedRangeForTestAsync() => MergeSelectedRangeAsync();
+
+    internal Task MergeAcrossSelectedRangeForTestAsync() => MergeAcrossSelectedRangeAsync();
+
+    internal Task ShowInsertCellsDialogForTestAsync() => ShowInsertCellsDialogAsync();
+
+    internal Task ShowDeleteCellsDialogForTestAsync() => ShowDeleteCellsDialogAsync();
+
+    internal Task ShowFormatCellsDialogForTestAsync(int initialTabIndex = 0) =>
+        ShowFormatCellsDialogAsync(initialTabIndex);
+
+    internal Task ShowFindDialogForTestAsync() => ShowFindDialogAsync();
+
+    internal Task ShowReplaceDialogForTestAsync() => ShowReplaceDialogAsync();
+
+    internal Task ShowOptionsDialogForTestAsync() => ShowOptionsDialogAsync();
+
+    internal Task ShowHeaderFooterDialogForTestAsync() => ShowHeaderFooterDialogAsync();
+
+    internal Task ShowPageSetupDialogForTestAsync() => ShowPageSetupDialogAsync(default, false);
+
+    internal Task ShowSymbolPickerForTestAsync() => ShowSymbolPickerAsync();
+
+    internal async Task ShowAdvancedFilterInputDialogForTestAsync() =>
+        _ = await ShowAdvancedFilterInputDialogAsync();
+
+    internal Task ShowCommentsListForTestAsync() => ShowCommentsListAsync();
+
+    internal Task ShowWatchWindowDialogForTestAsync() => ShowWatchWindowDialogAsync();
+
+    internal Task ShowErrorCheckingParityDialogForTestAsync() => ShowErrorCheckingParityDialogAsync();
+
+    internal Task ShowSelectionPaneParityDialogForTestAsync() => ShowSelectionPaneParityDialogAsync();
+
+    internal Task ShowSpellCheckParityDialogForTestAsync() => ShowSpellCheckParityDialogAsync();
+
+    internal Task ShowTextToColumnsParityDialogForTestAsync() => ShowTextToColumnsParityDialogAsync();
+
+    internal Task ShowDataValidationInputDialogForTestAsync() => ShowDataValidationInputDialogAsync();
+
+    internal Task ShowFindReplaceTabbedDialogForTestAsync(bool replaceMode = false) =>
+        ShowFindReplaceTabbedDialogAsync(replaceMode);
+
+    internal async Task ShowFormatCellsInputDialogForTestAsync(int initialTabIndex = 0) =>
+        _ = await ShowFormatCellsInputDialogAsync(initialTabIndex);
+
+    internal static void ConfigureDialogCancelOnEscapeForTest(Window dialog, Button cancelButton) =>
+        ConfigureDialogCancelOnEscape(dialog, cancelButton);
+
+    internal static void ConfigureDialogTabCycleForTest(Window dialog, Control root) =>
+        ConfigureDialogTabCycle(dialog, root);
+
+    internal static void ConfigureChartDialogKeyboardLifecycleForTest(Window dialog, Control initialFocus) =>
+        ConfigureChartDialogKeyboardLifecycle(dialog, initialFocus);
+
+    internal static void ConfigureLegalNoticesDialogKeyboardForTest(
+        Window dialog,
+        TabControl tabControl,
+        Button closeButton) =>
+        ConfigureLegalNoticesDialogKeyboard(dialog, tabControl, closeButton);
+
+    internal static void ConfigurePivotDialogLifecycleForTest(
+        Window dialog,
+        Control initialFocus,
+        bool selectAllText = false) =>
+        ConfigurePivotDialogLifecycle(dialog, initialFocus, selectAllText);
+
+    internal static Task SettleDialogRangeInteractionBoundaryForTestAsync(Window dialog) =>
+        SettleDialogRangeInteractionBoundaryAsync(dialog);
+
+    internal static int CountDialogTabStopsForTest(Window dialog) => CountDialogTabStops(dialog);
+
+    internal static Task<string> ExerciseTabCycleForTestAsync(
+        Window dialog,
+        bool reverse,
+        int tabStops) =>
+        ExerciseTabCycleAsync(dialog, reverse, tabStops);
 
 }

@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia.Automation;
@@ -187,7 +186,7 @@ public sealed class OptionsDialogAdvancedParitySourceTests
             try
             {
                 owner.Show();
-                optionsTask = InvokePrivateTaskAsync(owner, "ShowOptionsDialogAsync");
+                optionsTask = owner.ShowOptionsDialogForTestAsync();
                 await DrainInputAsync();
 
                 var options = FindOwnedWindow(owner, "OptionsDialog");
@@ -260,14 +259,6 @@ public sealed class OptionsDialogAdvancedParitySourceTests
 
     private static AvaloniaUserMessageDialog FindOwnedMessage(Window owner) =>
         owner.OwnedWindows.OfType<AvaloniaUserMessageDialog>().Single(window => window.IsVisible);
-
-    private static Task InvokePrivateTaskAsync(MainWindow owner, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
-        return method.Invoke(owner, null) as Task
-            ?? throw new InvalidOperationException($"Production dialog opener {methodName} did not return Task.");
-    }
 
     private static async Task DrainInputAsync()
     {

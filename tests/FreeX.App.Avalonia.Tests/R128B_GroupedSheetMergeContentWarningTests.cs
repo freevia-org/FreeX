@@ -1,5 +1,4 @@
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -111,7 +110,7 @@ public sealed class R128B_GroupedSheetMergeContentWarningTests
                 // the defect this test exists to catch.
                 window.Session.SelectRange(range);
 
-                var task = InvokePrivateTaskAsync(window, "MergeAndCenterSelectedRangeAsync");
+                var task = window.MergeAndCenterSelectedRangeForTestAsync();
                 await DrainInputAsync();
 
                 // THE DEFECT: because only the active sheet (Sheet1, empty) was analyzed, the pre-fix
@@ -197,7 +196,7 @@ public sealed class R128B_GroupedSheetMergeContentWarningTests
                 // rather than failing. The two sibling tests in this file already use the correct
                 // shape: start the task, PUMP the dispatcher, then await. Match them even though no
                 // dialog is expected here -- the pumping is what lets the method finish at all.
-                var mergeTask = InvokePrivateTaskAsync(window, "MergeAndCenterSelectedRangeAsync");
+                var mergeTask = window.MergeAndCenterSelectedRangeForTestAsync();
                 await DrainInputAsync();
                 await mergeTask;
 
@@ -255,7 +254,7 @@ public sealed class R128B_GroupedSheetMergeContentWarningTests
                 window.Session.SelectRange(range);
 
                 // The "Merge cells" checkbox lives on the Alignment tab (index 1).
-                var formatCellsTask = InvokePrivateTaskAsync(window, "ShowFormatCellsDialogAsync", 1);
+                var formatCellsTask = window.ShowFormatCellsDialogForTestAsync(1);
                 await DrainInputAsync();
 
                 var formatCellsDialog = FindOwnedWindow(window, "FormatCellsCompactDialog");
@@ -336,7 +335,7 @@ public sealed class R128B_GroupedSheetMergeContentWarningTests
                 window.Session.CommitCellText("active-sheet-data").Success.Should().BeTrue();
                 window.Session.SelectRange(range);
 
-                var formatCellsTask = InvokePrivateTaskAsync(window, "ShowFormatCellsDialogAsync", 1);
+                var formatCellsTask = window.ShowFormatCellsDialogForTestAsync(1);
                 await DrainInputAsync();
 
                 var formatCellsDialog = FindOwnedWindow(window, "FormatCellsCompactDialog");
@@ -383,17 +382,6 @@ public sealed class R128B_GroupedSheetMergeContentWarningTests
         match.Should().NotBeNull($"a window with automation id '{automationId}' must be owned by MainWindow");
         return match!;
     }
-
-    private static Task InvokePrivateAsync(MainWindow window, string methodName, params object[] args)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        return (Task)method.Invoke(window, args)!;
-    }
-
-    private static Task InvokePrivateTaskAsync(MainWindow window, string methodName, params object[] args) =>
-        InvokePrivateAsync(window, methodName, args);
 
     private static async Task DrainInputAsync()
     {

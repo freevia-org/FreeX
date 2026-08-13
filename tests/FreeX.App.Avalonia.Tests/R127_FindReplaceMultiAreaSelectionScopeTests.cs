@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -72,7 +71,7 @@ public sealed class R127_FindReplaceMultiAreaSelectionScopeTests
                 // (primary) area while SelectedRanges accumulates the full union.
                 window.Session.SelectRanges(areaTwo, [areaOne, areaTwo]);
 
-                await InvokePrivateTaskAsync(window, "ShowReplaceDialogAsync");
+                await window.ShowReplaceDialogForTestAsync();
                 var dialog = FindOwnedFindReplaceWindow(window);
 
                 var replaceFindBox = dialog.GetVisualDescendants().OfType<TextBox>()
@@ -139,7 +138,7 @@ public sealed class R127_FindReplaceMultiAreaSelectionScopeTests
                 var range = new GridRange(new CellAddress(sheetId, 2, 2), new CellAddress(sheetId, 5, 4)); // B2:D5
                 window.Session.SelectRange(range);
 
-                await InvokePrivateTaskAsync(window, "ShowReplaceDialogAsync");
+                await window.ShowReplaceDialogForTestAsync();
                 var dialog = FindOwnedFindReplaceWindow(window);
 
                 var replaceFindBox = dialog.GetVisualDescendants().OfType<TextBox>()
@@ -181,13 +180,4 @@ public sealed class R127_FindReplaceMultiAreaSelectionScopeTests
         owner.OwnedWindows.Single(window =>
             string.Equals(AutomationProperties.GetAutomationId(window), "FindReplaceDialog", StringComparison.Ordinal));
 
-    private static Task InvokePrivateTaskAsync(MainWindow owner, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName,
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
-        return method.Invoke(owner, null) as Task
-            ?? throw new InvalidOperationException($"Production dialog opener {methodName} did not return Task.");
-    }
 }

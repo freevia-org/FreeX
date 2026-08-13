@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -73,7 +72,7 @@ public sealed class R119_FindReplaceStaleScopeTests
                     new CellAddress(originalSheetId, 2, 2),
                     new CellAddress(originalSheetId, 3, 3)));
 
-                await InvokePrivateTaskAsync(window, "ShowFindDialogAsync");
+                await window.ShowFindDialogForTestAsync();
                 var dialog = FindOwnedFindReplaceWindow(window);
                 dialog.IsVisible.Should().BeTrue(
                     "sanity check: the modeless Find & Replace dialog must actually be open before the swap");
@@ -102,7 +101,7 @@ public sealed class R119_FindReplaceStaleScopeTests
 
                 // Positive proof the user is not stuck: reopening Find & Replace against the NEW session
                 // captures a fresh scope and finds the needle that is genuinely present.
-                await InvokePrivateTaskAsync(window, "ShowFindDialogAsync");
+                await window.ShowFindDialogForTestAsync();
                 var freshDialog = FindOwnedFindReplaceWindow(window);
                 freshDialog.Should().NotBeSameAs(dialog, "a brand new dialog instance must be created for the new session");
 
@@ -197,10 +196,10 @@ public sealed class R119_FindReplaceStaleScopeTests
             {
                 window.Show();
 
-                await InvokePrivateTaskAsync(window, "ShowFindDialogAsync");
+                await window.ShowFindDialogForTestAsync();
                 var findDialog = FindOwnedFindReplaceWindow(window);
 
-                await InvokePrivateTaskAsync(window, "ShowReplaceDialogAsync");
+                await window.ShowReplaceDialogForTestAsync();
                 var stillSameDialog = FindOwnedFindReplaceWindow(window);
 
                 stillSameDialog.Should().BeSameAs(findDialog,
@@ -233,13 +232,4 @@ public sealed class R119_FindReplaceStaleScopeTests
         owner.OwnedWindows.Single(window =>
             string.Equals(AutomationProperties.GetAutomationId(window), "FindReplaceDialog", StringComparison.Ordinal));
 
-    private static Task InvokePrivateTaskAsync(MainWindow owner, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName,
-            BindingFlags.Instance | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
-        return method.Invoke(owner, null) as Task
-            ?? throw new InvalidOperationException($"Production dialog opener {methodName} did not return Task.");
-    }
 }

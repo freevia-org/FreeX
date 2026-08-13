@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia.Automation;
@@ -120,11 +119,7 @@ public sealed class LegalNoticesKeyboardLifecycleTests
             },
         };
 
-        var configure = typeof(MainWindow).GetMethod(
-            "ConfigureLegalNoticesDialogKeyboard",
-            BindingFlags.Static | BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("Missing Legal Notices keyboard lifecycle helper.");
-        configure.Invoke(null, [dialog, tabControl, closeButton]);
+        MainWindow.ConfigureLegalNoticesDialogKeyboardForTest(dialog, tabControl, closeButton);
 
         dialog.Show(owner);
         dialog.UpdateLayout();

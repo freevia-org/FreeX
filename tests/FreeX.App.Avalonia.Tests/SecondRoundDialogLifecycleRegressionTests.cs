@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia.Automation;
@@ -19,22 +18,22 @@ public sealed class SecondRoundDialogLifecycleRegressionTests
 
     [Theory]
     [InlineData(
-        "ShowSelectionPaneParityDialogAsync",
+        DialogRoute.SelectionPane,
         "SelectionPaneDialog",
         "SelectionPaneSearchBox",
         "SelectionPaneCancelButton")]
     [InlineData(
-        "ShowSpellCheckParityDialogAsync",
+        DialogRoute.SpellCheck,
         "SpellCheckDialog",
         "SpellCheckSuggestionsList",
         "SpellCheckCancelButton")]
     [InlineData(
-        "ShowTextToColumnsParityDialogAsync",
+        DialogRoute.TextToColumns,
         "TextToColumnsDialog",
         "TextToColumnsDelimitedButton",
         "TextToColumnsCancelButton")]
     public async Task ProductionRoute_FocusesExpectedControl_AndDefersRealCancel(
-        string openerName,
+        DialogRoute route,
         string dialogAutomationId,
         string initialFocusAutomationId,
         string cancelAutomationId)
@@ -47,7 +46,7 @@ public sealed class SecondRoundDialogLifecycleRegressionTests
             try
             {
                 owner.Show();
-                opener = InvokeOpener(owner, openerName);
+                opener = OpenDialogAsync(owner, route);
                 dialog = await WaitForOwnedDialogAsync(owner, dialogAutomationId);
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
@@ -114,7 +113,7 @@ public sealed class SecondRoundDialogLifecycleRegressionTests
             try
             {
                 owner.Show();
-                opener = InvokeOpener(owner, "ShowTextToColumnsParityDialogAsync");
+                opener = OpenDialogAsync(owner, DialogRoute.TextToColumns);
                 dialog = await WaitForOwnedDialogAsync(owner, "TextToColumnsDialog");
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
@@ -171,11 +170,21 @@ public sealed class SecondRoundDialogLifecycleRegressionTests
         }, CancellationToken.None);
     }
 
-    private static Task InvokeOpener(MainWindow owner, string methodName) =>
-        typeof(MainWindow)
-            .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?.Invoke(owner, null) as Task
-        ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
+    private static Task OpenDialogAsync(MainWindow owner, DialogRoute route) =>
+        route switch
+        {
+            DialogRoute.SelectionPane => owner.ShowSelectionPaneParityDialogForTestAsync(),
+            DialogRoute.SpellCheck => owner.ShowSpellCheckParityDialogForTestAsync(),
+            DialogRoute.TextToColumns => owner.ShowTextToColumnsParityDialogForTestAsync(),
+            _ => throw new ArgumentOutOfRangeException(nameof(route)),
+        };
+
+    public enum DialogRoute
+    {
+        SelectionPane,
+        SpellCheck,
+        TextToColumns,
+    }
 
     private static async Task<Window> WaitForOwnedDialogAsync(
         MainWindow owner,

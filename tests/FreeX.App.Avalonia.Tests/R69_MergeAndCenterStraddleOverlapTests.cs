@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
@@ -44,7 +43,7 @@ public sealed class R69_MergeAndCenterStraddleOverlapTests
                 new CellAddress(sheet.Id, 1, 2),
                 new CellAddress(sheet.Id, 1, 4));
             window.Session.SelectRange(existingMerge);
-            await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+            await window.MergeAndCenterSelectedRangeForTestAsync();
             sheet.MergedRegions.Should().Contain(existingMerge, "the setup merge must succeed");
 
             // Select the straddling A1:C1 (overlaps B1:D1's left half only -- neither range contains
@@ -53,7 +52,7 @@ public sealed class R69_MergeAndCenterStraddleOverlapTests
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 1, 3));
             window.Session.SelectRange(straddlingRange);
-            await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+            await window.MergeAndCenterSelectedRangeForTestAsync();
 
             sheet.MergedRegions.Should().Contain(existingMerge,
                 "a straddling/partial overlap must be REJECTED, not treated as the unmerge-toggle gesture -- " +
@@ -84,10 +83,10 @@ public sealed class R69_MergeAndCenterStraddleOverlapTests
                 new CellAddress(sheet.Id, 1, 1),
                 new CellAddress(sheet.Id, 2, 2));
             window.Session.SelectRange(range);
-            await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+            await window.MergeAndCenterSelectedRangeForTestAsync();
             sheet.MergedRegions.Should().Contain(range);
 
-            await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+            await window.MergeAndCenterSelectedRangeForTestAsync();
 
             sheet.MergedRegions.Should().NotContain(range,
                 "selecting exactly the existing merged region and clicking Merge & Center again must still unmerge it");
@@ -116,7 +115,7 @@ public sealed class R69_MergeAndCenterStraddleOverlapTests
             window.Session.SelectRange(range);
 
             window.Session.IsSelectedRangeMerged.Should().BeFalse();
-            await InvokePrivateAsync(window, "MergeAndCenterSelectedRangeAsync");
+            await window.MergeAndCenterSelectedRangeForTestAsync();
 
             sheet.MergedRegions.Should().Contain(range);
             window.StatusTextForTest.Text.Should().Contain("Merged and centered");
@@ -128,12 +127,4 @@ public sealed class R69_MergeAndCenterStraddleOverlapTests
         }, CancellationToken.None);
     }
 
-    private static async Task InvokePrivateAsync(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        var task = (Task)method.Invoke(window, null)!;
-        await task;
-    }
 }

@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 
 using Avalonia.Automation;
@@ -28,7 +27,7 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
             try
             {
                 owner.Show();
-                opener = InvokePrivateTask(owner, "ShowTextToColumnsParityDialogAsync");
+                opener = owner.ShowTextToColumnsParityDialogForTestAsync();
                 dialog = await WaitForOwnedDialogAsync(owner, "TextToColumnsDialog");
                 dialog.Should().NotBeNull();
 
@@ -145,12 +144,6 @@ public sealed class TextToColumnsDialogLifecycleRegressionTests
             }, CancellationToken.None);
         }
     }
-
-    private static Task InvokePrivateTask(MainWindow owner, string methodName) =>
-        typeof(MainWindow)
-            .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
-            ?.Invoke(owner, null) as Task
-        ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
 
     private static async Task<Window?> WaitForOwnedDialogAsync(MainWindow owner, string automationId)
     {

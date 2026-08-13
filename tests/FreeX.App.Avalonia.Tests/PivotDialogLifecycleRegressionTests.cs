@@ -185,17 +185,9 @@ public sealed class PivotDialogLifecycleRegressionTests
                     dialog.UpdateLayout();
                 };
 
-                var countMethod = typeof(MainWindow).GetMethod(
-                    "CountDialogTabStops",
-                    System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
-                    ?? throw new InvalidOperationException("CountDialogTabStops was not found.");
-                ((int)countMethod.Invoke(null, [dialog])!).Should().Be(2);
+                MainWindow.CountDialogTabStopsForTest(dialog).Should().Be(2);
 
-                var cycleMethod = typeof(MainWindow).GetMethod(
-                    "ExerciseTabCycleAsync",
-                    System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
-                    ?? throw new InvalidOperationException("ExerciseTabCycleAsync was not found.");
-                var cycle = (Task<string>)cycleMethod.Invoke(null, [dialog, false, 2])!;
+                var cycle = MainWindow.ExerciseTabCycleForTestAsync(dialog, reverse: false, tabStops: 2);
                 (await cycle).Should().Be("passed:full-cycle:steps=2,stops=2");
                 replaced.Should().BeTrue();
             }
@@ -267,19 +259,11 @@ public sealed class PivotDialogLifecycleRegressionTests
 
     private static void ConfigurePivotDialogLifecycle(Window dialog, Control initialFocus)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ConfigurePivotDialogLifecycle",
-            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("ConfigurePivotDialogLifecycle was not found.");
-        method.Invoke(null, [dialog, initialFocus, false]);
+        MainWindow.ConfigurePivotDialogLifecycleForTest(dialog, initialFocus);
     }
 
     private static void ConfigureDialogTabCycle(Window dialog, Control root)
     {
-        var method = typeof(MainWindow).GetMethod(
-            "ConfigureDialogTabCycle",
-            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
-            ?? throw new InvalidOperationException("ConfigureDialogTabCycle was not found.");
-        method.Invoke(null, [dialog, root]);
+        MainWindow.ConfigureDialogTabCycleForTest(dialog, root);
     }
 }

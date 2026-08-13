@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -48,7 +47,7 @@ public sealed class R127B_InsertDeleteCellsClipboardMarqueeTests
                 new CellAddress(sheet.Id, 5, CellAddress.MaxCol));
             window.Session.SelectRange(wholeRow5);
 
-            await InvokePrivateAsync(window, "ShowInsertCellsDialogAsync");
+            await window.ShowInsertCellsDialogForTestAsync();
 
             window.StatusTextForTest.Text.Should().Be("Inserted rows");
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
@@ -81,7 +80,7 @@ public sealed class R127B_InsertDeleteCellsClipboardMarqueeTests
                 new CellAddress(sheet.Id, CellAddress.MaxRow, 5));
             window.Session.SelectRange(wholeColumnE);
 
-            await InvokePrivateAsync(window, "ShowDeleteCellsDialogAsync");
+            await window.ShowDeleteCellsDialogForTestAsync();
 
             window.StatusTextForTest.Text.Should().Be("Deleted columns");
             window.ClipboardMarqueeRangeForTest.Should().BeNull(
@@ -128,7 +127,7 @@ public sealed class R127B_InsertDeleteCellsClipboardMarqueeTests
                 new CellAddress(sheet.Id, 5, CellAddress.MaxCol));
             window.Session.SelectRange(wholeRow5);
 
-            await InvokePrivateAsync(window, "ShowInsertCellsDialogAsync");
+            await window.ShowInsertCellsDialogForTestAsync();
 
             window.StatusTextForTest.Text.Should().NotBe("Inserted rows", "sanity: protection must block the insert");
             window.ClipboardMarqueeRangeForTest.Should().NotBeNull(
@@ -142,12 +141,4 @@ public sealed class R127B_InsertDeleteCellsClipboardMarqueeTests
         }, CancellationToken.None);
     }
 
-    private static async Task InvokePrivateAsync(MainWindow window, string methodName)
-    {
-        var method = typeof(MainWindow).GetMethod(
-            methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-            ?? throw new System.MissingMethodException(nameof(MainWindow), methodName);
-        var task = (Task)method.Invoke(window, null)!;
-        await task;
-    }
 }
