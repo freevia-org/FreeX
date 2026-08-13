@@ -25,6 +25,19 @@ public sealed class TemporaryResourceLeaseTests
     }
 
     [Fact]
+    public async Task FileLease_WritesAsynchronouslyAndClosesBeforeHandoff()
+    {
+        using var root = new TestTemporaryDirectory(nameof(FileLease_WritesAsynchronouslyAndClosesBeforeHandoff));
+        using var lease = TemporaryFileLease.Create("freex-print-", ".pdf", root.Path);
+
+        await lease.WriteAllBytesAsync(new byte[] { 1, 2, 3 });
+
+        File.ReadAllBytes(lease.Path).Should().Equal(1, 2, 3);
+        using var exclusive = File.Open(lease.Path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        exclusive.Length.Should().Be(3);
+    }
+
+    [Fact]
     public void FileLease_DeterministicallyRetriesAReservedName()
     {
         using var root = new TestTemporaryDirectory(nameof(FileLease_DeterministicallyRetriesAReservedName));

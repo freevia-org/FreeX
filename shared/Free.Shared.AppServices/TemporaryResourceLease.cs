@@ -204,7 +204,7 @@ public sealed class TemporaryFileLease : TemporaryResourceLease
         ReadOnlyMemory<byte> bytes,
         CancellationToken cancellationToken = default)
     {
-        await using var stream = OpenWrite(useAsync: true);
+        using var stream = OpenWrite(useAsync: true);
         await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
     }
 
