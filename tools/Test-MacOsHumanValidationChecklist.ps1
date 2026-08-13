@@ -15,7 +15,7 @@ $validationErrors = New-Object System.Collections.Generic.List[string]
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
 
-    $validationErrors.Add($Message)
+    Add-ToolValidationError -Errors $validationErrors -Message $Message -SuppressWriteError
 }
 
 function Normalize-Cell {

@@ -1,14 +1,12 @@
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+
 function Resolve-VisualEvidenceOutputDirectory {
     param(
         [Parameter(Mandatory = $true)][string]$OutputDirectory,
         [Parameter(Mandatory = $true)][string]$RepoRoot
     )
 
-    if ([IO.Path]::IsPathRooted($OutputDirectory)) {
-        return [IO.Path]::GetFullPath($OutputDirectory)
-    }
-
-    return [IO.Path]::GetFullPath((Join-Path $RepoRoot $OutputDirectory))
+    return Resolve-ToolRepoPath -Path $OutputDirectory -RepoRoot $RepoRoot
 }
 
 function Invoke-VisualEvidenceProcess {
@@ -19,23 +17,37 @@ function Invoke-VisualEvidenceProcess {
         [switch]$OutputToHost
     )
 
-    Push-Location $WorkingDirectory
-    try {
-        if ($OutputToHost) {
-            & $FilePath @Arguments | Out-Host
-        }
-        else {
-            & $FilePath @Arguments
-        }
-        $exitCode = $LASTEXITCODE
+    Invoke-ToolProcess `
+        -FilePath $FilePath `
+        -Arguments $Arguments `
+        -WorkingDirectory $WorkingDirectory `
+        -OutputToHost:$OutputToHost
+}
+
+function Copy-VisualEvidenceProbe {
+    param(
+        [Parameter(Mandatory = $true)][string]$ProbeSource,
+        [Parameter(Mandatory = $true)][string]$SessionDirectory,
+        [string]$DestinationName = (Split-Path -Leaf $ProbeSource)
+    )
+
+    if (-not (Test-Path -LiteralPath $ProbeSource -PathType Leaf)) {
+        throw "Visual-evidence probe was not found: $ProbeSource"
     }
-    finally {
-        Pop-Location
+    if ([IO.Path]::GetFileName($DestinationName) -ne $DestinationName) {
+        throw "Visual-evidence probe destination must be a file name: $DestinationName"
     }
 
-    if ($exitCode -ne 0) {
-        throw "$FilePath exited with code $exitCode."
+    $probeSupport = Join-Path (Split-Path -Parent $ProbeSource) "ProbeScriptSupport.sh"
+    if (-not (Test-Path -LiteralPath $probeSupport -PathType Leaf)) {
+        throw "Visual-evidence probe support was not found: $probeSupport"
     }
+
+    New-Item -ItemType Directory -Path $SessionDirectory -Force | Out-Null
+    $destination = Join-Path $SessionDirectory $DestinationName
+    Copy-Item -LiteralPath $ProbeSource -Destination $destination -Force
+    Copy-Item -LiteralPath $probeSupport -Destination (Join-Path $SessionDirectory "ProbeScriptSupport.sh") -Force
+    return $destination
 }
 
 function Wait-VisualEvidenceFile {

@@ -15,6 +15,7 @@ screenshots_file="$output/screenshot-names.txt"
 manifest="$output/results.json"
 owner_id=""
 owner_title=""
+. "$(dirname "${BASH_SOURCE[0]}")/ProbeScriptSupport.sh"
 required_ids=(
     "visible-window-discovery"
     "rotated-editor-entry-and-caret"
@@ -43,37 +44,10 @@ PY
 }
 
 hash_file() { sha256sum "$1" | awk '{print tolower($1)}'; }
-track_screenshot() { printf '%s\n' "$1" >> "$screenshots_file"; }
-capture() {
-    local name="$1"
-    command -v scrot >/dev/null 2>&1 || return 1
-    scrot -o "$output/$name" >/dev/null 2>&1 || return 1
-    [[ -s "$output/$name" ]] || return 1
-    track_screenshot "$name"
-}
-focus_owner() {
-    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowactivate --sync "$owner_id" >/dev/null 2>&1 || true
-    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowfocus "$owner_id" >/dev/null 2>&1 || true
-    sleep 0.12
-}
 active_owner_now() {
     [[ "$(xdotool getactivewindow 2>/dev/null || true)" == "$owner_id" &&
        "$(xdotool getwindowfocus 2>/dev/null || true)" == "$owner_id" ]]
 }
-send_owner_key() {
-    focus_owner
-    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"
-    sleep "$settle_seconds"
-}
-capture_window_state() {
-    local name="$1"
-    {
-        printf 'owner-window-id=%s\nowner-window-title=%s\n' "$owner_id" "$owner_title"
-        printf 'active-window=%s\nfocus-window=%s\n' "$(xdotool getactivewindow 2>/dev/null || true)" "$(xdotool getwindowfocus 2>/dev/null || true)"
-        printf 'wmctrl-list-begin\n'; wmctrl -l 2>/dev/null || true; printf 'wmctrl-list-end\n'
-    } > "$output/$name"
-}
-
 inspect_pptx() {
     python3 - "$1" "$2" <<'PY'
 import hashlib, json, sys, zipfile
@@ -115,7 +89,7 @@ PY
 save_checkpoint() {
     local prefix="$1" expected="$2"
     local temporary="$output/.$prefix.pptx.tmp" inspect="$output/.$prefix.json.tmp"
-    send_owner_key ctrl+s || return 1
+    probe_send_owner_key ctrl+s || return 1
     for _ in $(seq 1 "$save_attempts"); do
         if cp "$document_path" "$temporary" 2>"$output/$prefix-inspection-error.txt" && inspect_pptx "$temporary" "$inspect" 2>>"$output/$prefix-inspection-error.txt" && assert_package "$inspect" "$expected" 2>>"$output/$prefix-inspection-error.txt"; then
             mv "$temporary" "$output/$prefix.pptx"; mv "$inspect" "$output/$prefix.json"; hash_file "$output/$prefix.pptx" > "$output/$prefix.sha256.txt"; return 0
@@ -174,10 +148,10 @@ if (( ${#visible_owner_ids[@]} == 0 )); then
     record "visible-window-discovery" "failed" "No visible FreeP owner matched the X11 precondition." window-discovery-error.txt
     exit 1
 fi
-owner_id="${visible_owner_ids[${#visible_owner_ids[@]}-1]}"; owner_title="$(xdotool getwindowname "$owner_id" 2>/dev/null || true)"; focus_owner
+owner_id="${visible_owner_ids[${#visible_owner_ids[@]}-1]}"; owner_title="$(xdotool getwindowname "$owner_id" 2>/dev/null || true)"; probe_focus_owner
 owner_focused=false; active_owner_now && owner_focused=true
-capture baseline.png && baseline_capture=true || baseline_capture=false
-capture_window_state owner-discovery-state.txt
+probe_capture baseline.png && baseline_capture=true || baseline_capture=false
+probe_capture_window_state owner-discovery-state.txt
 printf 'owner-window-id=%s\nowner-window-title=%s\nexpected-fixture-filename=%s\nowner-focused=%s\nbaseline-package-valid=%s\nbaseline-screenshot-captured=%s\n' "$owner_id" "$owner_title" "$expected_document_name" "$owner_focused" "$baseline_ok" "$baseline_capture" > "$output/visible-window-discovery-proof.txt"
 if $owner_focused && $baseline_ok && $baseline_capture && [[ "$owner_title" == *"$expected_document_name"* ]]; then
     record "visible-window-discovery" "passed" "Focused visible FreeP window, deterministic fixture title, screenshot, and exact rotated package baseline." visible-window-discovery-proof.txt owner-discovery-state.txt baseline.png baseline-package-inspection.json
@@ -196,16 +170,16 @@ entry_y=$((slide_y + (slide_height_px * shape_entry_y_dip * 9525 + slide_height_
 commit_x=$((slide_x + slide_width_px - 24)); commit_y=$((slide_y + slide_height_px - 24))
 printf 'owner-geometry-begin\n%s\nowner-geometry-end\nfit-constraint=%s\nderived-slide-rect=%s,%s,%s,%s\nrotated-entry-point=%s,%s\nentry-outside-unrotated-aabb=true\n' "$geometry" "$fit_constraint" "$slide_x" "$slide_y" "$slide_width_px" "$slide_height_px" "$entry_x" "$entry_y" > "$output/shape-pointer-calibration.txt"
 
-focus_owner; xdotool mousemove --sync "$entry_x" "$entry_y"; xdotool click --clearmodifiers --repeat 2 --delay 120 1; sleep "$settle_seconds"; capture rotated-editor-entry.png; capture_window_state rotated-editor-entry-state.txt
-send_owner_key ctrl+a; xdotool type --clearmodifiers --delay "$input_delay_ms" 'Typed rotated text'; sleep "$settle_seconds"; capture rotated-editor-input.png; capture_window_state rotated-editor-input-state.txt
+probe_focus_owner; xdotool mousemove --sync "$entry_x" "$entry_y"; xdotool click --clearmodifiers --repeat 2 --delay 120 1; sleep "$settle_seconds"; probe_capture rotated-editor-entry.png; probe_capture_window_state rotated-editor-entry-state.txt
+probe_send_owner_key ctrl+a; xdotool type --clearmodifiers --delay "$input_delay_ms" 'Typed rotated text'; sleep "$settle_seconds"; probe_capture rotated-editor-input.png; probe_capture_window_state rotated-editor-input-state.txt
 if [[ -s "$output/rotated-editor-entry.png" && -s "$output/rotated-editor-input.png" ]]; then record "rotated-editor-entry-and-caret" "passed" "Double-clicked a point inside the rotated shape but outside its unrotated AABB; focused editor state and input screenshot captured." shape-pointer-calibration.txt rotated-editor-entry.png rotated-editor-entry-state.txt rotated-editor-input.png rotated-editor-input-state.txt; else record "rotated-editor-entry-and-caret" "failed" "Rotated editor entry or caret/input capture was missing." shape-pointer-calibration.txt rotated-editor-entry-state.txt; fi
 
-xdotool mousemove --sync "$commit_x" "$commit_y"; xdotool click --clearmodifiers 1; sleep "$settle_seconds"; capture rotated-editor-committed.png; capture_window_state rotated-editor-committed-state.txt
+xdotool mousemove --sync "$commit_x" "$commit_y"; xdotool click --clearmodifiers 1; sleep "$settle_seconds"; probe_capture rotated-editor-committed.png; probe_capture_window_state rotated-editor-committed-state.txt
 if save_checkpoint after-commit 'Typed rotated text'; then record "rotated-editor-typing-selection-commit" "passed" "Real X11 selection replacement, typing, outside-pointer commit, and editor-state capture completed." rotated-editor-input.png rotated-editor-committed.png rotated-editor-committed-state.txt; record "saved-rotated-shape-package" "passed" "Saved PPTX contains exact edited text, original geometry, and 30 degree rotation." after-commit.json after-commit.pptx after-commit.sha256.txt; else record "rotated-editor-typing-selection-commit" "failed" "Typing or outside-pointer commit did not produce the exact saved text." rotated-editor-input.png rotated-editor-committed.png rotated-editor-committed-state.txt; record "saved-rotated-shape-package" "failed" "Saved PPTX did not satisfy exact text, geometry, and rotation assertions." after-commit-inspection-error.txt; fi
 
-focus_owner; xdotool mousemove --sync "$entry_x" "$entry_y"; xdotool click --clearmodifiers --repeat 2 --delay 120 1; sleep "$settle_seconds"; send_owner_key ctrl+a; xdotool type --clearmodifiers --delay "$input_delay_ms" 'Discarded'; sleep "$settle_seconds"; capture rotated-editor-canceled.png
+probe_focus_owner; xdotool mousemove --sync "$entry_x" "$entry_y"; xdotool click --clearmodifiers --repeat 2 --delay 120 1; sleep "$settle_seconds"; probe_send_owner_key ctrl+a; xdotool type --clearmodifiers --delay "$input_delay_ms" 'Discarded'; sleep "$settle_seconds"; probe_capture rotated-editor-canceled.png
 # Do not refocus the top-level window here: changing focus can commit the live editor before
 # Escape reaches its native input control.
-timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$owner_id" Escape; sleep "$settle_seconds"; capture rotated-editor-after-escape.png; capture_window_state rotated-editor-cancel-state.txt
+timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$owner_id" Escape; sleep "$settle_seconds"; probe_capture rotated-editor-after-escape.png; probe_capture_window_state rotated-editor-cancel-state.txt
 if save_checkpoint after-cancel 'Typed rotated text'; then record "escape-cancels-and-preserves-package" "passed" "Second real pointer/keyboard edit was canceled with Escape; exact committed package text, geometry, and rotation remained unchanged." rotated-editor-canceled.png rotated-editor-after-escape.png rotated-editor-cancel-state.txt after-cancel.json; else record "escape-cancels-and-preserves-package" "failed" "Escape did not preserve the exact committed package." rotated-editor-canceled.png rotated-editor-after-escape.png rotated-editor-cancel-state.txt after-cancel-inspection-error.txt; fi
 exit 0

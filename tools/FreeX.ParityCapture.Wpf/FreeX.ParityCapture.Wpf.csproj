@@ -1,13 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\ToolProjects.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.ParityCapture.Wpf</AssemblyName>
     <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeX.ico</ApplicationIcon>
     <ApplicationManifest>..\..\src\FreeX.App.Host\app.manifest</ApplicationManifest>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <EnableDefaultPageItems>false</EnableDefaultPageItems>
-    <ImplicitUsings>enable</ImplicitUsings>
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
-    <Nullable>enable</Nullable>
     <OutputType>WinExe</OutputType>
     <RootNamespace>FreeX.App.Host</RootNamespace>
     <StartupObject>FreeX.App.Host.Program</StartupObject>

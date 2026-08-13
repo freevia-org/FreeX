@@ -48,15 +48,12 @@ function Assert-ManifestContract {
     )
     $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath `
         -InvalidSchemaMessage "Field shortcut schema is not a JSON Schema document."
-    if ($manifest.schemaVersion -ne 1 -or
-        $manifest.suite -ne "freew-linux-field-shortcut-physical" -or
-        $manifest.platform -ne "linux" -or
-        $manifest.shell -ne "avalonia" -or
-        $manifest.app -ne "FreeW" -or
-        $manifest.baseline -ne $false -or
-        $manifest.coverage.exhaustive -ne $false -or
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freew-linux-field-shortcut-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeW"; baseline = $false; appSurface = "document-editor-field-shortcuts"
+    }) -FailureMessage "Field shortcut manifest header does not satisfy its dedicated contract."
+    if ($manifest.coverage.exhaustive -ne $false -or
         $manifest.coverage.scope -ne "physical Alt+F9/F9 field shortcut lane" -or
-        $manifest.appSurface -ne "document-editor-field-shortcuts" -or
         $manifest.window.pattern -ne $fixtureFileName -or
         ([string]$manifest.window.title).IndexOf($fixtureFileName, [StringComparison]::Ordinal) -lt 0 -or
         $manifest.window.visible -ne $true) {
@@ -70,34 +67,15 @@ function Assert-ManifestContract {
         "field-update-shortcut-persist"
     )
     $results = @($manifest.results)
-    $ids = @($results | ForEach-Object { [string]$_.id })
-    if ($results.Count -ne 4 -or $ids.Count -ne ($ids | Select-Object -Unique).Count) {
-        throw "Field shortcut manifest must contain exactly four unique result rows."
-    }
-    foreach ($requiredId in $requiredIds) {
-        if ($ids -notcontains $requiredId) {
-            throw "Field shortcut manifest is missing required result '$requiredId'."
-        }
-    }
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds -AllowAnyOrder `
+        -FailureMessage "Field shortcut manifest must contain exactly four unique result rows."
     Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 4 `
         -FailureMessage "Field shortcut manifest summary does not match its result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-field-shortcut" -or
-            $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1) {
-            throw "Result '$($result.id)' is missing physical evidence metadata."
-        }
-        foreach ($evidence in @($result.evidence)) {
-            $name = [string]$evidence
-            Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Result '$($result.id)'"
-        }
-    }
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $name = [string]$screenshot.name
-        Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Manifest" -ReferenceKind "screenshot"
-    }
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-field-shortcut" -EvidenceLevel "physical-x11-input"
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap
     return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
         -Validator "tools/Run-FreeWFieldShortcutValidation.ps1" `
         -ContractReference "tools/LinuxInteractiveDocker/field-shortcut-validation.schema.json"

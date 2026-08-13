@@ -47,37 +47,27 @@ $requiredIds = @(
 function Assert-ManifestContract {
     param([Parameter(Mandatory = $true)][string]$ManifestPath, [Parameter(Mandatory = $true)][string]$EvidenceDirectory)
     $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
-    if ($manifest.contractValidation.status -ne "pending") { throw "Probe must leave contractValidation pending until the runner passes strict validation." }
+    Assert-ManifestContractPending -Manifest $manifest
     $scope = "physical FreeP clipboard shortcut evidence lane"
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-linux-clipboard-shortcut-physical" -or
-        $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeP" -or
-        $manifest.baseline -ne $false -or $manifest.appSurface -ne "document-editor-clipboard-shortcuts" -or
-        $manifest.coverage.exhaustive -ne $false -or $manifest.coverage.scope -ne $scope -or
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-linux-clipboard-shortcut-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = "document-editor-clipboard-shortcuts"
+    }) -FailureMessage "FreeP clipboard shortcut manifest header does not satisfy its dedicated contract."
+    if ($manifest.coverage.exhaustive -ne $false -or $manifest.coverage.scope -ne $scope -or
         $manifest.window.pattern -ne $fixtureFileName -or $manifest.window.visible -ne $true -or
         ([string]$manifest.window.title).IndexOf($fixtureFileName, [StringComparison]::Ordinal) -lt 0 -or
         ([string]$manifest.window.title).IndexOf("FreeP", [StringComparison]::OrdinalIgnoreCase) -lt 0) { throw "FreeP clipboard shortcut manifest header does not satisfy its dedicated contract." }
 
     $results = @($manifest.results)
-    $ids = @($results | ForEach-Object { [string]$_.id })
-    if ($results.Count -ne 8 -or $ids.Count -ne ($ids | Select-Object -Unique).Count -or
-        [string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest must contain exactly the eight required unique result rows in contract order." }
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds `
+        -FailureMessage "Manifest must contain exactly the eight required unique result rows in contract order."
     Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 8 `
         -RequireCompleteStatuses -FailureMessage "Manifest summary does not match its eight result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-clipboard-shortcut" -or $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1 -or [string]::IsNullOrWhiteSpace([string]$result.note) -or $result.status -notin @("passed", "failed")) { throw "Result '$($result.id)' is missing strict physical evidence metadata or has an invalid status." }
-        foreach ($evidence in @($result.evidence)) {
-            $name = [string]$evidence
-            Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Result '$($result.id)'"
-        }
-    }
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $name = [string]$screenshot.name
-        if ($screenshot.kind -ne "screenshot") { throw "Manifest screenshot '$name' has an invalid kind." }
-        Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Manifest" -ReferenceKind "screenshot"
-    }
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-clipboard-shortcut" -EvidenceLevel "physical-x11-input" -RequireNote
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap -RequireKind
     return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
         -Validator "tools/Run-FreePClipboardShortcutValidation.ps1" `
         -ContractReference "tools/LinuxInteractiveDocker/freep-clipboard-shortcut-validation.schema.json" -JsonDepth 16

@@ -55,18 +55,13 @@ function Assert-ManifestContract {
     )
 
     $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
-    if ($manifest.contractValidation.status -ne "pending") {
-        throw "Probe must leave contractValidation pending until the runner passes strict validation."
-    }
+    Assert-ManifestContractPending -Manifest $manifest
     $expectedScope = "physical FreeP file/slideshow shortcut evidence lane"
-    if ($manifest.schemaVersion -ne 1 -or
-        $manifest.suite -ne "freep-linux-file-slideshow-shortcut-physical" -or
-        $manifest.platform -ne "linux" -or
-        $manifest.shell -ne "avalonia" -or
-        $manifest.app -ne "FreeP" -or
-        $manifest.baseline -ne $false -or
-        $manifest.appSurface -ne "document-editor-file-slideshow-shortcuts" -or
-        $manifest.coverage.exhaustive -ne $false -or
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-linux-file-slideshow-shortcut-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = "document-editor-file-slideshow-shortcuts"
+    }) -FailureMessage "FreeP file/slideshow shortcut manifest header does not satisfy its dedicated contract."
+    if ($manifest.coverage.exhaustive -ne $false -or
         $manifest.coverage.scope -ne $expectedScope -or
         $manifest.window.pattern -ne $fixtureFileName -or
         $manifest.window.visible -ne $true -or
@@ -76,42 +71,16 @@ function Assert-ManifestContract {
     }
 
     $results = @($manifest.results)
-    $ids = @($results | ForEach-Object { [string]$_.id })
-    if ($results.Count -ne $requiredIds.Count -or
-        $ids.Count -ne ($ids | Select-Object -Unique).Count) {
-        throw "FreeP file/slideshow shortcut manifest must contain exactly ten unique result rows."
-    }
-    foreach ($requiredId in $requiredIds) {
-        if ($ids -notcontains $requiredId) {
-            throw "Manifest is missing required result '$requiredId'."
-        }
-    }
-    $unexpectedIds = @($ids | Where-Object { $requiredIds -notcontains $_ })
-    if ($unexpectedIds.Count -gt 0) {
-        throw "Manifest contains unexpected result ID(s): $([string]::Join(', ', $unexpectedIds))."
-    }
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds -AllowAnyOrder `
+        -FailureMessage "FreeP file/slideshow shortcut manifest must contain exactly ten unique result rows."
 
     Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 10 `
         -RequireCompleteStatuses -FailureMessage "Manifest summary does not match its ten result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-file-slideshow-shortcut" -or
-            $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1 -or
-            [string]::IsNullOrWhiteSpace([string]$result.note)) {
-            throw "Result '$($result.id)' is missing physical evidence metadata."
-        }
-        foreach ($evidence in @($result.evidence)) {
-            $name = [string]$evidence
-            Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Result '$($result.id)'"
-        }
-    }
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $name = [string]$screenshot.name
-        if ($screenshot.kind -ne "screenshot") { throw "Manifest screenshot '$name' has an invalid kind." }
-        Assert-ManifestEvidenceReference -FileMap $fileMap -Name $name -Owner "Manifest" -ReferenceKind "screenshot"
-    }
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-file-slideshow-shortcut" -EvidenceLevel "physical-x11-input" -RequireNote
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap -RequireKind
 
     return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
         -Validator "tools/Run-FreePFileSlideshowShortcutValidation.ps1" `

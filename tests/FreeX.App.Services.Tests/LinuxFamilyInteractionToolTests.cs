@@ -422,9 +422,26 @@ public sealed class LinuxFamilyInteractionToolTests
         File.WriteAllText(evidencePath, "proof", Encoding.UTF8);
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(new
         {
+            schemaVersion = 1,
+            suite = "synthetic-validation",
+            platform = "linux",
+            shell = "avalonia",
+            app = "FreeX",
+            baseline = false,
             contractValidation = new { status = "pending" },
             summary = new { passed = 1, failed = 0, total = 1 },
-            results = new[] { new { id = "ok", status = "passed", evidence = new[] { "proof.txt" } } },
+            results = new[]
+            {
+                new
+                {
+                    id = "ok",
+                    category = "physical-x11-synthetic",
+                    status = "passed",
+                    evidenceLevel = "physical-x11-input",
+                    evidence = new[] { "proof.txt" },
+                    note = "Synthetic proof"
+                }
+            },
             screenshots = Array.Empty<object>()
         }), Encoding.UTF8);
 
@@ -433,9 +450,13 @@ public sealed class LinuxFamilyInteractionToolTests
             $". '{EscapePowerShell(helperPath)}'; " +
             $"$manifest = Read-ManifestContract -ManifestPath '{EscapePowerShell(manifestPath)}' -SchemaPath '{EscapePowerShell(schemaPath)}'; " +
             "$results = @($manifest.results); " +
+            "Assert-ManifestContractPending -Manifest $manifest; " +
+            "Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{ schemaVersion = 1; suite = 'synthetic-validation'; platform = 'linux'; shell = 'avalonia'; app = 'FreeX'; baseline = $false }); " +
+            "Assert-ManifestResultIds -Results $results -ExpectedIds @('ok'); " +
             "Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 1 -RequireCompleteStatuses; " +
             $"$map = Get-ManifestEvidenceFileMap -EvidenceDirectory '{EscapePowerShell(temporary.Path)}'; " +
-            "Assert-ManifestEvidenceReference -FileMap $map -Name 'proof.txt' -Owner 'Result ok'; " +
+            "Assert-ManifestResultEvidence -Results $results -FileMap $map -Category 'physical-x11-synthetic' -EvidenceLevel 'physical-x11-input' -ValidStatuses @('passed') -RequireNote; " +
+            "Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $map -ExpectedCount 0 -RequireKind; " +
             "$rejected = $false; try { Assert-ManifestEvidenceReference -FileMap $map -Name '../proof.txt' -Owner 'Result bad' } catch { $rejected = $true }; " +
             "if (-not $rejected) { throw 'non-basename evidence was accepted' }; " +
             $"Complete-ManifestContract -Manifest $manifest -ManifestPath '{EscapePowerShell(manifestPath)}' -Validator 'test-validator' -ContractReference 'schema.json' | Out-Null; " +
@@ -448,6 +469,68 @@ public sealed class LinuxFamilyInteractionToolTests
         using var completed = JsonDocument.Parse(File.ReadAllText(manifestPath));
         completed.RootElement.GetProperty("contractValidation").GetProperty("status").GetString()
             .Should().Be("passed");
+    }
+
+    [Fact]
+    public void ToolTemporaryDirectoryHelpers_CreateAndGuardOwnedDirectories()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var powershell = ResolvePowerShellExecutable();
+        powershell.Should().NotBeNull("the temporary-directory regression requires PowerShell");
+        var helperPath = RepositoryFileLocator.Find("tools", "ToolScriptSupport.ps1");
+        var repositoryRoot = Path.GetDirectoryName(Path.GetDirectoryName(helperPath))!;
+        var command =
+            $". '{EscapePowerShell(helperPath)}'; " +
+            "$errors = [Collections.Generic.List[string]]::new(); $env:GITHUB_ACTIONS = 'true'; " +
+            "Add-ToolValidationError -Errors $errors -Message \"percent%`r`nline\" -GitHubTitle 'Synthetic readiness' -SuppressWriteError; " +
+            "if ($errors.Count -ne 1) { throw 'validation error was not collected' }; " +
+            "$path = New-ToolTemporaryDirectory -Prefix 'freex-tool-test-'; " +
+            "if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw 'temporary directory was not created' }; " +
+            "Set-Content -LiteralPath (Join-Path $path 'owned.txt') -Value 'proof'; " +
+            "Remove-ToolTemporaryDirectory -Path $path; " +
+            "if (Test-Path -LiteralPath $path) { throw 'temporary directory was not removed' }; " +
+            $"$rejected = $false; try {{ Remove-ToolTemporaryDirectory -Path '{EscapePowerShell(repositoryRoot)}' }} catch {{ $rejected = $true }}; " +
+            "if (-not $rejected) { throw 'non-temporary directory was accepted' }; 'validated'";
+
+        var result = RunPowerShellCommand(powershell!, command);
+
+        result.ExitCode.Should().Be(0, result.Output);
+        result.Output.Should().Contain("validated");
+        result.Output.Should().Contain("::error title=Synthetic readiness::percent%25%0D%0Aline");
+    }
+
+    [Fact]
+    public void ProbeScriptSupport_OwnsSharedRotatedAndTransformedX11Primitives()
+    {
+        var support = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "ProbeScriptSupport.sh"));
+        foreach (var helper in new[]
+        {
+            "probe_capture()",
+            "probe_focus_owner()",
+            "probe_send_owner_key()",
+            "probe_capture_window_state()"
+        })
+        {
+            support.Should().Contain(helper);
+        }
+
+        foreach (var probeName in new[]
+        {
+            "run-freep-rotated-shape-text-edit.sh",
+            "run-freep-transformed-table-cell-edit.sh"
+        })
+        {
+            var probe = File.ReadAllText(RepositoryFileLocator.Find(
+                "tools", "LinuxInteractiveDocker", probeName));
+            probe.Should().Contain("ProbeScriptSupport.sh")
+                .And.NotContain("capture()")
+                .And.NotContain("focus_owner()")
+                .And.NotContain("send_owner_key()")
+                .And.NotContain("capture_window_state()");
+        }
     }
 
     [Fact]

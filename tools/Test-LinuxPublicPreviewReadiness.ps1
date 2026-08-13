@@ -16,12 +16,7 @@ $validationErrors = New-Object System.Collections.Generic.List[string]
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
 
-    $validationErrors.Add($Message)
-    if ($env:GITHUB_ACTIONS -eq "true") {
-        $escaped = $Message.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
-        Write-Host "::error title=Linux public-preview readiness::$escaped"
-    }
-    Write-Error $Message -ErrorAction Continue
+    Add-ToolValidationError -Errors $validationErrors -Message $Message -GitHubTitle "Linux public-preview readiness"
 }
 
 function Assert-True {

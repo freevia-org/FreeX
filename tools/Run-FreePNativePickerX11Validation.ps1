@@ -73,18 +73,6 @@ function Read-HashArtifact {
     return (Get-Content -LiteralPath $Path -Raw).Trim().ToLowerInvariant()
 }
 
-function Wait-EvidenceFile {
-    param([Parameter(Mandatory = $true)][string]$Directory, [Parameter(Mandatory = $true)][string]$Name)
-    if ([IO.Path]::GetFileName($Name) -ne $Name) { throw "Evidence reference must be a basename: $Name" }
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
-        $entry = Get-ChildItem -LiteralPath $Directory -File -Force -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -ceq $Name } | Select-Object -First 1
-        if ($null -ne $entry -and $entry.Length -gt 0) { return $entry.FullName }
-        Start-Sleep -Milliseconds 100
-    }
-    throw "Missing or empty evidence '$Name' in '$Directory'."
-}
-
 function Assert-PackageState {
     param([Parameter(Mandatory = $true)]$State, [Parameter(Mandatory = $true)][bool]$Exists, [Parameter(Mandatory = $true)][string]$ExpectedPath)
     if ([string]$State.path -ne $ExpectedPath -or [bool]$State.exists -ne $Exists) {
@@ -104,25 +92,21 @@ function Assert-PackageState {
 
 function Assert-ManifestContract {
     param([Parameter(Mandatory = $true)][string]$ManifestPath, [Parameter(Mandatory = $true)][string]$EvidenceDirectory)
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") { throw "Manifest schema is not a JSON Schema document." }
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.contractValidation.status -ne "pending") { throw "Probe must leave contractValidation pending until strict validation." }
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-native-picker-x11-wave90-physical" -or
-        $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeP" -or
-        $manifest.baseline -ne $false -or $manifest.appSurface -ne "native-storage-provider-open-save-as" -or
-        $manifest.window.pattern -ne "FreeP" -or $manifest.window.visible -ne $true) {
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath `
+        -InvalidSchemaMessage "Manifest schema is not a JSON Schema document."
+    Assert-ManifestContractPending -Manifest $manifest
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-native-picker-x11-wave90-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = "native-storage-provider-open-save-as"
+    }) -FailureMessage "Native picker manifest header failed the Wave 90 contract."
+    if ($manifest.window.pattern -ne "FreeP" -or $manifest.window.visible -ne $true) {
         throw "Native picker manifest header failed the Wave 90 contract."
     }
-    $ids = @($manifest.results | ForEach-Object { [string]$_.id })
-    if ([string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) {
-        throw "Native picker result rows are not the required ordered nine-row contract."
-    }
-    if ($manifest.results.Count -ne 9 -or $manifest.summary.total -ne 9 -or
-        $manifest.summary.passed -ne 9 -or $manifest.summary.failed -ne 0 -or
-        @($manifest.results | Where-Object status -ne "passed").Count -ne 0) {
-        throw "Native picker manifest summary contains failed or incomplete physical rows."
-    }
+    $results = @($manifest.results)
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds `
+        -FailureMessage "Native picker result rows are not the required ordered nine-row contract."
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 9 `
+        -RequireCompleteStatuses -FailureMessage "Native picker manifest summary contains failed or incomplete physical rows."
     $fixtureIds = @($manifest.fixtures | ForEach-Object { [string]$_.id })
     if ([string]::Join("|", $fixtureIds) -ne "initial|openSelected|collision") { throw "Fixture rows are not ordered or complete." }
     foreach ($fixture in @($manifest.fixtures)) {
@@ -142,30 +126,14 @@ function Assert-ManifestContract {
     if ($manifest.packageStates.collisionBefore.sha256 -ne $manifest.packageStates.collisionAfter.sha256) { throw "Collision cancellation changed the existing package hash." }
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in @($manifest.results)) {
-        if ([string]$result.category -ne "physical-x11-native-picker" -or
-            [string]$result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1 -or [string]::IsNullOrWhiteSpace([string]$result.note)) {
-            throw "Result '$($result.id)' is missing physical evidence metadata."
-        }
-        foreach ($evidence in @($result.evidence)) {
-            $name = [string]$evidence
-            if ([IO.Path]::GetFileName($name) -ne $name -or $name.Contains('/') -or $name.Contains('\') -or
-                -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) {
-                throw "Result '$($result.id)' references missing, empty, or non-basename evidence '$name'."
-            }
-        }
-    }
-    if (@($manifest.screenshots).Count -lt 9) { throw "Native picker manifest retained fewer than nine screenshots." }
-    foreach ($screenshot in @($manifest.screenshots)) { [void](Wait-EvidenceFile $EvidenceDirectory ([string]$screenshot.name)) }
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-native-picker" -EvidenceLevel "physical-x11-input" `
+        -ValidStatuses @("passed") -RequireNote
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap -MinimumCount 9
 
-    $manifest.contractValidation = [ordered]@{
-        status = "passed"
-        validator = "tools/Run-FreePNativePickerX11Validation.ps1"
-        contractReference = "tools/LinuxInteractiveDocker/freep-native-picker-x11-wave90-validation.schema.json"
-    }
-    $manifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreePNativePickerX11Validation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freep-native-picker-x11-wave90-validation.schema.json" -JsonDepth 20
 }
 
 foreach ($path in @($probeSource, $schemaPath, $initialFixturePath, $selectedFixturePath)) {

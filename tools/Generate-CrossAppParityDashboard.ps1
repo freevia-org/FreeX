@@ -138,11 +138,9 @@ function Get-FreeXNextSlice {
 
 $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
-$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-cross-app-parity-dashboard-" + [System.Guid]::NewGuid().ToString("N"))
+$tempRoot = New-ToolTemporaryDirectory -Prefix "freex-cross-app-parity-dashboard-"
 $tempJsonPath = Join-Path $tempRoot "avalonia-wpf-cross-app-dashboard.json"
 $tempMarkdownPath = Join-Path $tempRoot "avalonia-wpf-cross-app-dashboard.md"
-
-New-Item -ItemType Directory -Path $tempRoot | Out-Null
 
 try {
     $commandInventory = Read-ToolJson -Path "docs\parity\command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
@@ -597,7 +595,5 @@ try {
     }
 }
 finally {
-    if (Test-Path -LiteralPath $tempRoot) {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force
-    }
+    Remove-ToolTemporaryDirectory -Path $tempRoot
 }

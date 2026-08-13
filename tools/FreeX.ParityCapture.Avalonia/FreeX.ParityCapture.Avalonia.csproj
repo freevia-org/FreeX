@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\ToolProjects.props" />
   <PropertyGroup>
     <AssemblyName>FreeX.ParityCapture.Avalonia</AssemblyName>
     <ApplicationTitle>FreeX Parity Capture</ApplicationTitle>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <OutputType>Exe</OutputType>
     <RootNamespace>FreeX.App.Avalonia</RootNamespace>
     <RuntimeIdentifiers>osx-arm64;osx-x64</RuntimeIdentifiers>

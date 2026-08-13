@@ -26,6 +26,7 @@ $baseFixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/02-auto
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-rotated-shape-text-edit.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-rotated-shape-text-edit-validation.schema.json"
+$null = . (Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1")
 $requiredIds = @("visible-window-discovery", "rotated-editor-entry-and-caret", "rotated-editor-typing-selection-commit", "saved-rotated-shape-package", "escape-cancels-and-preserves-package")
 
 function New-RotatedFixture {
@@ -91,7 +92,7 @@ try {
     $session = Get-Content -LiteralPath (Join-Path $resolvedOutputRoot "freep/current-session.json") -Raw | ConvertFrom-Json
     $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     $probeInWork = Join-Path $sessionDirectory "freep-rotated-shape-text-edit-probe.sh"
-    Copy-Item -LiteralPath $probeSource -Destination $probeInWork -Force
+    Copy-VisualEvidenceProbe -ProbeSource $probeSource -SessionDirectory $sessionDirectory -DestinationName (Split-Path -Leaf $probeInWork) | Out-Null
     $manifestPath = Join-Path $sessionDirectory "freep-rotated-shape-text-edit-validation/results.json"
     $evidenceDirectory = Split-Path -Parent $manifestPath
     New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
@@ -103,29 +104,28 @@ try {
         Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot
         $started = $false
     }
-    Start-Sleep -Seconds 2
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Probe did not write manifest: $manifestPath" }
-    for ($attempt = 0; $attempt -lt 40; $attempt++) {
-        $manifestCandidate = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-        $evidenceNames = @($manifestCandidate.results | ForEach-Object { @($_.evidence) })
-        if ($evidenceNames.Count -gt 0 -and (@($evidenceNames | Where-Object { Test-Path -LiteralPath (Join-Path $evidenceDirectory $_) -PathType Leaf }).Count -eq $evidenceNames.Count)) { break }
-        Start-Sleep -Milliseconds 250
-    }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    $ids = @($manifest.results | ForEach-Object { [string]$_.id })
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-linux-rotated-shape-text-edit-physical" -or $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeP") { throw "Manifest header failed the Wave 61 schema contract." }
-    if ([string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest result IDs/order failed the Wave 61 contract." }
+    Wait-ForManifestEvidence -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
+    $manifest = Read-ManifestContract -ManifestPath $manifestPath -SchemaPath $schemaPath
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-linux-rotated-shape-text-edit-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"
+    }) -FailureMessage "Manifest header failed the Wave 61 schema contract."
+    $results = @($manifest.results)
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds `
+        -FailureMessage "Manifest result IDs/order failed the Wave 61 contract."
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal $requiredIds.Count `
+        -RequireCompleteStatuses -FailureMessage "Manifest summary failed the Wave 61 contract."
     $expectedBounds = @{ x = 2857500; y = 1428750; cx = 2286000; cy = 1524000 }
     if ($manifest.fixture.file -ne "rotated-shape-text-fixture.pptx" -or $manifest.fixture.shapeId -ne 2 -or $manifest.fixture.name -ne "Wave61 Rotated Text" -or $manifest.fixture.rotation -ne 30 -or $manifest.fixture.text -ne "Rotate me" -or $manifest.package.savedText -ne "Typed rotated text" -or $manifest.package.rotation -ne 30) { throw "Manifest fixture/package values failed exact text/geometry/rotation contract." }
     foreach ($coordinate in @("x", "y", "cx", "cy")) { if ([int]$manifest.fixture.bounds.$coordinate -ne $expectedBounds[$coordinate] -or [int]$manifest.package.bounds.$coordinate -ne $expectedBounds[$coordinate]) { throw "Manifest bounds failed exact value for $coordinate." } }
-    $evidenceFiles = @{}
-    foreach ($file in @(Get-ChildItem -LiteralPath $evidenceDirectory -File)) { $evidenceFiles[$file.Name] = [int64]$file.Length }
-    foreach ($result in @($manifest.results)) {
-        if ($result.status -ne "passed" -or $result.evidenceLevel -ne "physical-x11-input" -or @($result.evidence).Count -lt 1) { throw "Physical result '$($result.id)' did not pass its evidence contract." }
-        foreach ($name in @($result.evidence)) { if ([IO.Path]::GetFileName([string]$name) -ne [string]$name -or -not $evidenceFiles.ContainsKey([string]$name) -or $evidenceFiles[[string]$name] -le 0) { throw "Missing evidence '$name' for '$($result.id)'." } }
-    }
-    $manifest.contractValidation = [ordered]@{ status = "passed"; validator = "tools/Run-FreePRotatedShapeTextEditValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-rotated-shape-text-edit-validation.schema.json" }
-    $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+    $evidenceFiles = Get-ManifestEvidenceFileMap -EvidenceDirectory $evidenceDirectory
+    Assert-ManifestResultEvidence -Results $results -FileMap $evidenceFiles `
+        -Category "physical-x11-rotated-shape-text" -EvidenceLevel "physical-x11-input" -ValidStatuses @("passed")
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $evidenceFiles -RequireKind
+    $manifest = Complete-ManifestContract -Manifest $manifest -ManifestPath $manifestPath `
+        -Validator "tools/Run-FreePRotatedShapeTextEditValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freep-rotated-shape-text-edit-validation.schema.json" -JsonDepth 16
     $report = [ordered]@{ suite = $manifest.suite; probeExitCode = $probeExitCode; manifest = $manifestPath; evidenceDirectory = $evidenceDirectory; fixture = $fixturePath; results = $manifest.summary }
     $report | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath (Join-Path $resolvedOutputRoot "wave61-report.json") -Encoding utf8
     Write-Host "Manifest contract validation: passed"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Evidence: $evidenceDirectory"

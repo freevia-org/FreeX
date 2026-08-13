@@ -26,6 +26,7 @@ $baseFixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/05-tabl
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-transformed-table-cell-edit.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-transformed-table-cell-edit-validation.schema.json"
+$null = . (Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1")
 $requiredIds = @("visible-window-discovery", "transformed-editor-entry-and-caret", "transformed-editor-typing-selection-commit", "saved-transformed-table-package", "escape-cancels-and-preserves-package")
 
 function New-TransformedTableFixture {
@@ -89,7 +90,7 @@ try {
     $session = Get-Content -LiteralPath (Join-Path $resolvedOutputRoot "freep/current-session.json") -Raw | ConvertFrom-Json
     $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory)
     $probeInWork = Join-Path $sessionDirectory "freep-transformed-table-cell-edit-probe.sh"
-    Copy-Item -LiteralPath $probeSource -Destination $probeInWork -Force
+    Copy-VisualEvidenceProbe -ProbeSource $probeSource -SessionDirectory $sessionDirectory -DestinationName (Split-Path -Leaf $probeInWork) | Out-Null
     $manifestPath = Join-Path $sessionDirectory "freep-transformed-table-cell-edit-validation/results.json"
     $evidenceDirectory = Split-Path -Parent $manifestPath
     New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
@@ -99,14 +100,25 @@ try {
     Invoke-VisualEvidenceProcess -FilePath "docker" -Arguments @("cp", "$($session.containerName):/work/freep-transformed-table-cell-edit-validation/.", $evidenceDirectory) -WorkingDirectory $repoRoot
     if ($started -and -not $KeepContainer) { Invoke-VisualEvidenceProcess -FilePath "powershell.exe" -Arguments @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot) -WorkingDirectory $repoRoot; $started = $false }
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Probe did not write manifest: $manifestPath" }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-linux-transformed-table-cell-edit-physical" -or $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeP") { throw "Manifest header failed the Wave 62 schema contract." }
-    $ids = @($manifest.results | ForEach-Object { [string]$_.id })
-    if ([string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest result IDs/order failed the Wave 62 contract." }
+    Wait-ForManifestEvidence -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory
+    $manifest = Read-ManifestContract -ManifestPath $manifestPath -SchemaPath $schemaPath
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-linux-transformed-table-cell-edit-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"
+    }) -FailureMessage "Manifest header failed the Wave 62 schema contract."
+    $results = @($manifest.results)
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds `
+        -FailureMessage "Manifest result IDs/order failed the Wave 62 contract."
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal $requiredIds.Count `
+        -RequireCompleteStatuses -FailureMessage "Manifest summary failed the Wave 62 contract."
     if ($manifest.fixture.file -ne "transformed-table-cell-fixture.pptx" -or $manifest.fixture.shapeId -ne 2 -or $manifest.fixture.name -ne "Wave62 Transformed Table" -or $manifest.fixture.rotation -ne 30 -or -not $manifest.fixture.flipH -or -not $manifest.fixture.flipV -or $manifest.package.savedText -ne "Typed transformed cell text") { throw "Manifest fixture/package values failed the exact text/geometry/rotation/flip contract." }
-    foreach ($result in @($manifest.results)) { if ($result.status -ne "passed" -or $result.evidenceLevel -ne "physical-x11-input") { throw "Physical result '$($result.id)' did not pass its evidence contract." } }
-    $manifest.contractValidation = [ordered]@{ status = "passed"; validator = "tools/Run-FreePTransformedTableCellEditValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-transformed-table-cell-edit-validation.schema.json" }
-    $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $manifestPath -Encoding utf8
+    $evidenceFiles = Get-ManifestEvidenceFileMap -EvidenceDirectory $evidenceDirectory
+    Assert-ManifestResultEvidence -Results $results -FileMap $evidenceFiles `
+        -Category "physical-x11-transformed-table-cell-edit" -EvidenceLevel "physical-x11-input" -ValidStatuses @("passed")
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $evidenceFiles -RequireKind
+    $manifest = Complete-ManifestContract -Manifest $manifest -ManifestPath $manifestPath `
+        -Validator "tools/Run-FreePTransformedTableCellEditValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freep-transformed-table-cell-edit-validation.schema.json" -JsonDepth 16
     $report = [ordered]@{ suite = $manifest.suite; probeExitCode = $probeExitCode; manifest = $manifestPath; evidenceDirectory = $evidenceDirectory; fixture = $fixturePath; results = $manifest.summary }
     $report | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath (Join-Path $resolvedOutputRoot "wave62-report.json") -Encoding utf8
     Write-Host "Manifest contract validation: passed"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Evidence: $evidenceDirectory"

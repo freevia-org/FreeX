@@ -73,13 +73,11 @@ function Assert-ManifestContract {
     )
 
     $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
-    if ($manifest.schemaVersion -ne 1 -or
-        $manifest.suite -ne "family-linux-physical-baseline" -or
-        $manifest.platform -ne "linux" -or
-        $manifest.shell -ne "avalonia" -or
-        $manifest.app -ne $App -or
-        $manifest.baseline -ne $true -or
-        $manifest.coverage.exhaustive -ne $false -or
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "family-linux-physical-baseline"; platform = "linux"
+        shell = "avalonia"; app = $App; baseline = $true
+    }) -FailureMessage "Manifest header does not satisfy the family physical-baseline contract."
+    if ($manifest.coverage.exhaustive -ne $false -or
         $manifest.parameters.fileSurface -ne $probeParameters.FileSurface -or
         $manifest.parameters.ribbonTabKey -ne $probeParameters.RibbonTabKey -or
         $manifest.parameters.fileKey -ne $probeParameters.FileKey -or
@@ -175,22 +173,9 @@ function Assert-ManifestContract {
     Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal $results.Count
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-smoke" -or
-            $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1) {
-            throw "Result '$($result.id)' is missing physical evidence metadata."
-        }
-        foreach ($evidence in @($result.evidence)) {
-            $evidenceName = [string]$evidence
-            Assert-ManifestEvidenceReference -FileMap $fileMap -Name $evidenceName -Owner "Result '$($result.id)'"
-        }
-    }
-
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $screenshotName = [string]$screenshot.name
-        Assert-ManifestEvidenceReference -FileMap $fileMap -Name $screenshotName -Owner "Manifest" -ReferenceKind "screenshot"
-    }
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-smoke" -EvidenceLevel "physical-x11-input"
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap
 
     return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
         -Validator "tools/Run-FamilyLinuxInteractionValidation.ps1" `

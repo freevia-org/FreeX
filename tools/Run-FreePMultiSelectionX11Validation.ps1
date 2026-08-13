@@ -25,6 +25,7 @@ $fixturePath = Join-Path $resolvedOutputRoot $fixtureName
 $genericRunner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probeSource = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freep-multiselect-x11-wave89-probe.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freep-multiselect-x11-wave89-validation.schema.json"
+$null = . (Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1")
 $baseFixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/02-autoshapes.pptx"
 $requiredIds = @("visible-window-discovery", "two-shape-pointer-selection", "group-resize-handle-drag", "saved-resize-geometry", "group-rotate-handle-drag", "saved-rotate-geometry", "ctrl-z-restores-resize", "escape-cancel-preserves-package", "capture-loss-cancel-preserves-package")
 
@@ -33,21 +34,6 @@ function Invoke-External {
     Invoke-ToolProcess -FilePath $FilePath -Arguments $Arguments -WorkingDirectory $repoRoot
 }
 
-function Wait-EvidenceFile {
-    param([Parameter(Mandatory=$true)][string]$Directory, [Parameter(Mandatory=$true)][string]$Name)
-    if ([IO.Path]::GetFileName($Name) -ne $Name) { throw "Evidence name must be a file name: $Name" }
-    $path = Join-Path $Directory $Name
-    foreach ($attempt in 1..30) {
-        # OneDrive can briefly make Test-Path disagree with directory enumeration after a
-        # Docker bind mount closes. Enumerating the directory returns the stable file entry.
-        $entry = Get-ChildItem -LiteralPath $Directory -File -Force -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -ceq $Name } |
-            Select-Object -First 1
-        if ($null -ne $entry -and $entry.Length -gt 0) { return $entry.FullName }
-        Start-Sleep -Milliseconds 100
-    }
-    throw "Missing or empty evidence '$Name'."
-}
 function Write-Fixture {
     param([string]$Source, [string]$Destination)
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -73,14 +59,21 @@ function Write-Fixture {
 }
 function Assert-Manifest {
     param([string]$ManifestPath, [string]$EvidenceDirectory)
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-linux-multiselect-x11-wave89-physical" -or $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeP" -or $manifest.baseline) { throw "Wave 89 manifest header failed." }
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-linux-multiselect-x11-wave89-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"; baseline = $false
+    }) -FailureMessage "Wave 89 manifest header failed."
     if ($manifest.fixture.file -ne $fixtureName -or @($manifest.fixture.shapes).Count -ne 2) { throw "Wave 89 fixture contract failed." }
-    $ids = @($manifest.results | ForEach-Object { [string]$_.id }); if ([string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Wave 89 result IDs/order failed." }
-    if ($manifest.results.Count -ne 9 -or $manifest.summary.total -ne 9 -or $manifest.summary.failed -ne 0 -or $manifest.summary.passed -ne 9) { throw "Wave 89 result summary failed." }
+    $results = @($manifest.results)
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds -FailureMessage "Wave 89 result IDs/order failed."
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 9 `
+        -RequireCompleteStatuses -FailureMessage "Wave 89 result summary failed."
     if ($manifest.calibration.status -ne "passed" -or @($manifest.screenshots).Count -lt 7) { throw "Wave 89 calibration/screenshot contract failed." }
-    foreach ($result in @($manifest.results)) { if ($result.category -ne "physical-x11-multiselect" -or $result.status -ne "passed" -or $result.evidenceLevel -ne "physical-x11-input" -or @($result.evidence).Count -lt 1) { throw "Result '$($result.id)' failed the physical evidence contract." }; foreach ($name in @($result.evidence)) { try { [void](Wait-EvidenceFile -Directory $EvidenceDirectory -Name ([string]$name)) } catch { throw "Missing or empty evidence '$name' for '$($result.id)'." } } }
-    foreach ($shot in @($manifest.screenshots)) { try { [void](Wait-EvidenceFile -Directory $EvidenceDirectory -Name ([string]$shot.name)) } catch { throw "Missing or empty screenshot '$($shot.name)'." } }
+    $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-multiselect" -EvidenceLevel "physical-x11-input" -ValidStatuses @("passed")
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap -MinimumCount 7
     $expectedStates = @{
         baseline = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 1905000; cy = 1143000; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 4762500; y = 2857500; cx = 1905000; cy = 1143000; rotation = 0 })
         afterResize = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1733550; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3448050; cx = 2286000; cy = 1733550; rotation = 0 })
@@ -99,9 +92,9 @@ function Assert-Manifest {
         }
     }
     if ($manifest.packageStates.afterEscape.packageSha256 -ne $manifest.packageStates.afterUndo.packageSha256 -or $manifest.packageStates.afterCaptureLoss.packageSha256 -ne $manifest.packageStates.afterUndo.packageSha256) { throw "Cancellation package hashes did not remain identical to the restored package." }
-    $manifest.contractValidation = [ordered]@{ status = "passed"; validator = "tools/Run-FreePMultiSelectionX11Validation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-multiselect-x11-wave89-validation.schema.json" }
-    $manifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreePMultiSelectionX11Validation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freep-multiselect-x11-wave89-validation.schema.json" -JsonDepth 20
 }
 
 if (-not (Test-Path -LiteralPath $baseFixturePath -PathType Leaf)) { throw "Base fixture missing: $baseFixturePath" }; if (-not (Test-Path -LiteralPath $probeSource -PathType Leaf)) { throw "Probe missing: $probeSource" }; if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) { throw "Schema missing: $schemaPath" }

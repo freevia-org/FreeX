@@ -204,43 +204,31 @@ function Assert-PointerSelectionSemanticContract {
 
 function Assert-ManifestContract {
     param([Parameter(Mandatory = $true)][string]$ManifestPath, [Parameter(Mandatory = $true)][string]$EvidenceDirectory)
-    if (-not (Test-Path -LiteralPath $schemaPath -PathType Leaf)) { throw "Manifest schema is missing: $schemaPath" }
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org") { throw "Manifest contract reference is not a JSON Schema document." }
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.contractValidation.status -ne "pending") { throw "Probe must leave contractValidation pending until the runner passes strict validation." }
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freep-linux-rich-text-shortcut-physical" -or
-        $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeP" -or
-        $manifest.baseline -ne $false -or $manifest.appSurface -ne $surface -or
-        $manifest.coverage.exhaustive -ne $false -or $manifest.coverage.scope -ne $scope -or
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath
+    Assert-ManifestContractPending -Manifest $manifest
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freep-linux-rich-text-shortcut-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeP"; baseline = $false; appSurface = $surface
+    }) -FailureMessage "FreeP rich-text shortcut manifest header does not satisfy its dedicated contract."
+    if ($manifest.coverage.exhaustive -ne $false -or $manifest.coverage.scope -ne $scope -or
         $manifest.window.pattern -ne $fixtureFileName -or $manifest.window.visible -ne $true -or
         ([string]$manifest.window.title).IndexOf($fixtureFileName, [StringComparison]::Ordinal) -lt 0 -or
         ([string]$manifest.window.title).IndexOf("FreeP", [StringComparison]::OrdinalIgnoreCase) -lt 0) { throw "FreeP rich-text shortcut manifest header does not satisfy its dedicated contract." }
 
     $results = @($manifest.results)
-    $ids = @($results | ForEach-Object { [string]$_.id })
-    if ($results.Count -ne 5 -or $ids.Count -ne ($ids | Select-Object -Unique).Count -or
-        [string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest must contain exactly the five required unique result rows in contract order." }
-    $passed = @($results | Where-Object { $_.status -eq "passed" }).Count
-    $failed = @($results | Where-Object { $_.status -eq "failed" }).Count
-    if ($manifest.summary.total -ne 5 -or $manifest.summary.passed -ne $passed -or $manifest.summary.failed -ne $failed -or ($passed + $failed) -ne 5) { throw "Manifest summary does not match its five result rows." }
+    Assert-ManifestResultIds -Results $results -ExpectedIds $requiredIds `
+        -FailureMessage "Manifest must contain exactly the five required unique result rows in contract order."
+    Assert-ManifestResultSummary -Manifest $manifest -Results $results -ExpectedTotal 5 `
+        -RequireCompleteStatuses -FailureMessage "Manifest summary does not match its five result rows."
 
     $fileMap = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
-    foreach ($result in $results) {
-        if ($result.category -ne "physical-x11-rich-text-shortcut" -or $result.evidenceLevel -ne "physical-x11-input" -or
-            @($result.evidence).Count -lt 1 -or [string]::IsNullOrWhiteSpace([string]$result.note) -or $result.status -notin @("passed", "failed")) { throw "Result '$($result.id)' is missing strict physical evidence metadata or has an invalid status." }
-        foreach ($evidence in @($result.evidence)) {
-            $name = [string]$evidence
-            if ([string]::IsNullOrWhiteSpace($name) -or [IO.Path]::IsPathRooted($name) -or [IO.Path]::GetFileName($name) -ne $name -or $name.Contains("/") -or $name.Contains("\") -or -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) { throw "Result '$($result.id)' references missing, empty, or non-basename evidence '$name'." }
-        }
-    }
-    foreach ($screenshot in @($manifest.screenshots)) {
-        $name = [string]$screenshot.name
-        if ($screenshot.kind -ne "screenshot" -or [string]::IsNullOrWhiteSpace($name) -or [IO.Path]::IsPathRooted($name) -or [IO.Path]::GetFileName($name) -ne $name -or $name.Contains("/") -or $name.Contains("\") -or -not $fileMap.ContainsKey($name) -or $fileMap[$name].Length -le 0) { throw "Manifest references missing, empty, or non-basename screenshot '$name'." }
-    }
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{ status = "passed"; validator = "tools/Run-FreePRichTextShortcutValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-rich-text-shortcut-validation.schema.json" }) -Force
-    $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    return $manifest
+    Assert-ManifestResultEvidence -Results $results -FileMap $fileMap `
+        -Category "physical-x11-rich-text-shortcut" -EvidenceLevel "physical-x11-input" -RequireNote `
+        -FailureMessage "Rich-text result is missing strict physical evidence metadata or has an invalid status."
+    Assert-ManifestScreenshotEvidence -Screenshots @($manifest.screenshots) -FileMap $fileMap -RequireKind
+    return Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreePRichTextShortcutValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freep-rich-text-shortcut-validation.schema.json" -JsonDepth 16
 }
 
 if (-not (Test-Path -LiteralPath $fixturePath -PathType Leaf)) { throw "Fixture was not found: $fixturePath" }

@@ -31,6 +31,7 @@ $avaloniaTableProject = Join-Path $repoRoot "freew/FreeW.App.Avalonia.Tests/Free
 $runner = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $probe = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freew-table-pagination-probe.sh"
 $schemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freew-table-pagination-validation.schema.json"
+$null = . (Join-Path $PSScriptRoot "LinuxInteractiveDocker/ManifestEvidence.ps1")
 $requiredIds = @("visible-window-discovery", "generated-fixture-hash-integrity", "physical-third-page-navigation", "nonblank-final-page-render", "shared-plan-proof")
 
 function Invoke-CapturedExternal {
@@ -75,26 +76,35 @@ function Assert-FocusedTestProof {
 
 function Assert-ManifestContract {
     param([Parameter(Mandatory)][string]$ManifestPath, [Parameter(Mandatory)][string]$EvidenceDirectory)
-    $schema = Get-Content -LiteralPath $schemaPath -Raw | ConvertFrom-Json
-    if ($schema.'$schema' -notmatch "json-schema.org" -or $schema.title -notmatch "table pagination") { throw "Committed table-pagination schema is not a JSON Schema document." }
-    $manifest = Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
-    if ($manifest.schemaVersion -ne 1 -or $manifest.suite -ne "freew-linux-table-pagination-physical" -or $manifest.platform -ne "linux" -or $manifest.shell -ne "avalonia" -or $manifest.app -ne "FreeW" -or $manifest.baseline -ne $false -or $manifest.appSurface -ne "table-page-composition-stress" -or $manifest.window.visible -ne $true -or $manifest.parameters.fixture -ne $fixtureName -or $manifest.parameters.port -ne $Port -or $manifest.parameters.width -ne $Width -or $manifest.parameters.height -ne $Height -or $manifest.parameters.dpi -ne $Dpi -or $manifest.coverage.scope -ne "physical FreeW table pagination and third-page composition evidence lane" -or $manifest.coverage.exhaustive -ne $false -or $manifest.processExitCode -ne 0) { throw "Manifest header violates the committed schema or probe exit contract." }
-    $rows = @($manifest.results); $ids = @($rows | ForEach-Object { [string]$_.id })
-    if ($rows.Count -ne 5 -or [string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Manifest result IDs/order violate the exact contract." }
-    $files = @{}; Get-ChildItem -LiteralPath $EvidenceDirectory -File | ForEach-Object { $files[$_.Name] = $_.Length }
+    $manifest = Read-ManifestContract -ManifestPath $ManifestPath -SchemaPath $schemaPath `
+        -SchemaTitlePattern "table pagination" -InvalidSchemaMessage "Committed table-pagination schema is not a JSON Schema document."
+    Assert-ManifestIdentity -Manifest $manifest -Expected ([ordered]@{
+        schemaVersion = 1; suite = "freew-linux-table-pagination-physical"; platform = "linux"
+        shell = "avalonia"; app = "FreeW"; baseline = $false; appSurface = "table-page-composition-stress"
+    }) -FailureMessage "Manifest header violates the committed schema or probe exit contract."
+    if ($manifest.window.visible -ne $true -or $manifest.parameters.fixture -ne $fixtureName -or
+        $manifest.parameters.port -ne $Port -or $manifest.parameters.width -ne $Width -or
+        $manifest.parameters.height -ne $Height -or $manifest.parameters.dpi -ne $Dpi -or
+        $manifest.coverage.scope -ne "physical FreeW table pagination and third-page composition evidence lane" -or
+        $manifest.coverage.exhaustive -ne $false -or $manifest.processExitCode -ne 0) { throw "Manifest header violates the committed schema or probe exit contract." }
+    $rows = @($manifest.results)
+    Assert-ManifestResultIds -Results $rows -ExpectedIds $requiredIds `
+        -FailureMessage "Manifest result IDs/order violate the exact contract."
+    $files = Get-ManifestEvidenceFileMap -EvidenceDirectory $EvidenceDirectory
     for ($i = 0; $i -lt $rows.Count; $i++) {
         $row = $rows[$i]; $physical = $i -lt 4
         $category = if ($physical) { "physical-x11-table-pagination" } else { "deterministic-shared-plan" }
         $level = if ($physical) { "physical-x11-input" } else { "focused-test" }
         if (($row.PSObject.Properties.Name -notcontains "evidenceLevel") -or ($row.PSObject.Properties.Name -contains "level") -or $row.category -ne $category -or $row.evidenceLevel -ne $level -or $row.status -ne "passed" -or @($row.evidence).Count -lt 1 -or [string]::IsNullOrWhiteSpace([string]$row.note)) { throw "Result '$($row.id)' violates the committed schema." }
         if ($row.id -eq "shared-plan-proof" -and [string]::Join("|", @($row.evidence)) -ne "shared-plan-test.txt|avalonia-table-structure-test.txt") { throw "The shared-plan-proof row must retain both focused-test evidence files." }
-        foreach ($name in @($row.evidence)) { $n = [string]$name; if ([IO.Path]::GetFileName($n) -ne $n -or $n.Contains("/") -or $n.Contains("\") -or -not $files.ContainsKey($n) -or $files[$n] -le 0) { throw "Result '$($row.id)' references invalid evidence '$n'." } }
+        foreach ($name in @($row.evidence)) { Assert-ManifestEvidenceReference -FileMap $files -Name ([string]$name) -Owner "Result '$($row.id)'" }
     }
-    if ($manifest.summary.passed -ne 5 -or $manifest.summary.failed -ne 0 -or $manifest.summary.total -ne 5) { throw "Manifest summary does not satisfy the five-passed contract." }
+    Assert-ManifestResultSummary -Manifest $manifest -Results $rows -ExpectedTotal 5 `
+        -RequireCompleteStatuses -FailureMessage "Manifest summary does not satisfy the five-passed contract."
     if (Test-Path -LiteralPath (Join-Path $EvidenceDirectory "probe-incomplete.txt")) { throw "Probe completion sentinel remains; the manifest cannot be promoted." }
-    $manifest | Add-Member -NotePropertyName contractValidation -NotePropertyValue ([pscustomobject]@{ status = "passed"; validator = "tools/Run-FreeWTablePaginationValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freew-table-pagination-validation.schema.json" }) -Force
-    $manifest | ConvertTo-Json -Depth 16 | Set-Content -LiteralPath $ManifestPath -Encoding utf8
-    $manifest
+    Complete-ManifestContract -Manifest $manifest -ManifestPath $ManifestPath `
+        -Validator "tools/Run-FreeWTablePaginationValidation.ps1" `
+        -ContractReference "tools/LinuxInteractiveDocker/freew-table-pagination-validation.schema.json" -JsonDepth 16
 }
 
 New-Item -ItemType Directory -Path $fixtureDir -Force | Out-Null

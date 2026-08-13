@@ -33,12 +33,7 @@ $RequiredGates = @(
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
 
-    $validationErrors.Add($Message)
-    if ($env:GITHUB_ACTIONS -eq "true") {
-        $escaped = $Message.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
-        Write-Host "::error title=Linux human validation::$escaped"
-    }
-    Write-Error $Message -ErrorAction Continue
+    Add-ToolValidationError -Errors $validationErrors -Message $Message -GitHubTitle "Linux human validation"
 }
 
 $path = Resolve-InputPath -Path $ChecklistPath -RepoRoot $repoRoot
