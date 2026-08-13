@@ -97,6 +97,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Text = string.Empty,
             Foreground = SystemColors.GrayTextBrush,
             FontStyle = FontStyles.Italic,
+            FontSize = Surface.StatusFontSize,
             Margin = new Thickness(0, Surface.StatusVerticalMargin, 0, Surface.StatusVerticalMargin),
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -167,7 +168,7 @@ internal sealed class IconPickerDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 Source = bmp,
                 Width = Surface.IconSize,
                 Height = Surface.IconSize,
-                Stretch = Stretch.Uniform,
+                Stretch = Surface.PreserveThumbnailAspectRatio ? Stretch.Uniform : Stretch.Fill,
                 ToolTip = IconPickerDialogPlanner.ToolTipFor(entry)
             };
         }

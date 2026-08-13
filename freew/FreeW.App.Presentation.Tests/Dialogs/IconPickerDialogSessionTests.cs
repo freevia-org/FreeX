@@ -18,9 +18,11 @@ public sealed class IconPickerDialogSessionTests
         surface.CategoryTrailingMargin.Should().Be(14);
         surface.FieldLabelTrailingMargin.Should().Be(6);
         surface.StatusVerticalMargin.Should().Be(4);
+        surface.StatusFontSize.Should().Be(12);
         surface.BottomRowTopMargin.Should().Be(6);
         surface.TileSize.Should().Be(54);
         surface.IconSize.Should().Be(38);
+        surface.PreserveThumbnailAspectRatio.Should().BeTrue();
         surface.TileMargin.Should().Be(2);
         surface.TilePadding.Should().Be(4);
         surface.TileBorderThickness.Should().Be(1);
@@ -51,11 +53,13 @@ public sealed class IconPickerDialogSessionTests
         {
             source.Should().Contain("Surface.FieldLabelTrailingMargin");
             source.Should().Contain("Surface.StatusVerticalMargin");
+            source.Should().Contain("Surface.StatusFontSize");
             source.Should().Contain("Surface.BottomRowTopMargin");
             source.Should().Contain("Surface.TileMargin");
             source.Should().Contain("Surface.TilePadding");
             source.Should().Contain("Surface.TileBorderThickness");
             source.Should().Contain("Surface.ScrollBorderThickness");
+            source.Should().Contain("Surface.PreserveThumbnailAspectRatio ? Stretch.Uniform : Stretch.Fill");
         }
 
         wpf.Should().NotContain("Margin = new Thickness(2)");

@@ -61,7 +61,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
             Foreground = Brushes.Gray,
             FontStyle = FontStyle.Italic,
             FontFamily = ChromeStyle.FontFamily,
-            FontSize = 12,
+            FontSize = Surface.StatusFontSize,
             Margin = new Thickness(0, Surface.StatusVerticalMargin),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -198,7 +198,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
                 Source = drawing,
                 Width = Surface.IconSize,
                 Height = Surface.IconSize,
-                Stretch = Stretch.Fill,
+                Stretch = Surface.PreserveThumbnailAspectRatio ? Stretch.Uniform : Stretch.Fill,
             };
     }
 
