@@ -548,9 +548,10 @@ public sealed class TablePropertiesDialogSessionOwnershipTests
             root, "freew", "FreeW.App.Avalonia", "TableDialogs.cs"));
 
         wpf.Should().Contain("DialogMessageHelper.ShowWarning(this, acceptance.ValidationMessage)");
-        avalonia.Should().Contain("AvaloniaUserMessageDialog.ShowWarningAsync(");
+        avalonia.Should().Contain("IUserMessageService? messageService = null");
+        avalonia.Should().Contain("messageService ?? new AvaloniaUserMessageService(this)");
+        avalonia.Should().Contain("_messageService.ShowWarningAsync(");
         avalonia.Should().Contain("acceptance.ValidationMessage ?? TablePropertiesDialogPlanner.ValidationMessage");
-        avalonia.Should().Contain("Title ?? TablePropertiesDialogPlanner.Title");
         avalonia.Should().Contain("private TablePropertiesDialogAcceptance CaptureAcceptance()");
         avalonia.Should().Contain("private TablePropertiesValues? TryAccept(bool close)");
     }

@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.Automation;
+using Free.Shared.AppServices;
 using FreeW.App.Localization;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -127,7 +128,11 @@ public sealed class BordersAndShadingDialogVisualParityTests
     {
         await Session.Dispatch(() =>
         {
-            var dialog = new BordersAndShadingDialog(ParagraphFormatting.Default, null);
+            var messages = new RecordingMessageService();
+            var dialog = new BordersAndShadingDialog(
+                ParagraphFormatting.Default,
+                null,
+                messages);
             try
             {
                 dialog.Show();
@@ -138,8 +143,12 @@ public sealed class BordersAndShadingDialogVisualParityTests
 
                 ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-                dialog.StatusForTest.IsVisible.Should().BeTrue();
-                dialog.StatusForTest.Text.Should().Be(BordersAndShadingDialogPlanner.WidthValidationMessage);
+                dialog.StatusForTest.IsVisible.Should().BeFalse();
+                messages.Request.Should().Be(new UserMessageRequest(
+                    BordersAndShadingDialogPlanner.WidthValidationMessage,
+                    "Warning",
+                    UserMessageButtons.Ok,
+                    UserMessageIcon.Warning));
                 dialog.IsVisible.Should().BeTrue();
             }
             finally
@@ -147,6 +156,19 @@ public sealed class BordersAndShadingDialogVisualParityTests
                 dialog.Close();
             }
         }, CancellationToken.None);
+    }
+
+    private sealed class RecordingMessageService : IUserMessageService
+    {
+        public UserMessageRequest? Request { get; private set; }
+
+        public ValueTask<UserMessageResult> ShowMessageAsync(
+            UserMessageRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Request = request;
+            return ValueTask.FromResult(UserMessageResult.Ok);
+        }
     }
 
     [Fact]

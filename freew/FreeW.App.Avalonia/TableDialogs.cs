@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Interactivity;
 using Avalonia.Input;
 using System.Collections.Generic;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -178,6 +179,7 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         };
 
     private readonly TablePropertiesDialogSession _session;
+    private readonly IUserMessageService _messageService;
     private readonly CheckBox _preferredWidthOn;
     private readonly TextBox _preferredWidth;
     private readonly ComboBox _alignment;
@@ -225,9 +227,11 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
 
     public TablePropertiesDialog(
         ModelTableContext context,
-        TablePropertiesDialogTabKind initialTab = TablePropertiesDialogTabKind.Table)
+        TablePropertiesDialogTabKind initialTab = TablePropertiesDialogTabKind.Table,
+        IUserMessageService? messageService = null)
     {
         _session = new TablePropertiesDialogSession(context, CultureInfo.CurrentCulture, initialTab);
+        _messageService = messageService ?? new AvaloniaUserMessageService(this);
         var state = _session.InitialState;
 
         Title = TablePropertiesDialogPlanner.Title;
@@ -504,10 +508,8 @@ internal sealed partial class TablePropertiesDialog : FreeWDialogWindow
         if (!acceptance.IsAccepted)
         {
             _validation.IsVisible = false;
-            await AvaloniaUserMessageDialog.ShowWarningAsync(
-                this,
-                acceptance.ValidationMessage ?? TablePropertiesDialogPlanner.ValidationMessage,
-                Title ?? TablePropertiesDialogPlanner.Title);
+            await _messageService.ShowWarningAsync(
+                acceptance.ValidationMessage ?? TablePropertiesDialogPlanner.ValidationMessage);
             FocusInitialField();
             return;
         }

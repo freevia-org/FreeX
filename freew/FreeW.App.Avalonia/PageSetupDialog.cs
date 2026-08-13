@@ -6,6 +6,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Localization;
@@ -41,12 +42,14 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
     private readonly ComboBox _verticalAlignment;
     private readonly TextBlock _status = PageLayoutDialogChrome.Status();
     private readonly PageSetupDialogSession _session;
+    private readonly IUserMessageService _messageService;
     private bool _suppressPaperSync;
 
     public PageSetupDialog(
         PageSettings current,
         PageSetupDialogTabKind initialTab = PageSetupDialogTabKind.Margins,
-        SectionBreakKind sectionStart = SectionBreakKind.NextPage)
+        SectionBreakKind sectionStart = SectionBreakKind.NextPage,
+        IUserMessageService? messageService = null)
     {
         ArgumentNullException.ThrowIfNull(current);
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
@@ -57,6 +60,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
             current,
             sectionStart,
             DialogCulture);
+        _messageService = messageService ?? new AvaloniaUserMessageService(this);
         var state = _session.InitialState;
         _top = NumberBox(state.MarginTopText);
         _bottom = NumberBox(state.MarginBottomText);
@@ -215,12 +219,13 @@ public sealed class PageSetupDialog : FreeWDialogWindow, IPageSetupDialogControl
         Accept(PageSetupDialogFollowUp.None);
     }
 
-    private void Accept(PageSetupDialogFollowUp followUp)
+    private async void Accept(PageSetupDialogFollowUp followUp)
     {
         var acceptance = _session.PlanAcceptance(this, followUp);
         if (!acceptance.IsAccepted)
         {
-            PageLayoutDialogChrome.ShowError(_status, acceptance.ErrorMessage!);
+            _status.IsVisible = false;
+            await _messageService.ShowWarningAsync(acceptance.ErrorMessage!);
             ApplyFocus(acceptance.FocusPlan!);
             return;
         }
