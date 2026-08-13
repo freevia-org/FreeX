@@ -170,9 +170,12 @@ public sealed class ReviewCommentAndCustomShowSessionTests
         foreach (var source in new[] { wpfDialog, avaloniaDialog })
         {
             source.Should().Contain("SlideShowCustomShowDialogSession");
-            source.Should().Contain("SlideShowCustomShowDialogTransitionDispatcher.Dispatch(");
+            source.Should().Contain("SlideShowCustomShowDialogController");
+            source.Should().Contain("ISlideShowCustomShowDialogView");
             source.Should().Contain("customShowSession.CreateDialogSession(");
-            source.Should().Contain("_session.Reorder(");
+            source.Should().Contain("_controller.Reorder(");
+            source.Should().NotContain("SlideShowCustomShowDialogTransitionDispatcher.Dispatch(");
+            source.Should().NotContain("private readonly SlideShowCustomShowDialogSession _session");
             source.Should().NotContain("MainWindow _host");
             source.Should().NotContain("SlideShowCustomShowSessionPlanner.");
             source.Should().NotContain("SlideShowCustomShowPlanner.");

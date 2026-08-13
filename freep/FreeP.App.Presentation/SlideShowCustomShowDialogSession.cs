@@ -248,6 +248,112 @@ public static class SlideShowCustomShowDialogTransitionDispatcher
     }
 }
 
+public sealed record SlideShowCustomShowDialogViewState(
+    string? Name,
+    IReadOnlyList<string> SelectedSlideIds,
+    int SelectedShowIndex,
+    int SelectedSlideIndex);
+
+public interface ISlideShowCustomShowDialogView
+{
+    SlideShowCustomShowDialogViewState CaptureState();
+
+    void RenderFullPlan(SlideShowCustomShowSessionPlan plan);
+
+    void RenderSelectedShowPlan(SlideShowCustomShowSessionPlan plan);
+
+    void ApplySlideSelection(SlideShowCustomShowSessionPlan plan);
+
+    void SetValidation(string? message);
+
+    void CloseDialog();
+}
+
+/// <summary>
+/// Routes custom-show dialog selections and actions through the portable session. Renderers retain
+/// native control construction, pointer handling, focus, and modal lifetime.
+/// </summary>
+public sealed class SlideShowCustomShowDialogController
+{
+    private readonly SlideShowCustomShowDialogSession _session;
+    private readonly ISlideShowCustomShowDialogView _view;
+
+    public SlideShowCustomShowDialogController(
+        SlideShowCustomShowDialogSession session,
+        ISlideShowCustomShowDialogView view)
+    {
+        _session = session ?? throw new ArgumentNullException(nameof(session));
+        _view = view ?? throw new ArgumentNullException(nameof(view));
+    }
+
+    public PresentationDialogSurfacePlan<
+        SlideShowCustomShowDialogField,
+        SlideShowCustomShowDialogAction> Surface => _session.Surface;
+
+    public void Initialize() => ApplyTransition(_session.InitialTransition);
+
+    public void SelectShow()
+    {
+        var state = _view.CaptureState();
+        ApplyTransition(_session.SelectShow(state.SelectedShowIndex));
+    }
+
+    public void SelectSlide()
+    {
+        var state = _view.CaptureState();
+        ApplyTransition(_session.SelectSlide(state.SelectedSlideIndex));
+    }
+
+    public void Create()
+    {
+        var state = _view.CaptureState();
+        ApplyTransition(_session.Create(state.Name, state.SelectedSlideIds));
+    }
+
+    public void Rename()
+    {
+        var state = _view.CaptureState();
+        ApplyTransition(_session.Rename(state.Name));
+    }
+
+    public void UpdateSlides()
+    {
+        var state = _view.CaptureState();
+        ApplyTransition(_session.UpdateSlides(state.SelectedSlideIds));
+    }
+
+    public void AddSlideOccurrence(string slideId) =>
+        ApplyTransition(_session.AddSlideOccurrence(slideId));
+
+    public void RemoveSelectedSlide() =>
+        ApplyTransition(_session.RemoveSelectedSlide());
+
+    public void MoveSelectedSlide(int offset) =>
+        ApplyTransition(_session.MoveSelectedSlide(offset));
+
+    public void Delete() => ApplyTransition(_session.Delete());
+
+    public void StartShow() => ApplyTransition(_session.StartShow());
+
+    public SlideShowCustomShowDragReorderPlan Reorder(
+        int sourceSlideIndex,
+        int targetDropIndex)
+    {
+        var transition = _session.Reorder(sourceSlideIndex, targetDropIndex);
+        ApplyTransition(transition.SessionTransition);
+        return transition.ReorderPlan;
+    }
+
+    private void ApplyTransition(SlideShowCustomShowDialogSessionTransition transition) =>
+        SlideShowCustomShowDialogTransitionDispatcher.Dispatch(
+            transition,
+            _view.RenderFullPlan,
+            _view.RenderSelectedShowPlan,
+            _view.ApplySlideSelection,
+            _view.SetValidation,
+            _view.CloseDialog);
+}
+
 /// <summary>
 /// Applies custom-show session plans to renderer-owned controls. The callbacks are deliberately
 /// limited to native value transport; selection defaulting and action enablement stay shared.

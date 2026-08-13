@@ -8,19 +8,20 @@ namespace FreeP.App.Host;
 public sealed partial class CustomShowDialog
 {
     public void SelectCustomShowSlideForTests(int index) => _formSession.SelectSlide(index);
-    public void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
-    public void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
-    public void RemoveSelectedCustomShowSlideForTests() => OnRemoveSelectedSlide();
-    public void AddCustomShowSlideOccurrenceForTests(string slideId) => AddSlideOccurrence(slideId);
+    public void MoveSelectedCustomShowSlideUpForTests() => _controller.MoveSelectedSlide(-1);
+    public void MoveSelectedCustomShowSlideDownForTests() => _controller.MoveSelectedSlide(1);
+    public void RemoveSelectedCustomShowSlideForTests() => _controller.RemoveSelectedSlide();
+    public void AddCustomShowSlideOccurrenceForTests(string slideId) =>
+        _controller.AddSlideOccurrence(slideId);
     public SlideShowCustomShowDragReorderPlan DragReorderCustomShowSlideForTests(
         int sourceSlideIndex,
         int targetDropIndex) =>
-        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
+        _controller.Reorder(sourceSlideIndex, targetDropIndex);
 
     internal void PrepareMissingNameForTests()
     {
         _nameBox.Text = string.Empty;
-        OnCreate();
+        _controller.Create();
     }
 }
 

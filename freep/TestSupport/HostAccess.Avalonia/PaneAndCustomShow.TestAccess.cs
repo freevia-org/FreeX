@@ -8,19 +8,20 @@ namespace FreeP.App.Avalonia;
 internal sealed partial class CustomShowDialog
 {
     internal void SelectCustomShowSlideForTests(int index) => _formSession.SelectSlide(index);
-    internal void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
-    internal void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
-    internal void RemoveSelectedCustomShowSlideForTests() => OnRemoveSelectedSlide();
-    internal void AddCustomShowSlideOccurrenceForTests(string slideId) => AddSlideOccurrence(slideId);
+    internal void MoveSelectedCustomShowSlideUpForTests() => _controller.MoveSelectedSlide(-1);
+    internal void MoveSelectedCustomShowSlideDownForTests() => _controller.MoveSelectedSlide(1);
+    internal void RemoveSelectedCustomShowSlideForTests() => _controller.RemoveSelectedSlide();
+    internal void AddCustomShowSlideOccurrenceForTests(string slideId) =>
+        _controller.AddSlideOccurrence(slideId);
     internal SlideShowCustomShowDragReorderPlan DragReorderCustomShowSlideForTests(
         int sourceSlideIndex,
         int targetDropIndex) =>
-        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
+        _controller.Reorder(sourceSlideIndex, targetDropIndex);
 
     internal void PrepareMissingNameForTests()
     {
         _nameBox.Text = string.Empty;
-        OnCreate();
+        _controller.Create();
     }
 
     internal bool CompleteCustomShowSlideDragForTests(
