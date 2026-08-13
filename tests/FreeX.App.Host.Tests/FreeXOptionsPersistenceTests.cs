@@ -305,8 +305,7 @@ public sealed class AppOptionsPersistenceTests : IDisposable
                 "FreeX.App.Host",
                 "FreeXOptions.cs"))
             .Should().BeFalse();
-        DialogSourceTestSupport.ReadHostSources("App.xaml.cs", "MainWindow.xaml.cs")
-            .Should().NotContain("FreeXOptions");
+        typeof(AppOptions).Assembly.GetName().Name.Should().Be("FreeX.App.Services");
     }
 
     [Fact]

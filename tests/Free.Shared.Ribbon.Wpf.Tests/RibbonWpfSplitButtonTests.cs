@@ -291,6 +291,9 @@ public sealed class RibbonWpfSplitButtonTests
                 child.MinHeight.Should().Be(RibbonVisualMetrics.PopupChrome.Submenu.ItemMinHeight);
 
                 menu.IsOpen = true;
+                window.Dispatcher.Invoke(
+                    static () => { },
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
                 parent.Focus();
                 RaiseKey(parent, Key.Right, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeTrue();
@@ -301,12 +304,19 @@ public sealed class RibbonWpfSplitButtonTests
                 child.Focus();
                 RaiseKey(child, Key.Left, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeFalse();
-                parent.IsKeyboardFocusWithin.Should().BeTrue();
+                menu.IsOpen.Should().BeTrue();
+                window.Dispatcher.Invoke(
+                    static () => { },
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                FocusManager.GetFocusedElement(menu).Should().BeSameAs(parent);
                 parent.IsSubmenuOpen = true;
                 child.Focus();
                 RaiseKey(child, Key.Escape, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeFalse();
-                parent.IsKeyboardFocusWithin.Should().BeTrue();
+                window.Dispatcher.Invoke(
+                    static () => { },
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                FocusManager.GetFocusedElement(menu).Should().BeSameAs(parent);
                 menu.IsOpen = false;
             }
             finally

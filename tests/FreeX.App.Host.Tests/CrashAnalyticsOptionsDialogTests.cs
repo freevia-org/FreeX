@@ -9,6 +9,7 @@ public sealed class CrashAnalyticsOptionsDialogTests
     {
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("OptionsDialog.xaml");
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
+        var plannerSource = DialogSourceTestSupport.ReadAppServicesSource("OptionsDialogPlanner.cs");
 
         xaml.Should().Contain("x:Name=\"OptCrashAnalytics\"");
         xaml.Should().Contain("Send opt-in _crash reports");
@@ -18,6 +19,7 @@ public sealed class CrashAnalyticsOptionsDialogTests
         xaml.Should().Contain("Crash exception messages and stack traces can occasionally contain sensitive values, so review files before sharing them.");
         xaml.Should().Contain("FREEX_DIAGNOSTICS=0");
         source.Should().Contain("OptCrashAnalytics.IsChecked = _opts.CrashAnalyticsEnabled");
-        source.Should().Contain("CrashAnalyticsEnabled = OptCrashAnalytics.IsChecked == true");
+        source.Should().Contain("crashAnalyticsEnabled: OptCrashAnalytics.IsChecked == true");
+        plannerSource.Should().Contain("CrashAnalyticsEnabled = input.CrashAnalyticsEnabled ?? existing.CrashAnalyticsEnabled");
     }
 }

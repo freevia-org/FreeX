@@ -9,14 +9,17 @@ public sealed class ConflictMarkersPreflightTests
     public void ConflictMarkersPreflight_ScansTextBackedRepositoryFiles()
     {
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ConflictMarkers.ps1");
+        var toolSupport = WorkspaceFileLocator.ReadAllText("tools", "ToolScriptSupport.ps1");
 
         script.Should().Contain("[string]$ProjectRoot = \".\"");
         script.Should().Contain("[string[]]$SearchRoots = @()");
         script.Should().Contain("git -C $resolvedProjectRoot ls-files");
         script.Should().Contain("if ($SearchRoots.Count -eq 0)");
         script.Should().Contain("\".slnx\"");
-        script.Should().Contain("$segments -contains \".worktrees\"");
-        script.Should().Contain("$segments -contains \".claude\"");
+        script.Should().Contain("Test-ToolExcludedPath");
+        script.Should().Contain("@(\"bin\", \"obj\", \".git\", \".worktrees\", \".claude\")");
+        toolSupport.Should().Contain("function Test-ToolExcludedPath");
+        toolSupport.Should().Contain("if ($segments -contains $directoryName)");
         script.Should().Contain("$conflictMarkerPattern = '^(<<<<<<<|=======|>>>>>>>)($|[ <].*)'");
         script.Should().Contain("Git conflict marker validation failed");
         script.Should().Contain("Validated $($candidateFiles.Count) text file(s) for Git conflict markers.");

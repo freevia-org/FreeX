@@ -173,7 +173,20 @@ internal static class RibbonWpfPopupAdapter
                 {
                     parent.IsSubmenuOpen = false;
                     if (contract.Submenu.RestoreFocusToParentOnClose)
-                        parent.Focus();
+                    {
+                        // WPF tears down the child popup after the key handler returns. Restore the
+                        // parent in the menu focus scope once that teardown can no longer steal focus.
+                        parent.Dispatcher.BeginInvoke(
+                            DispatcherPriority.ContextIdle,
+                            new Action(() =>
+                            {
+                                if (!contextMenu.IsOpen || parent.IsSubmenuOpen)
+                                    return;
+
+                                FocusManager.SetFocusedElement(contextMenu, parent);
+                                Keyboard.Focus(parent);
+                            }));
+                    }
                     args.Handled = true;
                     return;
                 }
